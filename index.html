@@ -229,7 +229,7 @@ body.connected #formatmenu, #formatmenu.always-available {
 	position: relative;
 }
 
-#input_text,#memorytext {
+#input_text,#memorytext,#anotetext {
 	height: 80px;
 	resize: none;
 	overflow:auto;
@@ -1780,6 +1780,7 @@ body.connected .popupfooter, .popupfooter.always-available {
 	var pending_response_id = "";
 	var poll_in_progress = false;
 	var current_memory = "";
+	var current_anote = "";
 	
 	var max_context_length = 1024;
 	var max_length = 80;
@@ -1911,6 +1912,7 @@ body.connected .popupfooter, .popupfooter.always-available {
 	function confirm_memory()
 	{
 		current_memory = document.getElementById("memorytext").value;
+		current_anote = document.getElementById("anotetext").value;
 		hide_popups();
 	}
 	
@@ -1920,6 +1922,7 @@ body.connected .popupfooter, .popupfooter.always-available {
 		redo_arr = [];
 		pending_response_id = "";
 		current_memory = "";
+		current_anote = "";
 		document.getElementById("input_text").value = "";
 		render_gametext();
 	}
@@ -1940,7 +1943,7 @@ body.connected .popupfooter, .popupfooter.always-available {
 	function submit_generation()
 	{
 		let newgen = document.getElementById("input_text").value;
-		if(newgen!="" || gametext_arr.length>0 || current_memory!="")
+		if(newgen!="" || gametext_arr.length>0 || current_memory!="" || current_anote!="")
 		{
 			if(newgen!="")
 			{
@@ -1959,14 +1962,23 @@ body.connected .popupfooter, .popupfooter.always-available {
 			//we clip the memory if its too long, taking the last x chars (not the first)
 			let truncated_memory = current_memory.substring(current_memory.length - max_allowed_characters); 
 			
+			//we clip the authors note if its too long
+			let truncated_anote = "[Author's note: "+current_anote+"]";
+			truncated_anote = truncated_anote.substring(truncated_anote.length - max_allowed_characters); 
+			
 			//append memory to the start of the context, clipping excess space if needed
-			if(truncated_memory.length>0)
+			if(truncated_memory.length>0 || truncated_anote.length>0)
 			{	
-				//now we resize the context such that the memory can fit inside
+				//now we resize the context such that the memory and authors note can fit inside
 				truncated_context = truncated_context.substring(truncated_context.length - max_allowed_characters);			
-				let augmented_len = truncated_memory.length + truncated_context.length;
+				let augmented_len = truncated_memory.length + truncated_context.length + truncated_anote.length;
 				let excess_len = augmented_len - max_allowed_characters; //if > 0, then we exceeded context window
-				truncated_context = truncated_memory + truncated_context.substring(excess_len);
+				truncated_context = truncated_context.substring(excess_len);
+				//insert authors note 75 tokens before the ending (300 characters).
+				let anote_dist = 300;
+				let anote_insert_idx = clamp(truncated_context.length - anote_dist,0,truncated_context.length);
+				truncated_context = truncated_context.slice(0, anote_insert_idx) + truncated_anote + truncated_context.slice(anote_insert_idx);
+				truncated_context = truncated_memory + truncated_context;
 			}
 			
 			submit_payload = {
@@ -2171,6 +2183,7 @@ body.connected .popupfooter, .popupfooter.always-available {
 	{		
 		document.getElementById("memorycontainer").classList.remove("hidden");	
 		document.getElementById("memorytext").value = current_memory;		
+		document.getElementById("anotetext").value = current_anote;	
 	}
 	
 	function btn_back()
@@ -2447,8 +2460,10 @@ body.connected .popupfooter, .popupfooter.always-available {
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Memory</div>
 			</div>
-		
+			<div class="justifyleft settinglabel">Memory</div>
 			<textarea class="form-control" id="memorytext" placeholder="Edit the memory to be sent with each request to the AI."></textarea>		
+			<br><div class="justifyleft settinglabel">Author's Note</div>
+			<textarea class="form-control" id="anotetext" placeholder="Author's Note will be inserted close to end of context."></textarea>		
 			
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" id="btn_memok" onclick="confirm_memory()">OK</button>
