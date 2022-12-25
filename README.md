@@ -12,9 +12,10 @@ I do not apologize for my code quality or how I massacred the UI.
 
 Changelog for 25 Dec 2022:
 - Added support for Author Note Template
-- Added a rudimentary save and load to file (compatible with BOTH old and new formats)
-- Added chat mode
-- Added autoscroll toggle
+- Added a rudimentary save and load to file, can read both old and new file formats, and will save to old format 
+(Caution: Feature is bare bones. Please backup your story.)
+- Added chat mode, toggle it in settings
+- Added autoscroll toggle it in settings
 - Cleaned up unused CSS classes and tidy up layout, especially for mobile device
-- Added more samplers and adjusted settings layout
+- Adjusted settings layout
 - Added more descriptive error messages when generation fails
