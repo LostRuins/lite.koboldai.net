@@ -12,5 +12,7 @@ I do not apologize for my code quality or how I massacred the UI.
 
 Changelog for 25 Dec 2022:
 - Added support for Author Note and Author Note template
-- Added a rudimentary save and load to file
+- Added a rudimentary save and load to file (compatible with BOTH old and new formats)
 - Added chat mode
+- Added autoscroll toggle
+- Added more samplers and adjusted settings layout
