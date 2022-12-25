@@ -8400,7 +8400,7 @@ I do not apologize for my code quality or how I massacred the UI.
 
 		#gamescreen {
 			overflow-x: hidden;
-			height: 60vh;
+			height: 62vh;
 			display: flex;
 			vertical-align: bottom;
 			background-color: #262626;
@@ -8447,7 +8447,7 @@ I do not apologize for my code quality or how I massacred the UI.
 			padding: 0px;
 			width: 100%;
 			display: grid;
-			grid-template-columns: 0% 90% 10%;
+			grid-template-columns: 0% auto 64px;
 		}
 
 		#inputrowmode {
@@ -9169,20 +9169,30 @@ I do not apologize for my code quality or how I massacred the UI.
 		.tokens-counted {
 			position: relative;
 		}
+
+		.btn-secondary
+		{
+			padding: 2px 8px;
+		}
+
+		.tightcontainer {
+			padding-right: 4px;
+			padding-left: 4px;
+			margin-right: auto;
+			margin-left: auto
+		}
 	
 
-		.loader {
-			position: absolute;
+		.loader {		
 			border: 6px solid #f3f3f3;
 			/* Light grey */
 			border-top: 6px solid #3498db;
 			/* Blue */
 			border-radius: 50%;
 			width: 32px;
-			height: 32px;
-			left: 32%;
-			top: 28%;
+			height: 32px;			
 			display: flex;
+			margin: auto;
 			align-items: center;
 			justify-content: center;
 			animation: spin 2s linear infinite;
@@ -9441,14 +9451,15 @@ I do not apologize for my code quality or how I massacred the UI.
 				truncated_anote = truncated_anote.substring(truncated_anote.length - max_allowed_characters);
 
 				//append memory to the start of the context, clipping excess space if needed
-				if (truncated_memory.length > 0 || truncated_anote.length > 0) {
+				//only do this processing if memory or anote is not blank
+				if (truncated_memory.length > 0 || current_anote.length > 0) {
 					//now we resize the context such that the memory and authors note can fit inside
 					truncated_context = truncated_context.substring(truncated_context.length - max_allowed_characters);
 					let augmented_len = truncated_memory.length + truncated_context.length + truncated_anote.length;
 					let excess_len = augmented_len - max_allowed_characters; //if > 0, then we exceeded context window
 					truncated_context = truncated_context.substring(excess_len);
-					//insert authors note 75 tokens before the ending (300 characters).
-					let anote_dist = 300;
+					//insert authors note 80 tokens before the ending (320 characters).
+					let anote_dist = 320;
 					let anote_insert_idx = clamp(truncated_context.length - anote_dist, 0, truncated_context.length);
 					truncated_context = truncated_context.slice(0, anote_insert_idx) + truncated_anote + truncated_context.slice(anote_insert_idx);
 					truncated_context = truncated_memory + truncated_context;
@@ -9525,7 +9536,20 @@ I do not apologize for my code quality or how I massacred the UI.
 								pending_response_id = "";
 								poll_in_progress = false;
 								render_gametext();
-								msgbox("Error encountered during text generation!");
+								let errmsg = "Error encountered during text generation!\n";
+								if(data.message!=null)
+								{
+									errmsg += data.message;
+								}
+								if(data.faulted == true)
+								{
+									errmsg += "Fault encountered during text generation.";
+								}
+								if(data.is_possible == false)
+								{
+									errmsg += "No workers were able to generate text with your request.";
+								}
+								msgbox(errmsg);
 							}
 							else {
 								if (data.done == true) {
@@ -9695,9 +9719,9 @@ I do not apologize for my code quality or how I massacred the UI.
 </head>
 
 <body id="mbd" class="">
-	<input type="file" id="remote-save-select" accept="application/json" style="display:none">
-	<div class="container">
-		<div class="row" id="topmenu">
+	
+	<div class="container tightcontainer">
+		<div class="" id="topmenu">
 			<div id="menuitems">
 				<div class="navcontainer">
 					<nav class="navbar" id="navbar">
@@ -9750,22 +9774,18 @@ I do not apologize for my code quality or how I massacred the UI.
 			</div>
 		</div>
 
-		<div class="row" id="formatmenu">
-		</div>
-
-
 		<div class="layer-container">
-			<div class="layer-bottom row" id="gamescreen">
+			<div class="layer-bottom" id="gamescreen">
 				<span id="gametext" contenteditable="false" onblur="merge_edit_field()">
 					<p>...</p>
 				</span>
 				<div class="hidden" id="wimenu">
 				</div>
 			</div>
-			<div id="curtain" class="layer-top row hidden"></div>
+			<div id="curtain" class="layer-top hidden"></div>
 		</div>
 
-		<div class="row flex" id="actionmenu">
+		<div class="flex" id="actionmenu">
 			<div id="actionmenuitems">
 				<button type="button" class="btn btn-primary" id="btn_actmem" onclick="btn_memory()">Memory</button>
 				<button type="button" class="btn btn-primary" id="btn_actundo" onclick="btn_back()">Back</button>
@@ -9779,7 +9799,7 @@ I do not apologize for my code quality or how I massacred the UI.
 				<div class="box-label">Allow Editing</div>
 			</div>
 		</div>
-		<div class="row">
+		<div class="">
 			<div id="inputrow">
 				<div id="inputrowmode">
 					<!--button type="button" class="btn btn-secondary hidden" id="btnmode">Mode:<br/><b id="btnmode_label">Story</b></button-->
@@ -9793,7 +9813,7 @@ I do not apologize for my code quality or how I massacred the UI.
 				</div>
 			</div>
 		</div>
-		<div class="row" id="lastreq" style="color:#999999">No Requests Made</div>
+		<div class="" id="lastreq" style="color:#999999">No Requests Made</div>
 	</div>
 
 
