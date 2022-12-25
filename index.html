@@ -8338,11 +8338,12 @@ I do not apologize for my code quality or how I massacred the UI.
 		}
 
 
-		#chatname {
-			background-color: #404040;
-			color: #ffffff;
-			width: 200px;
-			margin-left: 10px;
+		#chatname {	
+			background-color: #ffffff;
+			color:#555;
+			border:0px solid #ccc;
+			border-radius: 4px;
+			width: 100%;
 		}
 
 		#menuitems {
@@ -9229,6 +9230,9 @@ I do not apologize for my code quality or how I massacred the UI.
 		var current_anotetemplate = "[Author\'s note: <|>]";
 		var loaded_storyobj = generate_base_storyobj(); //for loading json story files from disk
 		var autoscroll = false; //automatically scroll to bottom on render
+		var trimsentences = false; //trim to last punctuation
+		var opmode = 1; //what mode are we in? 1=story, 2=adventure, 3=chat
+		var chatname = "You"; //name to use in chat
 
 		var max_context_length = 1024;
 		var max_length = 80;
@@ -9425,6 +9429,10 @@ I do not apologize for my code quality or how I massacred the UI.
 			document.getElementById("rep_pen").value = document.getElementById("rep_pen_slide").value = rep_pen;
 			document.getElementById("top_p").value = document.getElementById("top_p_slide").value = top_p;
 			document.getElementById("autoscroll").checked = autoscroll;
+			document.getElementById("trimsentences").checked = trimsentences;
+			document.getElementById("opmode").value = opmode;
+			document.getElementById("chatname").value = chatname;
+			toggle_opmode();
 		}
 
 		function confirm_settings() {
@@ -9434,6 +9442,9 @@ I do not apologize for my code quality or how I massacred the UI.
 			rep_pen = document.getElementById("rep_pen").value;
 			top_p = document.getElementById("top_p").value;
 			autoscroll = (document.getElementById("autoscroll").checked?true:false);
+			trimsentences = (document.getElementById("trimsentences").checked?true:false);
+			opmode = document.getElementById("opmode").value;
+			chatname = document.getElementById("chatname").value;
 
 			//clamp values
 			max_context_length = clamp(max_context_length, 512, 2048);
@@ -9443,6 +9454,15 @@ I do not apologize for my code quality or how I massacred the UI.
 			top_p = clamp(top_p, 0, 1);
 
 			hide_popups();
+		}
+
+		function toggle_opmode()
+		{			
+			if (document.getElementById('opmode').value == 3) {
+				document.getElementById('chatnamesection').classList.remove('hidden')
+			} else {
+				document.getElementById('chatnamesection').classList.add('hidden')
+			}
 		}
 
 		function display_newgame() {
@@ -9483,9 +9503,32 @@ I do not apologize for my code quality or how I massacred the UI.
 			}
 		}
 
+		function trim_to_sentence(input)
+		{
+			let p1 = input.lastIndexOf(".");
+			let p2 = input.lastIndexOf("!");
+			let p3 = input.lastIndexOf("?");
+			let last = Math.max(p1,p2,p3);
+			if(last>0)
+			{
+				return input.substring(0,last+1);
+			}
+			return input;
+		}
+
 		function submit_generation() {
 			let newgen = document.getElementById("input_text").value;
 			if (newgen != "" || gametext_arr.length > 0 || current_memory != "" || current_anote != "") {
+				if(opmode==3 && newgen!="")
+				{
+					//append chatname for chatmode
+					newgen = "\n"+chatname + ": " + newgen + "\n";
+				}
+				if(opmode==2 && newgen!="")
+				{
+					//append action for adventure mode
+					newgen = "\n\n\> " + newgen + "\n";
+				}
 				if (newgen != "") {
 					gametext_arr.push(newgen);
 				}
@@ -9505,6 +9548,12 @@ I do not apologize for my code quality or how I massacred the UI.
 				//we clip the authors note if its too long
 				let truncated_anote = current_anotetemplate.replace("<|>", current_anote);
 				truncated_anote = truncated_anote.substring(truncated_anote.length - max_allowed_characters);
+
+				if(current_anote.length==0)
+				{
+					//if there's no authors note at all, don't include the template
+					truncated_anote = "";
+				}
 
 				//append memory to the start of the context, clipping excess space if needed
 				//only do this processing if memory or anote is not blank
@@ -9619,6 +9668,25 @@ I do not apologize for my code quality or how I massacred the UI.
 											poll_in_progress = false;
 											if (data.generations != null && data.generations.length > 0) {
 												let gentxt = data.generations[0].text;
+
+												//always trim incomplete sentences for adventure and chat
+												if(opmode==2 || opmode==3 || trimsentences==true)
+												{
+													gentxt = trim_to_sentence(gentxt);
+												}
+
+												//if we are in chatmode, truncate to my first response
+												if(opmode==3)
+												{
+													let splitresponse = gentxt.split(chatname+"\:");
+													let startpart = splitresponse[0];
+													if(startpart.length>0 && startpart[startpart.length-1]=="\n")
+													{
+														startpart = startpart.substring(0,startpart.length-1);
+													}
+													gentxt = startpart;
+												}
+
 												gametext_arr.push(gentxt);
 												document.getElementById("lastreq").innerText = "Your last request was served by " + data.generations[0].worker_name + " for " + data.kudos + " kudos.";
 											}
@@ -10026,8 +10094,30 @@ I do not apologize for my code quality or how I massacred the UI.
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Autoscroll </div>	
 						   <input type="checkbox" data-toggle="toggle" data-onstyle="success" id="autoscroll" style="margin:0px 0 0;">				
-						</div>						
-						
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Trim Sentences </div>	
+						   <input type="checkbox" data-toggle="toggle" data-onstyle="success" id="trimsentences" style="margin:0px 0 0;">				
+						</div>
+					</div>
+					<div class="settingitem">
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Format </div>	
+							<select class="form-control" id="opmode" style="height:24px;padding:0;margin:0px 0 0;" onchange="toggle_opmode()">
+								<option value="1">Story Mode</option>
+								<option value="2">Adventure Mode</option>
+								<option value="3">Chat Mode</option>
+							</select>								
+						</div>
+					</div>
+					<div class="settingitem">
+						<div class="settinglabel">							
+							<div id="chatnamesection" class="hidden">
+							<div class="justifyleft settingsmall">Chat Name </div>	
+							<input class="" type="text" placeholder="Chat Name" value="You"
+							id="chatname">
+							</div>		
+						</div>
 					</div>
 
 					
