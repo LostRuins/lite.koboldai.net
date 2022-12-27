@@ -10,6 +10,11 @@ I do not apologize for my code quality or how I massacred the UI.
 
 - Concedo
 
+Changelog for KAI Horde Web UI v3 at 27 Dec 2022:
+- Added a table to display current list of Workers and their capabilities.
+- Added a hacky workaround to fix Horde misdirecting prompts to incorrect models (toggleable, not sure if it helps)
+- Allow user to abort a generation after 10 seconds if a response was not received.
+
 Changelog for KAI Horde Web UI v2 at 25 Dec 2022:
 - Added support for Author Note Template
 - Added a rudimentary save and load to file, can read both old and new file formats, and will save to old format 
