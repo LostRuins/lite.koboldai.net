@@ -981,6 +981,12 @@ I do not apologize for my code quality or how I massacred the UI.
 
 	<script>
 		//here is my shit integration of KAI Horde's API. You're welcome. -Concedo.
+		var perf_endpoint = "https://koboldai.net/api/v2/status/performance";
+		var models_endpoint = "https://koboldai.net/api/v2/status/models";
+		var submit_endpoint = "https://koboldai.net/api/v2/generate/async";
+		var polling_endpoint = "https://koboldai.net/api/v2/generate/check";
+		var output_endpoint = "https://koboldai.net/api/v2/generate/status";
+		var worker_endpoint = "https://koboldai.net/api/v2/workers";
 
 		//all configurable globals
 		var perfinfo = "";
@@ -999,23 +1005,40 @@ I do not apologize for my code quality or how I massacred the UI.
 		var current_anote = ""; //stored author note
 		var current_anotetemplate = "[Author\'s note: <|>]";
 		var loaded_storyobj = generate_base_storyobj(); //for loading json story files from disk
-		var autoscroll = false; //automatically scroll to bottom on render
-		var trimsentences = false; //trim to last punctuation
-		var opmode = 1; //what mode are we in? 1=story, 2=adventure, 3=chat
-		var chatname = "You"; //name to use in chat
 
-		var max_context_length = 1024;
-		var max_length = 80;
-		var rep_pen = 1.1;
-		var temperature = 0.5;
-		var top_p = 0.9;
+		var localsettings = {
+			autoscroll: false, //automatically scroll to bottom on render
+			trimsentences: false, //trim to last punctuation
+			opmode: 1, //what mode are we in? 1=story, 2=adventure, 3=chat
+			chatname: "You", //name to use in chat
+			persist_session: false,
 
-		var perf_endpoint = "https://koboldai.net/api/v2/status/performance";
-		var models_endpoint = "https://koboldai.net/api/v2/status/models";
-		var submit_endpoint = "https://koboldai.net/api/v2/generate/async";
-		var polling_endpoint = "https://koboldai.net/api/v2/generate/check";
-		var output_endpoint = "https://koboldai.net/api/v2/generate/status";
-		var worker_endpoint = "https://koboldai.net/api/v2/workers";
+			max_context_length: 1024,
+			max_length: 80,
+			rep_pen: 1.1,
+			temperature: 0.5,
+			top_p: 0.9,
+		};
+
+		//attempt to load settings
+		try {
+			let loadedsettingsjson = localStorage.getItem("kaihordewebui_settings");
+			let loadedstorycompressed = localStorage.getItem("kaihordewebui_story");
+			if (loadedsettingsjson != null && loadedsettingsjson != "" && loadedstorycompressed != null && loadedstorycompressed != "") {
+				let loadedsettings = JSON.parse(loadedsettingsjson);	
+				//see if persist is enabled		
+				if (loadedsettings && loadedsettings.persist_session)
+				{
+					localsettings = loadedsettings;
+					import_share_story(loadedstorycompressed); //use the same compressed format as shared stories and import it
+					console.log("Loaded local settings and story");
+				}
+			} else {
+				console.log("Skipped missing local save");
+			}
+		} catch (e) {
+			console.log("Discarded invalid local save: " + e);
+		}		
 
 		//fetch horde performance status as initial login
 		fetch(perf_endpoint)
@@ -1042,7 +1065,7 @@ I do not apologize for my code quality or how I massacred the UI.
 				}
 
 			}).catch((error) => {
-				console.error('Error:', error);
+				console.log("Error: " + error);
 				msgbox("Failed to connect to KAI Horde!\nPlease check your network connection.");
 			});
 		
@@ -1069,7 +1092,7 @@ I do not apologize for my code quality or how I massacred the UI.
 			return hsh.substring(0, 6);
 		};
 
-		function export_share_story()
+		function generate_compressed_story()
 		{
 			//encode the current story into a sharable url
 			//a tiny json format which gets compressed by LZMA then b64url
@@ -1089,6 +1112,11 @@ I do not apologize for my code quality or how I massacred the UI.
 			
 			//var cstoryjson = LZString.compressToEncodedURIComponent(storyjson);
 			var cstoryjson = buf_to_b64(lz_c.compress(storyjson,1));
+			return cstoryjson;
+		}
+		function export_share_story()
+		{
+			let cstoryjson = generate_compressed_story();
 						
 			document.getElementById("sharecontainer").classList.remove("hidden");
 			let fullurl = "https://kaihordewebui.github.io/?s="+cstoryjson;
@@ -1165,7 +1193,7 @@ I do not apologize for my code quality or how I massacred the UI.
 					}
 					
 				}).catch((error) => {
-					console.error('Error:', error);
+					console.log("Error: " + error);
 					msgbox("Failed to fetch models!\nPlease check your network connection.");
 				});
 			} else {
@@ -1293,7 +1321,7 @@ I do not apologize for my code quality or how I massacred the UI.
 					onDoneCallback(wdata);
 				}			
 			}).catch((error) => {
-				console.error('Error:', error);
+				console.log("Error: " + error);
 				msgbox("Failed to connect to Worker Endpoint!\nPlease check your network connection.");
 			});	
 		}
@@ -1321,6 +1349,7 @@ I do not apologize for my code quality or how I massacred the UI.
 		}
 
 		function msgbox(text) {
+			if (!text) { text = ""; }
 			document.getElementById("errtxt").innerText = text;
 			document.getElementById("msgboxcontainer").classList.remove("hidden");
 			console.log("Msgbox: " + text);
@@ -1343,7 +1372,7 @@ I do not apologize for my code quality or how I massacred the UI.
 				}
 				document.getElementById("oaimodel").innerHTML = model_choices;
 			}).catch((error) => {
-				console.error('Error:', error);
+				console.log("Error: " + error);
 				msgbox("Failed to fetch models!\nPlease check your network connection.");
 			});
 
@@ -1381,35 +1410,39 @@ I do not apologize for my code quality or how I massacred the UI.
 
 		function display_settings() {
 			document.getElementById("settingscontainer").classList.remove("hidden");
-			document.getElementById("max_context_length").value = document.getElementById("max_context_length_slide").value = max_context_length;
-			document.getElementById("max_length").value = document.getElementById("max_length_slide").value = max_length;
-			document.getElementById("temperature").value = document.getElementById("temperature_slide").value = temperature;
-			document.getElementById("rep_pen").value = document.getElementById("rep_pen_slide").value = rep_pen;
-			document.getElementById("top_p").value = document.getElementById("top_p_slide").value = top_p;
-			document.getElementById("autoscroll").checked = autoscroll;
-			document.getElementById("trimsentences").checked = trimsentences;
-			document.getElementById("opmode").value = opmode;
-			document.getElementById("chatname").value = chatname;
+			document.getElementById("max_context_length").value = document.getElementById("max_context_length_slide").value = localsettings.max_context_length;
+			document.getElementById("max_length").value = document.getElementById("max_length_slide").value = localsettings.max_length;
+			document.getElementById("temperature").value = document.getElementById("temperature_slide").value = localsettings.temperature;
+			document.getElementById("rep_pen").value = document.getElementById("rep_pen_slide").value = localsettings.rep_pen;
+			document.getElementById("top_p").value = document.getElementById("top_p_slide").value = localsettings.top_p;
+			document.getElementById("autoscroll").checked = localsettings.autoscroll;
+			document.getElementById("trimsentences").checked = localsettings.trimsentences;
+			document.getElementById("persist_session").checked = localsettings.persist_session;
+			document.getElementById("opmode").value = localsettings.opmode;
+			document.getElementById("chatname").value = localsettings.chatname;
 			toggle_opmode();
 		}
 
 		function confirm_settings() {
-			max_context_length = document.getElementById("max_context_length").value;
-			max_length = document.getElementById("max_length").value;
-			temperature = document.getElementById("temperature").value;
-			rep_pen = document.getElementById("rep_pen").value;
-			top_p = document.getElementById("top_p").value;
-			autoscroll = (document.getElementById("autoscroll").checked?true:false);
-			trimsentences = (document.getElementById("trimsentences").checked?true:false);
-			opmode = document.getElementById("opmode").value;
-			chatname = document.getElementById("chatname").value;
+			localsettings.max_context_length = document.getElementById("max_context_length").value;
+			localsettings.max_length = document.getElementById("max_length").value;
+			localsettings.temperature = document.getElementById("temperature").value;
+			localsettings.rep_pen = document.getElementById("rep_pen").value;
+			localsettings.top_p = document.getElementById("top_p").value;
+			localsettings.autoscroll = (document.getElementById("autoscroll").checked?true:false);
+			localsettings.trimsentences = (document.getElementById("trimsentences").checked?true:false);
+			localsettings.persist_session = (document.getElementById("persist_session").checked?true:false);
+			localsettings.opmode = document.getElementById("opmode").value;
+			localsettings.chatname = document.getElementById("chatname").value;
 
 			//clamp values
-			max_context_length = clamp(max_context_length, 512, 2048);
-			max_length = clamp(max_length, 16, 512);
-			temperature = clamp(temperature, 0.1, 2);
-			rep_pen = clamp(rep_pen, 1, 3);
-			top_p = clamp(top_p, 0, 1);
+			localsettings.max_context_length = clamp(localsettings.max_context_length, 512, 2048);
+			localsettings.max_length = clamp(localsettings.max_length, 16, 512);
+			localsettings.temperature = clamp(localsettings.temperature, 0.1, 2);
+			localsettings.rep_pen = clamp(localsettings.rep_pen, 1, 3);
+			localsettings.top_p = clamp(localsettings.top_p, 0, 1);
+
+			autosave(); //need to always autosave, so that we can switch back to non persistent sessions			
 
 			hide_popups();
 		}
@@ -1485,12 +1518,12 @@ I do not apologize for my code quality or how I massacred the UI.
 		function submit_generation() {
 			let newgen = document.getElementById("input_text").value;
 			if (newgen != "" || gametext_arr.length > 0 || current_memory != "" || current_anote != "") {
-				if(opmode==3 && newgen!="")
+				if(localsettings.opmode==3 && newgen!="")
 				{
 					//append chatname for chatmode
-					newgen = "\n"+chatname + ": " + newgen + "\n";
+					newgen = "\n"+localsettings.chatname + ": " + newgen + "\n";
 				}
-				if(opmode==2 && newgen!="")
+				if(localsettings.opmode==2 && newgen!="")
 				{
 					//append action for adventure mode
 					newgen = "\n\n\> " + newgen + "\n";
@@ -1504,7 +1537,7 @@ I do not apologize for my code quality or how I massacred the UI.
 				render_gametext();
 
 				//this is a hack since we dont have a proper tokenizer, but we can estimate 1 token per 4 characters				
-				let max_allowed_characters = max_context_length * 4;
+				let max_allowed_characters = localsettings.max_context_length * 4;
 
 				let truncated_context = concat_gametext(); //no need to truncate if memory is empty
 
@@ -1540,11 +1573,11 @@ I do not apologize for my code quality or how I massacred the UI.
 					"prompt": truncated_context,
 					"params": {
 						"n": 1,
-						"max_context_length": max_context_length,
-						"max_length": max_length,
-						"rep_pen": rep_pen,
-						"temperature": temperature,
-						"top_p": top_p,
+						"max_context_length": localsettings.max_context_length,
+						"max_length": localsettings.max_length,
+						"rep_pen": localsettings.rep_pen,
+						"temperature": localsettings.temperature,
+						"top_p": localsettings.top_p,
 					},
 					"workers": selected_workers,
 					"models": [selected_model],
@@ -1642,15 +1675,15 @@ I do not apologize for my code quality or how I massacred the UI.
 												let gentxt = data.generations[0].text;
 
 												//always trim incomplete sentences for adventure and chat
-												if(opmode==2 || opmode==3 || trimsentences==true)
+												if(localsettings.opmode==2 || localsettings.opmode==3 || localsettings.trimsentences==true)
 												{
 													gentxt = trim_to_sentence(gentxt);
 												}
 
 												//if we are in chatmode, truncate to my first response
-												if(opmode==3)
+												if(localsettings.opmode==3)
 												{
-													let foundMyName = gentxt.indexOf(chatname+"\:");
+													let foundMyName = gentxt.indexOf(localsettings.chatname+"\:");
 													let splitresponse = [];
 													if(foundMyName==-1) //if no name found
 													{		
@@ -1665,7 +1698,7 @@ I do not apologize for my code quality or how I massacred the UI.
 													}
 													else
 													{
-														splitresponse = gentxt.split(chatname+"\:");
+														splitresponse = gentxt.split(localsettings.chatname+"\:");
 													}
 													
 													let startpart = splitresponse[0];
@@ -1777,11 +1810,27 @@ I do not apologize for my code quality or how I massacred the UI.
 
 			}
 
-			if(autoscroll)
+			if(localsettings.autoscroll)
 			{
 				document.getElementById("gametext").scrollTop = document.getElementById("gametext").scrollHeight;
 			}
+			if(localsettings.persist_session)
+			{
+				autosave();
+			}
 			document.getElementById("abortgen").classList.add("hidden");
+		}
+
+		function autosave()
+		{
+			//autosave
+			localStorage.setItem("kaihordewebui_settings", JSON.stringify(localsettings));
+			if(localsettings.persist_session)
+			{
+				let compressedstory = generate_compressed_story();
+				localStorage.setItem("kaihordewebui_story", compressedstory);
+			}			
+			console.log("autosave done");
 		}
 
 		function btn_memory() {
@@ -2103,6 +2152,10 @@ I do not apologize for my code quality or how I massacred the UI.
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Trim Sentences </div>	
 						   <input type="checkbox" data-toggle="toggle" data-onstyle="success" id="trimsentences" style="margin:0px 0 0;">				
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Persist Session </div>	
+						   <input type="checkbox" data-toggle="toggle" data-onstyle="success" id="persist_session" style="margin:0px 0 0;">				
 						</div>
 					</div>
 					<div class="settingitem">

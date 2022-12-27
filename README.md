@@ -11,12 +11,13 @@ I do not apologize for my code quality or how I massacred the UI.
 - Concedo
 
 Changelog for KAI Horde Web UI v3 at 27 Dec 2022:
-- Added a popup table to display current list of Workers and their capabilities (click on Volunteers or volunteer name).
-- Added an optional workaround hack attempting to fix Horde misdirecting prompts to incorrect models by explicitly requesting Worker IDs (toggleable, not foolproof)
-- Allow user to manually abort a text generation after 10 seconds if a response was not received.
-- Added a share feature which allows you to instantly share any story via a special URL. The entire context, memory and authors note is compacted using LZMA compression and converted to a URL safe base64 format which others can import with a single click.
-- Opening a shared URL will automaticlly load the story, fill in context, AN and memory, and select the correct model.
+- Added a information table which displays current list of Workers and their capabilities (click on Volunteers or volunteer name).
+- Added a toggle to enable Persistent Sessions, which will autosave your story and settings to the browser local cache, and automatically load and resume every time you return. For privacy, this is switched off by default.
+- Added a share feature which allows you to instantly share any story via a special URL. The entire context, memory and authors note is compacted using an efficient LZMA compression and converted to a URL safe base64 format which others can import with a single click.
+- Opening a shared URL will automaticlly load the story, fill in context, Author's Note and memory, and select the correct model.
+- Added a button to allow user to manually abort a text generation after 10 seconds if a response was not received.
 - Change to minified bootstrap for smaller filesize
+- Added an optional workaround hack attempting to fix Horde misdirecting prompts to incorrect models by explicitly requesting Worker IDs (toggleable, not foolproof)
 
 Changelog for KAI Horde Web UI v2 at 25 Dec 2022:
 - Added support for Author Note Template
