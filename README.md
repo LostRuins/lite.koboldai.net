@@ -16,6 +16,7 @@ Changelog for KAI Horde Web UI v3 at 27 Dec 2022:
 - Allow user to manually abort a text generation after 10 seconds if a response was not received.
 - Added a share feature which allows you to instantly share any story via a special URL. The entire context, memory and authors note is compacted using LZMA compression and converted to a URL safe base64 format which others can import with a single click.
 - Opening a shared URL will automaticlly load the story, fill in context, AN and memory, and select the correct model.
+- Change to minified bootstrap for smaller filesize
 
 Changelog for KAI Horde Web UI v2 at 25 Dec 2022:
 - Added support for Author Note Template
