@@ -1,14 +1,16 @@
-# [kaihordewebui.github.io](https://kaihordewebui.github.io)
+#Kobold AI Lite
+# [lite.koboldai.net](https://lite.koboldai.net)
 
-This is a very quick and very dirty hackjob implementation of a standalone web ui for KoboldAIs Horde, which requires no dependencies, installation or setup.
+This is a standalone Web UI for KoboldAIs Horde, which requires no dependencies, installation or setup.
 
-Simply open the file in any browser, and it should work out of the box. All functionality is in a single static HTML file.
+Simply open it in any browser, and it should work out of the box. All functionality is in a single static HTML file.
 
 You can run it directly from your desktop or throw it on some web server and serve it there too. E.g. Github pages, nginx, whatever.
 
-I do not apologize for my code quality or how I massacred the UI.
-
 - Concedo
+
+Changelog Addendum 28 Dec 2022:
+- Thanks to Henk, KAI Horde Web UI is now rebranded as KoboldAI Lite! There is a new subdomain for it at https://lite.koboldai.net
 
 Changelog for KAI Horde Web UI v3 at 27 Dec 2022:
 - Added a information table which displays current list of Workers and their capabilities (click on Volunteers or volunteer name).
