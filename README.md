@@ -1,4 +1,4 @@
-# [kaihordewebui.github.io](kaihordewebui.github.io)
+# [kaihordewebui.github.io](https://kaihordewebui.github.io)
 
 This is a very quick and very dirty hackjob implementation of a standalone web ui for KoboldAIs Horde, which requires no dependencies, installation or setup.
 
