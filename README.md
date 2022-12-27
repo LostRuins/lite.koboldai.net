@@ -11,9 +11,11 @@ I do not apologize for my code quality or how I massacred the UI.
 - Concedo
 
 Changelog for KAI Horde Web UI v3 at 27 Dec 2022:
-- Added a table to display current list of Workers and their capabilities.
-- Added a hacky workaround to fix Horde misdirecting prompts to incorrect models (toggleable, not sure if it helps)
-- Allow user to abort a generation after 10 seconds if a response was not received.
+- Added a popup table to display current list of Workers and their capabilities (click on Volunteers or volunteer name).
+- Added an optional workaround hack attempting to fix Horde misdirecting prompts to incorrect models by explicitly requesting Worker IDs (toggleable, not foolproof)
+- Allow user to manually abort a text generation after 10 seconds if a response was not received.
+- Added a share feature which allows you to instantly share any story via a special URL. The entire context, memory and authors note is compacted using LZMA compression and converted to a URL safe base64 format which others can import with a single click.
+- Opening a shared URL will automaticlly load the story, fill in context, AN and memory, and select the correct model.
 
 Changelog for KAI Horde Web UI v2 at 25 Dec 2022:
 - Added support for Author Note Template
