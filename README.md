@@ -9,8 +9,14 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
-Changelog Addendum 28 Dec 2022:
+Changelog for KoboldAI Lite 28 Dec 2022:
 - Thanks to Henk, KAI Horde Web UI is now rebranded as KoboldAI Lite! There is a new subdomain for it at https://lite.koboldai.net
+- Added support for multiple model selection, allowing you to receive generated responses from more than one model. This setting is also remembered in persistent mode and shared stories.
+- Added new supported samplers! Top-A, Top-K, Typical and TFS samplers added as Advanced Settings (disabled by default)
+- Shared stories now include the game mode (e.g. chat/adventure) and chatname.
+- Persistent mode now stores your API key locally if enabled. 
+- Url parameters are cleared after loading a shared story. 
+- Worker list window size should now scale based on main window size
 
 Changelog for KAI Horde Web UI v3 at 27 Dec 2022:
 - Added a information table which displays current list of Workers and their capabilities (click on Volunteers or volunteer name).

@@ -5,7 +5,7 @@ This is a standalone web ui for KoboldAIs Horde, which requires no dependencies,
 Just copy this single static HTML file anywhere and open it in a browser. No dependencies.
 Or you can throw it on some web server and serve it there too. E.g. Github pages, nginx, whatever.
 Now rebranded as KoboldAI Lite
-Current version: 3
+Current version: 4
 -Concedo
 -->
 
@@ -333,17 +333,18 @@ Current version: 3
 			}
 		}
 
-		#nspopup {
-			width: 330px;
+		.nspopup {
 			background-color: #262626;
 			margin-top: 200px;
 		}
-
-		#nspopuplow {
-			width: 330px;
-			background-color: #262626;
+		.nspopup.higher {
 			margin-top: 130px;
 		}
+		.nspopup.fixsize {
+			width: 330px;
+		}
+
+		
 
 
 		/*================= Classes =================*/
@@ -914,7 +915,7 @@ Current version: 3
 		}		
 		.workerTable{		
 			color: #ffffff;
-			font-size:5.5px;
+			font-size:1.5vw;
 		}
 	
 
@@ -992,11 +993,9 @@ Current version: 3
 		//all configurable globals
 		var perfinfo = "";
 		var models_data = [];
-		var selected_model = "";
-		var selected_model_meta = {};
+		var selected_models = []; //this stores ALL selected models properties as array of objects
 		var worker_data = [];
-		var selected_workers = [];
-		var my_api_key = "0000000000";
+		var selected_workers = [];		
 		var gametext_arr = []; //array of texts currently displayed
 		var redo_arr = []; //array of texts that are in the redo stack
 		var pending_response_id = ""; //guid of response pending from horde server
@@ -1008,6 +1007,8 @@ Current version: 3
 		var loaded_storyobj = generate_base_storyobj(); //for loading json story files from disk
 
 		var localsettings = {
+			 my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
+
 			autoscroll: false, //automatically scroll to bottom on render
 			trimsentences: false, //trim to last punctuation
 			opmode: 1, //what mode are we in? 1=story, 2=adventure, 3=chat
@@ -1019,7 +1020,14 @@ Current version: 3
 			rep_pen: 1.1,
 			temperature: 0.5,
 			top_p: 0.9,
+			top_k: 0,
+			top_a: 0,
+			typ_s: 1,
+			tfs_s: 1,
+
 		};
+
+		var defaultsettings = JSON.parse(JSON.stringify(localsettings));
 
 		//attempt to load settings
 		try {
@@ -1063,6 +1071,8 @@ Current version: 3
 				if(foundStory&&foundStory!="")
 				{
 					import_share_story(foundStory);
+					//purge url params
+					window.history.replaceState(null, null, window.location.pathname);
 				}
 
 			}).catch((error) => {
@@ -1099,7 +1109,11 @@ Current version: 3
 			//a tiny json format which gets compressed by LZMA then b64url
 			var story = {
 				ga: gametext_arr,
-				md: cyrb_hash(selected_model),
+				md: [],
+			}
+			for(var i=0;i<selected_models.length;++i)
+			{
+				story.md.push(cyrb_hash(selected_models[i].name));
 			}
 			if (current_memory != "") {
 				story.cm = current_memory
@@ -1107,6 +1121,15 @@ Current version: 3
 			if (current_anote != "") {
 				story.ca = current_anote;
 				story.ct = current_anotetemplate;
+			}
+			//export some settings if nondefault
+			if(localsettings.opmode!=defaultsettings.opmode)
+			{
+				story.op = localsettings.opmode;
+				if(localsettings.chatname!=defaultsettings.chatname)
+				{
+					story.cn = localsettings.chatname;
+				}
 			}
 			var storyjson = JSON.stringify(story);
 			console.log("Exporting story: " + storyjson);
@@ -1164,18 +1187,19 @@ Current version: 3
 					{
 						msgbox("No models available. Unable to load.");
 					}else{
-						let sidx = 0;
+
+						selected_models = [];
 						for(var i=0;i<mdls.length;++i)
 						{
-							if(cyrb_hash(mdls[i].name)==story.md)
+							if(story.md.includes(cyrb_hash(mdls[i].name)))
 							{
-								sidx = i;
-								break;
+								selected_models.push(mdls[i]);
 							}
 						}
-						selected_model_meta = mdls[sidx];
-						selected_model = selected_model_meta.name;
-						console.log("selected model: " + selected_model);
+						if(selected_models.length==0) //no matching models, just assign one
+						{
+							selected_models.push(mdls[0]);
+						}
 						restart_new_game();
 
 						gametext_arr = story.ga;
@@ -1187,6 +1211,14 @@ Current version: 3
 						if(story.cm&&story.cm!="")
 						{
 							current_memory = story.cm;
+						}
+						if(story.op&&story.op!="")
+						{
+							localsettings.opmode = story.op;
+							if(story.cn&&story.cn!="")
+							{
+								localsettings.chatname = story.cn;
+							}
 						}
 						
 
@@ -1360,7 +1392,7 @@ Current version: 3
 		function display_models() {
 			document.getElementById("oaimodel").innerHTML = "";			
 			document.getElementById("loadmodelcontainer").classList.remove("hidden");
-			document.getElementById("apikey").value = my_api_key;
+			document.getElementById("apikey").value = localsettings.my_api_key;
 
 			fetch(models_endpoint)
 			.then(x => x.json())
@@ -1384,24 +1416,28 @@ Current version: 3
 		}
 
 		function confirm_models() {
-			let selected_idx = document.getElementById("oaimodel").value;
-			if (selected_idx && selected_idx != "") {
-				selected_model_meta = models_data[selected_idx];
-				selected_model = selected_model_meta.name;
-				console.log("selected model: " + selected_model);
+			let selected_idx_arr = Array.from(document.getElementById("oaimodel").selectedOptions).map(({ value }) => value);
 
-				//if the misdirect fix hack is enabled, pick a specific worker id to use
+			if (selected_idx_arr.length>0) {
+				selected_models = [];
+
+				//if the misdirect fix hack is enabled, pick a specific worker ids to use
 				selected_workers = [];
 				let misdirectfix = (document.getElementById("misdirectfix").checked ? true : false);
-				if (misdirectfix) {
-					let foundworker = worker_data.find(element => element.models.includes(selected_model));
-					if(foundworker)
-					{
-						selected_workers.push(foundworker.id);
-					}
-				} 
 
-				my_api_key = document.getElementById("apikey").value;
+				for(var i=0;i<selected_idx_arr.length;++i)
+				{
+					let addedmodel = models_data[selected_idx_arr[i]];
+					selected_models.push(addedmodel);
+					if (misdirectfix) {
+						let foundworker = worker_data.find(element => element.models.includes(addedmodel.name));
+						if (foundworker) {
+							selected_workers.push(foundworker.id);
+						}
+					}
+				}
+
+				localsettings.my_api_key = document.getElementById("apikey").value;
 
 				render_gametext();
 
@@ -1421,6 +1457,11 @@ Current version: 3
 			document.getElementById("persist_session").checked = localsettings.persist_session;
 			document.getElementById("opmode").value = localsettings.opmode;
 			document.getElementById("chatname").value = localsettings.chatname;
+			document.getElementById("top_k").value = localsettings.top_k;
+			document.getElementById("top_a").value = localsettings.top_a;
+			document.getElementById("typ_s").value = localsettings.typ_s;
+			document.getElementById("tfs_s").value = localsettings.tfs_s;			
+
 			toggle_opmode();
 		}
 
@@ -1435,6 +1476,10 @@ Current version: 3
 			localsettings.persist_session = (document.getElementById("persist_session").checked?true:false);
 			localsettings.opmode = document.getElementById("opmode").value;
 			localsettings.chatname = document.getElementById("chatname").value;
+			localsettings.top_k = document.getElementById("top_k").value;
+			localsettings.top_a = document.getElementById("top_a").value;
+			localsettings.typ_s = document.getElementById("typ_s").value;
+			localsettings.tfs_s = document.getElementById("tfs_s").value;	
 
 			//clamp values
 			localsettings.max_context_length = clamp(localsettings.max_context_length, 512, 2048);
@@ -1442,6 +1487,10 @@ Current version: 3
 			localsettings.temperature = clamp(localsettings.temperature, 0.1, 2);
 			localsettings.rep_pen = clamp(localsettings.rep_pen, 1, 3);
 			localsettings.top_p = clamp(localsettings.top_p, 0, 1);
+			localsettings.top_k = clamp(localsettings.top_k, 0, 100);
+			localsettings.top_a = clamp(localsettings.top_a, 0, 1);
+			localsettings.typ_s = clamp(localsettings.typ_s, 0, 1);
+			localsettings.tfs_s = clamp(localsettings.tfs_s, 0, 1);
 
 			autosave(); //need to always autosave, so that we can switch back to non persistent sessions			
 
@@ -1581,8 +1630,19 @@ Current version: 3
 						"top_p": localsettings.top_p,
 					},
 					"workers": selected_workers,
-					"models": [selected_model],
+					"models": selected_models.map((m)=>{return m.name}),
 				};
+				
+				//only send advanced settings if they're modified
+				if (localsettings.top_k != defaultsettings.top_k ||
+					localsettings.top_a != defaultsettings.top_a ||
+					localsettings.typ_s != defaultsettings.typ_s ||
+					localsettings.tfs_s != defaultsettings.tfs_s) {
+						submit_payload.params.top_k = localsettings.top_k;
+						submit_payload.params.top_a = localsettings.top_a;
+						submit_payload.params.typical = localsettings.typ_s;
+						submit_payload.params.tfs = localsettings.tfs_s;
+				}
 
 				console.log(submit_payload);
 
@@ -1590,7 +1650,7 @@ Current version: 3
 					method: 'POST', // or 'PUT'
 					headers: {
 						'Content-Type': 'application/json',
-						'apikey': my_api_key,
+						'apikey': localsettings.my_api_key,
 					},
 					body: JSON.stringify(submit_payload),
 				})
@@ -1766,9 +1826,9 @@ Current version: 3
 
 		function render_gametext() {
 			if (gametext_arr.length == 0) {
-				document.getElementById("gametext").innerHTML = "<span>Welcome to <span class=\"color_cyan\">KoboldAI Lite</span>!<br>You are using the model <span class=\"color_green\">" 
-				+ selected_model + "</span>"+ (selected_workers.length==0?"":(" (Misdirect Fix Applied)")) 
-				+ ".<br>There are <span class=\"color_orange\">" + selected_model_meta.count + "</span> <a class=\"color_green\" href=\"#\" onclick=\"get_and_show_workers()\">volunteer(s)</a> running this model with an approximate queue length of <span class=\"color_orange\">" + selected_model_meta.queued + "</span>.<br>Enter a prompt below to begin!</span>";
+				document.getElementById("gametext").innerHTML = "<span>Welcome to <span class=\"color_cyan\">KoboldAI Lite</span>!<br>You are using the models <span class=\"color_green\">" 
+				+ selected_models.reduce((s, a) => s + (s==""?"":", ") + a.name , "") + "</span>"+ (selected_workers.length==0?"":(" (Misdirect Fix Applied)")) 
+				+ ".<br>There are <span class=\"color_orange\">" + selected_models.reduce((s, a) => s + a.count, 0) + "</span> <a class=\"color_green\" href=\"#\" onclick=\"get_and_show_workers()\">volunteer(s)</a> running selected models with a total queue length of <span class=\"color_orange\">" + selected_models.reduce((s, a) => s + a.queued, 0) + "</span>.<br>Enter a prompt below to begin!</span>";
 			}
 			else {
 				let fulltxt = "<span>" + concat_gametext() + "</span>";
@@ -1777,7 +1837,7 @@ Current version: 3
 				document.getElementById("gametext").innerHTML = fulltxt;
 			}
 
-			if (selected_model == "") {
+			if (selected_models.length==0) {
 				let elements = document.getElementsByClassName("hideuntilselectedai");
 				for (var i = 0; i < elements.length; i++) {
 					elements[i].classList.add("hidden");
@@ -1789,7 +1849,7 @@ Current version: 3
 				}
 			}
 
-			if (selected_model == "") {
+			if (selected_models.length==0) {
 				document.getElementById("btnsend").disabled = true;
 				document.getElementById("btnsend").classList.add("wait");
 				document.getElementById("btnsend").classList.remove("btn-primary");
@@ -2012,7 +2072,7 @@ Current version: 3
 						<span class="helptext">These are the models currently provided by KoboldAI Horde
 							volunteers.</span>
 					</span>
-					<select class="form-control" id="oaimodel"></select>
+					<select class="form-control" id="oaimodel" multiple></select>
 				</div>
 
 				<div class="justifyleft anotelabel">
@@ -2036,7 +2096,7 @@ Current version: 3
 
 
 	<div class="popupcontainer flex hidden" id="newgamecontainer">
-		<div id="nspopup">
+		<div class="nspopup fixsize">
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Really Start A New Story?</div>
 			</div>
@@ -2052,7 +2112,7 @@ Current version: 3
 	</div>
 
 	<div class="popupcontainer flex hidden" id="settingscontainer">
-		<div id="nspopuplow">
+		<div class="nspopup fixsize higher">
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Settings</div>
 			</div>
@@ -2146,6 +2206,44 @@ Current version: 3
 						</div>
 					</div>
 					<div class="settingitem">
+						<div class="settinglabel">							
+							<div id="advsettings">
+							<div class="justifyleft settingsmall">Advanced Settings <span class="helpicon">?<span class="helptext">These settings control alternative samplers configurations. They are inactive by default, you usually do not need to change them.</span></span></div>	
+							<table class="settingsmall text-center" style="border-spacing: 4px 2px;
+							border-collapse: separate;">
+								<tr>
+								  <th>Top-K</th>
+								  <th>Top-A</th>
+								  <th>Typ.</th>
+								  <th>TFS</th>
+								</tr>
+								<tr>
+								<td><input class="" type="text" placeholder="0" value="0"
+								id="top_k"></td>
+								<td><input class="" type="text" placeholder="0" value="0"
+								id="top_a"></td>
+								<td><input class="" type="text" placeholder="0" value="0"
+								id="typ_s"></td>
+								<td><input class="" type="text" placeholder="0" value="0"
+								id="tfs_s"></td>
+								</tr>								
+							  </table>							
+							</div>		
+						</div>
+					</div>
+
+					<div class="settingitem">
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Format </div>	
+							<select class="form-control" id="opmode" style="height:24px;padding:0;margin:0px 0 0;" onchange="toggle_opmode()">
+								<option value="1">Story Mode</option>
+								<option value="2">Adventure Mode</option>
+								<option value="3">Chat Mode</option>
+							</select>								
+						</div>
+					</div>
+				
+					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Autoscroll </div>	
 						   <input type="checkbox" data-toggle="toggle" data-onstyle="success" id="autoscroll" style="margin:0px 0 0;">				
@@ -2159,16 +2257,7 @@ Current version: 3
 						   <input type="checkbox" data-toggle="toggle" data-onstyle="success" id="persist_session" style="margin:0px 0 0;">				
 						</div>
 					</div>
-					<div class="settingitem">
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Format </div>	
-							<select class="form-control" id="opmode" style="height:24px;padding:0;margin:0px 0 0;" onchange="toggle_opmode()">
-								<option value="1">Story Mode</option>
-								<option value="2">Adventure Mode</option>
-								<option value="3">Chat Mode</option>
-							</select>								
-						</div>
-					</div>
+
 					<div class="settingitem">
 						<div class="settinglabel">							
 							<div id="chatnamesection" class="hidden">
@@ -2178,8 +2267,6 @@ Current version: 3
 							</div>		
 						</div>
 					</div>
-
-					
 
 				</div>
 			</div>
@@ -2193,7 +2280,7 @@ Current version: 3
 	</div>
 
 	<div class="popupcontainer flex hidden" id="memorycontainer">
-		<div id="nspopuplow">
+		<div class="nspopup fixsize higher">
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Memory</div>
 			</div>
@@ -2217,7 +2304,7 @@ Current version: 3
 	</div>
 
 	<div class="popupcontainer flex hidden" id="workercontainer">
-		<div id="nspopup">
+		<div class="nspopup">
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Worker List</div>
 			</div>
@@ -2237,7 +2324,7 @@ Current version: 3
 	</div>
 
 	<div class="popupcontainer flex hidden" id="sharecontainer">
-		<div id="nspopup">
+		<div class="nspopup fixsize">
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Share Story URL</div>
 			</div>
@@ -2252,7 +2339,7 @@ Current version: 3
 	</div>
 
 	<div class="popupcontainer flex hidden" id="msgboxcontainer">
-		<div id="nspopup">
+		<div class="nspopup fixsize">
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Error Encountered</div>
 			</div>
