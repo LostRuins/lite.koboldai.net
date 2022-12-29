@@ -1014,11 +1014,12 @@ Current version: 4
 			opmode: 1, //what mode are we in? 1=story, 2=adventure, 3=chat
 			chatname: "You", //name to use in chat
 			persist_session: false,
+			speech_synth: 0, //0 is disabled
 
 			max_context_length: 1024,
 			max_length: 80,
 			rep_pen: 1.1,
-			temperature: 0.5,
+			temperature: 0.55,
 			top_p: 0.9,
 			top_k: 0,
 			top_a: 0,
@@ -1047,7 +1048,13 @@ Current version: 4
 			}
 		} catch (e) {
 			console.log("Discarded invalid local save: " + e);
-		}		
+		}	
+		
+		//poke speech synth to preload voices
+		if ('speechSynthesis' in window) {
+			let voices = window.speechSynthesis.getVoices();  
+			console.log("Voices loading...");
+		}
 
 		//fetch horde performance status as initial login
 		fetch(perf_endpoint)
@@ -1087,6 +1094,18 @@ Current version: 4
 			sel.removeAllRanges();
 			sel.addRange(range);
 		}
+
+		var timetaken_timestamp = performance.now();
+		function startTimeTaken()
+		{
+			timetaken_timestamp = performance.now();
+		}
+		function getTimeTaken()
+		{
+			var end_timestamp = performance.now();
+			return ((end_timestamp - timetaken_timestamp)/1000).toFixed(1);
+		}
+
 		function cyrb_hash(str, seed = 0)
 		{
 			let h1 = 0xdeadbeef ^ seed,
@@ -1460,7 +1479,21 @@ Current version: 4
 			document.getElementById("top_k").value = localsettings.top_k;
 			document.getElementById("top_a").value = localsettings.top_a;
 			document.getElementById("typ_s").value = localsettings.typ_s;
-			document.getElementById("tfs_s").value = localsettings.tfs_s;			
+			document.getElementById("tfs_s").value = localsettings.tfs_s;	
+			
+			var ttshtml = "<option value=\"0\">Disabled</option>";
+			if ('speechSynthesis' in window) {
+				let voices = window.speechSynthesis.getVoices();
+				console.log("speech synth available: " + voices.length);
+				for(var i=0;i<voices.length;++i) {
+					ttshtml += "<option value=\"" + (i + 1) + "\">" + voices[i].name + "</option>";
+				}
+			}else{
+				console.log("No speech synth available");
+			}
+			document.getElementById("ttsselect").innerHTML = ttshtml;	
+			document.getElementById("ttsselect").value = localsettings.speech_synth;
+							
 
 			toggle_opmode();
 		}
@@ -1480,6 +1513,7 @@ Current version: 4
 			localsettings.top_a = document.getElementById("top_a").value;
 			localsettings.typ_s = document.getElementById("typ_s").value;
 			localsettings.tfs_s = document.getElementById("tfs_s").value;	
+			localsettings.speech_synth = document.getElementById("ttsselect").value;
 
 			//clamp values
 			localsettings.max_context_length = clamp(localsettings.max_context_length, 512, 2048);
@@ -1568,6 +1602,13 @@ Current version: 4
 		function submit_generation() {
 			let newgen = document.getElementById("input_text").value;
 			if (newgen != "" || gametext_arr.length > 0 || current_memory != "" || current_anote != "") {
+				if(localsettings.speech_synth>0 && 'speechSynthesis' in window)
+				{
+					let utterance = new window.SpeechSynthesisUtterance(newgen);
+					utterance.voice = window.speechSynthesis.getVoices()[localsettings.speech_synth-1];
+					window.speechSynthesis.speak(utterance);
+				}
+				
 				if(localsettings.opmode==3 && newgen!="")
 				{
 					//append chatname for chatmode
@@ -1645,6 +1686,8 @@ Current version: 4
 				}
 
 				console.log(submit_payload);
+
+				startTimeTaken(); //timestamp start request
 
 				fetch(submit_endpoint, {
 					method: 'POST', // or 'PUT'
@@ -1770,8 +1813,15 @@ Current version: 4
 													gentxt = startpart;
 												}
 
+												if(localsettings.speech_synth>0 && 'speechSynthesis' in window)
+												{
+													let utterance = new window.SpeechSynthesisUtterance(gentxt);
+													utterance.voice = window.speechSynthesis.getVoices()[localsettings.speech_synth-1];
+													window.speechSynthesis.speak(utterance);
+												}
+
 												gametext_arr.push(gentxt);
-												document.getElementById("lastreq").innerHTML = "Your last request was served by <a href=\"#\" onclick=\"get_and_show_workers()\">" + data.generations[0].worker_name + "</a> for " + data.kudos + " kudos.";
+												document.getElementById("lastreq").innerHTML = "Last request served by <a href=\"#\" onclick=\"get_and_show_workers()\">" + data.generations[0].worker_name + "</a> for " + data.kudos + " kudos in "+ getTimeTaken() +" seconds.";
 											}
 											render_gametext();
 										}).catch((error) => {
@@ -2265,6 +2315,15 @@ Current version: 4
 							<input class="" type="text" placeholder="Chat Name" value="You"
 							id="chatname">
 							</div>		
+						</div>
+					</div>
+
+					<div class="settingitem">
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">TTS <span class="helpicon">?<span class="helptext">Enable Text-To-Speech to have your story automatically read to you.</span></span></div>
+							<select class="form-control" id="ttsselect" style="height:24px;padding:0;margin:0px 0 0;">
+							</select>						
+							</select>							
 						</div>
 					</div>
 
