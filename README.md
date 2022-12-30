@@ -9,6 +9,11 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
+Changelog for KoboldAI Lite 30 Dec 2022:
+- New TTS (Text-To-Speech) feature added! Will read out whatever you send and whatever is generated. Enable in settings.
+- Now displays how long the last request took, time elapsed between request and response.
+- Slightly increased default temperature
+
 Changelog for KoboldAI Lite 28 Dec 2022:
 - Thanks to Henk, KAI Horde Web UI is now rebranded as KoboldAI Lite! There is a new subdomain for it at https://lite.koboldai.net
 - Added support for multiple model selection, allowing you to receive generated responses from more than one model. This setting is also remembered in persistent mode and shared stories.
