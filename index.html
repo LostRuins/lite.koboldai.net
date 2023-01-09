@@ -458,6 +458,10 @@ Current version: 5
 			color: #ff0000;
 		}
 
+		.color_pink {
+			color: #ffbdbd;
+		}
+
 		.dropdown-menu {
 			background-color: #757575;
 			width: 200px;
@@ -988,6 +992,12 @@ Current version: 5
 		var output_endpoint = "https://koboldai.net/api/v2/generate/status";
 		var worker_endpoint = "https://koboldai.net/api/v2/workers";
 
+		var submit_v1_endpoint = "https://koboldai.net/api/v1/generate/sync";
+
+		var stablehorde_submit_endpoint = "https://stablehorde.net/api/v2/generate/async";
+		var stablehorde_poll_endpoint = "https://stablehorde.net/api/v2/generate/check";
+		var stablehorde_output_endpoint = "https://stablehorde.net/api/v2/generate/status";
+		
 		//all configurable globals
 		var perfinfo = "";
 		var models_data = [];
@@ -1003,6 +1013,10 @@ Current version: 5
 		var current_anote = ""; //stored author note
 		var current_anotetemplate = "[Author\'s note: <|>]";
 		var loaded_storyobj = generate_base_storyobj(); //for loading json story files from disk
+		var generateimagesinterval = 600; //if generated images is enabled, it will trigger after every 600 new characters in context. 
+		var nextgeneratedimagemilestone = generateimagesinterval; //used to keep track of when to generate the next image
+		var usev1api = false;
+		var v1_polled_response = null;
 
 		var localsettings = {
 			 my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
@@ -1013,6 +1027,7 @@ Current version: 5
 			chatname: "You", //name to use in chat
 			persist_session: false,
 			speech_synth: 0, //0 is disabled
+			generate_images: false,
 
 			max_context_length: 1024,
 			max_length: 80,
@@ -1314,7 +1329,7 @@ Current version: 5
 			a.click();			
 		}
 		
-		function load_file(event) {
+		function load_file(event) {			
 			let input = event.target;
 
 			if (input.files.length > 0) {
@@ -1339,18 +1354,36 @@ Current version: 5
 								for (var i = 0; i < loaded_storyobj.actions.length; ++i) {
 									gametext_arr.push(loaded_storyobj.actions[i]);
 								}
-								current_anotetemplate = loaded_storyobj.anotetemplate;
-								current_anote = loaded_storyobj.authorsnote;
-								current_memory = loaded_storyobj.memory;
+								if(loaded_storyobj.anotetemplate)
+								{
+									current_anotetemplate = loaded_storyobj.anotetemplate;
+								}
+								if(loaded_storyobj.authorsnote)
+								{
+									current_anote = loaded_storyobj.authorsnote;
+								}
+								if(loaded_storyobj.memory)
+								{
+									current_memory = loaded_storyobj.memory;
+								}
 							} else {
 								gametext_arr.push(loaded_storyobj.prompt);
 								for (var key in loaded_storyobj.actions.actions){
 									var itm = loaded_storyobj.actions.actions[key];
 									gametext_arr.push(itm["Selected Text"]);
-								}							
-								current_anotetemplate = loaded_storyobj.authornotetemplate;
-								current_anote = loaded_storyobj.authornote;
-								current_memory = loaded_storyobj.memory;
+								}
+								if(loaded_storyobj.authornotetemplate)
+								{	
+									current_anotetemplate = loaded_storyobj.authornotetemplate;
+								}
+								if(loaded_storyobj.authornote)
+								{
+									current_anote = loaded_storyobj.authornote;
+								}
+								if(loaded_storyobj.memory)
+								{
+									current_memory = loaded_storyobj.memory;
+								}
 							}
 							render_gametext();
 						}
@@ -1360,6 +1393,9 @@ Current version: 5
 
 				};
 				reader.readAsText(input.files[0]);
+				document.getElementById("loadfileinput").value = "";
+			}else{
+				console.log("No file to load")
 			}
 		};
 
@@ -1446,6 +1482,7 @@ Current version: 5
 
 				//if the misdirect fix hack is enabled, pick a specific worker ids to use
 				selected_workers = [];
+				usev1api = (document.getElementById("usev1api").checked ? true : false);
 				let misdirectfix = (document.getElementById("misdirectfix").checked ? true : false);
 
 				for(var i=0;i<selected_idx_arr.length;++i)
@@ -1478,6 +1515,7 @@ Current version: 5
 			document.getElementById("autoscroll").checked = localsettings.autoscroll;
 			document.getElementById("trimsentences").checked = localsettings.trimsentences;
 			document.getElementById("persist_session").checked = localsettings.persist_session;
+			document.getElementById("generate_images").checked = localsettings.generate_images;
 			document.getElementById("opmode").value = localsettings.opmode;
 			document.getElementById("chatname").value = localsettings.chatname;
 			document.getElementById("top_k").value = localsettings.top_k;
@@ -1511,6 +1549,7 @@ Current version: 5
 			localsettings.autoscroll = (document.getElementById("autoscroll").checked?true:false);
 			localsettings.trimsentences = (document.getElementById("trimsentences").checked?true:false);
 			localsettings.persist_session = (document.getElementById("persist_session").checked?true:false);
+			localsettings.generate_images = (document.getElementById("generate_images").checked?true:false);
 			localsettings.opmode = document.getElementById("opmode").value;
 			localsettings.chatname = document.getElementById("chatname").value;
 			localsettings.top_k = document.getElementById("top_k").value;
@@ -1563,7 +1602,9 @@ Current version: 5
 		function restart_new_game() {
 			gametext_arr = [];
 			redo_arr = [];
+			nextgeneratedimagemilestone = generateimagesinterval;
 			pending_response_id = "";
+			v1_polled_response = null;
 			current_memory = "";
 			current_anote = "";
 			current_anotetemplate = "[Author's note: <|>]";
@@ -1582,7 +1623,7 @@ Current version: 5
 			}
 		}
 
-		function trim_to_sentence(input)
+		function end_trim_to_sentence(input)
 		{
 			let p1 = input.lastIndexOf(".");
 			let p2 = input.lastIndexOf("!");
@@ -1595,11 +1636,26 @@ Current version: 5
 			return input;
 		}
 
+		function start_trim_to_sentence(input) {
+			let p1 = input.indexOf(".");
+			let p2 = input.indexOf("!");
+			let p3 = input.indexOf("?");
+			let first = p1;
+			if (p2 > 0 && p2 < first) { first = p2; }
+			if (p3 > 0 && p3 < first) { first = p3; }
+			console.log(first)
+			if (first > 0) {
+				return input.substring(first + 2);
+			}
+			return input;
+		}
+
 		function abort_generation()
 		{
 			console.log("Generation " + pending_response_id + " aborted");
 			pending_response_id = "";
 			poll_in_progress = false;
+			v1_polled_response = null;
 			render_gametext();
 		}
 
@@ -1635,6 +1691,20 @@ Current version: 5
 				let max_allowed_characters = localsettings.max_context_length * 4;
 
 				let truncated_context = concat_gametext(); //no need to truncate if memory is empty
+
+				//determine if a new generated image is needed
+				if(localsettings.generate_images)
+				{
+					var tclen = truncated_context.length;
+					if(tclen > nextgeneratedimagemilestone)
+					{
+						nextgeneratedimagemilestone = tclen + generateimagesinterval; //set next milestone and trigger generation, using the last 300 characters advanced to the nearest sentence.
+						var sentence = truncated_context.substring(tclen-300,tclen);
+						sentence = start_trim_to_sentence(sentence);
+						sentence = end_trim_to_sentence(sentence);
+						generate_new_image(sentence);
+					}
+				}
 
 				//we clip the memory if its too long, taking the last x chars (not the first)
 				let truncated_memory = current_memory.substring(current_memory.length - max_allowed_characters);
@@ -1673,10 +1743,18 @@ Current version: 5
 						"rep_pen": localsettings.rep_pen,
 						"temperature": localsettings.temperature,
 						"top_p": localsettings.top_p,
-					},
-					"workers": selected_workers,
+					},					
 					"models": selected_models.map((m)=>{return m.name}),
 				};
+
+				//v1 and v2 api specific fields
+				if (usev1api) {
+					submit_payload.api_key = localsettings.my_api_key;
+					submit_payload.servers = selected_workers;
+				} else {
+					submit_payload.workers = selected_workers;
+				}
+
 				
 				//only send advanced settings if they're modified
 				if (localsettings.top_k != defaultsettings.top_k ||
@@ -1693,14 +1771,62 @@ Current version: 5
 
 				startTimeTaken(); //timestamp start request
 
-				fetch(submit_endpoint, {
-					method: 'POST', // or 'PUT'
-					headers: {
-						'Content-Type': 'application/json',
-						'apikey': localsettings.my_api_key,
-					},
-					body: JSON.stringify(submit_payload),
-				})
+				//handle v1 or v2 submit
+				if (usev1api) {
+					console.log("submit v1 api");
+
+					pending_response_id = "submit-v1-dummy-id"; //dummy id
+					poll_ticks_passed = 0;
+					poll_in_progress = false;
+					v1_polled_response = null;
+
+					fetch(submit_v1_endpoint, {
+						method: 'POST', // or 'PUT'
+						headers: {
+							'Content-Type': 'application/json',							
+						},
+						body: JSON.stringify(submit_payload),
+					})
+					.then((response) => response.json())
+					.then((data) => {
+						
+						v1_polled_response = data;	
+						console.log("v1 finished response: " + JSON.stringify(v1_polled_response));						
+						if(v1_polled_response.length > 0) //will be undefined if fail, not zero!
+						{
+							console.log("v1 success");
+						}
+						else
+						{
+							//error occurred, maybe captcha failed
+							console.error("error occurred in v1 generation");
+							pending_response_id = "";
+							poll_in_progress = false;
+							v1_polled_response = null;
+							render_gametext();
+							msgbox("Error occurred during text generation.");						
+						}
+					})
+					.catch((error) => {
+						console.error('Error:', error);
+						pending_response_id = "";
+						poll_in_progress = false;
+						v1_polled_response = null;
+						render_gametext();
+						msgbox("Error while submitting prompt: " + error);
+					});
+				}
+				else {
+					console.log("submit v2 api");
+
+					fetch(submit_endpoint, {
+						method: 'POST', // or 'PUT'
+						headers: {
+							'Content-Type': 'application/json',
+							'apikey': localsettings.my_api_key,
+						},
+						body: JSON.stringify(submit_payload),
+					})
 					.then((response) => response.json())
 					.then((data) => {
 						console.log('Success:', data);
@@ -1729,7 +1855,66 @@ Current version: 5
 						render_gametext();
 						msgbox("Error while submitting prompt: " + error);
 					});
+				}
 			}
+		}
+
+		function generate_new_image(sentence)
+		{
+			console.log("Generating image for: " + sentence);
+		}
+		function render_image_html(url)
+		{
+			var dim = 150;
+			if(!url || url=="")
+			{
+				return `<svg width="`+dim+`" height="`+dim+`" viewBox="0 0 180.119 139.794" style="float: right;"><g transform="translate(-13.59 -66.639)" paint-order="fill markers stroke"><path fill="#d0d0d0" d="M13.591 66.639H193.71v139.794H13.591z"/><path d="m118.507 133.514-34.249 34.249-15.968-15.968-41.938 41.937H178.726z" opacity=".675" fill="#fff"/><circle cx="58.217" cy="108.555" r="11.773" opacity=".675" fill="#fff"/><path fill="none" d="M26.111 77.634h152.614v116.099H26.111z"/></g></svg>`;
+			}else{
+				return `<img src="` + url + `" width=`+dim+` height=`+dim+` style="float: right;border-radius: 6%;">`;
+			}
+		}
+
+		function handle_incoming_text(gentxt, genworker, genkudos)
+		{
+			//always trim incomplete sentences for adventure and chat
+			if (localsettings.opmode == 2 || localsettings.opmode == 3 || localsettings.trimsentences == true) {
+				gentxt = end_trim_to_sentence(gentxt);
+			}
+
+			//if we are in chatmode, truncate to my first response
+			if (localsettings.opmode == 3) {
+				let foundMyName = gentxt.indexOf(localsettings.chatname + "\:");
+				let splitresponse = [];
+				if (foundMyName == -1) //if no name found
+				{
+					//if quotes found, split by quotes
+					if (gentxt.indexOf("\"") == 0 && gentxt.indexOf("\"", 1) > 0) {
+						let endquote = gentxt.indexOf("\"", 1);
+						splitresponse.push(gentxt.substring(0, endquote + 1));
+					} else {
+						//split to first newline
+						splitresponse = gentxt.split("\n");
+					}
+				}
+				else {
+					splitresponse = gentxt.split(localsettings.chatname + "\:");
+				}
+
+				let startpart = splitresponse[0];
+				if (startpart.length > 0 && startpart[startpart.length - 1] == "\n") {
+					startpart = startpart.substring(0, startpart.length - 1);
+				}
+				gentxt = startpart;
+			}
+
+			if (localsettings.speech_synth > 0 && 'speechSynthesis' in window) {
+				let utterance = new window.SpeechSynthesisUtterance(gentxt);
+				utterance.voice = window.speechSynthesis.getVoices()[localsettings.speech_synth - 1];
+				window.speechSynthesis.speak(utterance);
+			}
+
+			gametext_arr.push(gentxt);
+			document.getElementById("lastreq").innerHTML = "Last request served by <a href=\"#\" onclick=\"get_and_show_workers()\">" + genworker + "</a> for " + genkudos + " kudos in " + getTimeTaken() + " seconds.";
 		}
 
 		function poll_pending_response() {
@@ -1743,9 +1928,36 @@ Current version: 5
 					console.log("Polling still in progress for id: " + pending_response_id);
 				}
 				else {
-					console.log("Polling started for pending id: " + pending_response_id);
-					poll_in_progress = true;					
-					fetch(polling_endpoint + "/" + pending_response_id)
+
+					if(usev1api)
+					{
+						//v1 api only needs to check if data was received and stored into local object
+						poll_in_progress = true;
+						if (v1_polled_response == null) {
+							//still waiting, do nothing until next poll
+							poll_in_progress = false;
+							console.log("v1 still awaiting reply");
+						} else {
+							console.log("v1 handle recv reply");
+							pending_response_id = "";
+							poll_in_progress = false;
+							let v1_elem = v1_polled_response[0];
+							if (v1_elem.text != null && v1_elem.text!=""){
+								let gentxt = v1_elem.text;
+								let genworker = v1_elem.server_name;
+								let genkudos = "unknown";
+								handle_incoming_text(gentxt, genworker, genkudos);
+							}
+							render_gametext();
+							v1_polled_response = null;					
+						}
+					}
+					else
+					{
+						//v2 api needs to constantly poll to see if response is done
+						console.log("v2 Polling started for pending id: " + pending_response_id);
+						poll_in_progress = true;					
+						fetch(polling_endpoint + "/" + pending_response_id)
 						.then(x => x.json())
 						.then(data => {
 							if (data.message != null || data.faulted == true || data.is_possible == false) {
@@ -1781,51 +1993,9 @@ Current version: 5
 											poll_in_progress = false;
 											if (data.generations != null && data.generations.length > 0) {
 												let gentxt = data.generations[0].text;
-
-												//always trim incomplete sentences for adventure and chat
-												if(localsettings.opmode==2 || localsettings.opmode==3 || localsettings.trimsentences==true)
-												{
-													gentxt = trim_to_sentence(gentxt);
-												}
-
-												//if we are in chatmode, truncate to my first response
-												if(localsettings.opmode==3)
-												{
-													let foundMyName = gentxt.indexOf(localsettings.chatname+"\:");
-													let splitresponse = [];
-													if(foundMyName==-1) //if no name found
-													{		
-														//if quotes found, split by quotes
-														if (gentxt.indexOf("\"") == 0 && gentxt.indexOf("\"", 1) > 0) {
-															let endquote = gentxt.indexOf("\"", 1);
-															splitresponse.push(gentxt.substring(0, endquote+1));
-														} else {
-															//split to first newline
-															splitresponse = gentxt.split("\n");
-														}
-													}
-													else
-													{
-														splitresponse = gentxt.split(localsettings.chatname+"\:");
-													}
-													
-													let startpart = splitresponse[0];
-													if(startpart.length>0 && startpart[startpart.length-1]=="\n")
-													{
-														startpart = startpart.substring(0,startpart.length-1);
-													}
-													gentxt = startpart;
-												}
-
-												if(localsettings.speech_synth>0 && 'speechSynthesis' in window)
-												{
-													let utterance = new window.SpeechSynthesisUtterance(gentxt);
-													utterance.voice = window.speechSynthesis.getVoices()[localsettings.speech_synth-1];
-													window.speechSynthesis.speak(utterance);
-												}
-
-												gametext_arr.push(gentxt);
-												document.getElementById("lastreq").innerHTML = "Last request served by <a href=\"#\" onclick=\"get_and_show_workers()\">" + data.generations[0].worker_name + "</a> for " + data.kudos + " kudos in "+ getTimeTaken() +" seconds.";
+												let genworker = data.generations[0].worker_name;
+												let genkudos = data.kudos;
+												handle_incoming_text(gentxt,genworker,genkudos);
 											}
 											render_gametext();
 										}).catch((error) => {
@@ -1849,6 +2019,7 @@ Current version: 5
 							render_gametext();
 							msgbox("Error encountered during text generation!");
 						});
+					}				
 				}
 			}
 			else {
@@ -1881,8 +2052,9 @@ Current version: 5
 		function render_gametext() {
 			if (gametext_arr.length == 0) {
 				document.getElementById("gametext").innerHTML = "<span>Welcome to <span class=\"color_cyan\">KoboldAI Lite</span>!<br>You are using the models <span class=\"color_green\">" 
-				+ selected_models.reduce((s, a) => s + (s==""?"":", ") + a.name , "") + "</span>"+ (selected_workers.length==0?"":(" (Misdirect Fix Applied)")) 
-				+ ".<br>There are <span class=\"color_orange\">" + selected_models.reduce((s, a) => s + a.count, 0) + "</span> <a class=\"color_green\" href=\"#\" onclick=\"get_and_show_workers()\">volunteer(s)</a> running selected models with a total queue length of <span class=\"color_orange\">" + selected_models.reduce((s, a) => s + a.queued, 0) + "</span>.<br>Enter a prompt below to begin!</span>";
+				+ selected_models.reduce((s, a) => s + (s==""?"":", ") + a.name , "") + "</span>"+ (selected_workers.length==0?"":(" (Pinned to "+selected_workers.length+" worker IDs)")) 
+				+ "."+(usev1api?"<br><span class=\"color_pink\">You are using legacy v1 API</span>":"")
+				+ "<br>There are <span class=\"color_orange\">" + selected_models.reduce((s, a) => s + a.count, 0) + "</span> <a class=\"color_green\" href=\"#\" onclick=\"get_and_show_workers()\">volunteer(s)</a> running selected models with a total queue length of <span class=\"color_orange\">" + selected_models.reduce((s, a) => s + a.queued, 0) + "</span>.<br>Enter a prompt below to begin!</span>";
 			}
 			else {
 				let fulltxt = "<span>" + concat_gametext() + "</span>";
@@ -2130,12 +2302,18 @@ Current version: 5
 				</div>
 
 				<div class="justifyleft anotelabel">
-							Model Misdirect Fix Hack <span class="helpicon">?
-						<span class="helptext">There is a bug in the Horde Worker Allocation code that occasionally sends the request to the wrong model. This EXPERIMENTAL hack attempts to fix it by explicitly assigning worker IDs.</span>
+					Use v1 Generate API <span class="helpicon">?
+						<span class="helptext">Uses an older API, which may be helpful if the current one has bugs.</span>
 					</span>
-						   <input type="checkbox" data-toggle="toggle" data-onstyle="success" id="misdirectfix">				
-						</div>
+					<input type="checkbox" data-toggle="toggle" data-onstyle="success" id="usev1api">
+					<br>
+					Lock-in Worker IDs <span class="helpicon">?
+						<span class="helptext">This option explicitly assigns worker IDs, fixed based on the current workers available
+							at model selection time.</span>
+					</span>
+					<input type="checkbox" data-toggle="toggle" data-onstyle="success" id="misdirectfix">
 				</div>
+				
 
 				<div class="popupfooter">
 					<button type="button" class="btn btn-primary" id="btn_loadmodelaccept"
@@ -2309,6 +2487,10 @@ Current version: 5
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Persist Session </div>	
 						   <input type="checkbox" data-toggle="toggle" data-onstyle="success" id="persist_session" style="margin:0px 0 0;">				
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Generate Images <span class="helpicon">?<span class="helptext">Use Stable Horde to insert AI generated images into your story at sporadic intervals.</span></span></div>	
+						   <input type="checkbox" data-toggle="toggle" data-onstyle="success" id="generate_images" style="margin:0px 0 0;">				
 						</div>
 					</div>
 

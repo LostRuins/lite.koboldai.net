@@ -9,6 +9,11 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
+Changelog for KoboldAI Lite 09 Jan 2023:
+- Added an option to use v1 sync API, as it may not have the wrong-model bug currently
+- Fixed a bug where a story would fail to generate if A/N Template was undefined
+- Fixed a bug where loading a story prevented you from loading the same story again 
+
 Changelog for KoboldAI Lite 30 Dec 2022:
 - New TTS (Text-To-Speech) feature added! Will read out whatever you send and whatever is generated. Enable in settings.
 - Now displays how long the last request took, time elapsed between request and response.
