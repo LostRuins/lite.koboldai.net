@@ -9,8 +9,11 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
-Changelog for KoboldAI Lite 09 Jan 2023:
-- Added an option to use v1 sync API, as it may not have the wrong-model bug currently
+Changelog for KoboldAI Lite 11 Jan 2023:
+- Added speed (performance) information to worker table
+- Added support for Pygmalion models in chat mode. Defaulted chatmode to include some hidden context for prompt engineering if none was supplied and memory is empty.
+- Added fancy color coding to Adventure mode actions and Chat handles
+- Added an option to use v1 sync API when selecting model. The Horde model bug should be fixed, so you may not need it.
 - Fixed a bug where a story would fail to generate if A/N Template was undefined
 - Fixed a bug where loading a story prevented you from loading the same story again 
 

@@ -5,7 +5,7 @@ This is a standalone web ui for KoboldAIs Horde, which requires no dependencies,
 Just copy this single static HTML file anywhere and open it in a browser. No dependencies.
 Or you can throw it on some web server and serve it there too. E.g. Github pages, nginx, whatever.
 Now rebranded as KoboldAI Lite
-Current version: 5
+Current version: 6
 -Concedo
 -->
 
@@ -1004,6 +1004,7 @@ Current version: 5
 		var selected_models = []; //this stores ALL selected models properties as array of objects
 		var worker_data = [];
 		var selected_workers = [];		
+		//gametext_arr stores images inline, with the special format {p|id|p} or {d|b64img|d}, which is either a data url, or an ID for pending requests
 		var gametext_arr = []; //array of texts currently displayed
 		var redo_arr = []; //array of texts that are in the redo stack
 		var pending_response_id = ""; //guid of response pending from horde server
@@ -1020,6 +1021,7 @@ Current version: 5
 
 		var localsettings = {
 			 my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
+			 stable_api_key: "0000000000", //same as above, for stable horde
 
 			autoscroll: false, //automatically scroll to bottom on render
 			trimsentences: false, //trim to last punctuation
@@ -1027,7 +1029,7 @@ Current version: 5
 			chatname: "You", //name to use in chat
 			persist_session: false,
 			speech_synth: 0, //0 is disabled
-			generate_images: false,
+			generate_images: 0, //0 is disabled, 1 is anything diffusion, 2 is stable diffusion
 
 			max_context_length: 1024,
 			max_length: 80,
@@ -1424,7 +1426,8 @@ Current version: 5
 			let str = "";
 			for (var i = 0; i < wdata.length; ++i) {
 				let elem = wdata[i];
-				str += "<tr><td>" + elem.name.substring(0, 32) + "</td><td>" + elem.models[0].substring(0, 32) + "</td><td>" + elem.max_length + " / " + elem.max_content_length + "</td><td>" + elem.uptime + "</td><td>" + elem.kudos_rewards.toFixed(0) + "</td></tr>";
+				let tokenspersec = elem.performance.replace(" tokens per second","");
+				str += "<tr><td>" + elem.name.substring(0, 32) + "</td><td>" + elem.models[0].substring(0, 32) + "</td><td>" + elem.max_length + " / " + elem.max_content_length + "</td><td>" + tokenspersec + "</td><td>" + elem.uptime + "</td><td>" + elem.kudos_rewards.toFixed(0) + "</td></tr>";
 			}
 			document.getElementById("workertable").innerHTML = str;		
 		}
@@ -1514,14 +1517,14 @@ Current version: 5
 			document.getElementById("top_p").value = document.getElementById("top_p_slide").value = localsettings.top_p;
 			document.getElementById("autoscroll").checked = localsettings.autoscroll;
 			document.getElementById("trimsentences").checked = localsettings.trimsentences;
-			document.getElementById("persist_session").checked = localsettings.persist_session;
-			document.getElementById("generate_images").checked = localsettings.generate_images;
+			document.getElementById("persist_session").checked = localsettings.persist_session;	
 			document.getElementById("opmode").value = localsettings.opmode;
 			document.getElementById("chatname").value = localsettings.chatname;
 			document.getElementById("top_k").value = localsettings.top_k;
 			document.getElementById("top_a").value = localsettings.top_a;
 			document.getElementById("typ_s").value = localsettings.typ_s;
 			document.getElementById("tfs_s").value = localsettings.tfs_s;	
+			document.getElementById("generate_images").value = localsettings.generate_images;
 			
 			var ttshtml = "<option value=\"0\">Disabled</option>";
 			if ('speechSynthesis' in window) {
@@ -1549,7 +1552,7 @@ Current version: 5
 			localsettings.autoscroll = (document.getElementById("autoscroll").checked?true:false);
 			localsettings.trimsentences = (document.getElementById("trimsentences").checked?true:false);
 			localsettings.persist_session = (document.getElementById("persist_session").checked?true:false);
-			localsettings.generate_images = (document.getElementById("generate_images").checked?true:false);
+			localsettings.generate_images = document.getElementById("generate_images").value;
 			localsettings.opmode = document.getElementById("opmode").value;
 			localsettings.chatname = document.getElementById("chatname").value;
 			localsettings.top_k = document.getElementById("top_k").value;
@@ -1690,10 +1693,10 @@ Current version: 5
 				//this is a hack since we dont have a proper tokenizer, but we can estimate 1 token per 4 characters				
 				let max_allowed_characters = localsettings.max_context_length * 4;
 
-				let truncated_context = concat_gametext(); //no need to truncate if memory is empty
+				let truncated_context = concat_gametext(true); //no need to truncate if memory is empty
 
 				//determine if a new generated image is needed
-				if(localsettings.generate_images)
+				if(localsettings.generate_images>0)
 				{
 					var tclen = truncated_context.length;
 					if(tclen > nextgeneratedimagemilestone)
@@ -1702,7 +1705,7 @@ Current version: 5
 						var sentence = truncated_context.substring(tclen-300,tclen);
 						sentence = start_trim_to_sentence(sentence);
 						sentence = end_trim_to_sentence(sentence);
-						generate_new_image(sentence);
+						generate_new_image(sentence);					
 					}
 				}
 
@@ -1862,13 +1865,59 @@ Current version: 5
 		function generate_new_image(sentence)
 		{
 			console.log("Generating image for: " + sentence);
+			let genimg_payload = {
+			"prompt": (sentence + " ### disfigured, ugly, deformed, misformed, poorly, censor, censored, blurry, lowres, fused, mutation, mutated, malformed, watermark, misshapen, duplicated, grainy, misproportioned, distorted, signature"),
+			"params": {
+				"cfg_scale": 7,
+				"sampler_name": "k_euler_a",
+				"height": 512,
+				"width": 512,
+				"steps": 20,
+				"karras": false,
+				"n": 1,
+				"seed": "",
+				"post_processing": []
+			},
+			"models": [(localsettings.generate_images==2?"stable_diffusion":"Anything Diffusion")],
+			"nsfw": true,
+			"censor_nsfw": false,
+			"trusted_workers": false,			
+			"r2": false
+			}
+
+			fetch(stablehorde_submit_endpoint, {
+				method: 'POST', // or 'PUT'
+				headers: {
+					'Content-Type': 'application/json',
+					'apikey': localsettings.stable_api_key,
+				},
+				body: JSON.stringify(genimg_payload),
+			})
+			.then((response) => response.json())
+			.then((data) => {
+				console.log('genimg result:', data);
+				if (data.id && data.id != "") {
+					//for now, append the new image directly into the gtarr
+					gametext_arr.push("{p|"+data.id+"|p}");
+				}
+				else 
+				{
+					//something went wrong.	do nothing.
+					msgbox("Image generation failed: " + data.message);	
+				}
+			})
+			.catch((error) => {
+				console.error('Error:', error);	
+				msgbox("Image generation error: " + error);				
+			});		
 		}
+
 		function render_image_html(url)
 		{
 			var dim = 150;
 			if(!url || url=="")
 			{
-				return `<svg width="`+dim+`" height="`+dim+`" viewBox="0 0 180.119 139.794" style="float: right;"><g transform="translate(-13.59 -66.639)" paint-order="fill markers stroke"><path fill="#d0d0d0" d="M13.591 66.639H193.71v139.794H13.591z"/><path d="m118.507 133.514-34.249 34.249-15.968-15.968-41.938 41.937H178.726z" opacity=".675" fill="#fff"/><circle cx="58.217" cy="108.555" r="11.773" opacity=".675" fill="#fff"/><path fill="none" d="M26.111 77.634h152.614v116.099H26.111z"/></g></svg>`;
+				return `<div class="loader" style="float: right;"><svg width="`+dim+`" height="`+dim+`" viewBox="0 0 180.119 139.794"><g transform="translate(-13.59 -66.639)" paint-order="fill markers stroke"><path fill="#d0d0d0" d="M13.591 66.639H193.71v139.794H13.591z"/><path d="m118.507 133.514-34.249 34.249-15.968-15.968-41.938 41.937H178.726z" opacity=".675" fill="#fff"/><circle cx="58.217" cy="108.555" r="11.773" opacity=".675" fill="#fff"/><path fill="none" d="M26.111 77.634h152.614v116.099H26.111z"/></g></svg></div>`;
 			}else{
 				return `<img src="` + url + `" width=`+dim+` height=`+dim+` style="float: right;border-radius: 6%;">`;
 			}
@@ -2026,38 +2075,46 @@ Current version: 5
 				console.log("Nothing to update: " + pending_response_id);
 			}
 		}
-
+		
 		function merge_edit_field() {
 			if (gametext_arr.length > 0 && document.getElementById("allowediting").checked) {
-				let oldInnerText = concat_gametext();
+				let oldInnerText = concat_gametext(true);
 				let edited = document.getElementById("gametext").innerText;
 
 				if (oldInnerText != edited) {
 					gametext_arr = [];
 					redo_arr = [];
+					let newhtml = document.getElementById("gametext").innerHTML;
+					//convert all newlines back into their original forms
+					//convert all inline images back into their original forms
 					gametext_arr.push(edited);
 					console.log("Merged edit field");
 				}
 			}
 		}
 
-		function concat_gametext() {
+		function concat_gametext(stripimg = false) {
 			let fulltxt = "";
 			for (let i = 0; i < gametext_arr.length; ++i) {
 				fulltxt += gametext_arr[i];
+			}
+			if(stripimg)
+			{
+				fulltxt = fulltxt.replace(/{p\|.+\|p}/g, "");
+				fulltxt = fulltxt.replace(/{d\|.+\|d}/g, "");
 			}
 			return fulltxt;
 		}
 
 		function render_gametext() {
 			if (gametext_arr.length == 0) {
-				document.getElementById("gametext").innerHTML = "<span>Welcome to <span class=\"color_cyan\">KoboldAI Lite</span>!<br>You are using the models <span class=\"color_green\">" 
+				document.getElementById("gametext").innerHTML = "Welcome to <span class=\"color_cyan\">KoboldAI Lite</span>!<br>You are using the models <span class=\"color_green\">" 
 				+ selected_models.reduce((s, a) => s + (s==""?"":", ") + a.name , "") + "</span>"+ (selected_workers.length==0?"":(" (Pinned to "+selected_workers.length+" worker IDs)")) 
 				+ "."+(usev1api?"<br><span class=\"color_pink\">You are using legacy v1 API</span>":"")
-				+ "<br>There are <span class=\"color_orange\">" + selected_models.reduce((s, a) => s + a.count, 0) + "</span> <a class=\"color_green\" href=\"#\" onclick=\"get_and_show_workers()\">volunteer(s)</a> running selected models with a total queue length of <span class=\"color_orange\">" + selected_models.reduce((s, a) => s + a.queued, 0) + "</span>.<br>Enter a prompt below to begin!</span>";
+				+ "<br>There are <span class=\"color_orange\">" + selected_models.reduce((s, a) => s + a.count, 0) + "</span> <a class=\"color_green\" href=\"#\" onclick=\"get_and_show_workers()\">volunteer(s)</a> running selected models with a total queue length of <span class=\"color_orange\">" + selected_models.reduce((s, a) => s + a.queued, 0) + "</span>.<br>Enter a prompt below to begin!";
 			}
 			else {
-				let fulltxt = "<span>" + concat_gametext() + "</span>";
+				let fulltxt = "<span>" + concat_gametext(true) + "</span>";
 				fulltxt = fulltxt.replace(/(\r\n|\r|\n)/g, '<br>');
 				console.log("FT:" + fulltxt);
 				document.getElementById("gametext").innerHTML = fulltxt;
@@ -2081,7 +2138,7 @@ Current version: 5
 				document.getElementById("btnsend").classList.remove("btn-primary");
 				document.getElementById("btnsend").innerHTML = "No AI<br>Loaded";
 
-				document.getElementById("gametext").innerHTML = "<span>Welcome to <span class=\"color_cyan\">KoboldAI Lite</span>!<br><br>" + perfinfo + "Please select an AI model to use!</span>";
+				document.getElementById("gametext").innerHTML = "Welcome to <span class=\"color_cyan\">KoboldAI Lite</span>!<br><br>" + perfinfo + "Please select an AI model to use!";
 			}
 			else if (pending_response_id == "") {
 				document.getElementById("btnsend").disabled = false;
@@ -2466,12 +2523,37 @@ Current version: 5
 
 					<div class="settingitem">
 						<div class="settinglabel">
+							<div class="justifyleft settingsmall">AutoGenerate Images <span class="helpicon">?<span class="helptext">Use Stable Horde to insert AI generated images into your story at sporadic intervals.</span></span></div>
+							<select class="form-control" id="generate_images" style="height:24px;padding:0;margin:0px 0 0;">
+								<option value="0">Disabled</option>
+								<option value="1">AnythingV3</option>
+								<option value="2">StableDiffusion</option>
+							</select>							
+						</div>
+					</div>
+
+					<div class="settingitem">
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">TTS <span class="helpicon">?<span class="helptext">Enable Text-To-Speech to have your story automatically read to you.</span></span></div>
+							<select class="form-control" id="ttsselect" style="height:24px;padding:0;margin:0px 0 0;">			
+							</select>							
+						</div>
+					</div>
+
+
+					<div class="settingitem">
+						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Format </div>	
 							<select class="form-control" id="opmode" style="height:24px;padding:0;margin:0px 0 0;" onchange="toggle_opmode()">
 								<option value="1">Story Mode</option>
 								<option value="2">Adventure Mode</option>
 								<option value="3">Chat Mode</option>
-							</select>								
+							</select>	
+							<div id="chatnamesection" class="hidden">
+								<div class="justifyleft settingsmall">Chat Name </div>	
+								<input class="" type="text" placeholder="Chat Name" value="You"
+								id="chatname">
+								</div>								
 						</div>
 					</div>
 				
@@ -2487,31 +2569,9 @@ Current version: 5
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Persist Session </div>	
 						   <input type="checkbox" data-toggle="toggle" data-onstyle="success" id="persist_session" style="margin:0px 0 0;">				
-						</div>
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Generate Images <span class="helpicon">?<span class="helptext">Use Stable Horde to insert AI generated images into your story at sporadic intervals.</span></span></div>	
-						   <input type="checkbox" data-toggle="toggle" data-onstyle="success" id="generate_images" style="margin:0px 0 0;">				
-						</div>
+						</div>					
 					</div>
-
-					<div class="settingitem">
-						<div class="settinglabel">							
-							<div id="chatnamesection" class="hidden">
-							<div class="justifyleft settingsmall">Chat Name </div>	
-							<input class="" type="text" placeholder="Chat Name" value="You"
-							id="chatname">
-							</div>		
-						</div>
-					</div>
-
-					<div class="settingitem">
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall">TTS <span class="helpicon">?<span class="helptext">Enable Text-To-Speech to have your story automatically read to you.</span></span></div>
-							<select class="form-control" id="ttsselect" style="height:24px;padding:0;margin:0px 0 0;">
-							</select>						
-							</select>							
-						</div>
-					</div>
+				
 
 				</div>
 			</div>
@@ -2556,7 +2616,7 @@ Current version: 5
 			<div class="workerTableDiv">
 			<table class="table text-center workerTable">
 			<thead class="sticky-top bg-white">
-			<tr><th>Name</th><th>Model</th><th>Capabilities</th><th>Uptime</th><th>Kudos</th></tr>
+			<tr><th>Name</th><th>Model</th><th>Capabilities</th><th>Speed</th><th>Uptime</th><th>Kudos</th></tr>
 			</thead>
 			<tbody id="workertable">			
 			</tbody>
