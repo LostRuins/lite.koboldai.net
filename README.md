@@ -13,9 +13,10 @@ Changelog for KoboldAI Lite 11 Jan 2023:
 - Added speed (performance) information to worker table
 - Added support for Pygmalion models in chat mode. Defaulted chatmode to include some hidden context for prompt engineering if none was supplied and memory is empty.
 - Added fancy color coding to Adventure mode actions and Chat handles
-- Added an option to use v1 sync API when selecting model. The Horde model bug should be fixed, so you may not need it.
+- Added an option when selecting model to use legacy v1 sync API. The Horde model bug should be fixed, so you may not need it.
 - Fixed a bug where a story would fail to generate if A/N Template was undefined
-- Fixed a bug where loading a story prevented you from loading the same story again 
+- Fixed a bug where loading a story prevented you from loading the same story again
+- Fixed a bug where editing a story would add extra newlines after existing ones
 
 Changelog for KoboldAI Lite 30 Dec 2022:
 - New TTS (Text-To-Speech) feature added! Will read out whatever you send and whatever is generated. Enable in settings.

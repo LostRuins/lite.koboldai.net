@@ -936,6 +936,45 @@ Current version: 6
 			justify-content: center;
 			animation: spin 2s linear infinite;
 		}
+		.loader2
+		{
+			border: 6px solid #8a8686;
+			/* Light grey */
+			border-top: 6px solid peru;
+			/* Blue */
+			border-radius: 50%;
+			width: 32px;
+			height: 32px;			
+			display: flex;
+			margin: auto;
+			align-items: center;
+			justify-content: center;
+			animation: spin 2s linear infinite;
+
+			top: 0;
+			bottom: 0;
+			left: 0;
+			right: 0;
+			position: absolute;
+			margin: auto;
+		}
+		.imagelabel
+		{	
+			bottom: 20%;
+			left: 0;
+			right: 0;
+			position: absolute;
+			margin: auto;
+			text-align: center;
+			color:peru;
+			font-weight: bold;
+		}
+		.storyimg
+		{
+			float: right; 
+			position: relative;
+			padding: 4px;
+		}
 
 		@keyframes spin {
 			0% {
@@ -1016,6 +1055,8 @@ Current version: 6
 		var loaded_storyobj = generate_base_storyobj(); //for loading json story files from disk
 		var generateimagesinterval = 600; //if generated images is enabled, it will trigger after every 600 new characters in context. 
 		var nextgeneratedimagemilestone = generateimagesinterval; //used to keep track of when to generate the next image
+		var image_db = {}; //stores a dictionary of pending images
+		//key is ID, body is {done:false,queue:10,result:""}
 		var usev1api = false;
 		var v1_polled_response = null;
 
@@ -1029,7 +1070,7 @@ Current version: 6
 			chatname: "You", //name to use in chat
 			persist_session: false,
 			speech_synth: 0, //0 is disabled
-			generate_images: 0, //0 is disabled, 1 is anything diffusion, 2 is stable diffusion
+			generate_images: 0, //0 is disabled, 1 is anything diffusion, 2 is stable diffusion, 3 is wildcard
 
 			max_context_length: 1024,
 			max_length: 80,
@@ -1091,6 +1132,7 @@ Current version: 6
 
 				//start the polling script for async generation status checking every 2s
 				setInterval(poll_pending_response, 2000);
+				setInterval(poll_image_db, 5500); //check images every 5.5s
 
 				//read the url params, and autoload a shared story if found
 				const urlParams = new URLSearchParams(window.location.search);
@@ -1261,7 +1303,6 @@ Current version: 6
 							}
 						}
 						
-
 						render_gametext();
 					}
 					
@@ -1455,6 +1496,7 @@ Current version: 6
 			document.getElementById("oaimodel").innerHTML = "";			
 			document.getElementById("loadmodelcontainer").classList.remove("hidden");
 			document.getElementById("apikey").value = localsettings.my_api_key;
+			document.getElementById("stableapikey").value = localsettings.stable_api_key;
 
 			fetch(models_endpoint)
 			.then(x => x.json())
@@ -1501,6 +1543,7 @@ Current version: 6
 				}
 
 				localsettings.my_api_key = document.getElementById("apikey").value;
+				localsettings.stable_api_key = document.getElementById("stableapikey").value;
 
 				render_gametext();
 
@@ -1613,6 +1656,7 @@ Current version: 6
 			current_anotetemplate = "[Author's note: <|>]";
 			loaded_storyobj = generate_base_storyobj();
 			document.getElementById("input_text").value = "";
+			image_db = {};
 			render_gametext();
 		}
 
@@ -1645,8 +1689,7 @@ Current version: 6
 			let p3 = input.indexOf("?");
 			let first = p1;
 			if (p2 > 0 && p2 < first) { first = p2; }
-			if (p3 > 0 && p3 < first) { first = p3; }
-			console.log(first)
+			if (p3 > 0 && p3 < first) { first = p3; }			
 			if (first > 0) {
 				return input.substring(first + 2);
 			}
@@ -1693,7 +1736,7 @@ Current version: 6
 				//this is a hack since we dont have a proper tokenizer, but we can estimate 1 token per 4 characters				
 				let max_allowed_characters = localsettings.max_context_length * 4;
 
-				let truncated_context = concat_gametext(true); //no need to truncate if memory is empty
+				let truncated_context = concat_gametext(true, ""); //no need to truncate if memory is empty
 
 				//determine if a new generated image is needed
 				if(localsettings.generate_images>0)
@@ -1865,8 +1908,21 @@ Current version: 6
 		function generate_new_image(sentence)
 		{
 			console.log("Generating image for: " + sentence);
+			let modelused = [];
+			if(localsettings.generate_images==1)
+			{
+				modelused = ["Anything Diffusion"];
+			}
+			if(localsettings.generate_images==2)
+			{
+				modelused = ["stable_diffusion"];
+			}
+			if(localsettings.generate_images==3)
+			{
+				modelused = [];
+			}
 			let genimg_payload = {
-			"prompt": (sentence + " ### disfigured, ugly, deformed, misformed, poorly, censor, censored, blurry, lowres, fused, mutation, mutated, malformed, watermark, misshapen, duplicated, grainy, misproportioned, distorted, signature"),
+			"prompt": (sentence + " ### disfigured, ugly, deformed, poorly, censor, censored, blurry, lowres, fused, malformed, watermark, misshapen, duplicated, grainy, distorted, signature"),
 			"params": {
 				"cfg_scale": 7,
 				"sampler_name": "k_euler_a",
@@ -1878,7 +1934,7 @@ Current version: 6
 				"seed": "",
 				"post_processing": []
 			},
-			"models": [(localsettings.generate_images==2?"stable_diffusion":"Anything Diffusion")],
+			"models": modelused,
 			"nsfw": true,
 			"censor_nsfw": false,
 			"trusted_workers": false,			
@@ -1898,7 +1954,10 @@ Current version: 6
 				console.log('genimg result:', data);
 				if (data.id && data.id != "") {
 					//for now, append the new image directly into the gtarr
-					gametext_arr.push("{p|"+data.id+"|p}");
+					let nimgtag = "{p|"+data.id+"|p}";
+					gametext_arr.push(nimgtag);
+					image_db[data.id] = { done: false, queue: "Starting", result: "" };
+					console.log("New image queued " + nimgtag);
 				}
 				else 
 				{
@@ -1909,17 +1968,25 @@ Current version: 6
 			.catch((error) => {
 				console.error('Error:', error);	
 				msgbox("Image generation error: " + error);				
-			});		
+			});
 		}
 
-		function render_image_html(url)
+		function render_image_html(data, alttext="")
 		{
-			var dim = 150;
-			if(!url || url=="")
+			var dim = 200;
+			if(!data || data=="")
 			{
-				return `<div class="loader" style="float: right;"><svg width="`+dim+`" height="`+dim+`" viewBox="0 0 180.119 139.794"><g transform="translate(-13.59 -66.639)" paint-order="fill markers stroke"><path fill="#d0d0d0" d="M13.591 66.639H193.71v139.794H13.591z"/><path d="m118.507 133.514-34.249 34.249-15.968-15.968-41.938 41.937H178.726z" opacity=".675" fill="#fff"/><circle cx="58.217" cy="108.555" r="11.773" opacity=".675" fill="#fff"/><path fill="none" d="M26.111 77.634h152.614v116.099H26.111z"/></g></svg></div>`;
+				let waittime = "Unavailable";
+				if(image_db[alttext]!=null)
+				{
+					let qq = image_db[alttext].queue;
+					waittime = (qq==0?"Generating":qq);
+				}else{
+					console.log("Cannot render " + alttext);
+				}
+				return `<div class="storyimg"><img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wAARCAEAAQADASIAAhEBAxEB/8QAGQABAQEBAQEAAAAAAAAAAAAAAAEDAgQF/8QAIBABAAIBBQEBAQEAAAAAAAAAAAECEgMRMVKRIWFBof/EABQBAQAAAAAAAAAAAAAAAAAAAAD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwD7AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABETPENNPT3je3jUHm22HpmInljqUx+xwDgAAAAAAAAAAAAAAAAAAAAAAAAABaxvaIRaztaJB6AAEmN4mFSZ2iZB5wAAAAAAAAAAAAAAAAAAAAAAAAAAAaaeptG1vWrzETMcSD0zMRyx1L5fI4cb7gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA7rpzNd/HAAAAAAAAAAAAAAAAAAAAAAAAAAAAADTT09/s8Gnp7/Z4agONSmX2OXYDzDbUpl9jliAAAAAAAAAAAAAAAAAAAsVmd9o4KVm0/jeIiI2gHnGupp/2vjIAABpp6e/2TT09/s8NQAAAAHGpTL7HLsB5htqUy+xyxAAAAAAAAAAAAAAAWlZtP4UrNp/G8RFY2gCIiI2hQAZ6mn/a+NAHmaaenv8AZ4dzp1m2/wDjoAAAAAAAABxqUy+xy7AeYbalMvscsQAAAAAAAAAAFpWbT+FKzafxvEREbQBEREbQoAAAAAAAAAAAAAAAAAONSmX2OXYDzDbUpl9jliAAAAAAAtKzafxaVm0/jaIiI2gCIiI2hQAAAAAAAAAAAAAAAAAAAAAcalMvscuwHmG2pTL7HLEAAAAFi0xxMwZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6kzvyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/Z" width=`+dim+` height=`+dim+` style="border-radius: 6%;" alt="`+alttext+`"><div class=\"loader2\"></div><div class=\"imagelabel\">`+waittime+`</div></div>`;				
 			}else{
-				return `<img src="` + url + `" width=`+dim+` height=`+dim+` style="float: right;border-radius: 6%;">`;
+				return `<div class="storyimg"><img src="`+data+`" width=`+dim+` height=`+dim+` style="border-radius: 6%;"></div>`;	
 			}
 		}
 
@@ -1965,6 +2032,128 @@ Current version: 6
 			gametext_arr.push(gentxt);
 			document.getElementById("lastreq").innerHTML = "Last request served by <a href=\"#\" onclick=\"get_and_show_workers()\">" + genworker + "</a> for " + genkudos + " kudos in " + getTimeTaken() + " seconds.";
 		}
+		
+		function poll_image_db()
+		{
+			//every time this runs, we loop through our image cache for unfinished images and poll for a response
+			//console.log("polling for pending images: " + JSON.stringify(image_db));
+			console.log("polling for pending images " + Object.keys(image_db).length);
+			for(let key in image_db)
+			{
+				let img = image_db[key];
+				if(img.done==false)
+				{
+					//call check					
+					fetch(stablehorde_poll_endpoint + "/" + key)
+					.then(x => x.json())
+					.then((data) => {
+						console.log('pollimg result:', data);
+						if (data.faulted==true || data.is_possible==false) {						
+							msgbox("Pending image generation could not complete.");
+							console.log("removing from images: " + key);	
+							delete image_db[key];
+						}
+						else if(data.done==true)
+						{
+							//fetch final image
+							img.done = true;
+							fetch(stablehorde_output_endpoint + "/" + key)
+							.then(y => y.json())
+							.then((finalimg) => {
+								console.log('finalimg recv for ' + key);
+								if (finalimg.faulted==true || finalimg.is_possible==false) {
+									msgbox("Pending image generation could not complete.");
+									console.log("removing from images: " + key);	
+									delete image_db[key];
+								}
+								else
+								{
+									img.queue = 0;
+									let origImg = "data:image/jpeg;base64," + finalimg.generations[0].img;
+									//console.log("Original image: " + origImg);
+									compressImage(origImg,(newDataUri)=>{
+										img.result = newDataUri;
+									});									
+								}							
+							})
+							.catch((error) => {
+								console.error('Error:', error);	
+								msgbox("Image poll error: " + error);
+								delete image_db[key];		
+							});
+						}
+						else
+						{
+							//update timer
+							img.queue = (data.queue_position==null?"Error":data.queue_position);
+						}
+					})
+					.catch((error) => {
+						console.error('Error:', error);	
+						msgbox("Image poll error: " + error);
+						delete image_db[key];
+					});
+				}
+			}
+
+			//now we loop through the image cache and swap completed images into the gametext
+			let hasChangedImage = false;
+			for(var i=0;i<gametext_arr.length;++i)
+			{
+				//if there's no image in this segment, continue
+				if(/{p\|.+?\|p}/.test(gametext_arr[i]))
+				{		
+					for(let key in image_db)
+					{
+						let img = image_db[key];
+						let matchstr = "{p|"+key+"|p}";
+						if(gametext_arr[i].includes(matchstr))
+						{
+							hasChangedImage = true; //set here to update timers
+							if (img.done == true && img.result != "") {
+								let newstr = "{d|" + img.result + "|d}";
+								console.log("Replacing with Image: " + matchstr);
+								gametext_arr[i] = gametext_arr[i].replace(matchstr, newstr);
+								delete image_db[key]; //leave it in pending images
+							}
+						}
+					}
+				}
+			}
+			if(hasChangedImage && document.activeElement!=document.getElementById("gametext"))
+			{
+				//console.log(gametext_arr);
+				render_gametext();
+			}
+
+		}
+		function compressImage(inputDataUri, onDone)
+		{      
+			let img = document.createElement('img');
+			let wantedWidth = 256;
+			let wantedHeight = 256;
+
+			// When the event "onload" is triggered we can resize the image.
+			img.onload = function()
+			{        
+				// We create a canvas and get its context.
+				var canvas = document.createElement('canvas');
+				var ctx = canvas.getContext('2d');
+
+				// We set the dimensions at the wanted size.
+				canvas.width = wantedWidth;
+				canvas.height = wantedHeight;
+
+				// We resize the image with the canvas method 
+				ctx.drawImage(this, 0, 0, wantedWidth, wantedHeight);
+
+				var dataURI = canvas.toDataURL('image/jpeg', 0.33);
+				onDone(dataURI);
+			};
+
+			// We put the Data URI in the image's src attribute
+			img.src = inputDataUri;
+		}		
 
 		function poll_pending_response() {
 			if (pending_response_id && pending_response_id != "-1" && pending_response_id != "") {
@@ -2078,35 +2267,43 @@ Current version: 6
 		
 		function merge_edit_field() {
 			if (gametext_arr.length > 0 && document.getElementById("allowediting").checked) {
-				let oldInnerText = concat_gametext(true);
-				let edited = document.getElementById("gametext").innerText;
+				let oldInnerText = concat_gametext(true,"\n");
+				let gametext_elem = document.getElementById("gametext");
+				let edited = gametext_elem.innerText;
 
-				if (oldInnerText != edited) {
+				if (oldInnerText != edited) {					
 					gametext_arr = [];
 					redo_arr = [];
-					let newhtml = document.getElementById("gametext").innerHTML;
-					//convert all newlines back into their original forms
-					//convert all inline images back into their original forms
-					gametext_arr.push(edited);
+					
+					gametext_elem.innerHTML = gametext_elem.innerHTML.replaceAll("<div><br></div>","<br>");
+					gametext_elem.querySelectorAll('div.storyimg').forEach(
+					(el) => {
+						let chimg = el.getElementsByTagName("img")[0];
+						el.replaceWith((chimg.alt==null||chimg.alt=="")?("{d|"+chimg.src+"|d}"):("{p|"+chimg.alt+"|p}"))
+					}
+					);
+
+					gametext_arr.push(gametext_elem.innerText);
+					render_gametext(true);
 					console.log("Merged edit field");
 				}
 			}
 		}
 
-		function concat_gametext(stripimg = false) {
+		function concat_gametext(stripimg = false, stripimg_replace_str = "") {
 			let fulltxt = "";
 			for (let i = 0; i < gametext_arr.length; ++i) {
 				fulltxt += gametext_arr[i];
 			}
 			if(stripimg)
 			{
-				fulltxt = fulltxt.replace(/{p\|.+\|p}/g, "");
-				fulltxt = fulltxt.replace(/{d\|.+\|d}/g, "");
+				fulltxt = fulltxt.replace(/{p\|.+?\|p}/g, stripimg_replace_str);
+				fulltxt = fulltxt.replace(/{d\|.+?\|d}/g, stripimg_replace_str);
 			}
 			return fulltxt;
 		}
 
-		function render_gametext() {
+		function render_gametext(partialrefresh=false) {
 			if (gametext_arr.length == 0) {
 				document.getElementById("gametext").innerHTML = "Welcome to <span class=\"color_cyan\">KoboldAI Lite</span>!<br>You are using the models <span class=\"color_green\">" 
 				+ selected_models.reduce((s, a) => s + (s==""?"":", ") + a.name , "") + "</span>"+ (selected_workers.length==0?"":(" (Pinned to "+selected_workers.length+" worker IDs)")) 
@@ -2114,9 +2311,21 @@ Current version: 6
 				+ "<br>There are <span class=\"color_orange\">" + selected_models.reduce((s, a) => s + a.count, 0) + "</span> <a class=\"color_green\" href=\"#\" onclick=\"get_and_show_workers()\">volunteer(s)</a> running selected models with a total queue length of <span class=\"color_orange\">" + selected_models.reduce((s, a) => s + a.queued, 0) + "</span>.<br>Enter a prompt below to begin!";
 			}
 			else {
-				let fulltxt = "<span>" + concat_gametext(true) + "</span>";
+				let fulltxt = concat_gametext(false);
+				fulltxt = fulltxt.replace(/{p\|.+?\|p}/g, function(m) {
+					// m here means the whole matched string				
+					let inner = m.substring(3, m.length - 3);
+					inner = render_image_html("",inner);
+					return inner;				
+				});
+				fulltxt = fulltxt.replace(/{d\|.+?\|d}/g, function(m) {
+					// m here means the whole matched string				
+					let inner = m.substring(3, m.length - 3);
+					inner = render_image_html(inner,"");
+					return inner;				
+				});
 				fulltxt = fulltxt.replace(/(\r\n|\r|\n)/g, '<br>');
-				console.log("FT:" + fulltxt);
+				//console.log("FT:" + fulltxt);
 				document.getElementById("gametext").innerHTML = fulltxt;
 			}
 
@@ -2154,15 +2363,15 @@ Current version: 6
 
 			}
 
-			if(localsettings.autoscroll)
-			{
-				document.getElementById("gametext").scrollTop = document.getElementById("gametext").scrollHeight;
+			if (partialrefresh==false) {
+				if (localsettings.autoscroll) {
+					document.getElementById("gametext").scrollTop = document.getElementById("gametext").scrollHeight;
+				}
+				if (localsettings.persist_session) {
+					autosave();
+				}
+				document.getElementById("abortgen").classList.add("hidden");
 			}
-			if(localsettings.persist_session)
-			{
-				autosave();
-			}
-			document.getElementById("abortgen").classList.add("hidden");
 		}
 
 		function autosave()
@@ -2343,13 +2552,21 @@ Current version: 6
 
 			<div id="loadmodellistcontent" style="overflow: auto;">
 				<div class="justifyleft anotelabel">
-					Your API Key <span class="helpicon">?
-						<span class="helptext">You need an API key to use KoboldAI Horde. Get one at
+					Your Kobold Horde API Key <span class="helpicon">?
+						<span class="helptext">You need an API key to use KoboldAI Horde to generate text. Get one at
 							https://koboldai.net/register or use the anonymous key 0000000000.</span>
 					</span>
 				</div>
 				<input class="form-control" type="text" placeholder="Enter API Key (or use 0000000000)" value=""
 					id="apikey">
+				<div class="justifyleft anotelabel">
+					Your Stable Horde API Key <span class="helpicon">?
+						<span class="helptext">You need an API key to use Stable Horde to generate images. Get one at
+							https://stablehorde.net/register or use the anonymous key 0000000000.</span>
+					</span>
+				</div>
+				<input class="form-control" type="text" placeholder="Enter API Key (or use 0000000000)" value=""
+					id="stableapikey">
 				<div class="justifyleft anotelabel">
 					Select Kobold Horde AI Model <span class="helpicon">?
 						<span class="helptext">These are the models currently provided by KoboldAI Horde
@@ -2523,11 +2740,12 @@ Current version: 6
 
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall">AutoGenerate Images <span class="helpicon">?<span class="helptext">Use Stable Horde to insert AI generated images into your story at sporadic intervals.</span></span></div>
+							<div class="justifyleft settingsmall">Generate Images <span class="helpicon">?<span class="helptext">Use Stable Horde to insert AI generated images into your story at sporadic intervals.</span></span></div>
 							<select class="form-control" id="generate_images" style="height:24px;padding:0;margin:0px 0 0;">
 								<option value="0">Disabled</option>
 								<option value="1">AnythingV3</option>
 								<option value="2">StableDiffusion</option>
+								<option value="3">[Any Model]</option>
 							</select>							
 						</div>
 					</div>
