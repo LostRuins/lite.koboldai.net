@@ -62,7 +62,7 @@ Current version: 6
 		}
 
 
-		#chatname {	
+		#chatname,#chatopponent{	
 			background-color: #ffffff;
 			color:#555;
 			border:0px solid #ccc;
@@ -455,7 +455,10 @@ Current version: 6
 		}
 
 		.color_red {
-			color: #ff0000;
+			color: #ff7967;
+		}
+		.color_blue {
+			color: #828eff;
 		}
 
 		.color_pink {
@@ -1068,6 +1071,7 @@ Current version: 6
 			trimsentences: false, //trim to last punctuation
 			opmode: 1, //what mode are we in? 1=story, 2=adventure, 3=chat
 			chatname: "You", //name to use in chat
+			chatopponent: "Stranger",
 			persist_session: false,
 			speech_synth: 0, //0 is disabled
 			generate_images: 0, //0 is disabled, 1 is anything diffusion, 2 is stable diffusion, 3 is wildcard
@@ -1211,6 +1215,7 @@ Current version: 6
 				if(localsettings.chatname!=defaultsettings.chatname)
 				{
 					story.cn = localsettings.chatname;
+					story.co = localsettings.chatopponent;
 				}
 			}
 			var storyjson = JSON.stringify(story);
@@ -1300,6 +1305,10 @@ Current version: 6
 							if(story.cn&&story.cn!="")
 							{
 								localsettings.chatname = story.cn;
+							}
+							if(story.co)
+							{
+								localsettings.chatopponent = story.co;
 							}
 						}
 						
@@ -1563,6 +1572,7 @@ Current version: 6
 			document.getElementById("persist_session").checked = localsettings.persist_session;	
 			document.getElementById("opmode").value = localsettings.opmode;
 			document.getElementById("chatname").value = localsettings.chatname;
+			document.getElementById("chatopponent").value = localsettings.chatopponent;
 			document.getElementById("top_k").value = localsettings.top_k;
 			document.getElementById("top_a").value = localsettings.top_a;
 			document.getElementById("typ_s").value = localsettings.typ_s;
@@ -1598,6 +1608,7 @@ Current version: 6
 			localsettings.generate_images = document.getElementById("generate_images").value;
 			localsettings.opmode = document.getElementById("opmode").value;
 			localsettings.chatname = document.getElementById("chatname").value;
+			localsettings.chatopponent = document.getElementById("chatopponent").value;
 			localsettings.top_k = document.getElementById("top_k").value;
 			localsettings.top_a = document.getElementById("top_a").value;
 			localsettings.typ_s = document.getElementById("typ_s").value;
@@ -1687,11 +1698,18 @@ Current version: 6
 			let p1 = input.indexOf(".");
 			let p2 = input.indexOf("!");
 			let p3 = input.indexOf("?");
+			let p4 = input.indexOf("\n");
 			let first = p1;
+			let skip1 = false;
 			if (p2 > 0 && p2 < first) { first = p2; }
-			if (p3 > 0 && p3 < first) { first = p3; }			
+			if (p3 > 0 && p3 < first) { first = p3; }
+			if (p4 > 0 && p4 < first) { first = p4; skip1 = true;}			
 			if (first > 0) {
-				return input.substring(first + 2);
+				if (skip1) {
+					return input.substring(first + 1);
+				} else {
+					return input.substring(first + 2);
+				}
 			}
 			return input;
 		}
@@ -1723,7 +1741,7 @@ Current version: 6
 				if(localsettings.opmode==2 && newgen!="")
 				{
 					//append action for adventure mode
-					newgen = "\n\n\> " + newgen + "\n";
+					newgen = "\n\n\> " + newgen + "\n\n";
 				}
 				if (newgen != "") {
 					gametext_arr.push(newgen);
@@ -1738,17 +1756,44 @@ Current version: 6
 
 				let truncated_context = concat_gametext(true, ""); //no need to truncate if memory is empty
 
-				//determine if a new generated image is needed
-				if(localsettings.generate_images>0)
+				//for chatmode, inject hidden context if AN and memory are empty, and if there's no story in context before the chat
+				if(localsettings.opmode==3 && current_anote.length==0 && current_memory.length==0)
 				{
-					var tclen = truncated_context.length;
-					if(tclen > nextgeneratedimagemilestone)
+					let co = localsettings.chatopponent;
+					let me = localsettings.chatname;
+					if (gametext_arr.length > 0 && gametext_arr[0].startsWith("\n" + me + ": ")) 
+					{						
+						if(co==null||co=="")
+						{
+							co = "KoboldAI";
+						}
+						let injected = "[The following is an interesting chat message log between "+me+" and "+co+".]\n\n"+localsettings.chatname + ": Hi.\n"+co + ": Hello.";
+						truncated_context = injected + truncated_context;
+					}
+				}
+
+				//determine if a new generated image is needed, chatmode is excluded
+				if(localsettings.generate_images>0 && localsettings.opmode!=3)
+				{
+					//if adventure mode, generate every action
+					if(localsettings.opmode==2)
 					{
-						nextgeneratedimagemilestone = tclen + generateimagesinterval; //set next milestone and trigger generation, using the last 300 characters advanced to the nearest sentence.
-						var sentence = truncated_context.substring(tclen-300,tclen);
+						var sentence = truncated_context.substring(tclen-200,tclen);
 						sentence = start_trim_to_sentence(sentence);
-						sentence = end_trim_to_sentence(sentence);
-						generate_new_image(sentence);					
+						generate_new_image(sentence);
+					}
+					else
+					{
+						//story mode, generate every few hundred chars
+						var tclen = truncated_context.length;
+						if(tclen > nextgeneratedimagemilestone)
+						{
+							nextgeneratedimagemilestone = tclen + generateimagesinterval; //set next milestone and trigger generation, using the last 300 characters advanced to the nearest sentence.
+							var sentence = truncated_context.substring(tclen-300,tclen);
+							sentence = start_trim_to_sentence(sentence);
+							sentence = end_trim_to_sentence(sentence);
+							generate_new_image(sentence);					
+						}
 					}
 				}
 
@@ -1973,7 +2018,7 @@ Current version: 6
 
 		function render_image_html(data, alttext="")
 		{
-			var dim = 200;
+			var dim = (localsettings.opmode==2?150:200); //adventure mode has smaller pictures
 			if(!data || data=="")
 			{
 				let waittime = "Unavailable";
@@ -2324,7 +2369,29 @@ Current version: 6
 					inner = render_image_html(inner,"");
 					return inner;				
 				});
+
+				//for adventure mode, highlight our actions in green
+				if(localsettings.opmode==2)
+				{
+					fulltxt = fulltxt.replace(/\n\n\> .+?\n\n/g, function(m) {
+						return `<span class="color_green">`+m+`</span>`;	
+					});
+				}
+
+				//for chat mode, highlight our name in blue and opponent in red
+				if(localsettings.opmode==3)
+				{
+					let m_name = "\n"+localsettings.chatname+": ";
+					//match anything that is NOT us, ie. opponents
+					var regex = new RegExp("\n(?!"+localsettings.chatname+").+?\: ", "g");
+					fulltxt = fulltxt.replace(regex, function(m) {
+						return `<span class="color_red">`+m+`</span>`;
+					});
+					fulltxt = fulltxt.replaceAll(m_name,`<span class="color_blue">`+m_name+`</span>`);
+				}
+
 				fulltxt = fulltxt.replace(/(\r\n|\r|\n)/g, '<br>');
+
 				//console.log("FT:" + fulltxt);
 				document.getElementById("gametext").innerHTML = fulltxt;
 			}
@@ -2768,10 +2835,18 @@ Current version: 6
 								<option value="3">Chat Mode</option>
 							</select>	
 							<div id="chatnamesection" class="hidden">
-								<div class="justifyleft settingsmall">Chat Name </div>	
-								<input class="" type="text" placeholder="Chat Name" value="You"
-								id="chatname">
-								</div>								
+								<table class="settingsmall text-center" style="border-spacing: 4px 2px;	border-collapse: separate;">
+								<tr>
+								  <th>Your Name</th>
+								  <th>AI Name</th>
+								</tr>
+								<tr>
+								<td><input class="" type="text" placeholder="(Enter Name)" value="You" id="chatname"></td>
+								<td><input class="" type="text" placeholder="KoboldAI" value="Stranger"	id="chatopponent"></td>							
+								</tr>								
+							  </table>	
+								
+							</div>								
 						</div>
 					</div>
 				

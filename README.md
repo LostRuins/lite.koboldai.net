@@ -9,11 +9,12 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
-Changelog for KoboldAI Lite 11 Jan 2023:
-- Added speed (performance) information to worker table
-- Added support for Pygmalion models in chat mode. Defaulted chatmode to include some hidden context for prompt engineering if none was supplied and memory is empty.
+Changelog for KoboldAI Lite 13 Jan 2023:
+- Added integration with Stable Horde to auto generate images INSIDE your stories and adventures! Supports multiple simultaneous generations, with prompts AUTOMATICALLY DEDUCED from your story. They will be displayed inline in the text, with full support for embedded saving and sharing. You can use your own API key, and select your SD model in the Settings panel. Note that this save format is an extension of KoboldAIs own save, if you save a story with images they will not load in the official client. Regular text-only stories are still cross compatible.
+- Added support for Pygmalion models in Chat Mode. Defaulted chatmode to inject some hidden context for prompt engineering if none was supplied and memory and author note is empty, it should now behave and respond much better across all models.
 - Added fancy color coding to Adventure mode actions and Chat handles
-- Added an option when selecting model to use legacy v1 sync API. The Horde model bug should be fixed, so you may not need it.
+- Added speed (performance) information to worker table
+- Added an option when selecting model to use legacy v1 sync API instead of the new v2 API. The Horde model bug should be fixed already, so you may not need it, but could be useful if either one of them breaks in future.
 - Fixed a bug where a story would fail to generate if A/N Template was undefined
 - Fixed a bug where loading a story prevented you from loading the same story again
 - Fixed a bug where editing a story would add extra newlines after existing ones
