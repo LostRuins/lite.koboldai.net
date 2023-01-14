@@ -1050,7 +1050,7 @@ Current version: 6
 		var selected_models = []; //this stores ALL selected models properties as array of objects
 		var worker_data = [];
 		var selected_workers = [];		
-		//gametext_arr stores images inline, with the special format {p|id|p} or {d|b64img|d}, which is either a data url, or an ID for pending requests
+		//gametext_arr stores images inline, with the special format <|p|id|p|> or <|d|id|d|>, which is either an ID for loaded image data, or an ID for pending requests
 		var gametext_arr = []; //array of texts currently displayed
 		var redo_arr = []; //array of texts that are in the redo stack
 		var pending_response_id = ""; //guid of response pending from horde server
@@ -1064,7 +1064,7 @@ Current version: 6
 		var nextgeneratedimagemilestone = generateimagesinterval; //used to keep track of when to generate the next image
 		var image_db = {}; //stores a dictionary of pending images
 		//key is ID, body is {done:false,queue:10,result:""}
-		var stablemodels = [];
+		var stablemodels = []; //stored as {name,count}
 		var usev1api = false;
 		var v1_polled_response = null;
 
@@ -1166,7 +1166,7 @@ Current version: 6
 				shdata = shdata.sort(function(a, b){return b.count-a.count});
 				for(var i=0;i<shdata.length;++i)
 				{
-					stablemodels.push(shdata[i].name);
+					stablemodels.push({name:shdata[i].name,count:shdata[i].count});
 				}
 				console.log("Loaded SD models list: " + stablemodels.length);
 			}).catch((error) => {
@@ -1618,7 +1618,7 @@ Current version: 6
 			let sdmodelshtml = "";
 			for(var i=0;i<stablemodels.length;++i)
 			{
-				sdmodelshtml += "<option value=\""+stablemodels[i]+"\">";
+				sdmodelshtml += "<option value=\""+stablemodels[i].name + " (" + stablemodels[i].count +")\">";
 			}
 			document.getElementById("sdmodels").innerHTML = sdmodelshtml;	
 		}
@@ -1626,7 +1626,18 @@ Current version: 6
 		function validate_sd_model()
 		{
 			var inputmodel = document.getElementById("generate_images").value;
-			if(!stablemodels.includes(inputmodel))
+			let matched = false;
+			for(var i=0;i<stablemodels.length;++i)
+			{
+				var matcher = stablemodels[i].name + " (" + stablemodels[i].count +")";
+				if(inputmodel==matcher || inputmodel==stablemodels[i].name)
+				{
+					document.getElementById("generate_images").value = stablemodels[i].name;
+					matched = true;
+					break;
+				}
+			}
+			if(!matched)
 			{
 				document.getElementById("generate_images").value = "";
 			}
@@ -2063,7 +2074,7 @@ Current version: 6
 				console.log('genimg result:', data);
 				if (data.id && data.id != "") {
 					//for now, append the new image directly into the gtarr
-					let nimgtag = "{p|"+data.id+"|p}";
+					let nimgtag = "<|p|"+data.id+"|p|>";
 					gametext_arr.push(nimgtag);
 					image_db[data.id] = { done: false, queue: "Starting", result: "" };
 					console.log("New image queued " + nimgtag);
@@ -2210,17 +2221,17 @@ Current version: 6
 			for(var i=0;i<gametext_arr.length;++i)
 			{
 				//if there's no image in this segment, continue
-				if(/{p\|.+?\|p}/.test(gametext_arr[i]))
+				if(/<\|p\|.+?\|p\|>/.test(gametext_arr[i]))
 				{		
 					for(let key in image_db)
 					{
 						let img = image_db[key];
-						let matchstr = "{p|"+key+"|p}";
+						let matchstr = "<|p|"+key+"|p|>";
 						if(gametext_arr[i].includes(matchstr))
 						{
 							hasChangedImage = true; //set here to update timers
 							if (img.done == true && img.result != "") {
-								let newstr = "{d|" + img.result + "|d}";
+								let newstr = "<|d|" + img.result + "|d|>";
 								console.log("Replacing with Image: " + matchstr);
 								gametext_arr[i] = gametext_arr[i].replace(matchstr, newstr);
 								delete image_db[key]; //leave it in pending images
@@ -2388,7 +2399,7 @@ Current version: 6
 					gametext_elem.querySelectorAll('div.storyimg').forEach(
 					(el) => {
 						let chimg = el.getElementsByTagName("img")[0];
-						el.replaceWith((chimg.alt==null||chimg.alt=="")?("{d|"+chimg.src+"|d}"):("{p|"+chimg.alt+"|p}"))
+						el.replaceWith((chimg.alt==null||chimg.alt=="")?("<|d|"+chimg.src+"|d|>"):("<|p|"+chimg.alt+"|p|>"))
 					}
 					);
 
@@ -2406,8 +2417,8 @@ Current version: 6
 			}
 			if(stripimg)
 			{
-				fulltxt = fulltxt.replace(/{p\|.+?\|p}/g, stripimg_replace_str);
-				fulltxt = fulltxt.replace(/{d\|.+?\|d}/g, stripimg_replace_str);
+				fulltxt = fulltxt.replace(/<\|p\|.+?\|p\|>/g, stripimg_replace_str);
+				fulltxt = fulltxt.replace(/<\|d\|.+?\|d\|>/g, stripimg_replace_str);
 			}
 			return fulltxt;
 		}
@@ -2421,15 +2432,15 @@ Current version: 6
 			}
 			else {
 				let fulltxt = concat_gametext(false);
-				fulltxt = fulltxt.replace(/{p\|.+?\|p}/g, function(m) {
+				fulltxt = fulltxt.replace(/<\|p\|.+?\|p\|>/g, function(m) {
 					// m here means the whole matched string				
-					let inner = m.substring(3, m.length - 3);
+					let inner = m.substring(4, m.length - 4);
 					inner = render_image_html("",inner);
 					return inner;				
 				});
-				fulltxt = fulltxt.replace(/{d\|.+?\|d}/g, function(m) {
+				fulltxt = fulltxt.replace(/<\|d\|.+?\|d\|>/g, function(m) {
 					// m here means the whole matched string				
-					let inner = m.substring(3, m.length - 3);
+					let inner = m.substring(4, m.length - 4);
 					inner = render_image_html(inner,"");
 					return inner;				
 				});
@@ -2876,7 +2887,7 @@ Current version: 6
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Generate Images <span class="helpicon">?<span class="helptext">Use Stable Horde to insert AI generated images into your story at sporadic intervals.</span></span></div>
 						</div>
-							<input list="sdmodels" class="form-control mdlpicker" id="generate_images" style="font-size: 13px;height:24px;padding:2px;margin:0px 0 0;" placeholder="[Disabled]" value="" onblur="validate_sd_model()" onfocus="clear_sd_model()">
+							<input list="sdmodels" class="form-control mdlpicker" id="generate_images" style="font-size: 12px;height:24px;padding:2px;margin:0px 0 0;" placeholder="[Disabled]" value="" onblur="validate_sd_model()" onfocus="clear_sd_model()">
 							<datalist id="sdmodels">
 								<option value="stable_diffusion">
 							  </datalist>
