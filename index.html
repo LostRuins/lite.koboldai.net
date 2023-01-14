@@ -978,6 +978,9 @@ Current version: 6
 			position: relative;
 			padding: 4px;
 		}
+		.mdlpicker::-webkit-calendar-picker-indicator {
+              opacity: 100;
+           }
 
 		@keyframes spin {
 			0% {
@@ -1039,6 +1042,7 @@ Current version: 6
 		var stablehorde_submit_endpoint = "https://stablehorde.net/api/v2/generate/async";
 		var stablehorde_poll_endpoint = "https://stablehorde.net/api/v2/generate/check";
 		var stablehorde_output_endpoint = "https://stablehorde.net/api/v2/generate/status";
+		var stablehorde_model_endpoint = "https://stablehorde.net/api/v2/status/models";
 		
 		//all configurable globals
 		var perfinfo = "";
@@ -1060,6 +1064,7 @@ Current version: 6
 		var nextgeneratedimagemilestone = generateimagesinterval; //used to keep track of when to generate the next image
 		var image_db = {}; //stores a dictionary of pending images
 		//key is ID, body is {done:false,queue:10,result:""}
+		var stablemodels = [];
 		var usev1api = false;
 		var v1_polled_response = null;
 
@@ -1074,7 +1079,7 @@ Current version: 6
 			chatopponent: "Stranger",
 			persist_session: false,
 			speech_synth: 0, //0 is disabled
-			generate_images: 0, //0 is disabled, 1 is anything diffusion, 2 is stable diffusion, 3 is wildcard
+			generate_images: "", //"" is disabled and "*" is all, anything else is the model name pulled from stable horde
 
 			max_context_length: 1024,
 			max_length: 80,
@@ -1151,6 +1156,21 @@ Current version: 6
 			}).catch((error) => {
 				console.log("Error: " + error);
 				msgbox("Failed to connect to KAI Horde!\nPlease check your network connection.");
+			});
+
+			//fetch the stable horde model list once and store it forever, it likely wont change
+			fetch(stablehorde_model_endpoint)
+			.then(x => x.json())
+			.then(shdata => {
+				stablemodels = [];
+				shdata = shdata.sort(function(a, b){return b.count-a.count});
+				for(var i=0;i<shdata.length;++i)
+				{
+					stablemodels.push(shdata[i].name);
+				}
+				console.log("Loaded SD models list: " + stablemodels.length);
+			}).catch((error) => {
+				console.log("Error: " + error);			
 			});
 		}
 		
@@ -1591,9 +1611,29 @@ Current version: 6
 			}
 			document.getElementById("ttsselect").innerHTML = ttshtml;	
 			document.getElementById("ttsselect").value = localsettings.speech_synth;
-							
 
 			toggle_opmode();
+
+			//sd models display
+			let sdmodelshtml = "";
+			for(var i=0;i<stablemodels.length;++i)
+			{
+				sdmodelshtml += "<option value=\""+stablemodels[i]+"\">";
+			}
+			document.getElementById("sdmodels").innerHTML = sdmodelshtml;	
+		}
+
+		function validate_sd_model()
+		{
+			var inputmodel = document.getElementById("generate_images").value;
+			if(!stablemodels.includes(inputmodel))
+			{
+				document.getElementById("generate_images").value = "";
+			}
+		}
+		function clear_sd_model()
+		{
+			document.getElementById("generate_images").value = "";
 		}
 
 		function confirm_settings() {
@@ -1798,7 +1838,7 @@ Current version: 6
 				}
 
 				//determine if a new generated image is needed, chatmode is excluded
-				if(localsettings.generate_images>0 && localsettings.opmode!=3)
+				if(localsettings.generate_images!="" && localsettings.opmode!=3)
 				{
 					//if adventure mode, generate every action
 					if(localsettings.opmode==2)
@@ -1982,18 +2022,13 @@ Current version: 6
 		{
 			console.log("Generating image for: " + sentence);
 			let modelused = [];
-			if(localsettings.generate_images==1)
-			{
-				modelused = ["Midjourney Diffusion"];
-			}
-			if(localsettings.generate_images==2)
-			{
-				modelused = ["stable_diffusion"];
-			}
-			if(localsettings.generate_images==3)
-			{
+			if (localsettings.generate_images == "*") {
 				modelused = [];
+			} else {
+				modelused = [localsettings.generate_images];
 			}
+			
+
 			let genimg_payload = {
 			"prompt": (sentence + " ### disfigured, ugly, deformed, poorly, censor, censored, blurry, lowres, fused, malformed, watermark, misshapen, duplicated, grainy, distorted, signature"),
 			"params": {
@@ -2840,13 +2875,12 @@ Current version: 6
 					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Generate Images <span class="helpicon">?<span class="helptext">Use Stable Horde to insert AI generated images into your story at sporadic intervals.</span></span></div>
-							<select class="form-control" id="generate_images" style="height:24px;padding:0;margin:0px 0 0;">
-								<option value="0">Disabled</option>
-								<option value="1">Midjourney Diffusion</option>
-								<option value="2">Stable Diffusion</option>
-								<option value="3">[Any Model]</option>
-							</select>							
 						</div>
+							<input list="sdmodels" class="form-control mdlpicker" id="generate_images" style="font-size: 13px;height:24px;padding:2px;margin:0px 0 0;" placeholder="[Disabled]" value="" onblur="validate_sd_model()" onfocus="clear_sd_model()">
+							<datalist id="sdmodels">
+								<option value="stable_diffusion">
+							  </datalist>
+						
 					</div>
 
 					<div class="settingitem">
