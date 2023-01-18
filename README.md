@@ -9,6 +9,16 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
+Changelog of KoboldAI Lite 18 Jan 2023:
+- Added horde disclaimer to welcome page text.
+- Added a NSFW toggle for image generation.
+- Added a toggle for auto image generation, and button to manually generate images (ratelimited).
+- Added trailing whitespace trimming (currently forced, let me know if it needs to be an option).
+- Changed the default chat opponent name from "Stranger" to "KoboldAI" as it gives consistently more interesting output.
+- Displays number of workers next to each stable horde worker when setting image generation.
+- Allows you to randomize Stable Horde models by using * as the model name.
+- Changed the delimiters used in story saving to improve compatibility with the official client (uses <|> comments now, this might affect some saved stories with images.)
+
 Changelog for KoboldAI Lite 13 Jan 2023:
 - Added integration with Stable Horde to auto generate images INSIDE your stories and adventures! Supports multiple simultaneous generations, with prompts AUTOMATICALLY DEDUCED from your story. They will be displayed inline in the text, with full support for embedded saving and sharing. You can use your own API key, and select your SD model in the Settings panel. Note that this save format is an extension of KoboldAIs own save, if you save a story with images they will not load in the official client. Regular text-only stories are still cross compatible.
 - Added support for Pygmalion models in Chat Mode. Defaulted chatmode to inject some hidden context for prompt engineering if none was supplied and memory and author note is empty, it should now behave and respond much better across all models.

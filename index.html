@@ -450,8 +450,27 @@ Current version: 6
 			color: #3bf723;
 		}
 
+		.bg_green {
+			background-color: #129c00;
+		}
+		.bg_green:hover {
+			background-color: #058105;
+		}
+		.bg_green:focus {
+			background-color: #058105;
+		}
+		.bg_green:disabled {
+			background-color: #8a8a8a;
+		}
+		.bg_green:disabled:hover {
+			background-color: #8a8a8a;
+		}
+
 		.color_cyan {
 			color: #7afaff;
+		}
+		.color_gray {
+			color: #9b9b9b;
 		}
 
 		.color_red {
@@ -1080,6 +1099,8 @@ Current version: 6
 			persist_session: false,
 			speech_synth: 0, //0 is disabled
 			generate_images: "", //"" is disabled and "*" is all, anything else is the model name pulled from stable horde
+			img_autogen:true,
+			img_allownsfw:true,
 
 			max_context_length: 1024,
 			max_length: 80,
@@ -1094,9 +1115,7 @@ Current version: 6
 		};
 
 		var defaultsettings = JSON.parse(JSON.stringify(localsettings));
-
-		init();
-
+	
 		//attempt to load settings
 		function init()
 		{
@@ -1111,14 +1130,22 @@ Current version: 6
 				{
 					localsettings = loadedsettings;
 					import_share_story(loadedstorycompressed); //use the same compressed format as shared stories and import it
-					console.log("Loaded local settings and story");
+					console.log("Loaded local settings and story");					
 				}
 			} else {
 				console.log("Skipped missing local save");
 			}
+			
 		} catch (e) {
 			console.log("Discarded invalid local save: " + e);
 		}	
+
+		//toggle genimg btn
+		if (localsettings.generate_images) {
+			document.getElementById("btn_genimg").classList.remove("hidden");
+		} else {
+			document.getElementById("btn_genimg").classList.add("hidden");
+		}
 		
 		//poke speech synth to preload voices
 		if ('speechSynthesis' in window) {
@@ -1620,7 +1647,10 @@ Current version: 6
 			{
 				sdmodelshtml += "<option value=\""+stablemodels[i].name + " (" + stablemodels[i].count +")\">";
 			}
-			document.getElementById("sdmodels").innerHTML = sdmodelshtml;	
+			document.getElementById("sdmodels").innerHTML = sdmodelshtml;
+			document.getElementById("img_autogen").checked = localsettings.img_autogen;
+			document.getElementById("img_allownsfw").checked = localsettings.img_allownsfw;	
+			
 		}
 
 		function validate_sd_model()
@@ -1641,6 +1671,8 @@ Current version: 6
 			{
 				document.getElementById("generate_images").value = "";
 			}
+
+			
 		}
 		function clear_sd_model()
 		{
@@ -1669,6 +1701,15 @@ Current version: 6
 			localsettings.typ_s = document.getElementById("typ_s").value;
 			localsettings.tfs_s = document.getElementById("tfs_s").value;	
 			localsettings.speech_synth = document.getElementById("ttsselect").value;
+
+			localsettings.img_autogen = (document.getElementById("img_autogen").checked?true:false);
+			localsettings.img_allownsfw = (document.getElementById("img_allownsfw").checked?true:false);
+			if(localsettings.generate_images)
+			{
+				document.getElementById("btn_genimg").classList.remove("hidden");
+			}else{
+				document.getElementById("btn_genimg").classList.add("hidden");
+			}
 
 			//clamp values
 			localsettings.max_context_length = clamp(localsettings.max_context_length, 512, 2048);
@@ -1744,9 +1785,9 @@ Current version: 6
 			let last = Math.max(p1,p2,p3);
 			if(last>0)
 			{
-				return input.substring(0,last+1);
+				return input.substring(0,last+1).trim();
 			}
-			return input;
+			return input.trim();
 		}
 
 		function start_trim_to_sentence(input) {
@@ -1799,6 +1840,27 @@ Current version: 6
 			render_gametext();
 		}
 
+		function manual_gen_image()
+		{
+			let truncated_context = concat_gametext(true, "");
+			var tclen = truncated_context.length;
+			if (tclen > 0) {
+				var sentence = truncated_context.substring(tclen - 300, tclen);
+				sentence = start_trim_to_sentence(sentence);
+				sentence = end_trim_to_sentence(sentence);
+				if(sentence.length>0)
+				{
+					generate_new_image(sentence);
+					nextgeneratedimagemilestone = tclen + generateimagesinterval;
+					document.getElementById("btn_genimg").disabled = true;
+					//disable it for 5sec to prevent spam
+					setTimeout(()=>{
+						document.getElementById("btn_genimg").disabled = false;
+					}, 5000);
+				}
+			}
+		}
+
 		function submit_generation() {
 			let newgen = document.getElementById("input_text").value;
 			if (newgen != "" || gametext_arr.length > 0 || current_memory != "" || current_anote != "") {
@@ -1832,6 +1894,9 @@ Current version: 6
 
 				let truncated_context = concat_gametext(true, ""); //no need to truncate if memory is empty
 
+				//trim trailing whitespace
+				truncated_context = truncated_context.trimEnd();
+
 				//for chatmode, inject hidden context if AN and memory are empty, and if there's no story in context before the chat
 				if(localsettings.opmode==3 && current_anote.length==0 && current_memory.length==0)
 				{
@@ -1849,7 +1914,7 @@ Current version: 6
 				}
 
 				//determine if a new generated image is needed, chatmode is excluded
-				if(localsettings.generate_images!="" && localsettings.opmode!=3)
+				if(localsettings.generate_images!="" && localsettings.opmode!=3 && localsettings.img_autogen)
 				{
 					//if adventure mode, generate every action
 					if(localsettings.opmode==2)
@@ -2054,8 +2119,8 @@ Current version: 6
 				"post_processing": []
 			},
 			"models": modelused,
-			"nsfw": true,
-			"censor_nsfw": false,
+			"nsfw": (localsettings.img_allownsfw?true:false),
+			"censor_nsfw": (localsettings.img_allownsfw?false:true),
 			"trusted_workers": false,			
 			"r2": false
 			}
@@ -2419,6 +2484,7 @@ Current version: 6
 			{
 				fulltxt = fulltxt.replace(/<\|p\|.+?\|p\|>/g, stripimg_replace_str);
 				fulltxt = fulltxt.replace(/<\|d\|.+?\|d\|>/g, stripimg_replace_str);
+				fulltxt = fulltxt.replace(/<\|.+?\|>/g, ""); //remove normal comments too
 			}
 			return fulltxt;
 		}
@@ -2489,7 +2555,7 @@ Current version: 6
 				document.getElementById("btnsend").classList.remove("btn-primary");
 				document.getElementById("btnsend").innerHTML = "No AI<br>Loaded";
 
-				document.getElementById("gametext").innerHTML = "Welcome to <span class=\"color_cyan\">KoboldAI Lite</span>!<br><br>" + perfinfo + "Please select an AI model to use!";
+				document.getElementById("gametext").innerHTML = "Welcome to <span class=\"color_cyan\">KoboldAI Lite</span>!<br><br>" + perfinfo + "Please select an AI model to use!<br><br><span class=\"color_gray\" style=\"font-size:10pt;font-style: italic;\">Note: Horde Workers are open source and can be modified to log inputs, but not who sent them. Avoid sending privacy sensitive information.</span>";
 			}
 			else if (pending_response_id == "") {
 				document.getElementById("btnsend").disabled = false;
@@ -2656,6 +2722,7 @@ Current version: 6
 				<button type="button" class="btn btn-primary" id="btn_actundo" onclick="btn_back()">Back</button>
 				<button type="button" class="btn btn-primary" id="btn_actredo" onclick="btn_redo()">Redo</button>
 				<button type="button" class="btn btn-primary" id="btn_actretry" onclick="btn_retry()">Retry</button>
+				<button type="button" class="btn btn-primary bg_green" id="btn_genimg" style="width:90px" onclick="manual_gen_image()">Add Image</button>
 			</div>
 
 			<div class="box flex-push-right">
@@ -2891,6 +2958,16 @@ Current version: 6
 							<datalist id="sdmodels">
 								<option value="stable_diffusion">
 							  </datalist>
+							<div id="genimgopt" class="">
+								<div class="settinglabel">
+									<div class="justifyleft settingsmall">Autogenerate </div>	
+								   <input type="checkbox" id="img_autogen" style="margin:0px 0 0;">				
+								</div>
+								<div class="settinglabel">
+									<div class="justifyleft settingsmall">Allow NSFW </div>	
+								   <input type="checkbox" id="img_allownsfw" style="margin:0px 0 0;">				
+								</div>
+							</div>
 						
 					</div>
 
@@ -3031,5 +3108,6 @@ Current version: 6
 
 
 </body>
+<script>init();</script>
 
 </html>
