@@ -942,7 +942,39 @@ Current version: 6
 			color: #ffffff;
 			font-size:1.5vw;
 		}
-	
+
+		.widelbtn
+		{
+		font-size: 12px; 
+		height: 24px; 
+		padding: 5px; 
+		margin: 2px;
+		font-weight: bolder;
+		}
+		.wiinputkey
+		{
+		font-size: 14px; 
+		height: 24px; 
+		padding: 2px; 
+		margin: 0px;
+		width: 20vw;
+		}
+		.wiinputval
+		{
+		font-size: 14px; 
+		height: 24px; 
+		padding: 2px; 
+		margin: 0px;
+		width: 60vw;
+		}
+		.wilist
+		{
+			background-color: #434343;
+			overflow-y: auto;
+			max-height: 250px;
+			min-height: 60px;
+		}
+		
 
 		.loader {		
 			border: 6px solid #f3f3f3;
@@ -1078,6 +1110,7 @@ Current version: 6
 		var current_memory = ""; //stored memory
 		var current_anote = ""; //stored author note
 		var current_anotetemplate = "[Author\'s note: <|>]";
+		var current_wi = []; //each stores {k:key,v:val}
 		var loaded_storyobj = generate_base_storyobj(); //for loading json story files from disk
 		var generateimagesinterval = 600; //if generated images is enabled, it will trigger after every 600 new characters in context. 
 		var nextgeneratedimagemilestone = generateimagesinterval; //used to keep track of when to generate the next image
@@ -1537,7 +1570,7 @@ Current version: 6
 			document.getElementById("memorycontainer").classList.add("hidden");
 			document.getElementById("workercontainer").classList.add("hidden");	
 			document.getElementById("sharecontainer").classList.add("hidden");	
-					
+			document.getElementById("wicontainer").classList.add("hidden");
 		}
 
 		function msgbox(text) {
@@ -2601,6 +2634,32 @@ Current version: 6
 			document.getElementById("anotetemplate").value = current_anotetemplate;
 		}
 
+		function btn_wi() {
+			document.getElementById("wicontainer").classList.remove("hidden");
+
+			let wilist = document.getElementById("wilist");
+			selectionhtml = "<table>";
+            for (var i = 0; i < current_wi.length; ++i) {
+				var winame = current_wi[i].k;
+				var witxt = current_wi[i].v;
+           
+              selectionhtml += `<tr><td class="col-8" style="font-size: 10px;">` + 
+				`<button type="button" class="btn btn-danger widelbtn" id="widel`+i+`">X</button></td>`+
+				`<td class="col-6">
+                <input class="form-control wiinputkey" id="wikey`+ i + `" placeholder="Key" value="` + winame + `">` + `</td>
+              <td class="col-10">
+                <input class="form-control wiinputval" id="wival`+ i + `" placeholder="What To Remember" value="` + witxt + `">
+                </td></tr>`;
+            }
+			if(current_wi.length==0)
+			{
+				selectionhtml = "<div class=\"aidgpopuplistheader anotelabel\">No world info.<br>Click [+] to add a new entry.</div>"
+			}
+
+            selectionhtml += "</table>"
+            wilist.innerHTML = selectionhtml;
+		}
+
 		function btn_back() {
 			if (pending_response_id == "" && gametext_arr.length > 0) {
 				let popped = gametext_arr.pop();
@@ -2719,10 +2778,11 @@ Current version: 6
 		<div class="flex" id="actionmenu">
 			<div id="actionmenuitems">
 				<button type="button" class="btn btn-primary" id="btn_actmem" onclick="btn_memory()">Memory</button>
+				<button type="button" class="btn btn-primary" id="btn_actwi" onclick="btn_wi()">W Info</button>
 				<button type="button" class="btn btn-primary" id="btn_actundo" onclick="btn_back()">Back</button>
 				<button type="button" class="btn btn-primary" id="btn_actredo" onclick="btn_redo()">Redo</button>
 				<button type="button" class="btn btn-primary" id="btn_actretry" onclick="btn_retry()">Retry</button>
-				<button type="button" class="btn btn-primary bg_green" id="btn_genimg" style="width:94px" onclick="manual_gen_image()">Add Image</button>
+				<button type="button" class="btn btn-primary bg_green" id="btn_genimg"  onclick="manual_gen_image()">Add Img</button>
 			</div>
 
 			<div class="box flex-push-right">
@@ -3054,6 +3114,28 @@ Current version: 6
 			</div>
 		</div>
 	</div>
+
+	<div class="popupcontainer flex hidden" id="wicontainer">
+		<div class="nspopup">
+			<div class="popuptitlebar">
+				<div style="float:right;"><button type="button" class="btn btn-info widelbtn" id="wiadd">+</button></div>
+				<div class="popuptitletext">World Info</div>
+			</div>
+
+			<div class="wilist" id="wilist">
+						
+			</div>
+			
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" id="btn_memok" onclick="confirm_memory()">OK</button>
+				<button type="button" class="btn btn-primary" id="btn_memclose" onclick="hide_popups()">Cancel</button>
+			</div>
+		</div>
+	</div>
+
+
+	
+
 
 	<div class="popupcontainer flex hidden" id="workercontainer">
 		<div class="nspopup">
