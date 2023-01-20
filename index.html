@@ -974,6 +974,18 @@ Current version: 6
 			max-height: 250px;
 			min-height: 60px;
 		}
+		.witoggleroff,.witoggleroff:hover,.witoggleroff:focus
+		{
+			color: transparent; 
+			text-shadow: 0 0 0 gray;
+			text-decoration:none;
+		}
+		.witoggleron,.witoggleron:hover,.witoggleron:focus
+		{
+			color: transparent; 
+			text-shadow: 0 0 0 #0cdb0c;
+			text-decoration:none;
+		}
 		
 
 		.loader {		
@@ -1110,7 +1122,7 @@ Current version: 6
 		var current_memory = ""; //stored memory
 		var current_anote = ""; //stored author note
 		var current_anotetemplate = "[Author\'s note: <|>]";
-		var current_wi = []; //each stores {k:key,v:val}
+		var current_wi = []; //each item stores a wi object.
 		var loaded_storyobj = generate_base_storyobj(); //for loading json story files from disk
 		var generateimagesinterval = 600; //if generated images is enabled, it will trigger after every 600 new characters in context. 
 		var nextgeneratedimagemilestone = generateimagesinterval; //used to keep track of when to generate the next image
@@ -1288,6 +1300,10 @@ Current version: 6
 				story.ca = current_anote;
 				story.ct = current_anotetemplate;
 			}
+			if(current_wi!=null && current_wi.length>0)
+			{
+				story.cwi = current_wi;
+			}
 			//export some settings if nondefault
 			if(localsettings.opmode!=defaultsettings.opmode)
 			{
@@ -1379,6 +1395,10 @@ Current version: 6
 						{
 							current_memory = story.cm;
 						}
+						if(story.cwi && story.cwi.length>0)
+						{
+							current_wi = story.cwi;
+						}
 						if(story.op&&story.op!="")
 						{
 							localsettings.opmode = story.op;
@@ -1449,6 +1469,7 @@ Current version: 6
 			loaded_storyobj.anotetemplate = current_anotetemplate;
 			loaded_storyobj.authorsnote = current_anote;
 			loaded_storyobj.memory = current_memory;
+			loaded_storyobj.worldinfo = current_wi;
 
 			var a = document.getElementById("tempfile");
 			var file = new Blob([JSON.stringify(loaded_storyobj)], { type: 'application/json' });
@@ -1482,6 +1503,7 @@ Current version: 6
 							let is_oldui = (loaded_storyobj.file_version == null);
 							console.log("Is oldui: " + is_oldui);
 							if (is_oldui) {
+								//v1 load
 								gametext_arr.push(loaded_storyobj.prompt);
 								for (var i = 0; i < loaded_storyobj.actions.length; ++i) {
 									gametext_arr.push(loaded_storyobj.actions[i]);
@@ -1498,7 +1520,12 @@ Current version: 6
 								{
 									current_memory = loaded_storyobj.memory;
 								}
+								if(loaded_storyobj.worldinfo)
+								{
+									current_wi = loaded_storyobj.worldinfo;
+								}
 							} else {
+								//v2 load
 								gametext_arr.push(loaded_storyobj.prompt);
 								for (var key in loaded_storyobj.actions.actions){
 									var itm = loaded_storyobj.actions.actions[key];
@@ -1516,6 +1543,26 @@ Current version: 6
 								{
 									current_memory = loaded_storyobj.memory;
 								}
+								if(loaded_storyobj.worldinfo_v2!=null && loaded_storyobj.worldinfo_v2.entries!=null)
+								{
+									for (var key in loaded_storyobj.worldinfo_v2.entries){
+										var itm = loaded_storyobj.worldinfo_v2.entries[key];
+										if(itm.key.length>0 && itm.content!=null)
+										{
+											let nwi = {
+												"key": itm.key[0],
+												"keysecondary": (itm.keysecondary.length>0?itm.keysecondary[0]:""),
+												"content": itm.content,
+												"comment": itm.comment,
+												"folder": null,
+												"selective": itm.selective,
+												"constant": itm.constant
+											};
+											current_wi.push(nwi);
+										}
+									}
+								}
+								
 							}
 							render_gametext();
 						}
@@ -1793,6 +1840,7 @@ Current version: 6
 			v1_polled_response = null;
 			current_memory = "";
 			current_anote = "";
+			current_wi = [];
 			current_anotetemplate = "[Author's note: <|>]";
 			loaded_storyobj = generate_base_storyobj();
 			document.getElementById("input_text").value = "";
@@ -2582,6 +2630,21 @@ Current version: 6
 				}
 			}
 
+			if(selected_models.length==0) //if no model, disable all first
+			{
+				document.getElementById("btn_actmem").disabled = true;
+				document.getElementById("btn_actwi").disabled = true;
+				document.getElementById("btn_actundo").disabled = true;
+				document.getElementById("btn_actredo").disabled = true;
+				document.getElementById("btn_actretry").disabled = true;
+			}else{
+				document.getElementById("btn_actmem").disabled = false;
+				document.getElementById("btn_actwi").disabled = false;
+				document.getElementById("btn_actundo").disabled = false;
+				document.getElementById("btn_actredo").disabled = false;
+				document.getElementById("btn_actretry").disabled = false;
+			}
+
 			if (selected_models.length==0) {
 				document.getElementById("btnsend").disabled = true;
 				document.getElementById("btnsend").classList.add("wait");
@@ -2634,22 +2697,99 @@ Current version: 6
 			document.getElementById("anotetemplate").value = current_anotetemplate;
 		}
 
+		function toggle_wi_sk(idx)
+		{
+			var ce = current_wi[idx];
+			ce.selective = !ce.selective;
+			var tgt = document.getElementById("wiskt"+idx);
+			var tgt2 = document.getElementById("wikeysec"+idx);
+			if(ce.selective)
+			{
+				tgt.classList.add("witoggleron");
+				tgt.classList.remove("witoggleroff");
+				tgt2.classList.remove("hidden");
+			}else{
+				tgt.classList.remove("witoggleron");
+				tgt.classList.add("witoggleroff");
+				tgt2.classList.add("hidden");
+			}
+		}
+
+		function toggle_wi_ck(idx)
+		{
+			var ce = current_wi[idx];
+			ce.constant = !ce.constant;
+			var tgt = document.getElementById("wickt"+idx);
+			if(ce.constant)
+			{
+				tgt.classList.add("witoggleron");
+				tgt.classList.remove("witoggleroff");
+			}else{
+				tgt.classList.remove("witoggleron");
+				tgt.classList.add("witoggleroff");
+			}
+		}
+
+		function del_wi(idx)
+		{
+			save_wi();
+			var ce = current_wi[idx];			
+			current_wi.splice(idx, 1);
+			btn_wi();
+		}
+
+		function add_wi()
+		{
+			save_wi();
+			var ne = {				
+				"key": "",
+				"keysecondary": "",
+				"content": "",
+				"comment": "",
+				"folder": null,
+				"selective": false,
+				"constant": false											
+			};
+			current_wi.push(ne);
+			btn_wi();
+		}
+
+		function save_wi()
+		{
+			for (var i = 0; i < current_wi.length; ++i) 
+			{
+				current_wi[i].key = document.getElementById("wikey" + i).value;
+				current_wi[i].keysecondary = document.getElementById("wikeysec" + i).value;
+				current_wi[i].content = document.getElementById("wival" + i).value;
+			}
+		}
+
 		function btn_wi() {
 			document.getElementById("wicontainer").classList.remove("hidden");
 
 			let wilist = document.getElementById("wilist");
-			selectionhtml = "<table>";
+			selectionhtml = `<table style="border-collapse: separate; border-spacing: 1.5pt;">`;
             for (var i = 0; i < current_wi.length; ++i) {
-				var winame = current_wi[i].k;
-				var witxt = current_wi[i].v;
+				var curr = current_wi[i];
+				var winame = curr.key;
+				var witxt = curr.content;
+				var wisec = curr.keysecondary;
            
-              selectionhtml += `<tr><td class="col-8" style="font-size: 10px;">` + 
-				`<button type="button" class="btn btn-danger widelbtn" id="widel`+i+`">X</button></td>`+
+              selectionhtml += `<tr id="wirow`+i+`"><td class="col-8" style="font-size: 10px;">` + 
+				`<button type="button" class="btn btn-danger widelbtn" id="widel`+i+`" onclick="return del_wi(`+i+`)">X</button></td>`+
 				`<td class="col-6">
-                <input class="form-control wiinputkey" id="wikey`+ i + `" placeholder="Key" value="` + winame + `">` + `</td>
+                <input class="form-control wiinputkey" id="wikey`+ i + `" placeholder="Key" value="` + winame + `">
+				<input class="form-control wiinputkey `+(curr.selective?``:`hidden`)+`" id="wikeysec`+ i + `" placeholder="Sec. Key" value="` + wisec + `">` + `</td>
               <td class="col-10">
                 <input class="form-control wiinputval" id="wival`+ i + `" placeholder="What To Remember" value="` + witxt + `">
-                </td></tr>`;
+                </td>`+
+				`
+				<td>
+					<a id="wiskt`+ i + `" href="#" class=`+(curr.selective?"witoggleron":"witoggleroff")+` title="Toggle Selective Key mode (if enabled, this world info entry will be included in memory only if at least one PRIMARY KEY and at least one SECONDARY KEY are both present in the story)" onclick="return toggle_wi_sk(`+i+`)">📑</a>
+					<a id="wickt`+ i + `" href="#" class=`+(curr.constant?"witoggleron":"witoggleroff")+` title="Toggle Constant Key mode (if enabled, this world info entry will always be included in memory)" onclick="return toggle_wi_ck(`+i+`)">📌</a>
+					</td>
+				</tr>
+				`;
             }
 			if(current_wi.length==0)
 			{
@@ -3118,7 +3258,7 @@ Current version: 6
 	<div class="popupcontainer flex hidden" id="wicontainer">
 		<div class="nspopup">
 			<div class="popuptitlebar">
-				<div style="float:right;"><button type="button" class="btn btn-info widelbtn" id="wiadd">+</button></div>
+				<div style="float:right;"><button type="button" class="btn btn-info widelbtn" id="wiadd" onclick="add_wi()">+</button></div>
 				<div class="popuptitletext">World Info</div>
 			</div>
 
@@ -3126,9 +3266,8 @@ Current version: 6
 						
 			</div>
 			
-			<div class="popupfooter">
-				<button type="button" class="btn btn-primary" id="btn_memok" onclick="confirm_memory()">OK</button>
-				<button type="button" class="btn btn-primary" id="btn_memclose" onclick="hide_popups()">Cancel</button>
+			<div class="popupfooter">				
+				<button type="button" class="btn btn-primary" id="btn_memclose" onclick="save_wi();hide_popups()">Accept</button>
 			</div>
 		</div>
 	</div>
