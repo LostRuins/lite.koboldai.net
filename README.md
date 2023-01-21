@@ -9,8 +9,8 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
-Changelog of KoboldAI Lite 22 Jan 2023:
-- Added World Info support, with compatible loading from v1 and v2 saves, and saving to v1 format.
+Changelog of KoboldAI Lite 21 Jan 2023:
+- Added World Info support, with compatible loading from v1 and v2 saves, and saving to v1 format. It should work exactly like world info in the main v1 client.
 - Fixed a bug that allowed HTML inside images to also be edited when edit text was enabled.
 - Prevented action buttons from being selected before an AI model was chosen
 
