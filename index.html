@@ -1994,6 +1994,7 @@ Current version: 6
 					}
 				}
 
+
 				//determine if a new generated image is needed, chatmode is excluded
 				if(localsettings.generate_images!="" && localsettings.opmode!=3 && localsettings.img_autogen)
 				{
@@ -2024,6 +2025,48 @@ Current version: 6
 
 				//we clip the memory if its too long, taking the last x chars (not the first)
 				let truncated_memory = current_memory.substring(current_memory.length - max_allowed_characters);
+				if(truncated_memory!=null && truncated_memory!="")
+				{
+					truncated_memory += "\n";
+				}
+
+				//if world info exists, we inject it right after the memory
+				//for each matching key
+				let lowercase_context = truncated_context.toLowerCase();
+				if(current_wi.length>0)
+				{
+					for(var x=0;x<current_wi.length;++x)
+					{			
+						let wi = current_wi[x];
+
+						//see if this is a valid wi entry
+						if(wi.key==null||wi.key==""||(wi.selective && (wi.keysecondary==""||wi.keysecondary==null)))
+						{
+							continue;
+						}
+
+						let wiks = wi.key.split(",");
+
+						let shoulduse = false;
+						if (wi.constant) {
+							shoulduse = true;
+						}
+						else if (!wi.selective) {
+							shoulduse = wiks.some(k => lowercase_context.includes(k.trim().toLowerCase()));
+						} else {
+							let wiks2 = wi.keysecondary.split(",");
+							let t1 = wiks.some(k => lowercase_context.includes(k.trim().toLowerCase()));
+							let t2 = wiks2.some(k => lowercase_context.includes(k.trim().toLowerCase()));
+							
+							shoulduse = (t1 && t2);							
+						}
+
+						if(shoulduse)
+						{
+							truncated_memory += wi.content + "\n";
+						}
+					}
+				}
 
 				//we clip the authors note if its too long
 				let truncated_anote = current_anotetemplate.replace("<|>", current_anote);
@@ -2082,6 +2125,8 @@ Current version: 6
 						submit_payload.params.typical = localsettings.typ_s;
 						submit_payload.params.tfs = localsettings.tfs_s;
 				}
+
+				//submit_payload.params.sampler_order = [6, 0, 1, 2, 3, 4, 5];
 
 				console.log(submit_payload);
 
@@ -2778,8 +2823,8 @@ Current version: 6
               selectionhtml += `<tr id="wirow`+i+`"><td class="col-8" style="font-size: 10px;">` + 
 				`<button type="button" class="btn btn-danger widelbtn" id="widel`+i+`" onclick="return del_wi(`+i+`)">X</button></td>`+
 				`<td class="col-6">
-                <input class="form-control wiinputkey" id="wikey`+ i + `" placeholder="Key" value="` + winame + `">
-				<input class="form-control wiinputkey `+(curr.selective?``:`hidden`)+`" id="wikeysec`+ i + `" placeholder="Sec. Key" value="` + wisec + `">` + `</td>
+                <input class="form-control wiinputkey" id="wikey`+ i + `" placeholder="Key(s)" value="` + winame + `">
+				<input class="form-control wiinputkey `+(curr.selective?``:`hidden`)+`" id="wikeysec`+ i + `" placeholder="Sec. Key(s)" value="` + wisec + `">` + `</td>
               <td class="col-10">
                 <input class="form-control wiinputval" id="wival`+ i + `" placeholder="What To Remember" value="` + witxt + `">
                 </td>`+
@@ -3271,9 +3316,6 @@ Current version: 6
 			</div>
 		</div>
 	</div>
-
-
-	
 
 
 	<div class="popupcontainer flex hidden" id="workercontainer">

@@ -12,6 +12,7 @@ You can run it directly from your desktop or throw it on some web server and ser
 Changelog of KoboldAI Lite 22 Jan 2023:
 - Added World Info support, with compatible loading from v1 and v2 saves, and saving to v1 format.
 - Fixed a bug that allowed HTML inside images to also be edited when edit text was enabled.
+- Prevented action buttons from being selected before an AI model was chosen
 
 Changelog of KoboldAI Lite 18 Jan 2023:
 - Added horde disclaimer to welcome page text.
