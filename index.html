@@ -1155,6 +1155,7 @@ Current version: 8
 		var stablemodels = []; //stored as {name,count}
 		var usev1api = false;
 		var v1_polled_response = null;
+		var pending_found_story = null;
 
 		var localsettings = {
 			 my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
@@ -1268,8 +1269,13 @@ Current version: 8
 				const urlParams = new URLSearchParams(window.location.search);
 				const foundStory = urlParams.get('s');
 				if(foundStory&&foundStory!="")
-				{
-					import_share_story(foundStory);
+				{					
+					if (localsettings.persist_session) {
+						pending_found_story = foundStory;
+						prompt_overwrite();
+					} else {
+						import_share_story(foundStory);
+					}
 					//purge url params
 					window.history.replaceState(null, null, window.location.pathname);
 				}
@@ -1675,6 +1681,7 @@ Current version: 8
 		function hide_popups() {
 			document.getElementById("loadmodelcontainer").classList.add("hidden");
 			document.getElementById("newgamecontainer").classList.add("hidden");
+			document.getElementById("overwritestorycontainer").classList.add("hidden");
 			document.getElementById("settingscontainer").classList.add("hidden");
 			document.getElementById("msgboxcontainer").classList.add("hidden");
 			document.getElementById("memorycontainer").classList.add("hidden");
@@ -1997,6 +2004,20 @@ Current version: 8
 			} else {
 				document.getElementById('chatnamesection').classList.add('hidden')
 			}
+		}
+
+		function prompt_overwrite()
+		{
+			document.getElementById("overwritestorycontainer").classList.remove("hidden");
+		}
+		function confirm_overwrite()
+		{
+			if(pending_found_story&&pending_found_story!="")
+			{
+				import_share_story(pending_found_story);
+				pending_found_story = null;
+			}
+			hide_popups();
 		}
 
 		function display_newgame() {
@@ -3092,8 +3113,9 @@ Current version: 8
 			}
 		}
 
-		function btn_retry() {
-			if (pending_response_id == "" && gametext_arr.length > 0) {
+		function btn_retry() { 
+			//do not retry if story is only 1 part long
+			if (pending_response_id == "" && gametext_arr.length > 1) {
 				btn_back();
 				submit_generation();
 				redo_arr = [];
@@ -3309,6 +3331,22 @@ Current version: 8
 				<button type="button" class="btn btn-primary" id="btn_nsaccept"
 					onclick="confirm_newgame()">Accept</button>
 				<button type="button" class="btn btn-primary" id="btn_nsclose" onclick="hide_popups()">Cancel</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="overwritestorycontainer">
+		<div class="nspopup fixsize">
+			<div class="popuptitlebar">
+				<div class="popuptitletext">Overwrite Warning</div>
+			</div>
+			<div class="aidgpopuplistheader anotelabel">
+				You already have an existing persistent story. Do you want to overwrite it?
+			</div>
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" id="btn_nsaccept"
+					onclick="confirm_overwrite()">Yes</button>
+				<button type="button" class="btn btn-primary" id="btn_nsclose" onclick="hide_popups()">No</button>
 			</div>
 		</div>
 	</div>
