@@ -5,7 +5,7 @@ This is a standalone web ui for KoboldAIs Horde, which requires no dependencies,
 Just copy this single static HTML file anywhere and open it in a browser. No dependencies.
 Or you can throw it on some web server and serve it there too. E.g. Github pages, nginx, whatever.
 Now rebranded as KoboldAI Lite
-Current version: 6
+Current version: 8
 -Concedo
 -->
 
@@ -13,6 +13,12 @@ Current version: 6
 	<title>KoboldAI Lite</title>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
+
+	<!--PWA Manifest-->
+	<link rel="manifest" href="manifest.json" />
+
+	<!-- Favicon -->
+	<link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAAXNSR0IB2cksfwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAEtQTFRFAAAA+XJ0l09PsVdXcTw842hqw2hmTi4vMCQlb2eUgWtl+tGpBAMDEw4NPCkoFw8PJBgXt5WBVkxW4Nvf7Lia3Z+MpJnAZ05HnJOTYIS/NAAAABl0Uk5TAv////v//vT9//3/Nna08qf+///////a/hkcROQAAAGUSURBVHiclZLRcoQgDEULBAKoIKjI/39pL4i7nbUPbcYZwJyES5Kvr3/YvIx1nn9zL4G4EwuTXX7xs4QFGEklOT6SBENERguhsWHFD2AVRhL8IEgawY8b5L4fYtg+TSl8+NMEu4G2P34Q67r6I+37dLyBfU/4PY/sInG2MR8vIHG01h9mHfq1hUUQtwYcLEcp+ltmwqutdy5HMwAfc8ExKtVSLEZZW13Jxb4Azq7UHFnFrtGItLliS1UDYOfctm3JhEtlEH5zzpZNDsC63AB1VysY3gqC3C2ytsNW6Q3IjCt91Qr9QK8MiFL4nUEpEyNLYmodxYo3RquVHWUmbbRu0QCbKWwNfil5zYeENrRRqtZrGEQYqdtW8FWHLl4bgZDLFLZdbS/UzP2AEGTufkt3xWSvwzJeh4GxHWD5qlgXOZ/n2ULuC/od4Pk8x9xhCekD0Bqd/DmXgbpEumRgrMPn1K6ecs4pJc/V0nE+x35KtfTJTJufpvPTD2DyNZ3e4wP3zDCHevg+yYvf09PfkHuK7/Vv9g2CjBTdqv3bFgAAAABJRU5ErkJggg==" />
 
 	<style>
 	/*!
@@ -95,15 +101,15 @@ Current version: 6
 			font-weight: bold;
 		}
 
-		#settingsmenu {
+		.settingsmenu {
 			display: flex;
 			flex-wrap: wrap;
 			background-color: #4d4d4d;
 			padding: 10px;
 		}
 
-		body.connected #settingsmenu,
-		#settingsmenu.always-available {
+		body.connected .settingsmenu,
+		.settingsmenu.always-available {
 			background-color: #295071;
 		}
 
@@ -1003,6 +1009,16 @@ Current version: 6
 			justify-content: center;
 			animation: spin 2s linear infinite;
 		}
+		.loader.greenloader
+		{
+			border-top: 6px solid #0dff35;
+		}
+		.loader.redloader
+		{
+			border-top: 6px solid #ec5f0d;
+		}
+
+
 		.loader2
 		{
 			border: 6px solid #8a8686;
@@ -1055,6 +1071,11 @@ Current version: 6
 				transform: rotate(360deg);
 			}
 		}
+
+		/* #oaimodel
+		{
+			height: 120px;
+		} */
 
 		
 	</style>
@@ -1139,6 +1160,7 @@ Current version: 6
 
 			autoscroll: false, //automatically scroll to bottom on render
 			trimsentences: false, //trim to last punctuation
+			trimwhitespace: true, //trim trailing whitespace
 			opmode: 1, //what mode are we in? 1=story, 2=adventure, 3=chat
 			chatname: "You", //name to use in chat
 			chatopponent: "KoboldAI",
@@ -1147,20 +1169,44 @@ Current version: 6
 			generate_images: "", //"" is disabled and "*" is all, anything else is the model name pulled from stable horde
 			img_autogen:true,
 			img_allownsfw:true,
+			last_selected_preset: 0,
 
 			max_context_length: 1024,
 			max_length: 80,
 			rep_pen: 1.1,
+			rep_pen_range: 1024,
+			rep_pen_slope: 0.7,
 			temperature: 0.55,
 			top_p: 0.9,
 			top_k: 0,
 			top_a: 0,
 			typ_s: 1,
 			tfs_s: 1,
+			sampler_order: [6, 0, 1, 2, 3, 4, 5],
 
 		};
-
+		
 		var defaultsettings = JSON.parse(JSON.stringify(localsettings));
+
+		//a list of presets users can choose from
+		const presets = [
+			{
+				preset: "[Default]",
+				description: "Known Working Settings.",
+				temp: defaultsettings.temperature,
+				genamt: defaultsettings.max_length,
+				top_k: defaultsettings.top_k,
+				top_p: defaultsettings.top_p,
+				top_a: defaultsettings.top_a,
+				typical: defaultsettings.typ_s,
+				tfs: defaultsettings.tfs_s,
+				rep_pen: defaultsettings.rep_pen,
+				rep_pen_range: defaultsettings.rep_pen_range,
+				rep_pen_slope: defaultsettings.rep_pen_slope,
+				sampler_order: defaultsettings.sampler_order
+			},
+			{"preset":"Godlike","description":"Makes AI give a descriptive and sensual output.","temp":0.7,"genamt":80,"top_k":0,"top_p":0.5,"top_a":0.75,"typical":0.19,"tfs":0.97,"rep_pen":1.1,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,5,4,3,2,1,0]},{"preset":"Light Breeze","description":"Staying on track, not complex stories, directing the plot yourself.","temp":0.6,"genamt":80,"top_k":0,"top_p":0.85,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.2,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,0,1,2,3,4,5]},{"preset":"Mayday","description":"Wacky plot, creativity from AI, crazy stories you want AI to weird out.","temp":1.05,"genamt":80,"top_k":0,"top_p":0.95,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.1,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,0,1,2,3,4,5]},{"preset":"Good Winds","description":"Let AI direct the plot, but still stay logical.","temp":0.7,"genamt":80,"top_k":0,"top_p":1,"top_a":0,"typical":1,"tfs":0.9,"rep_pen":1.1,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,0,1,2,3,4,5]},{"preset":"Liminal Drift","description":"Drives coherent dialogue, responses, and behavior, sometimes surreal situations arise based on information already present in the story.","temp":0.66,"genamt":80,"top_k":0,"top_p":1,"top_a":0.96,"typical":0.6,"tfs":1,"rep_pen":1.1,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,4,5,1,0,2,3]},{"preset":"Storywriter 6B","description":"Optimized settings for relevant output.","genamt":80,"rep_pen":1.1,"rep_pen_range":2048,"rep_pen_slope":0.2,"sampler_order":[6,5,0,2,3,1,4],"temp":0.72,"tfs":1,"top_a":0,"top_k":0,"top_p":0.73,"typical":1},{"preset":"Coherent Creativity 6B","description":"A good balance between coherence, creativity, and quality of prose.","genamt":80,"rep_pen":1.2,"rep_pen_range":2048,"rep_pen_slope":0,"sampler_order":[6,5,0,2,3,1,4],"temp":0.51,"tfs":0.99,"top_a":0,"top_k":0,"top_p":1,"typical":1},{"preset":"Luna Moth 6B","description":"A great degree of creativity without losing coherency.","temp":2,"genamt":80,"top_k":85,"top_p":0.24,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.1,"rep_pen_range":2048,"rep_pen_slope":0,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Sphinx Moth 6B","description":"Maximum randomness while still being plot relevant. Like Sphinx riddles!","temp":2,"genamt":80,"top_k":30,"top_p":0.18,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.15,"rep_pen_range":2048,"rep_pen_slope":0,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Emperor Moth 6B","description":"Medium randomness with a decent bit of creative writing.","temp":1.25,"genamt":80,"top_k":0,"top_p":0.24,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.1,"rep_pen_range":2048,"rep_pen_slope":0,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Best Guess 6B","description":"A subtle change with alternative context settings.","temp":0.8,"genamt":80,"top_k":100,"top_p":0.9,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.15,"rep_pen_range":2048,"rep_pen_slope":3.4,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Pleasing Results 6B","description":"Expectable output with alternative context settings.","temp":0.44,"genamt":80,"top_k":0,"top_p":1,"top_a":0,"typical":1,"tfs":0.9,"rep_pen":1.15,"rep_pen_range":2048,"rep_pen_slope":6.8,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Genesis 13B","description":"Stable and logical, but with scattered creativity.","temp":0.63,"genamt":80,"top_k":0,"top_p":0.98,"top_a":0,"typical":1,"tfs":0.98,"rep_pen":1.05,"rep_pen_range":2048,"rep_pen_slope":0.1,"sampler_order":[6,2,0,3,5,1,4]},{"preset":"Basic Coherence 13B","description":"Keep things on track.","temp":0.59,"genamt":80,"top_k":0,"top_p":1,"top_a":0,"typical":1,"tfs":0.87,"rep_pen":1.1,"rep_pen_range":2048,"rep_pen_slope":0.3,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Ouroboros 13B","description":"Versatile, conforms well to poems, lists, chat, etc.","temp":1.07,"genamt":80,"top_k":100,"top_p":1,"top_a":0,"typical":1,"tfs":0.93,"rep_pen":1.05,"rep_pen_range":404,"rep_pen_slope":0.8,"sampler_order":[6,0,5,3,2,1,4]},{"preset":"Ace of Spades 13B","description":"Expressive, while still staying focused.","temp":1.15,"genamt":80,"top_k":0,"top_p":0.95,"top_a":0,"typical":1,"tfs":0.8,"rep_pen":1.05,"rep_pen_range":2048,"rep_pen_slope":7,"sampler_order":[6,3,2,0,5,1,4]},{"preset":"Moonlit Chronicler 13B","description":"Tells a tale with confidence, but variety where it matters.","temp":1.25,"genamt":80,"top_k":100,"top_p":1,"top_a":0.78,"typical":0.95,"tfs":0.8,"rep_pen":1.05,"rep_pen_range":0,"rep_pen_slope":0,"sampler_order":[6,0,4,1,3,5,2]},{"preset":"Fandango 13B","description":"A rhytmic dance of prose, whoever takes the lead.","temp":0.86,"genamt":80,"top_k":20,"top_p":0.95,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.05,"rep_pen_range":2048,"rep_pen_slope":0.1,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"All-Nighter 13B","description":"Creative diction with room for embellishments.","temp":1.33,"genamt":80,"top_k":13,"top_p":1,"top_a":0,"typical":1,"tfs":0.84,"rep_pen":1.05,"rep_pen_range":400,"rep_pen_slope":0.3,"sampler_order":[6,5,0,3,2,1,4]},{"preset":"Low Rider 13B","description":"Reliable, aimed at story development.","temp":0.94,"genamt":80,"top_k":12,"top_p":1,"top_a":0,"typical":1,"tfs":0.94,"rep_pen":1.05,"rep_pen_range":2048,"rep_pen_slope":0.2,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Morpho 13B","description":"Let the AI generate without constraints.","temp":0.69,"genamt":80,"top_k":0,"top_p":1,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.05,"rep_pen_range":2048,"rep_pen_slope":0,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Pro Writer 13B","description":"Optimal setting for readability, based on AI-powered mass statistical analysis of Euterpe output.","temp":1.35,"genamt":80,"top_k":0,"top_p":1,"top_a":0,"typical":1,"tfs":0.69,"rep_pen":1.15,"rep_pen_range":2048,"rep_pen_slope":0.1,"sampler_order":[6,3,2,5,0,1,4]}
+		];
 	
 		//attempt to load settings
 		function init()
@@ -1246,6 +1292,20 @@ Current version: 6
 				console.log("Error: " + error);			
 			});
 		}
+
+		//this is needed for PWA to work on chrome, so users can install KoboldAI Lite to device
+		async function registerServiceWorker() {
+			if ('serviceWorker' in navigator) {
+				try {					
+					const registration = await navigator.serviceWorker.register("sw.js");
+					console.log("service worker registered");
+				} catch (error) {
+					console.log("error while registering service worker: " + error.message);					
+				}
+			} else {
+				console.log("service workers API not available");
+			}
+		};
 		
 		function selectElementContents(el) {
 			var range = document.createRange();
@@ -1634,28 +1694,42 @@ Current version: 6
 			document.getElementById("loadmodelcontainer").classList.remove("hidden");
 			document.getElementById("apikey").value = localsettings.my_api_key;
 			document.getElementById("stableapikey").value = localsettings.stable_api_key;
+			let manualworker = (document.getElementById("manualworker").checked ? true : false);
 
 			fetch(models_endpoint)
 			.then(x => x.json())
 			.then(y => {
-				models_data = y;
-				let model_choices = "";
-				for (let i = 0; i < models_data.length; ++i) {
-					let curr = models_data[i];
-					model_choices += "<option value=\"" + i + "\">" + curr.name + " (Queue: " + curr.queued + ", Speed: " + curr.performance + ", Qty: " + curr.count + ")</option>";
-				}
-				document.getElementById("oaimodel").innerHTML = model_choices;
+					models_data = y;					
+					if (!manualworker) {
+						let model_choices = "";
+						for (let i = 0; i < models_data.length; ++i) {
+							let curr = models_data[i];
+							model_choices += "<option value=\"" + i + "\">" + curr.name + " (Queue: " + curr.queued + ", Speed: " + curr.performance + ", Qty: " + curr.count + ")</option>";
+						}
+						document.getElementById("oaimodel").innerHTML = model_choices;
+					}
 			}).catch((error) => {
 				console.log("Error: " + error);
 				msgbox("Failed to fetch models!\nPlease check your network connection.");
 			});
 
-			get_workers((wdata)=>{ //this is required for the hack
+			get_workers((wdata)=>{ 
 				worker_data = wdata;
+				if(manualworker)
+				{
+					let model_choices = "";
+					for (let i = 0; i < worker_data.length; ++i) {
+						let curr = worker_data[i];
+						let cm = (curr.models && curr.models.length>0)?curr.models[0]:"None";
+						model_choices += "<option value=\"" + i + "\">" + curr.name + " (" + cm + ")</option>";
+					}
+					document.getElementById("oaimodel").innerHTML = model_choices;
+				}
 			});
 					
 		}
 
+		
 		function confirm_models() {
 			let selected_idx_arr = Array.from(document.getElementById("oaimodel").selectedOptions).map(({ value }) => value);
 
@@ -1665,18 +1739,29 @@ Current version: 6
 				//if the misdirect fix hack is enabled, pick a specific worker ids to use
 				selected_workers = [];
 				usev1api = (document.getElementById("usev1api").checked ? true : false);
-				let misdirectfix = (document.getElementById("misdirectfix").checked ? true : false);
+				let manualworker = (document.getElementById("manualworker").checked ? true : false);
 
 				for(var i=0;i<selected_idx_arr.length;++i)
 				{
-					let addedmodel = models_data[selected_idx_arr[i]];
-					selected_models.push(addedmodel);
-					if (misdirectfix) {
-						let foundworker = worker_data.find(element => element.models.includes(addedmodel.name));
-						if (foundworker) {
-							selected_workers.push(foundworker.id);
-						}
+					if(manualworker) //we are looping through selected workers
+					{
+						let addedworker = worker_data[selected_idx_arr[i]];
+						selected_workers.push(addedworker.id);
+						let modnames = addedworker.models;
+						for(var j=0;j<modnames.length;++j)
+						{
+							let addedmodel = models_data.find(element => element.name==modnames[j]);
+							if(!selected_models.includes(addedmodel))
+							{
+								selected_models.push(addedmodel);
+							}
+						}						
 					}
+					else //we are looping through selected models
+					{
+						let addedmodel = models_data[selected_idx_arr[i]];
+						selected_models.push(addedmodel);
+					}					
 				}
 
 				localsettings.my_api_key = document.getElementById("apikey").value;
@@ -1694,9 +1779,12 @@ Current version: 6
 			document.getElementById("max_length").value = document.getElementById("max_length_slide").value = localsettings.max_length;
 			document.getElementById("temperature").value = document.getElementById("temperature_slide").value = localsettings.temperature;
 			document.getElementById("rep_pen").value = document.getElementById("rep_pen_slide").value = localsettings.rep_pen;
+			document.getElementById("rep_pen_slope").value = localsettings.rep_pen_slope;
+			document.getElementById("rep_pen_range").value = localsettings.rep_pen_range;
 			document.getElementById("top_p").value = document.getElementById("top_p_slide").value = localsettings.top_p;
 			document.getElementById("autoscroll").checked = localsettings.autoscroll;
 			document.getElementById("trimsentences").checked = localsettings.trimsentences;
+			document.getElementById("trimwhitespace").checked = localsettings.trimwhitespace;
 			document.getElementById("persist_session").checked = localsettings.persist_session;	
 			document.getElementById("opmode").value = localsettings.opmode;
 			document.getElementById("chatname").value = localsettings.chatname;
@@ -1706,6 +1794,20 @@ Current version: 6
 			document.getElementById("typ_s").value = localsettings.typ_s;
 			document.getElementById("tfs_s").value = localsettings.tfs_s;	
 			document.getElementById("generate_images").value = localsettings.generate_images;
+
+			//prepare the input for sampler order
+			let samplerstr = localsettings.sampler_order.toString();
+			document.getElementById("sampler_order").value = samplerstr;
+
+			//populate the presets list
+			let npresets = "";
+			for(var i=0;i<presets.length;++i)
+			{
+				npresets += `<option value="`+i+`" title="`+presets[i].description+`">`+presets[i].preset+`</option>`;
+			}
+			npresets += `<option value="9999" title="User Defined Settings">[Custom]</option>`;
+			document.getElementById("presets").innerHTML = npresets;
+			document.getElementById("presets").value = localsettings.last_selected_preset;
 			
 			var ttshtml = "<option value=\"0\">Disabled</option>";
 			if ('speechSynthesis' in window) {
@@ -1734,6 +1836,27 @@ Current version: 6
 			
 		}
 
+		function toggle_preset()
+		{
+			let selp = document.getElementById("presets").value;
+			let found = presets[selp];
+			if(found)
+			{
+				temp_changingpreset = true;	
+				document.getElementById("temperature").value = document.getElementById("temperature_slide").value = found.temp;
+				document.getElementById("max_length").value = document.getElementById("max_length_slide").value = found.genamt;
+				document.getElementById("top_k").value = found.top_k;
+				document.getElementById("top_p").value = document.getElementById("top_p_slide").value = found.top_p;
+				document.getElementById("top_a").value = found.top_a;
+				document.getElementById("typ_s").value = found.typical;
+				document.getElementById("tfs_s").value = found.tfs;
+				document.getElementById("rep_pen").value = document.getElementById("rep_pen_slide").value = found.rep_pen;
+				document.getElementById("rep_pen_range").value = found.rep_pen_range;
+				document.getElementById("rep_pen_slope").value = found.rep_pen_slope;
+				document.getElementById("sampler_order").value = found.sampler_order.toString();
+			}
+		}
+
 		function validate_sd_model()
 		{
 			var inputmodel = document.getElementById("generate_images").value;
@@ -1760,14 +1883,65 @@ Current version: 6
 			document.getElementById("generate_images").value = "";
 		}
 
+		function validate_samplers(savesetting = false)
+		{
+			let samplerstr = document.getElementById("sampler_order").value;
+			let sarr = samplerstr.split(",");
+			let validatorarr = [0,1,2,3,4,5,6];
+			let passval = true;
+			for (a in sarr) {
+				let p = parseInt(sarr[a], 10);
+				if(!isNaN(p) && validatorarr.includes(p))
+				{
+					sarr[a] = p;
+					validatorarr[p] = undefined;
+				}
+				else
+				{
+					passval = false;
+				}
+			}
+			if(sarr.length==7 && passval)
+			{
+				if(savesetting)
+				{
+					localsettings.sampler_order = sarr;
+				}
+				document.getElementById("sampler_order").value = sarr.toString();
+			}
+			else
+			{
+				if(savesetting)
+				{
+					localsettings.sampler_order = defaultsettings.sampler_order;
+				}
+				document.getElementById("sampler_order").value = defaultsettings.sampler_order.toString();
+			}
+		}
+
+		//when we actually want to change presets, set to true temporarily, it will skip one update
+		var temp_changingpreset = false;
+		function setting_tweaked()
+		{
+			if(!temp_changingpreset)
+			{
+				document.getElementById("presets").value = 9999;
+			}else{
+				temp_changingpreset = false;
+			}
+		}
+
 		function confirm_settings() {
 			localsettings.max_context_length = document.getElementById("max_context_length").value;
 			localsettings.max_length = document.getElementById("max_length").value;
 			localsettings.temperature = document.getElementById("temperature").value;
 			localsettings.rep_pen = document.getElementById("rep_pen").value;
+			localsettings.rep_pen_slope = document.getElementById("rep_pen_slope").value;
+			localsettings.rep_pen_range = document.getElementById("rep_pen_range").value;
 			localsettings.top_p = document.getElementById("top_p").value;
 			localsettings.autoscroll = (document.getElementById("autoscroll").checked?true:false);
 			localsettings.trimsentences = (document.getElementById("trimsentences").checked?true:false);
+			localsettings.trimwhitespace = (document.getElementById("trimwhitespace").checked?true:false);
 			localsettings.persist_session = (document.getElementById("persist_session").checked?true:false);
 			localsettings.generate_images = document.getElementById("generate_images").value;
 			localsettings.opmode = document.getElementById("opmode").value;
@@ -1792,16 +1966,22 @@ Current version: 6
 				document.getElementById("btn_genimg").classList.add("hidden");
 			}
 
-			//clamp values
-			localsettings.max_context_length = clamp(localsettings.max_context_length, 512, 2048);
-			localsettings.max_length = clamp(localsettings.max_length, 16, 512);
-			localsettings.temperature = clamp(localsettings.temperature, 0.1, 2);
-			localsettings.rep_pen = clamp(localsettings.rep_pen, 1, 3);
-			localsettings.top_p = clamp(localsettings.top_p, 0, 1);
-			localsettings.top_k = clamp(localsettings.top_k, 0, 100);
-			localsettings.top_a = clamp(localsettings.top_a, 0, 1);
-			localsettings.typ_s = clamp(localsettings.typ_s, 0, 1);
-			localsettings.tfs_s = clamp(localsettings.tfs_s, 0, 1);
+			//validate samplers, if fail, reset to default
+			validate_samplers(true);
+			localsettings.last_selected_preset = document.getElementById("presets").value;
+
+			//clean and clamp invalid values
+			localsettings.max_context_length = cleannum(localsettings.max_context_length, 512, 2048);
+			localsettings.max_length = cleannum(localsettings.max_length, 16, 512);
+			localsettings.temperature = cleannum(localsettings.temperature, 0.1, 2);
+			localsettings.rep_pen = cleannum(localsettings.rep_pen, 1, 3);
+			localsettings.rep_pen_range = cleannum(localsettings.rep_pen_range, 0, 4096);
+			localsettings.rep_pen_slope = cleannum(localsettings.rep_pen_slope, 0, 10);
+			localsettings.top_p = cleannum(localsettings.top_p, 0, 1);
+			localsettings.top_k = cleannum(localsettings.top_k, 0, 100);
+			localsettings.top_a = cleannum(localsettings.top_a, 0, 1);
+			localsettings.typ_s = cleannum(localsettings.typ_s, 0, 1);
+			localsettings.tfs_s = cleannum(localsettings.tfs_s, 0, 1);			
 
 			autosave(); //need to always autosave, so that we can switch back to non persistent sessions			
 
@@ -1971,13 +2151,23 @@ Current version: 6
 				pending_response_id = "-1";
 				render_gametext();
 
+				let mtl = document.getElementById("maintxtloader");
+				if(mtl)
+				{
+					mtl.classList.remove("greenloader");
+					mtl.classList.remove("redloader");
+				}
+
 				//this is a hack since we dont have a proper tokenizer, but we can estimate 1 token per 4 characters				
 				let max_allowed_characters = localsettings.max_context_length * 4;
 
 				let truncated_context = concat_gametext(true, ""); //no need to truncate if memory is empty
 
 				//trim trailing whitespace
-				truncated_context = truncated_context.trimEnd();
+				if(localsettings.trimwhitespace)
+				{
+					truncated_context = truncated_context.trimEnd();
+				}
 
 				//for chatmode, inject hidden context if AN and memory are empty, and if there's no story in context before the chat
 				if(localsettings.opmode==3 && current_anote.length==0 && current_memory.length==0)
@@ -2038,13 +2228,16 @@ Current version: 6
 				{
 					for(var x=0;x<current_wi.length;++x)
 					{			
-						let wi = current_wi[x];
+						let wi = current_wi[x];					
 
 						//see if this is a valid wi entry
-						if(wi.key==null||wi.key==""||(wi.selective && (wi.keysecondary==""||wi.keysecondary==null)))
+						if(wi.key==null||wi.key=="")
 						{
 							continue;
 						}
+
+						//selective, but bad secondary key. treat as only 1 key
+						let invalidseckey = (wi.selective && (wi.keysecondary==""||wi.keysecondary==null));
 
 						let wiks = wi.key.split(",");
 
@@ -2052,7 +2245,7 @@ Current version: 6
 						if (wi.constant) {
 							shoulduse = true;
 						}
-						else if (!wi.selective) {
+						else if (!wi.selective || invalidseckey) {
 							shoulduse = wiks.some(k => lowercase_context.includes(k.trim().toLowerCase()));
 						} else {
 							let wiks2 = wi.keysecondary.split(",");
@@ -2127,7 +2320,16 @@ Current version: 6
 						submit_payload.params.tfs = localsettings.tfs_s;
 				}
 
-				//submit_payload.params.sampler_order = [6, 0, 1, 2, 3, 4, 5];
+				if(localsettings.rep_pen_range != defaultsettings.rep_pen_range || 
+				localsettings.rep_pen_slope != defaultsettings.rep_pen_slope)
+				{
+					submit_payload.params.rep_pen_range = localsettings.rep_pen_range;
+					submit_payload.params.rep_pen_slope = localsettings.rep_pen_slope;				
+				}
+
+				if (localsettings.sampler_order.toString() != defaultsettings.sampler_order.toString()) {
+					submit_payload.params.sampler_order = localsettings.sampler_order;
+				}
 
 				console.log(submit_payload);
 
@@ -2559,6 +2761,17 @@ Current version: 6
 								else {
 									//still waiting, do nothing until next poll
 									poll_in_progress = false;
+									//depending on the queue_position, set loader color
+									let mtl = document.getElementById("maintxtloader");
+									if (mtl) {
+										mtl.classList.remove("greenloader");
+										mtl.classList.remove("redloader");
+										if (data.queue_position > 3) {
+											mtl.classList.add("redloader");
+										} else if (data.queue_position == 0) {
+											mtl.classList.add("greenloader");
+										}
+									}
 									console.log("Still awaiting " + pending_response_id + ": " + JSON.stringify(data));
 								}
 							}
@@ -2595,9 +2808,24 @@ Current version: 6
 					}
 					);
 
-					gametext_arr.push(gametext_elem.innerText);
+					//rather than dump it all into one history, let's split it into paragraphs
+					let fullmergedstory = gametext_elem.innerText;
+					let splittertoken = "\n";
+					if(fullmergedstory.includes("\n\n"))
+					{
+						splittertoken = "\n\n";
+					}
+					let splitmergedstory = fullmergedstory.split(splittertoken);
+					for (var i = 0; i < splitmergedstory.length; ++i) {
+						if (i != 0) {
+							gametext_arr.push(splittertoken + splitmergedstory[i]);
+						} else {
+							gametext_arr.push(splitmergedstory[i]);
+						}
+					}
+					
 					render_gametext(true);
-					console.log("Merged edit field");
+					console.log("Merged edit field. Parts:" + splitmergedstory.length);
 				}
 			}
 		}
@@ -2709,7 +2937,7 @@ Current version: 6
 				document.getElementById("btnsend").disabled = true;
 				document.getElementById("btnsend").classList.add("wait");
 				document.getElementById("btnsend").classList.remove("btn-primary");
-				document.getElementById("btnsend").innerHTML = "<div class=\"loader\"></div>";
+				document.getElementById("btnsend").innerHTML = "<div id=\"maintxtloader\" class=\"loader\"></div>";
 
 			}
 
@@ -2882,7 +3110,16 @@ Current version: 6
 
 		// Clamp number between two values
 		const clamp = (num, min, max) => Math.min(Math.max(num, min), max);
+		const cleannum = function(val, min, max){
+			let v = isNaN(val)?0:val;
+			return clamp(v,min,max);
+		};
 
+	</script>
+	
+	<!-- Cloudflare Insights -->
+	<script defer src='https://static.cloudflareinsights.com/beacon.min.js' 
+	data-cf-beacon='{"token": "01dfc5803ce042689f94672185004c04"}'>
 	</script>
 
 
@@ -3030,20 +3267,19 @@ Current version: 6
 						<span class="helptext">These are the models currently provided by KoboldAI Horde
 							volunteers.</span>
 					</span>
-					<select class="form-control" id="oaimodel" multiple></select>
+					<select class="form-control" id="oaimodel" size="6" multiple></select>
 				</div>
 
 				<div class="justifyleft anotelabel">
 					Use v1 Generate API <span class="helpicon">?
 						<span class="helptext">Uses an older API, which may be helpful if the current one has bugs.</span>
 					</span>
-					<input type="checkbox" data-toggle="toggle" data-onstyle="success" id="usev1api">
+					<input type="checkbox" id="usev1api">
 					<br>
-					Lock-in Worker IDs <span class="helpicon">?
-						<span class="helptext">This option explicitly assigns worker IDs, fixed based on the current workers available
-							at model selection time.</span>
+					Manually Select Worker <span class="helpicon">?
+						<span class="helptext">This option explicitly assigns worker IDs, fixed based on the current workers available at model selection time.</span>
 					</span>
-					<input type="checkbox" data-toggle="toggle" data-onstyle="success" id="misdirectfix">
+					<input type="checkbox" id="manualworker" onclick="display_models()">
 				</div>
 				
 
@@ -3081,7 +3317,36 @@ Current version: 6
 				<div class="popuptitletext">Settings</div>
 			</div>
 			<div class="aidgpopuplistheader">
-				<div id="settingsmenu">
+				<div class="settingsmenu" style="padding-bottom: 0px;" onchange="setting_tweaked()">
+
+					<div class="settingitem">
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Quick Presets <span class="helpicon">?<span class="helptext">Pick from an easy selection of curated generation presets, or configure your own.</span></span></div>	
+							<select class="form-control" id="presets" style="height:24px;padding:0;margin:0px 0 0;" onchange="toggle_preset()">
+								<option value="1" title="Known Working Settings">[Default]</option>
+							</select>		
+						</div>
+					</div>
+
+					<div class="settingitem">
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Temperature <span class="helpicon">?<span
+										class="helptext">Randomness of sampling. High values can increase creativity but
+										may make text less sensible. Lower values will make text more predictable but
+										can become repetitious.</span></span></div>
+							<input inputmode="numeric" class="justifyright flex-push-right settingsmall" id="temperature" value=0.5
+								oninput="
+						   document.getElementById('temperature_slide').value = this.value;">
+						</div>
+						<div><input type="range" class="form-range airange" min="0.1" max="2" step="0.01"
+								id="temperature_slide" oninput="
+						   document.getElementById('temperature').value = this.value;"></div>
+						<div class="settingminmax">
+							<div class="justifyleft">0.1</div>
+							<div class="justifyright">2</div>
+						</div>
+					</div>
+
 					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Max Tokens <span class="helpicon">?<span class="helptext">Max
@@ -3118,24 +3383,51 @@ Current version: 6
 							<div class="justifyright">512</div>
 						</div>
 					</div>
+
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Temperature <span class="helpicon">?<span
-										class="helptext">Randomness of sampling. High values can increase creativity but
-										may make text less sensible. Lower values will make text more predictable but
-										can become repetitious.</span></span></div>
-							<input inputmode="numeric" class="justifyright flex-push-right settingsmall" id="temperature" value=0.5
+							<div class="justifyleft settingsmall">Top p Sampling <span class="helpicon">?<span class="helptext">Used
+										to discard unlikely text in the sampling process. Lower values will make text
+										more predictable but can become repetitious.</span></span></div>
+							<input inputmode="numeric" class="justifyright flex-push-right settingsmall" id="top_p" value=80 oninput="
+						   document.getElementById('top_p_slide').value = this.value;">
+						</div>
+						<div><input type="range" class="form-range airange" min="0" max="1" step="0.01" id="top_p_slide"
 								oninput="
-						   document.getElementById('temperature_slide').value = this.value;">
-						</div>
-						<div><input type="range" class="form-range airange" min="0.1" max="2" step="0.01"
-								id="temperature_slide" oninput="
-						   document.getElementById('temperature').value = this.value;"></div>
+						   document.getElementById('top_p').value = this.value;"></div>
 						<div class="settingminmax">
-							<div class="justifyleft">0.1</div>
-							<div class="justifyright">2</div>
+							<div class="justifyleft">0</div>
+							<div class="justifyright">1</div>
 						</div>
+					</div>							
+					
+					<div class="settingitem">
+						<div class="settinglabel">							
+						
+							<div class="justifyleft settingsmall">Advanced Settings <span class="helpicon">?<span class="helptext">These settings control alternative samplers configurations. They are inactive by default, you usually do not need to change them.</span></span></div>	
+							<table class="settingsmall text-center" style="border-spacing: 4px 2px;
+							border-collapse: separate;">
+								<tr>
+								  <th title="Top-K Sampling. 0 to Deactivate.">Top-K</th>
+								  <th title="Top-A Sampling. 0 to Deactivate.">Top-A</th>
+								  <th title="Typical Sampling. 1 to Deactivate.">Typ.</th>
+								  <th title="Tail-Free Sampling. 1 to Deactivate.">TFS</th>
+								</tr>
+								<tr>
+								<td><input class="" type="text" placeholder="0" value="0"
+								id="top_k"></td>
+								<td><input class="" type="text" placeholder="0" value="0"
+								id="top_a"></td>
+								<td><input class="" type="text" placeholder="0" value="0"
+								id="typ_s"></td>
+								<td><input class="" type="text" placeholder="0" value="0"
+								id="tfs_s"></td>
+								</tr>								
+							  </table>							
+							
+						</div>				
 					</div>
+
 					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Repetition Penalty <span class="helpicon">?<span
@@ -3152,65 +3444,45 @@ Current version: 6
 							<div class="justifyleft">1</div>
 							<div class="justifyright">3</div>
 						</div>
-					</div>
-					<div class="settingitem">
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Top p Sampling <span class="helpicon">?<span class="helptext">Used
-										to discard unlikely text in the sampling process. Lower values will make text
-										more predictable but can become repetitious.</span></span></div>
-							<input inputmode="numeric" class="justifyright flex-push-right settingsmall" id="top_p" value=80 oninput="
-						   document.getElementById('top_p_slide').value = this.value;">
-						</div>
-						<div><input type="range" class="form-range airange" min="0" max="1" step="0.01" id="top_p_slide"
-								oninput="
-						   document.getElementById('top_p').value = this.value;"></div>
-						<div class="settingminmax">
-							<div class="justifyleft">0</div>
-							<div class="justifyright">1</div>
-						</div>
-					</div>
+					</div>	
+					
 					<div class="settingitem">
 						<div class="settinglabel">							
-							<div id="advsettings">
-							<div class="justifyleft settingsmall">Advanced Settings <span class="helpicon">?<span class="helptext">These settings control alternative samplers configurations. They are inactive by default, you usually do not need to change them.</span></span></div>	
 							<table class="settingsmall text-center" style="border-spacing: 4px 2px;
 							border-collapse: separate;">
 								<tr>
-								  <th>Top-K</th>
-								  <th>Top-A</th>
-								  <th>Typ.</th>
-								  <th>TFS</th>
+								  <th title="Repetition Penalty Range">RpRng.</th>
+								  <th title="Repetition Penalty Slope">RpSlp.</th>
+								  <th title="The order by which all 7 samplers are applied, separated by commas. 0=top_k, 1=top_a, 2=top_p, 3=tfs, 4=typ, 5=temp, 6=rep_pen" style="width:80px;" class="hidden">Smp.Order</th>
 								</tr>
 								<tr>
 								<td><input class="" type="text" placeholder="0" value="0"
-								id="top_k"></td>
+								id="rep_pen_range" title="Repetition Penalty Range"></td>
 								<td><input class="" type="text" placeholder="0" value="0"
-								id="top_a"></td>
-								<td><input class="" type="text" placeholder="0" value="0"
-								id="typ_s"></td>
-								<td><input class="" type="text" placeholder="0" value="0"
-								id="tfs_s"></td>
+								id="rep_pen_slope" title="Repetition Penalty Slope"></td>
+								<td><input class="hidden" type="text" placeholder="CSV" value="" id="sampler_order" style="width:80px;" title="Valid values are: 0=top_k, 1=top_a, 2=top_p, 3=tfs, 4=typ, 5=temp, 6=rep_pen" onblur="validate_samplers()"></td>							
 								</tr>								
-							  </table>							
-							</div>		
+							  </table>		
 						</div>
+							
 					</div>
-
+					</div>
+					<div class="settingsmenu" style="padding-top: 0px;">
 					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Generate Images <span class="helpicon">?<span class="helptext">Use Stable Horde to insert AI generated images into your story at sporadic intervals.</span></span></div>
 						</div>
-							<input list="sdmodels" class="form-control mdlpicker" id="generate_images" style="font-size: 12px;height:24px;padding:2px;margin:0px 0 0;" placeholder="[Disabled]" value="" onblur="validate_sd_model()" onfocus="clear_sd_model()">
+							<input list="sdmodels" class="form-control mdlpicker" id="generate_images" style="font-size: 12px;height:24px;padding:2px;margin:0px 0 0;" placeholder="[Disabled]" value="" onblur="validate_sd_model()" onfocus="clear_sd_model()" title="Select a stable diffusion model to generate images with">
 							<datalist id="sdmodels">
 								<option value="stable_diffusion">
 							  </datalist>
 							<div id="genimgopt" class="">
 								<div class="settinglabel">
-									<div class="justifyleft settingsmall">Autogenerate </div>	
+									<div class="justifyleft settingsmall"  title="Automatically generates images periodically as you write">Autogenerate </div>	
 								   <input type="checkbox" id="img_autogen" style="margin:0px 0 0;">				
 								</div>
 								<div class="settinglabel">
-									<div class="justifyleft settingsmall">Allow NSFW </div>	
+									<div class="justifyleft settingsmall"  title="If NSFW is disabled, explicit images will be censored">Allow NSFW </div>	
 								   <input type="checkbox" id="img_allownsfw" style="margin:0px 0 0;">				
 								</div>
 							</div>
@@ -3228,7 +3500,7 @@ Current version: 6
 
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Format </div>	
+							<div class="justifyleft settingsmall">Format <span class="helpicon">?<span class="helptext">Story Mode is best for novel style writing. Adventure Mode is best for Interactive Fiction RPGs. Chat Mode is best for chat conversations with the AI.</span></span></div>	
 							<select class="form-control" id="opmode" style="height:24px;padding:0;margin:0px 0 0;" onchange="toggle_opmode()">
 								<option value="1">Story Mode</option>
 								<option value="2">Adventure Mode</option>
@@ -3241,8 +3513,8 @@ Current version: 6
 								  <th>AI Name</th>
 								</tr>
 								<tr>
-								<td><input class="" type="text" placeholder="(Enter Name)" value="You" id="chatname"></td>
-								<td><input class="" type="text" placeholder="(Auto)" value="KoboldAI"	id="chatopponent"></td>							
+								<td><input class="" type="text" placeholder="(Enter Name)" value="You" id="chatname" title="The name that you will be chatting as"></td>
+								<td><input class="" type="text" placeholder="(Auto)" value="KoboldAI" id="chatopponent"  title="The name of the person you want to chat with"></td>							
 								</tr>								
 							  </table>	
 								
@@ -3252,16 +3524,20 @@ Current version: 6
 				
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Autoscroll </div>	
-						   <input type="checkbox" data-toggle="toggle" data-onstyle="success" id="autoscroll" style="margin:0px 0 0;">				
+							<div class="justifyleft settingsmall" title="Automatically scrolls the text window down when new text is generated">Autoscroll </div>	
+						   <input type="checkbox" id="autoscroll" style="margin:0px 0 0;">				
 						</div>
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Trim Sentences </div>	
-						   <input type="checkbox" data-toggle="toggle" data-onstyle="success" id="trimsentences" style="margin:0px 0 0;">				
+							<div class="justifyleft settingsmall" title="Trims incomplete sentences in AI output">Trim Sentences </div>	
+						   <input type="checkbox" id="trimsentences" style="margin:0px 0 0;">				
 						</div>
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Persist Session </div>	
-						   <input type="checkbox" data-toggle="toggle" data-onstyle="success" id="persist_session" style="margin:0px 0 0;">				
+							<div class="justifyleft settingsmall" title="Trim trailing whitespace at the end of context">Trim Whitespace </div>	
+						   <input type="checkbox" id="trimwhitespace" style="margin:0px 0 0;">				
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="Autosaves your current story and settings on exit, reloads when you return">Persist Session </div>	
+						   <input type="checkbox" id="persist_session" style="margin:0px 0 0;">				
 						</div>					
 					</div>
 				
@@ -3372,6 +3648,6 @@ Current version: 6
 
 
 </body>
-<script>init();</script>
+<script>init();registerServiceWorker();</script>
 
 </html>

@@ -9,6 +9,19 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
+Changelog of KoboldAI Lite 24 Jan 2023:
+- Added support to install KAI Lite as a **Progressive Web App** (adds desktop shortcuts, app icons and fullscreen UI layout). This means you'll be able to *install* the KoboldAI Lite as a shortcut on your home screen or desktop, and run it in a standalone window.
+- Added a curated list of quick settings presets, taken from UI2. Includes Kobold exclusives like Chasm's *Godlike* and xen0's *Light Breeze*, as well as classic configs from NAI like *Genesis* and *Storywriter*. Will support custom sampler orders once Horde backend implements it.
+- Added support for rep pen range and rep pen slope. Custom sampler orders are on the way, pending Horde backend changes.
+- Waiting spinner now changes appearance based on estimated queue length, allowing you to estimate the text generation time. Green circle means generation is almost ready, and red means there is a long queue.
+- "Lock-in Workers" has been replaced with "Manually Select Worker", which allows you to pick exactly which workers are used to generate text. Multiple workers can be selected from this new menu.
+- Improved edit mode, upon saving now it splits your undo stack into paragraphs instead of everything in one action.
+- World Info improvements, ignoring secondary keys if they are invalid or empty.
+- Trim whitespace can now be toggled in settings.
+- Added more tooltips for some settings.
+- Increased height of model selection window.
+
+
 Changelog of KoboldAI Lite 21 Jan 2023:
 - Added World Info support, with compatible loading from v1 and v2 saves, and saving to v1 format. It should work exactly like world info in the main v1 client.
 - Fixed a bug that allowed HTML inside images to also be edited when edit text was enabled.
