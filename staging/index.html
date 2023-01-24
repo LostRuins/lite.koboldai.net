@@ -101,15 +101,15 @@ Current version: 8
 			font-weight: bold;
 		}
 
-		#settingsmenu {
+		.settingsmenu {
 			display: flex;
 			flex-wrap: wrap;
 			background-color: #4d4d4d;
 			padding: 10px;
 		}
 
-		body.connected #settingsmenu,
-		#settingsmenu.always-available {
+		body.connected .settingsmenu,
+		.settingsmenu.always-available {
 			background-color: #295071;
 		}
 
@@ -1169,20 +1169,44 @@ Current version: 8
 			generate_images: "", //"" is disabled and "*" is all, anything else is the model name pulled from stable horde
 			img_autogen:true,
 			img_allownsfw:true,
+			last_selected_preset: 0,
 
 			max_context_length: 1024,
 			max_length: 80,
 			rep_pen: 1.1,
+			rep_pen_range: 1024,
+			rep_pen_slope: 0.7,
 			temperature: 0.55,
 			top_p: 0.9,
 			top_k: 0,
 			top_a: 0,
 			typ_s: 1,
 			tfs_s: 1,
+			sampler_order: [6, 0, 1, 2, 3, 4, 5],
 
 		};
-
+		
 		var defaultsettings = JSON.parse(JSON.stringify(localsettings));
+
+		//a list of presets users can choose from
+		const presets = [
+			{
+				preset: "[Default]",
+				description: "Known Working Settings.",
+				temp: defaultsettings.temperature,
+				genamt: defaultsettings.max_length,
+				top_k: defaultsettings.top_k,
+				top_p: defaultsettings.top_p,
+				top_a: defaultsettings.top_a,
+				typical: defaultsettings.typ_s,
+				tfs: defaultsettings.tfs_s,
+				rep_pen: defaultsettings.rep_pen,
+				rep_pen_range: defaultsettings.rep_pen_range,
+				rep_pen_slope: defaultsettings.rep_pen_slope,
+				sampler_order: defaultsettings.sampler_order
+			},
+			{"preset":"Godlike","description":"Makes AI give a descriptive and sensual output.","temp":0.7,"genamt":80,"top_k":0,"top_p":0.5,"top_a":0.75,"typical":0.19,"tfs":0.97,"rep_pen":1.1,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,5,4,3,2,1,0]},{"preset":"Light Breeze","description":"Staying on track, not complex stories, directing the plot yourself.","temp":0.6,"genamt":80,"top_k":0,"top_p":0.85,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.2,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,0,1,2,3,4,5]},{"preset":"Mayday","description":"Wacky plot, creativity from AI, crazy stories you want AI to weird out.","temp":1.05,"genamt":80,"top_k":0,"top_p":0.95,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.1,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,0,1,2,3,4,5]},{"preset":"Good Winds","description":"Let AI direct the plot, but still stay logical.","temp":0.7,"genamt":80,"top_k":0,"top_p":1,"top_a":0,"typical":1,"tfs":0.9,"rep_pen":1.1,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,0,1,2,3,4,5]},{"preset":"Liminal Drift","description":"Drives coherent dialogue, responses, and behavior, sometimes surreal situations arise based on information already present in the story.","temp":0.66,"genamt":80,"top_k":0,"top_p":1,"top_a":0.96,"typical":0.6,"tfs":1,"rep_pen":1.1,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,4,5,1,0,2,3]},{"preset":"Storywriter 6B","description":"Optimized settings for relevant output.","genamt":80,"rep_pen":1.1,"rep_pen_range":2048,"rep_pen_slope":0.2,"sampler_order":[6,5,0,2,3,1,4],"temp":0.72,"tfs":1,"top_a":0,"top_k":0,"top_p":0.73,"typical":1},{"preset":"Coherent Creativity 6B","description":"A good balance between coherence, creativity, and quality of prose.","genamt":80,"rep_pen":1.2,"rep_pen_range":2048,"rep_pen_slope":0,"sampler_order":[6,5,0,2,3,1,4],"temp":0.51,"tfs":0.99,"top_a":0,"top_k":0,"top_p":1,"typical":1},{"preset":"Luna Moth 6B","description":"A great degree of creativity without losing coherency.","temp":2,"genamt":80,"top_k":85,"top_p":0.24,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.1,"rep_pen_range":2048,"rep_pen_slope":0,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Sphinx Moth 6B","description":"Maximum randomness while still being plot relevant. Like Sphinx riddles!","temp":2,"genamt":80,"top_k":30,"top_p":0.18,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.15,"rep_pen_range":2048,"rep_pen_slope":0,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Emperor Moth 6B","description":"Medium randomness with a decent bit of creative writing.","temp":1.25,"genamt":80,"top_k":0,"top_p":0.24,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.1,"rep_pen_range":2048,"rep_pen_slope":0,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Best Guess 6B","description":"A subtle change with alternative context settings.","temp":0.8,"genamt":80,"top_k":100,"top_p":0.9,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.15,"rep_pen_range":2048,"rep_pen_slope":3.4,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Pleasing Results 6B","description":"Expectable output with alternative context settings.","temp":0.44,"genamt":80,"top_k":0,"top_p":1,"top_a":0,"typical":1,"tfs":0.9,"rep_pen":1.15,"rep_pen_range":2048,"rep_pen_slope":6.8,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Genesis 13B","description":"Stable and logical, but with scattered creativity.","temp":0.63,"genamt":80,"top_k":0,"top_p":0.98,"top_a":0,"typical":1,"tfs":0.98,"rep_pen":1.05,"rep_pen_range":2048,"rep_pen_slope":0.1,"sampler_order":[6,2,0,3,5,1,4]},{"preset":"Basic Coherence 13B","description":"Keep things on track.","temp":0.59,"genamt":80,"top_k":0,"top_p":1,"top_a":0,"typical":1,"tfs":0.87,"rep_pen":1.1,"rep_pen_range":2048,"rep_pen_slope":0.3,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Ouroboros 13B","description":"Versatile, conforms well to poems, lists, chat, etc.","temp":1.07,"genamt":80,"top_k":100,"top_p":1,"top_a":0,"typical":1,"tfs":0.93,"rep_pen":1.05,"rep_pen_range":404,"rep_pen_slope":0.8,"sampler_order":[6,0,5,3,2,1,4]},{"preset":"Ace of Spades 13B","description":"Expressive, while still staying focused.","temp":1.15,"genamt":80,"top_k":0,"top_p":0.95,"top_a":0,"typical":1,"tfs":0.8,"rep_pen":1.05,"rep_pen_range":2048,"rep_pen_slope":7,"sampler_order":[6,3,2,0,5,1,4]},{"preset":"Moonlit Chronicler 13B","description":"Tells a tale with confidence, but variety where it matters.","temp":1.25,"genamt":80,"top_k":100,"top_p":1,"top_a":0.78,"typical":0.95,"tfs":0.8,"rep_pen":1.05,"rep_pen_range":0,"rep_pen_slope":0,"sampler_order":[6,0,4,1,3,5,2]},{"preset":"Fandango 13B","description":"A rhytmic dance of prose, whoever takes the lead.","temp":0.86,"genamt":80,"top_k":20,"top_p":0.95,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.05,"rep_pen_range":2048,"rep_pen_slope":0.1,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"All-Nighter 13B","description":"Creative diction with room for embellishments.","temp":1.33,"genamt":80,"top_k":13,"top_p":1,"top_a":0,"typical":1,"tfs":0.84,"rep_pen":1.05,"rep_pen_range":400,"rep_pen_slope":0.3,"sampler_order":[6,5,0,3,2,1,4]},{"preset":"Low Rider 13B","description":"Reliable, aimed at story development.","temp":0.94,"genamt":80,"top_k":12,"top_p":1,"top_a":0,"typical":1,"tfs":0.94,"rep_pen":1.05,"rep_pen_range":2048,"rep_pen_slope":0.2,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Morpho 13B","description":"Let the AI generate without constraints.","temp":0.69,"genamt":80,"top_k":0,"top_p":1,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.05,"rep_pen_range":2048,"rep_pen_slope":0,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Pro Writer 13B","description":"Optimal setting for readability, based on AI-powered mass statistical analysis of Euterpe output.","temp":1.35,"genamt":80,"top_k":0,"top_p":1,"top_a":0,"typical":1,"tfs":0.69,"rep_pen":1.15,"rep_pen_range":2048,"rep_pen_slope":0.1,"sampler_order":[6,3,2,5,0,1,4]}
+		];
 	
 		//attempt to load settings
 		function init()
@@ -1755,6 +1779,8 @@ Current version: 8
 			document.getElementById("max_length").value = document.getElementById("max_length_slide").value = localsettings.max_length;
 			document.getElementById("temperature").value = document.getElementById("temperature_slide").value = localsettings.temperature;
 			document.getElementById("rep_pen").value = document.getElementById("rep_pen_slide").value = localsettings.rep_pen;
+			document.getElementById("rep_pen_slope").value = localsettings.rep_pen_slope;
+			document.getElementById("rep_pen_range").value = localsettings.rep_pen_range;
 			document.getElementById("top_p").value = document.getElementById("top_p_slide").value = localsettings.top_p;
 			document.getElementById("autoscroll").checked = localsettings.autoscroll;
 			document.getElementById("trimsentences").checked = localsettings.trimsentences;
@@ -1768,6 +1794,20 @@ Current version: 8
 			document.getElementById("typ_s").value = localsettings.typ_s;
 			document.getElementById("tfs_s").value = localsettings.tfs_s;	
 			document.getElementById("generate_images").value = localsettings.generate_images;
+
+			//prepare the input for sampler order
+			let samplerstr = localsettings.sampler_order.toString();
+			document.getElementById("sampler_order").value = samplerstr;
+
+			//populate the presets list
+			let npresets = "";
+			for(var i=0;i<presets.length;++i)
+			{
+				npresets += `<option value="`+i+`" title="`+presets[i].description+`">`+presets[i].preset+`</option>`;
+			}
+			npresets += `<option value="9999" title="User Defined Settings">[Custom]</option>`;
+			document.getElementById("presets").innerHTML = npresets;
+			document.getElementById("presets").value = localsettings.last_selected_preset;
 			
 			var ttshtml = "<option value=\"0\">Disabled</option>";
 			if ('speechSynthesis' in window) {
@@ -1796,6 +1836,27 @@ Current version: 8
 			
 		}
 
+		function toggle_preset()
+		{
+			let selp = document.getElementById("presets").value;
+			let found = presets[selp];
+			if(found)
+			{
+				temp_changingpreset = true;	
+				document.getElementById("temperature").value = document.getElementById("temperature_slide").value = found.temp;
+				document.getElementById("max_length").value = document.getElementById("max_length_slide").value = found.genamt;
+				document.getElementById("top_k").value = found.top_k;
+				document.getElementById("top_p").value = document.getElementById("top_p_slide").value = found.top_p;
+				document.getElementById("top_a").value = found.top_a;
+				document.getElementById("typ_s").value = found.typical;
+				document.getElementById("tfs_s").value = found.tfs;
+				document.getElementById("rep_pen").value = document.getElementById("rep_pen_slide").value = found.rep_pen;
+				document.getElementById("rep_pen_range").value = found.rep_pen_range;
+				document.getElementById("rep_pen_slope").value = found.rep_pen_slope;
+				document.getElementById("sampler_order").value = found.sampler_order.toString();
+			}
+		}
+
 		function validate_sd_model()
 		{
 			var inputmodel = document.getElementById("generate_images").value;
@@ -1822,11 +1883,61 @@ Current version: 8
 			document.getElementById("generate_images").value = "";
 		}
 
+		function validate_samplers(savesetting = false)
+		{
+			let samplerstr = document.getElementById("sampler_order").value;
+			let sarr = samplerstr.split(",");
+			let validatorarr = [0,1,2,3,4,5,6];
+			let passval = true;
+			for (a in sarr) {
+				let p = parseInt(sarr[a], 10);
+				if(!isNaN(p) && validatorarr.includes(p))
+				{
+					sarr[a] = p;
+					validatorarr[p] = undefined;
+				}
+				else
+				{
+					passval = false;
+				}
+			}
+			if(sarr.length==7 && passval)
+			{
+				if(savesetting)
+				{
+					localsettings.sampler_order = sarr;
+				}
+				document.getElementById("sampler_order").value = sarr.toString();
+			}
+			else
+			{
+				if(savesetting)
+				{
+					localsettings.sampler_order = defaultsettings.sampler_order;
+				}
+				document.getElementById("sampler_order").value = defaultsettings.sampler_order.toString();
+			}
+		}
+
+		//when we actually want to change presets, set to true temporarily, it will skip one update
+		var temp_changingpreset = false;
+		function setting_tweaked()
+		{
+			if(!temp_changingpreset)
+			{
+				document.getElementById("presets").value = 9999;
+			}else{
+				temp_changingpreset = false;
+			}
+		}
+
 		function confirm_settings() {
 			localsettings.max_context_length = document.getElementById("max_context_length").value;
 			localsettings.max_length = document.getElementById("max_length").value;
 			localsettings.temperature = document.getElementById("temperature").value;
 			localsettings.rep_pen = document.getElementById("rep_pen").value;
+			localsettings.rep_pen_slope = document.getElementById("rep_pen_slope").value;
+			localsettings.rep_pen_range = document.getElementById("rep_pen_range").value;
 			localsettings.top_p = document.getElementById("top_p").value;
 			localsettings.autoscroll = (document.getElementById("autoscroll").checked?true:false);
 			localsettings.trimsentences = (document.getElementById("trimsentences").checked?true:false);
@@ -1855,16 +1966,22 @@ Current version: 8
 				document.getElementById("btn_genimg").classList.add("hidden");
 			}
 
-			//clamp values
-			localsettings.max_context_length = clamp(localsettings.max_context_length, 512, 2048);
-			localsettings.max_length = clamp(localsettings.max_length, 16, 512);
-			localsettings.temperature = clamp(localsettings.temperature, 0.1, 2);
-			localsettings.rep_pen = clamp(localsettings.rep_pen, 1, 3);
-			localsettings.top_p = clamp(localsettings.top_p, 0, 1);
-			localsettings.top_k = clamp(localsettings.top_k, 0, 100);
-			localsettings.top_a = clamp(localsettings.top_a, 0, 1);
-			localsettings.typ_s = clamp(localsettings.typ_s, 0, 1);
-			localsettings.tfs_s = clamp(localsettings.tfs_s, 0, 1);
+			//validate samplers, if fail, reset to default
+			validate_samplers(true);
+			localsettings.last_selected_preset = document.getElementById("presets").value;
+
+			//clean and clamp invalid values
+			localsettings.max_context_length = cleannum(localsettings.max_context_length, 512, 2048);
+			localsettings.max_length = cleannum(localsettings.max_length, 16, 512);
+			localsettings.temperature = cleannum(localsettings.temperature, 0.1, 2);
+			localsettings.rep_pen = cleannum(localsettings.rep_pen, 1, 3);
+			localsettings.rep_pen_range = cleannum(localsettings.rep_pen_range, 0, 4096);
+			localsettings.rep_pen_slope = cleannum(localsettings.rep_pen_slope, 0, 10);
+			localsettings.top_p = cleannum(localsettings.top_p, 0, 1);
+			localsettings.top_k = cleannum(localsettings.top_k, 0, 100);
+			localsettings.top_a = cleannum(localsettings.top_a, 0, 1);
+			localsettings.typ_s = cleannum(localsettings.typ_s, 0, 1);
+			localsettings.tfs_s = cleannum(localsettings.tfs_s, 0, 1);			
 
 			autosave(); //need to always autosave, so that we can switch back to non persistent sessions			
 
@@ -2203,8 +2320,16 @@ Current version: 8
 						submit_payload.params.tfs = localsettings.tfs_s;
 				}
 
-				//todo: custom sampler orders
-				submit_payload.params.sampler_order = [6, 0, 1, 2, 3, 4, 5];
+				if(localsettings.rep_pen_range != defaultsettings.rep_pen_range || 
+				localsettings.rep_pen_slope != defaultsettings.rep_pen_slope)
+				{
+					submit_payload.params.rep_pen_range = localsettings.rep_pen_range;
+					submit_payload.params.rep_pen_slope = localsettings.rep_pen_slope;				
+				}
+
+				if (localsettings.sampler_order.toString() != defaultsettings.sampler_order.toString()) {
+					submit_payload.params.sampler_order = localsettings.sampler_order;
+				}
 
 				console.log(submit_payload);
 
@@ -2641,7 +2766,7 @@ Current version: 8
 									if (mtl) {
 										mtl.classList.remove("greenloader");
 										mtl.classList.remove("redloader");
-										if (data.queue_position >= 5) {
+										if (data.queue_position > 3) {
 											mtl.classList.add("redloader");
 										} else if (data.queue_position == 0) {
 											mtl.classList.add("greenloader");
@@ -2683,9 +2808,24 @@ Current version: 8
 					}
 					);
 
-					gametext_arr.push(gametext_elem.innerText);
+					//rather than dump it all into one history, let's split it into paragraphs
+					let fullmergedstory = gametext_elem.innerText;
+					let splittertoken = "\n";
+					if(fullmergedstory.includes("\n\n"))
+					{
+						splittertoken = "\n\n";
+					}
+					let splitmergedstory = fullmergedstory.split(splittertoken);
+					for (var i = 0; i < splitmergedstory.length; ++i) {
+						if (i != 0) {
+							gametext_arr.push(splittertoken + splitmergedstory[i]);
+						} else {
+							gametext_arr.push(splitmergedstory[i]);
+						}
+					}
+					
 					render_gametext(true);
-					console.log("Merged edit field");
+					console.log("Merged edit field. Parts:" + splitmergedstory.length);
 				}
 			}
 		}
@@ -2970,6 +3110,10 @@ Current version: 8
 
 		// Clamp number between two values
 		const clamp = (num, min, max) => Math.min(Math.max(num, min), max);
+		const cleannum = function(val, min, max){
+			let v = isNaN(val)?0:val;
+			return clamp(v,min,max);
+		};
 
 	</script>
 	
@@ -3173,14 +3317,13 @@ Current version: 8
 				<div class="popuptitletext">Settings</div>
 			</div>
 			<div class="aidgpopuplistheader">
-				<div id="settingsmenu">
+				<div class="settingsmenu" style="padding-bottom: 0px;" onchange="setting_tweaked()">
 
 					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Quick Presets <span class="helpicon">?<span class="helptext">Pick from an easy selection of curated generation presets, or configure your own.</span></span></div>	
 							<select class="form-control" id="presets" style="height:24px;padding:0;margin:0px 0 0;" onchange="toggle_preset()">
 								<option value="1" title="Known Working Settings">[Default]</option>
-								<option value="999" title="User modified settings">[Custom]</option>
 							</select>		
 						</div>
 					</div>
@@ -3243,6 +3386,50 @@ Current version: 8
 
 					<div class="settingitem">
 						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Top p Sampling <span class="helpicon">?<span class="helptext">Used
+										to discard unlikely text in the sampling process. Lower values will make text
+										more predictable but can become repetitious.</span></span></div>
+							<input inputmode="numeric" class="justifyright flex-push-right settingsmall" id="top_p" value=80 oninput="
+						   document.getElementById('top_p_slide').value = this.value;">
+						</div>
+						<div><input type="range" class="form-range airange" min="0" max="1" step="0.01" id="top_p_slide"
+								oninput="
+						   document.getElementById('top_p').value = this.value;"></div>
+						<div class="settingminmax">
+							<div class="justifyleft">0</div>
+							<div class="justifyright">1</div>
+						</div>
+					</div>							
+					
+					<div class="settingitem">
+						<div class="settinglabel">							
+						
+							<div class="justifyleft settingsmall">Advanced Settings <span class="helpicon">?<span class="helptext">These settings control alternative samplers configurations. They are inactive by default, you usually do not need to change them.</span></span></div>	
+							<table class="settingsmall text-center" style="border-spacing: 4px 2px;
+							border-collapse: separate;">
+								<tr>
+								  <th title="Top-K Sampling. 0 to Deactivate.">Top-K</th>
+								  <th title="Top-A Sampling. 0 to Deactivate.">Top-A</th>
+								  <th title="Typical Sampling. 1 to Deactivate.">Typ.</th>
+								  <th title="Tail-Free Sampling. 1 to Deactivate.">TFS</th>
+								</tr>
+								<tr>
+								<td><input class="" type="text" placeholder="0" value="0"
+								id="top_k"></td>
+								<td><input class="" type="text" placeholder="0" value="0"
+								id="top_a"></td>
+								<td><input class="" type="text" placeholder="0" value="0"
+								id="typ_s"></td>
+								<td><input class="" type="text" placeholder="0" value="0"
+								id="tfs_s"></td>
+								</tr>								
+							  </table>							
+							
+						</div>				
+					</div>
+
+					<div class="settingitem">
+						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Repetition Penalty <span class="helpicon">?<span
 										class="helptext">Used to penalize words that were already generated or belong to
 										the context (Going over 1.2 breaks 6B models).</span></span></div>
@@ -3257,60 +3444,30 @@ Current version: 8
 							<div class="justifyleft">1</div>
 							<div class="justifyright">3</div>
 						</div>
-					</div>									
+					</div>	
 					
 					<div class="settingitem">
 						<div class="settinglabel">							
-							<div id="advsettings">
-							<div class="justifyleft settingsmall">Advanced Settings <span class="helpicon">?<span class="helptext">These settings control alternative samplers configurations. They are inactive by default, you usually do not need to change them.</span></span></div>	
 							<table class="settingsmall text-center" style="border-spacing: 4px 2px;
 							border-collapse: separate;">
 								<tr>
-								  <th>Top-K</th>
-								  <th>Top-A</th>
-								  <th>Typ.</th>
-								  <th>TFS</th>
+								  <th title="Repetition Penalty Range">RpRng.</th>
+								  <th title="Repetition Penalty Slope">RpSlp.</th>
+								  <th title="The order by which all 7 samplers are applied, separated by commas. 0=top_k, 1=top_a, 2=top_p, 3=tfs, 4=typ, 5=temp, 6=rep_pen" style="width:80px;" class="hidden">Smp.Order</th>
 								</tr>
 								<tr>
 								<td><input class="" type="text" placeholder="0" value="0"
-								id="top_k"></td>
+								id="rep_pen_range" title="Repetition Penalty Range"></td>
 								<td><input class="" type="text" placeholder="0" value="0"
-								id="top_a"></td>
-								<td><input class="" type="text" placeholder="0" value="0"
-								id="typ_s"></td>
-								<td><input class="" type="text" placeholder="0" value="0"
-								id="tfs_s"></td>
+								id="rep_pen_slope" title="Repetition Penalty Slope"></td>
+								<td><input class="hidden" type="text" placeholder="CSV" value="" id="sampler_order" style="width:80px;" title="Valid values are: 0=top_k, 1=top_a, 2=top_p, 3=tfs, 4=typ, 5=temp, 6=rep_pen" onblur="validate_samplers()"></td>							
 								</tr>								
-							  </table>							
-							</div>	
-						</div>				
-					</div>
-
-					<div class="settingitem">
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Top p Sampling <span class="helpicon">?<span class="helptext">Used
-										to discard unlikely text in the sampling process. Lower values will make text
-										more predictable but can become repetitious.</span></span></div>
-							<input inputmode="numeric" class="justifyright flex-push-right settingsmall" id="top_p" value=80 oninput="
-						   document.getElementById('top_p_slide').value = this.value;">
+							  </table>		
 						</div>
-						<div><input type="range" class="form-range airange" min="0" max="1" step="0.01" id="top_p_slide"
-								oninput="
-						   document.getElementById('top_p').value = this.value;"></div>
-						<div class="settingminmax">
-							<div class="justifyleft">0</div>
-							<div class="justifyright">1</div>
-						</div>
+							
 					</div>
-
-					<div class="settingitem">
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Sampler Order <span class="helpicon">?<span class="helptext">The order by which all 7 samplers are applied, separated by commas. Advanced setting.<br><br>Valid values are: rep_pen, top_k, top_a, top_p, tfs, typ, temp</span></span></div>	
-						</div>
-						<input class="form-control" id="sampler_order" style="font-size: 12px;height:24px;padding:2px;margin:0px 0 0;" placeholder="Sampler Order (CSV)" value="">	
 					</div>
-
-
+					<div class="settingsmenu" style="padding-top: 0px;">
 					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Generate Images <span class="helpicon">?<span class="helptext">Use Stable Horde to insert AI generated images into your story at sporadic intervals.</span></span></div>
