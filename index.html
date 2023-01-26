@@ -1156,6 +1156,7 @@ Current version: 8
 		var usev1api = false;
 		var v1_polled_response = null;
 		var pending_found_story = null;
+		var horde_img_filter_enabled = true;
 
 		var localsettings = {
 			 my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
@@ -1268,8 +1269,14 @@ Current version: 8
 				//read the url params, and autoload a shared story if found
 				const urlParams = new URLSearchParams(window.location.search);
 				const foundStory = urlParams.get('s');
+				const nofiltermode = urlParams.get('nofilter');
+				if(nofiltermode)
+				{
+					horde_img_filter_enabled = false;
+					console.log("Horde image filter is off. Use at your own risk.");
+				}
 				if(foundStory&&foundStory!="")
-				{					
+				{				
 					if (localsettings.persist_session) {
 						pending_found_story = foundStory;
 						prompt_overwrite();
@@ -2446,8 +2453,42 @@ Current version: 8
 			}
 		}
 
+		//to reduce the prompt being flagged for CP on horde and failing, we sanitize it while trying to have as little impact on normal usage. 
+		//this does not affect the story context, only images sent
+		//we only match whole words, to avoid the scunthorpe problem
+		function sanitize_horde_image_prompt(inputtext) 
+		{
+			if (inputtext == null || inputtext == "") { return ""; }
+
+			//to avoid flagging from some image models, always swap these words
+			inputtext = inputtext.replace(/\b(girl)\b/gmi, "woman");
+			inputtext = inputtext.replace(/\b(boy)\b/gmi, "man");
+
+			//always remove these high risk words from prompt, as they add little value to image gen while increasing the risk the prompt gets flagged			
+			inputtext = inputtext.replace(/\b(under.age|under.aged|underage|underaged|loli|pedo|pedophile|(\w+).year.old|(\w+).years.old|minor|prepubescent|minors|shota)\b/gmi, "");
+
+			//if nsfw is detected, do not remove it but apply additional precautions
+			let foundnsfw = inputtext.match(/\b(cock|ahegao|hentai|uncensored|lewd|cocks|deepthroat|deepthroating|dick|dicks|cumshot|lesbian|fuck|fucked|fucking|sperm|naked|nipples|tits|boobs|breasts|boob|breast|topless|ass|butt|fingering|masturbate|masturbating|bitch|blowjob|pussy|piss|asshole|dildo|dildos|vibrator|erection|foreskin|handjob|nude|penis|porn|vibrator|virgin|vagina|vulva|threesome|orgy|bdsm|hickey|condom|testicles|anal|bareback|bukkake|creampie|stripper|strap-on|missionary|clitoris|clit|clitty|cowgirl|fleshlight|sex|buttplug|milf|oral|sucking|bondage|orgasm|scissoring|railed|slut|sluts|slutty|cumming|cunt|faggot|sissy|anal|anus|cum|semen|scat|nsfw|xxx|explicit|erotic|horny|aroused|jizz|moan|rape|raped|raping|throbbing|humping)\b/gmi);
+
+			if(foundnsfw)
+			{
+				//replace risky subject nouns with person
+				inputtext = inputtext.replace(/\b(youngster|infant|baby|toddler|child|teen|kid|kiddie|kiddo|teenager|student|preteen|pre.teen)\b/gmi, "person");
+
+				//remove risky adjectives and related words
+				inputtext = inputtext.replace(/\b(young|younger|youthful|youth|small|tiny|teenaged|little|school.aged|school|highschool|kindergarten|teens|children|kids)\b/gmi, "");
+			}
+
+			return inputtext;
+		}
+
 		function generate_new_image(sentence)
 		{
+			if(horde_img_filter_enabled)
+			{
+				sentence = sanitize_horde_image_prompt(sentence);
+			}
+
 			console.log("Generating image for: " + sentence);
 			let modelused = [];
 			if (localsettings.generate_images == "*") {
