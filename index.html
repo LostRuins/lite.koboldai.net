@@ -1117,19 +1117,24 @@ Current version: 9
 
 
 	//here is my shit integration of KAI Horde's API. You're welcome. -Concedo.
-	const perf_endpoint = "https://koboldai.net/api/v2/status/performance";
-	const models_endpoint = "https://koboldai.net/api/v2/status/models";
-	const submit_endpoint = "https://koboldai.net/api/v2/generate/async";
-	const polling_endpoint = "https://koboldai.net/api/v2/generate/check";
-	const output_endpoint = "https://koboldai.net/api/v2/generate/status";
-	const worker_endpoint = "https://koboldai.net/api/v2/workers";
 
-	const submit_v1_endpoint = "https://koboldai.net/api/v1/generate/sync";
+	const koboldhorde_url = "https://koboldai.net";
+	const stablehorde_url = "https://stablehorde.net";
 
-	const stablehorde_submit_endpoint = "https://stablehorde.net/api/v2/generate/async";
-	const stablehorde_poll_endpoint = "https://stablehorde.net/api/v2/generate/check";
-	const stablehorde_output_endpoint = "https://stablehorde.net/api/v2/generate/status";
-	const stablehorde_model_endpoint = "https://stablehorde.net/api/v2/status/models";
+	const perf_endpoint = koboldhorde_url + "/api/v2/status/performance";
+	const models_endpoint = koboldhorde_url + "/api/v2/status/models";
+	const submit_endpoint = koboldhorde_url + "/api/v2/generate/async";
+	const polling_endpoint = koboldhorde_url + "/api/v2/generate/check";
+	const output_endpoint = koboldhorde_url + "/api/v2/generate/status";
+	const worker_endpoint = koboldhorde_url + "/api/v2/workers";
+	const submit_v1_endpoint = koboldhorde_url + "/api/v1/generate/sync";
+
+	const stablehorde_submit_endpoint = stablehorde_url + "/api/v2/generate/async";
+	const stablehorde_poll_endpoint = stablehorde_url + "/api/v2/generate/check";
+	const stablehorde_output_endpoint = stablehorde_url + "/api/v2/generate/status";
+	const stablehorde_model_endpoint = stablehorde_url + "/api/v2/status/models";
+
+	const kobold_custom_gen_endpoint = "/api/latest/generate/";
 
 	const defaultchatopponent = "KoboldAI";
 
@@ -1156,7 +1161,8 @@ Current version: 9
 	var image_db = {}; //stores a dictionary of pending images
 	//key is ID, body is {done:false,queue:10,result:""}
 	var stablemodels = []; //stored as {name,count}
-	var usev1api = false;
+	var usev1api = false; //for sync type requests
+	var custom_kobold_endpoint = ""; //if set, does not use horde. Instead, attempts to use this sync endpoint
 	var v1_polled_response = null;
 	var pending_found_story = null;
 	var horde_img_filter_enabled = true;
@@ -2262,7 +2268,7 @@ Current version: 9
 				truncated_context = truncated_memory + truncated_context;
 			}
 
-			submit_payload = {
+			let submit_payload = {
 				"prompt": truncated_context,
 				"params": {
 					"n": 1,
@@ -2271,6 +2277,13 @@ Current version: 9
 					"rep_pen": localsettings.rep_pen,
 					"temperature": localsettings.temperature,
 					"top_p": localsettings.top_p,
+					"top_k": localsettings.top_k,
+					"top_a": localsettings.top_a,
+					"typical": localsettings.typ_s,
+					"tfs": localsettings.tfs_s,
+					"rep_pen_range": localsettings.rep_pen_range,
+					"rep_pen_slope": localsettings.rep_pen_slope,
+					"sampler_order": localsettings.sampler_order
 				},
 				"models": selected_models.map((m) => { return m.name }),
 			};
@@ -2283,34 +2296,12 @@ Current version: 9
 				submit_payload.workers = selected_workers;
 			}
 
-
-			//only send advanced settings if they're modified
-			if (localsettings.top_k != defaultsettings.top_k ||
-				localsettings.top_a != defaultsettings.top_a ||
-				localsettings.typ_s != defaultsettings.typ_s ||
-				localsettings.tfs_s != defaultsettings.tfs_s) {
-				submit_payload.params.top_k = localsettings.top_k;
-				submit_payload.params.top_a = localsettings.top_a;
-				submit_payload.params.typical = localsettings.typ_s;
-				submit_payload.params.tfs = localsettings.tfs_s;
-			}
-
-			if (localsettings.rep_pen_range != defaultsettings.rep_pen_range ||
-				localsettings.rep_pen_slope != defaultsettings.rep_pen_slope) {
-				submit_payload.params.rep_pen_range = localsettings.rep_pen_range;
-				submit_payload.params.rep_pen_slope = localsettings.rep_pen_slope;
-			}
-
-			if (localsettings.sampler_order.toString() != defaultsettings.sampler_order.toString()) {
-				submit_payload.params.sampler_order = localsettings.sampler_order;
-			}
-
 			console.log(submit_payload);
 
 			startTimeTaken(); //timestamp start request
 
 			//handle v1 or v2 submit
-			if (usev1api) {
+			if (usev1api || custom_kobold_endpoint!="") {
 				console.log("submit v1 api");
 
 				pending_response_id = "submit-v1-dummy-id"; //dummy id
@@ -2318,7 +2309,18 @@ Current version: 9
 				poll_in_progress = false;
 				v1_polled_response = null;
 
-				fetch(submit_v1_endpoint, {
+				//if this is set, we don't use horde, use the custom endpoint instead
+				if(custom_kobold_endpoint!="")
+				{
+					//payload is just the params with prompt inside
+					let prompt = submit_payload.prompt;
+					submit_payload = submit_payload.params;
+					submit_payload.prompt = prompt;
+				}
+				
+				let sub_endpt = custom_kobold_endpoint!=""?(custom_kobold_endpoint+kobold_custom_gen_endpoint):submit_v1_endpoint;
+
+				fetch(sub_endpt, {
 					method: 'POST', // or 'PUT'
 					headers: {
 						'Content-Type': 'application/json',
@@ -2326,12 +2328,15 @@ Current version: 9
 					body: JSON.stringify(submit_payload),
 				})
 					.then((response) => response.json())
-					.then((data) => {
-
-						v1_polled_response = data;
-						console.log("v1 finished response: " + JSON.stringify(v1_polled_response));
-						if (v1_polled_response.length > 0) //will be undefined if fail, not zero!
+					.then((data) => {						
+						console.log("sync finished response: " + JSON.stringify(data));
+						if(custom_kobold_endpoint!="" && data.results!=null && data.results.length>0)
 						{
+							v1_polled_response = data.results[0].text;
+						}
+						else if (usev1api && data.length > 0) //will be undefined if fail, not zero!
+						{
+							v1_polled_response = data[0];
 							console.log("v1 success");
 						}
 						else {
@@ -2673,7 +2678,7 @@ Current version: 9
 			}
 			else {
 
-				if (usev1api) {
+				if (usev1api || custom_kobold_endpoint!="") {
 					//v1 api only needs to check if data was received and stored into local object
 					poll_in_progress = true;
 					if (v1_polled_response == null) {
@@ -2684,12 +2689,22 @@ Current version: 9
 						console.log("v1 handle recv reply");
 						pending_response_id = "";
 						poll_in_progress = false;
-						let v1_elem = v1_polled_response[0];
-						if (v1_elem.text != null && v1_elem.text != "") {
-							let gentxt = v1_elem.text;
-							let genworker = v1_elem.server_name;
-							let genkudos = "unknown";
-							handle_incoming_text(gentxt, genworker, genkudos);
+						if (custom_kobold_endpoint != "") {
+							let resp = v1_polled_response;
+							if (resp != null && resp != "") {
+								let gentxt = resp;
+								let genworker = "Custom Endpoint";
+								let genkudos = "Free";
+								handle_incoming_text(gentxt, genworker, genkudos);
+							}
+						} else {
+							let v1_elem = v1_polled_response;
+							if (v1_elem.text != null && v1_elem.text != "") {
+								let gentxt = v1_elem.text;
+								let genworker = v1_elem.server_name;
+								let genkudos = "unknown";
+								handle_incoming_text(gentxt, genworker, genkudos);
+							}
 						}
 						render_gametext();
 						v1_polled_response = null;
