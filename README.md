@@ -8,6 +8,13 @@ Simply open it in any browser, and it should work out of the box. All functional
 You can run it directly from your desktop or throw it on some web server and serve it there too. E.g. Github pages, nginx, whatever.
 
 - Concedo
+Changelog of KoboldAI Lite 29 Jan 2023:
+- Added Offline Mode, allowing you to load, edit and save your stories even when not connected to horde.
+- Added an extra sampler preset for good default settings for NeoX-20B.
+- Improve chat mode, sends the botname in context for better support with Pygmalion models.
+- Added image prompt sanitization for stable horde, an optional filter that replaces high risk keywords relating to CSAM. It can be disabled with the flag `?nofilter=1` added to the url.
+- Changed PWA Manifest to Standalone.
+- Added confirmation window when overwriting from a shared story.
 
 Changelog of KoboldAI Lite 24 Jan 2023:
 - Added support to install KAI Lite as a **Progressive Web App** (adds desktop shortcuts, app icons and fullscreen UI layout). This means you'll be able to *install* the KoboldAI Lite as a shortcut on your home screen or desktop, and run it in a standalone window.
