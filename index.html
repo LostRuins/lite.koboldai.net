@@ -1127,6 +1127,7 @@ Current version: 9
 	const polling_endpoint = koboldhorde_url + "/api/v2/generate/check";
 	const output_endpoint = koboldhorde_url + "/api/v2/generate/status";
 	const worker_endpoint = koboldhorde_url + "/api/v2/workers";
+	const finduser_endpoint = koboldhorde_url + "/api/v2/find_user";
 	const submit_v1_endpoint = koboldhorde_url + "/api/v1/generate/sync";
 
 	const stablehorde_submit_endpoint = stablehorde_url + "/api/v2/generate/async";
@@ -1862,6 +1863,37 @@ Current version: 9
 
 				hide_popups();
 			}
+		}
+	}
+
+	function fetch_kudo_balance()
+	{
+		let newapikey = document.getElementById("apikey").value;
+		if(newapikey!=null && newapikey.trim()!="")
+		{
+		document.getElementById("kudos_bal").innerText = "Checking...";
+		fetch(finduser_endpoint, {
+			method: 'GET',
+			headers: {
+				'apikey': newapikey,
+			},
+		})
+			.then((response) => response.json())
+			.then((data) => {
+				let kuds = data.kudos;
+				console.log(data);
+				if (kuds == null || kuds == "") {
+					document.getElementById("kudos_bal").innerText = "API Key Error";
+				} else if (kuds < 0) {
+					document.getElementById("kudos_bal").innerText = "Kudos Balance: 0";
+				} else {
+					document.getElementById("kudos_bal").innerText = "Kudos Balance: " + kuds;
+				}
+			})
+			.catch((error) => {
+				console.error('Error:', error);
+				document.getElementById("kudos_bal").innerText = "API Key Error";
+			});		
 		}
 	}
 
@@ -3373,15 +3405,18 @@ Current version: 9
 				<div class="popuptitletext">Select A Model To Load</div>
 			</div>
 
-
 			<div id="loadmodellistcontent" style="overflow: auto;">
-				<div class="justifyleft anotelabel">
+				<div class="justifyleft anotelabel">				
 					Your Kobold Horde API Key <span class="helpicon">?
 						<span class="helptext">You need an API key to use KoboldAI Horde to generate text. Get one at
 							https://koboldai.net/register or use the anonymous key 0000000000.</span>
 					</span>
+					<span class="color_green" style="float:right;" id="kudos_bal">
+						Kudos Balance: 0
+					</span>	
 				</div>
-				<input class="form-control" type="text" placeholder="Enter API Key (or use 0000000000)" value=""
+				
+				<input class="form-control" type="text" placeholder="Enter API Key (or use 0000000000)" value="" onblur="fetch_kudo_balance()"
 					id="apikey">
 				<div class="justifyleft anotelabel">
 					Your Stable Horde API Key <span class="helpicon">?
