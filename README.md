@@ -8,6 +8,11 @@ Simply open it in any browser, and it should work out of the box. All functional
 You can run it directly from your desktop or throw it on some web server and serve it there too. E.g. Github pages, nginx, whatever.
 
 - Concedo
+
+Changelog of KoboldAI Lite 1 Feb 2023:
+- Added support to connect to custom KAI endpoints (e.g. trycloudflare, localtunnel, ngrok). So you can use Lite to connect to any colab/kaggle hosted url, or your own PC using *remote_play.bat*. *Note that localhost connection is not currently supported.*
+- Changed the PWA manifest base url
+
 Changelog of KoboldAI Lite 29 Jan 2023:
 - Added Offline Mode, allowing you to load, edit and save your stories even when not connected to horde.
 - Added an extra sampler preset for good default settings for NeoX-20B.
