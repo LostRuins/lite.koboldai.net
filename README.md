@@ -10,8 +10,9 @@ You can run it directly from your desktop or throw it on some web server and ser
 - Concedo
 
 Changelog of KoboldAI Lite 1 Feb 2023:
-- Added support to connect to custom KAI endpoints (e.g. trycloudflare, localtunnel, ngrok). So you can use Lite to connect to any colab/kaggle hosted url, or your own PC using *remote_play.bat*. *Note that localhost connection is not currently supported.*
-- Changed the PWA manifest base url
+- Added support to connect to custom remote KAI instances (e.g. trycloudflare, localtunnel, ngrok). So you can use Lite to connect to any colab / kaggle hosted url, or your own PC via *remote_play.bat*. 
+*Note that direct localhost connection is not currently supported. You must use a tunnel.*
+- Changed the PWA manifest base url to a relative path.
 
 Changelog of KoboldAI Lite 29 Jan 2023:
 - Added Offline Mode, allowing you to load, edit and save your stories even when not connected to horde.
