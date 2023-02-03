@@ -1430,13 +1430,16 @@ Current version: 9
 	function export_share_story() {
 		let cstoryjson = generate_compressed_story(true);
 		console.log("Export Len: " + cstoryjson.length);
-		if (cstoryjson.length >= 4800) {			
-			msgbox("This story is too long to be URL shared. Please save it as a file instead.")
+				
+		if (cstoryjson.length >= 4800) {
+			document.getElementById("sharewarning").classList.remove("hidden");
 		} else {
-			document.getElementById("sharecontainer").classList.remove("hidden");
-			let fullurl = "https://lite.koboldai.net/?s=" + cstoryjson;
-			document.getElementById("sharestorytext").innerHTML = "<a href=\"" + fullurl + "\">" + fullurl + "</a>";
+			document.getElementById("sharewarning").classList.add("hidden");
 		}
+
+		document.getElementById("sharecontainer").classList.remove("hidden");
+		let fullurl = "https://lite.koboldai.net/?s=" + cstoryjson;
+		document.getElementById("sharestorytext").innerHTML = "<a href=\"" + fullurl + "\">" + fullurl + "</a>";
 	}
 	function copy_share_url() {
 		var copyText = document.getElementById("sharestorytext");
@@ -1579,6 +1582,18 @@ Current version: 9
 		a.target = '_blank';
 		a.download = "saved_story.json";
 		a.click();
+
+		var userAgent = window.navigator.userAgent;
+		if (userAgent.match(/AppleWebKit/) && (userAgent.match(/iPad/i) || userAgent.match(/iPhone/i))) {
+			console.log("Special save handling for iphones")
+			// iPad or iPhone needs an extra download 			
+			var reader = new FileReader();			
+			reader.onload = function(e){			
+				// window.open(reader.result);
+				window.location.href = reader.result;
+			}
+			reader.readAsDataURL(file);
+		}
 		
 	}
 
@@ -3871,10 +3886,11 @@ Current version: 9
 			<div class="aidgpopuplistheader anotelabel shareStory" id="sharestorytext" style=" word-wrap: break-word;">
 
 			</div>
-			<div class="popupfooter">
+			<div class="popupfooter">				
 				<button type="button" class="btn btn-primary" id="btn_memclose" onclick="copy_share_url()">Copy URL</button>
 				<button type="button" class="btn btn-primary" id="btn_nsclose" onclick="hide_popups()">Close</button>
 			</div>
+			<div class="box-label hidden" id="sharewarning">Warning: This story is very long. It may not load in some browsers. You should save it as a file instead.</div>
 		</div>
 	</div>
 
