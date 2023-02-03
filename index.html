@@ -1573,31 +1573,31 @@ Current version: 9
 
 		var a = document.getElementById("tempfile");
 		window.URL = window.URL || window.webkitURL;
-	
+
 		var userAgent = window.navigator.userAgent;
 		if (userAgent.match(/AppleWebKit/) && (userAgent.match(/iPad/i) || userAgent.match(/iPhone/i))) {
 			var file = new Blob([JSON.stringify(loaded_storyobj)], { type: 'application/octet-stream' });
 			console.log("Special save handling for iphones")
 			// iPad or iPhone needs an extra download 			
-			var reader = new FileReader();			
-			reader.onload = function(e){	
-				window.open(reader.result);
-				//window.location.href = reader.result;				
+			var reader = new FileReader();
+			reader.onload = function (e) {
+				msgbox(`Right-Click or long press the link, and select (Save As)<br><h2><a href=` + reader.result + ` target='_blank' download="saved_story.json">Download Story</a></h2>`, "Save Story", true)
 			}
 			reader.readAsDataURL(file);
-		}
+		} else {
 
-		var file = new Blob([JSON.stringify(loaded_storyobj)], { type: 'application/json' });
-		console.log("Normal save handling for non-iphones")
-		if (tempfileurl) {
-			window.URL.revokeObjectURL(tempfileurl);
-		}	
-		tempfileurl = window.URL.createObjectURL(file);
-		a.href = tempfileurl;
-		a.target = '_blank';
-		a.download = "saved_story.json";
-		a.click();
-				
+			var file = new Blob([JSON.stringify(loaded_storyobj)], { type: 'application/json' });
+			console.log("Normal save handling for non-iphones")
+			if (tempfileurl) {
+				window.URL.revokeObjectURL(tempfileurl);
+			}
+			tempfileurl = window.URL.createObjectURL(file);
+			a.href = tempfileurl;
+			a.target = '_blank';
+			a.download = "saved_story.json";
+			a.click();
+		}
+		
 	}
 
 	function load_file(event) {
@@ -1727,9 +1727,16 @@ Current version: 9
 		document.getElementById("customendpointcontainer").classList.add("hidden");
 	}
 
-	function msgbox(text) {
+	function msgbox(text, title="Error Encountered", isHtml=false) {
 		if (!text) { text = ""; }
-		document.getElementById("errtxt").innerText = text;
+		if(isHtml)
+		{
+			document.getElementById("msgboxtxt").innerHTML = text;
+		}else{
+			document.getElementById("msgboxtxt").innerText = text;
+		}
+		
+		document.getElementById("msgboxtitle").innerText = title;
 		document.getElementById("msgboxcontainer").classList.remove("hidden");
 		console.log("Msgbox: " + text);
 	}
@@ -3900,9 +3907,9 @@ Current version: 9
 	<div class="popupcontainer flex hidden" id="msgboxcontainer">
 		<div class="nspopup fixsize">
 			<div class="popuptitlebar">
-				<div class="popuptitletext">Error Encountered</div>
+				<div class="popuptitletext" id="msgboxtitle"></div>
 			</div>
-			<div class="aidgpopuplistheader anotelabel" id="errtxt">
+			<div class="aidgpopuplistheader anotelabel" id="msgboxtxt">
 
 			</div>
 			<div class="popupfooter">
