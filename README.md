@@ -9,6 +9,13 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
+Changelog of KoboldAI Lite 4 Feb 2023:
+- Added a brand new ***AESTHETIC*** messenger-style UI for chat mode, which you can toggle in the settings. Fully compatible with all horde models including Pygmalion, it also allows **out-of-turn** chatting, where you can undo the AI's output to add on to your earlier messages, or simply send an empty message to let the AI continue speaking twice in a row. This new chat mode is now the default, but you can easily toggle between this UI and the classic UI in settings.
+- Improved iOS support, allowing most iPhones and iPads to save and load story files. Please let me know if you encounter issues.
+- Minor improvements in sharing stories (length checks and image exclusions).
+- Additional stopping tokens for adventure mode added.
+- Tweaks to reduce chance of memory being truncated from context due to excessive length.
+
 Changelog of KoboldAI Lite 1 Feb 2023:
 - Added support to connect to custom remote KAI instances (e.g. trycloudflare, localtunnel, ngrok). So you can use Lite to connect to any colab / kaggle hosted url, or your own PC via *remote_play.bat*. 
 *Note that direct localhost connection is not currently supported. You must use a tunnel.*
