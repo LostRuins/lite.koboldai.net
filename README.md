@@ -9,6 +9,11 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
+Changelog of KoboldAI Lite 5 Feb 2023:
+- Slight tweaks to the new chat UI to improve usability
+- Added ability to **export settings** into saved files and shared urls
+- Added custom sampler orders in settings, now that horde has support for them
+
 Changelog of KoboldAI Lite 4 Feb 2023:
 - Added a brand new ***AESTHETIC*** messenger-style UI for chat mode, which you can toggle in the settings. Fully compatible with all horde models including Pygmalion, it also allows **out-of-turn** chatting, where you can undo the AI's output to add on to your earlier messages, or simply send an empty message to let the AI continue speaking twice in a row. This new chat mode is now the default, but you can easily toggle between this UI and the classic UI in settings.
 - Improved iOS support, allowing most iPhones and iPads to save and load story files. Please let me know if you encounter issues.
