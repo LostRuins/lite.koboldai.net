@@ -1054,11 +1054,18 @@ Current version: 9
 			color:peru;
 			font-weight: bold;
 		}
-		.storyimg
+		.storyimgfloat
 		{
 			float: right; 
 			position: relative;
 			padding: 4px;
+		}
+		.storyimg
+		{		
+			text-align: center;
+			position: relative;
+			padding: 4px;
+			margin: 0 auto;
 		}
 		.mdlpicker::-webkit-calendar-picker-indicator {
               opacity: 100;
@@ -1115,10 +1122,7 @@ Current version: 9
 		width: 92%;
 	}
 	
-	.chat_received_withd_msg p {
-		background: #1d282f none repeat scroll 0 0;
-		border-radius: 0 15px 15px 15px;
-		color: #dde6e7;
+	.chat_received_withd_msg p {		
 		font-size: 14px;
 		margin: 0;
 		padding: 5px 10px 5px 12px;
@@ -1127,18 +1131,20 @@ Current version: 9
 	
 	.chat_received_withd_msg {
 		width: 75%;
+		background: #1d282f none repeat scroll 0 0;
+		border-radius: 0 15px 15px 15px;
+		color: #dde6e7;
+		overflow:auto;
 	}
 	
 	.chat_mesgs{
-		 float: center; 
+		float: center; 
 		padding: 20px 20px 20px 20px;
 		width:100%;
 		background: #0b141a;
 	}
 	
-	.chat_sent_msg p {
-		background:#005c4b;
-		border-radius: 12px 15px 0px 15px;
+	.chat_sent_msg p {		
 		font-size: 14px;
 		margin: 0;
 		color: #dde6e7;
@@ -1149,6 +1155,9 @@ Current version: 9
 	.chat_sent_msg {
 		float: right;
 		width: 75%;
+		overflow:auto;
+		background:#005c4b;
+		border-radius: 12px 15px 0px 15px;
 	}
 	
 	.chat_outgoing_msg {
@@ -1478,8 +1487,10 @@ Current version: 9
 		//toggle genimg btn
 		if (localsettings.generate_images) {
 			document.getElementById("btn_genimg").classList.remove("hidden");
+			document.getElementById("btn_genimg2").classList.remove("hidden");
 		} else {
 			document.getElementById("btn_genimg").classList.add("hidden");
+			document.getElementById("btn_genimg2").classList.add("hidden");
 		}
 
 		//poke speech synth to preload voices
@@ -1878,6 +1889,7 @@ Current version: 9
 									localsettings.my_api_key = tmpapikey1;
 									localsettings.stable_api_key = tmpapikey2;
 									hide_popups();
+									render_gametext();
 								},hide_popups);
 							}
 						} else {
@@ -2389,8 +2401,10 @@ Current version: 9
 		localsettings.img_allownsfw = (document.getElementById("img_allownsfw").checked ? true : false);
 		if (localsettings.generate_images) {
 			document.getElementById("btn_genimg").classList.remove("hidden");
+			document.getElementById("btn_genimg2").classList.remove("hidden");
 		} else {
 			document.getElementById("btn_genimg").classList.add("hidden");
+			document.getElementById("btn_genimg2").classList.add("hidden");
 		}
 
 		if(localsettings.enhanced_chat_ui && localsettings.opmode==3)
@@ -2569,9 +2583,11 @@ Current version: 9
 				generate_new_image(sentence);
 				nextgeneratedimagemilestone = tclen + generateimagesinterval;
 				document.getElementById("btn_genimg").disabled = true;
+				document.getElementById("btn_genimg2").disabled = true;
 				//disable it for 7sec to prevent spam
 				setTimeout(() => {
 					document.getElementById("btn_genimg").disabled = false;
+					document.getElementById("btn_genimg2").disabled = false;
 				}, 7000);
 			}
 		}
@@ -2991,8 +3007,9 @@ Current version: 9
 			});
 	}
 
-	function render_image_html(data, alttext = "") {
+	function render_image_html(data, alttext = "", float=true) {
 		var dim = (localsettings.opmode == 2 ? 150 : 200); //adventure mode has smaller pictures
+		let siclass = (float?"storyimgfloat":"storyimg");
 		if (!data || data == "") {
 			let waittime = "Unavailable";
 			if (image_db[alttext] != null) {
@@ -3001,9 +3018,10 @@ Current version: 9
 			} else {
 				console.log("Cannot render " + alttext);
 			}
-			return `<div class="storyimg" contenteditable="false"><img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wAARCAEAAQADASIAAhEBAxEB/8QAGQABAQEBAQEAAAAAAAAAAAAAAAEDAgQF/8QAIBABAAIBBQEBAQEAAAAAAAAAAAECEgMRMVKRIWFBof/EABQBAQAAAAAAAAAAAAAAAAAAAAD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwD7AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABETPENNPT3je3jUHm22HpmInljqUx+xwDgAAAAAAAAAAAAAAAAAAAAAAAAABaxvaIRaztaJB6AAEmN4mFSZ2iZB5wAAAAAAAAAAAAAAAAAAAAAAAAAAAaaeptG1vWrzETMcSD0zMRyx1L5fI4cb7gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA7rpzNd/HAAAAAAAAAAAAAAAAAAAAAAAAAAAAADTT09/s8Gnp7/Z4agONSmX2OXYDzDbUpl9jliAAAAAAAAAAAAAAAAAAAsVmd9o4KVm0/jeIiI2gHnGupp/2vjIAABpp6e/2TT09/s8NQAAAAHGpTL7HLsB5htqUy+xyxAAAAAAAAAAAAAAAWlZtP4UrNp/G8RFY2gCIiI2hQAZ6mn/a+NAHmaaenv8AZ4dzp1m2/wDjoAAAAAAAABxqUy+xy7AeYbalMvscsQAAAAAAAAAAFpWbT+FKzafxvEREbQBEREbQoAAAAAAAAAAAAAAAAAONSmX2OXYDzDbUpl9jliAAAAAAAtKzafxaVm0/jaIiI2gCIiI2hQAAAAAAAAAAAAAAAAAAAAAcalMvscuwHmG2pTL7HLEAAAAFi0xxMwZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6kzvyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/Z" width=` + dim + ` height=` + dim + ` style="border-radius: 6%;" alt="` + alttext + `"><div class=\"loader2\"></div><div class=\"imagelabel\">` + waittime + `</div></div>`;
+			
+			return `<div class="`+siclass+`" contenteditable="false"><img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wAARCAEAAQADASIAAhEBAxEB/8QAGQABAQEBAQEAAAAAAAAAAAAAAAEDAgQF/8QAIBABAAIBBQEBAQEAAAAAAAAAAAECEgMRMVKRIWFBof/EABQBAQAAAAAAAAAAAAAAAAAAAAD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwD7AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABETPENNPT3je3jUHm22HpmInljqUx+xwDgAAAAAAAAAAAAAAAAAAAAAAAAABaxvaIRaztaJB6AAEmN4mFSZ2iZB5wAAAAAAAAAAAAAAAAAAAAAAAAAAAaaeptG1vWrzETMcSD0zMRyx1L5fI4cb7gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA7rpzNd/HAAAAAAAAAAAAAAAAAAAAAAAAAAAAADTT09/s8Gnp7/Z4agONSmX2OXYDzDbUpl9jliAAAAAAAAAAAAAAAAAAAsVmd9o4KVm0/jeIiI2gHnGupp/2vjIAABpp6e/2TT09/s8NQAAAAHGpTL7HLsB5htqUy+xyxAAAAAAAAAAAAAAAWlZtP4UrNp/G8RFY2gCIiI2hQAZ6mn/a+NAHmaaenv8AZ4dzp1m2/wDjoAAAAAAAABxqUy+xy7AeYbalMvscsQAAAAAAAAAAFpWbT+FKzafxvEREbQBEREbQoAAAAAAAAAAAAAAAAAONSmX2OXYDzDbUpl9jliAAAAAAAtKzafxaVm0/jaIiI2gCIiI2hQAAAAAAAAAAAAAAAAAAAAAcalMvscuwHmG2pTL7HLEAAAAFi0xxMwZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6kzvyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/Z" width=` + dim + ` height=` + dim + ` style="border-radius: 6%;" alt="` + alttext + `"><div class=\"loader2\"></div><div class=\"imagelabel\">` + waittime + `</div></div>`;
 		} else {
-			return `<div class="storyimg"><img src="` + data + `" width=` + dim + ` height=` + dim + ` style="border-radius: 6%;"></div>`;
+			return `<div class="`+siclass+`"><img src="` + data + `" width=` + dim + ` height=` + dim + ` style="border-radius: 6%;"></div>`;
 		}
 	}
 
@@ -3505,7 +3523,7 @@ Current version: 9
 			}
 			else
 			{
-				render_enhanced_chat(concat_gametext(true,"")); 
+				render_enhanced_chat(concat_gametext(false,"")); 
 			}
 			document.getElementById("enhancedchatinterface").classList.remove("hidden");
 			document.getElementById("normalinterface").classList.add("hidden");
@@ -3581,6 +3599,25 @@ Current version: 9
 		for(var i=0;i<chatunits.length;++i)
 		{
 			let curr = chatunits[i];
+			let foundimg = "";
+			if(curr.msg && curr.msg!="")
+			{
+				//convert the msg into images
+				curr.msg = curr.msg.replace(/<\|p\|.+?\|p\|>/g, function (m) {
+					// m here means the whole matched string				
+					let inner = m.substring(4, m.length - 4);
+					inner = render_image_html("", inner,false);
+					return inner;
+				});
+				curr.msg = curr.msg.replace(/<\|d\|.+?\|d\|>/g, function (m) {
+					// m here means the whole matched string				
+					let inner = m.substring(4, m.length - 4);
+					inner = render_image_html(inner, "",false);
+					return inner;
+				});
+				curr.msg = curr.msg.replace(/<\|.+?\|>/g, ""); //remove normal comments too
+			}
+
 			if(curr.myturn)
 			{
 				let namepart = (curr.name!=""?`<span style="font-weight: bolder;color:#15e4c8b9;">`+curr.name+`</span><br>`:"");
@@ -3937,6 +3974,7 @@ Current version: 9
 					<button type="button" class="btn btn-primary" id="btn_actundo2" onclick="btn_back()">Back</button>
 					<button type="button" class="btn btn-primary" id="btn_actredo2" onclick="btn_redo()">Redo</button>
 					<button type="button" class="btn btn-primary" id="btn_actretry2" onclick="btn_retry()">Retry</button>
+					<button type="button" class="btn btn-primary bg_green" id="btn_genimg2"  onclick="manual_gen_image()">Add Img</button>
 					<button type="button" class="btn btn-primary" id="btn_editmode" onclick="btn_editmode()">Edit</button>
 					
 				</div>					
