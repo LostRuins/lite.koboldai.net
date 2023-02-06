@@ -2002,7 +2002,8 @@ Current version: 9
 			hide_popups();
 			tmpep = tmpep.trim();
 
-			//remove trailing slash
+			//remove trailing slash and pound
+			tmpep = tmpep.endsWith('#') ? tmpep.slice(0, -1) : tmpep;
 			tmpep = tmpep.endsWith('/') ? tmpep.slice(0, -1) : tmpep;
 
 			let proxy_part = "";
@@ -2044,6 +2045,20 @@ Current version: 9
 						custom_kobold_endpoint = tmpep;
 						selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": mdlname, "count": 1 }];
 						selected_workers = [];
+						if(perfdata==null)
+						{
+							//generate some fake perf data if horde is offline and using custom endpoint
+							perfdata = {
+							"queued_requests": 0,
+							"queued_tokens": 0,
+							"past_minute_tokens": 0,
+							"worker_count": 0
+							};
+							document.body.classList.add("connected");
+							document.getElementById("connectstatus").classList.remove("color_orange");
+							document.getElementById("connectstatus").classList.add("color_green");				
+						}		
+						document.getElementById("connectstatus").innerHTML = "Connected to Custom Endpoint!";
 						render_gametext();
 					}
 				})
@@ -2066,6 +2081,11 @@ Current version: 9
 				});
 		}
 		
+	}
+
+	function display_custom_endpoint()
+	{
+		document.getElementById("customendpointcontainer").classList.remove("hidden");
 	}
 
 	//function to allow selection of models
@@ -2118,7 +2138,7 @@ Current version: 9
 		if (selected_idx_arr.length == 1 && selected_idx_arr[0] == 9999) //custom endpoint
 		{			
 			hide_popups();
-			document.getElementById("customendpointcontainer").classList.remove("hidden");
+			display_custom_endpoint();
 		} else {
 			custom_kobold_endpoint = "";
 			//remove the Custom Endpoint if it's multi selected together with others.
@@ -2157,6 +2177,8 @@ Current version: 9
 
 				localsettings.my_api_key = document.getElementById("apikey").value;
 				localsettings.stable_api_key = document.getElementById("stableapikey").value;
+
+				document.getElementById("connectstatus").innerHTML = "Connected to KoboldAI Horde!";
 
 				render_gametext();
 
@@ -2782,7 +2804,8 @@ Current version: 9
 					submit_payload.quiet = !showlog;
 
 					//we never attempt to proxy localhost addresses
-					is_localhost = (custom_kobold_endpoint.toLowerCase().includes("localhost") ||custom_kobold_endpoint.toLowerCase().includes("127.0.0.1"));
+					is_localhost = (custom_kobold_endpoint.toLowerCase().includes("localhost") 
+					|| custom_kobold_endpoint.toLowerCase().includes("127.0.0.1"));
 				}
 
 				let proxy_part = "";				
@@ -3396,6 +3419,7 @@ Current version: 9
 
 		if (perfdata == null) {
 			document.getElementById("topbtn_reconnect").classList.remove("hidden"); 
+			document.getElementById("topbtn_customendpt").classList.remove("hidden"); 
 			document.getElementById("topbtn_ai").classList.add("hidden");
 			document.getElementById("topbtn_newgame").classList.remove("hidden");
 			document.getElementById("topbtn_save").classList.remove("hidden");
@@ -3403,16 +3427,16 @@ Current version: 9
 			document.getElementById("topbtn_settings").classList.add("hidden");
 			document.getElementById("topbtn_share").classList.add("hidden");
 		} else {
-			if (selected_models.length == 0) {
-				document.getElementById("topbtn_reconnect").classList.add("hidden");
+			document.getElementById("topbtn_reconnect").classList.add("hidden");
+			document.getElementById("topbtn_customendpt").classList.add("hidden"); 
+			if (selected_models.length == 0) {				
 				document.getElementById("topbtn_ai").classList.remove("hidden");
 				document.getElementById("topbtn_newgame").classList.add("hidden");
 				document.getElementById("topbtn_save").classList.add("hidden");
 				document.getElementById("topbtn_load").classList.add("hidden");
 				document.getElementById("topbtn_settings").classList.add("hidden");
 				document.getElementById("topbtn_share").classList.add("hidden");
-			} else {
-				document.getElementById("topbtn_reconnect").classList.add("hidden");
+			} else { 
 				document.getElementById("topbtn_ai").classList.remove("hidden");
 				document.getElementById("topbtn_newgame").classList.remove("hidden");
 				document.getElementById("topbtn_save").classList.remove("hidden");
@@ -3801,6 +3825,10 @@ Current version: 9
 
 								<li class="nav-item hidden" id="topbtn_reconnect">
 									<a class="nav-link" href="#" onclick="attempt_connect()">Reconnect</a>
+								</li>
+
+								<li class="nav-item hidden" id="topbtn_customendpt">
+									<a class="nav-link" href="#" onclick="display_custom_endpoint()">Custom Endpoint</a>
 								</li>
 
 								<li class="nav-item hidden" id="topbtn_ai">
