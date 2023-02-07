@@ -1412,7 +1412,7 @@ Current version: 9
 		chatopponent: defaultchatopponent,
 		persist_session: true,
 		speech_synth: 0, //0 is disabled
-		generate_images: "", //"" is disabled and "*" is all, anything else is the model name pulled from stable horde
+		generate_images: "stable_diffusion", //"" is disabled and "*" is all, anything else is the model name pulled from stable horde
 		img_autogen: false,
 		img_allownsfw: true,
 		last_selected_preset: 0,
@@ -1459,6 +1459,19 @@ Current version: 9
 
 	//attempt to load settings
 	function init() {
+
+		//disable debug log if not local
+		const urlParams = new URLSearchParams(window.location.search);
+		const dbgmode = urlParams.get('dbg');
+		const fromfile = ( window.location.protocol == 'file:' );
+		if(!dbgmode && !fromfile){
+			if(!window.console) window.console = {};
+			var methods = ["log", "debug", "warn", "info"];
+			for(var i=0;i<methods.length;i++){
+				console[methods[i]] = function(){};
+			}
+		}
+
 		console.log("Init started");
 		try {
 			let loadedsettingsjson = localStorage.getItem("kaihordewebui_settings");
@@ -3555,16 +3568,27 @@ Current version: 9
 		let newbodystr = "";
 		let myturnchat = false; //who is currently speaking?
 
+				
+		var othernamesregex = new RegExp("(?!" + localsettings.chatname + ").+?\: ", "gi");
+
+		//a quick fix that adds a newline if there's none before opponent chat and a picture
+		var othernamesregexreplace = new RegExp("\\|[d|p]\\|>(?!" + localsettings.chatname + ").+?\\: ", "gi");
+		
+		input = input.replace(othernamesregexreplace, function (m) {							
+			let rep = m.substring(0,4) + "\n" + m.substring(4);
+			return rep;
+		});
+		
+
 		let chatunits = []; //parse chat body into nice chat chunks
 		input = input.split("\n"); //split by newline, then parse each chunk
 
 		let m_name = "\n" + localsettings.chatname + ": ";
-		var mynameregex = new RegExp("(" + localsettings.chatname + ")\: ", "gi");
+		var mynameregex = new RegExp("(" + localsettings.chatname + ")\: ", "gi");		
 		
 		for(var i=0;i<input.length;++i)
 		{
 			let tempfullsearchable = input[i];
-			var othernamesregex = new RegExp("(?!" + localsettings.chatname + ").+?\: ", "gi");
 			var foundopponent = tempfullsearchable.match(othernamesregex);
 			var foundself = tempfullsearchable.match(mynameregex);
 
@@ -4273,7 +4297,7 @@ Current version: 9
 					<div class="settingsmenu" style="padding-top: 0px;">
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Generate Images <span class="helpicon">?<span class="helptext">Use Stable Horde to insert AI generated images into your story at sporadic intervals.</span></span></div>
+							<div class="justifyleft settingsmall">Generate Images <span class="helpicon">?<span class="helptext">Use Stable Horde to insert AI generated images into your story.</span></span></div>
 						</div>
 							<input list="sdmodels" class="form-control mdlpicker" id="generate_images" style="font-size: 12px;height:24px;padding:2px;margin:0px 0 0;" placeholder="[Disabled]" value="" onblur="validate_sd_model()" onfocus="clear_sd_model()" title="Select a stable diffusion model to generate images with">
 							<datalist id="sdmodels">
