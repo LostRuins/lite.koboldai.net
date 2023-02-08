@@ -3353,7 +3353,7 @@ Current version: 9
 				redo_arr = [];
 
 				gametext_elem.innerHTML = gametext_elem.innerHTML.replaceAll("<div><br></div>", "<br>");
-				gametext_elem.querySelectorAll('div.storyimg').forEach(
+				gametext_elem.querySelectorAll('div.storyimg,div.storyimgfloat').forEach(
 					(el) => {
 						let chimg = el.getElementsByTagName("img")[0];
 						el.replaceWith((chimg.alt == null || chimg.alt == "") ? ("<|d|" + chimg.src + "|d|>") : ("<|p|" + chimg.alt + "|p|>"))
@@ -3416,6 +3416,30 @@ Current version: 9
 		}
 		else {
 			let fulltxt = concat_gametext(false);
+
+			if(localsettings.opmode==3)
+			{		
+
+				//for chat mode, highlight our name in blue and opponent in red			
+				let m_name = "\n" + localsettings.chatname + ": ";
+			
+				//match anything that is NOT us, ie. opponents				
+				var regex = new RegExp("\n(?!" + localsettings.chatname + ").+?\: ", "gi");
+				fulltxt = fulltxt.replace(regex, function (m) {
+					return `<span class="color_red">` + m + `</span>`;
+				});
+				fulltxt = fulltxt.replaceAll(m_name, `<span class="color_blue">` + m_name + `</span>`);
+			
+			}
+
+			//for adventure mode, highlight our actions in green
+			if (localsettings.opmode == 2) {
+				fulltxt = fulltxt.replace(/\n\n\> .+?\n\n/g, function (m) {
+					return `<span class="color_green">` + m + `</span>`;
+				});
+			}
+		
+			//handle images
 			fulltxt = fulltxt.replace(/<\|p\|.+?\|p\|>/g, function (m) {
 				// m here means the whole matched string				
 				let inner = m.substring(4, m.length - 4);
@@ -3427,25 +3451,8 @@ Current version: 9
 				let inner = m.substring(4, m.length - 4);
 				inner = render_image_html(inner, "");
 				return inner;
-			});
+			});	
 
-			//for adventure mode, highlight our actions in green
-			if (localsettings.opmode == 2) {
-				fulltxt = fulltxt.replace(/\n\n\> .+?\n\n/g, function (m) {
-					return `<span class="color_green">` + m + `</span>`;
-				});
-			}
-
-			//for chat mode, highlight our name in blue and opponent in red
-			if (localsettings.opmode == 3) {
-				let m_name = "\n" + localsettings.chatname + ": ";
-				//match anything that is NOT us, ie. opponents
-				var regex = new RegExp("\n(?!" + localsettings.chatname + ").+?\: ", "gi");
-				fulltxt = fulltxt.replace(regex, function (m) {
-					return `<span class="color_red">` + m + `</span>`;
-				});
-				fulltxt = fulltxt.replaceAll(m_name, `<span class="color_blue">` + m_name + `</span>`);
-			}
 
 			fulltxt = fulltxt.replace(/(\r\n|\r|\n)/g, '<br>');
 
