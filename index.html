@@ -1487,7 +1487,7 @@ Current version: 9
 				//see if persist is enabled		
 				if (loadedsettings && loadedsettings.persist_session) {					
 					import_share_story(loadedstorycompressed); //use the same compressed format as shared stories and import it
-					localsettings = loadedsettings;
+					import_props_into_object(localsettings,loadedsettings);
 					console.log("Loaded local settings and story");
 				}
 				if(loadedsettings && !loadedsettings.persist_session)
@@ -1636,6 +1636,12 @@ Current version: 9
 		return hsh.substring(0, 6);
 	};
 
+	function import_props_into_object(existingObj, objToImport) {
+		for (var k in objToImport) {
+			existingObj[k] = objToImport[k];
+		}
+	}
+
 	function generate_compressed_story(strip_images=false) {
 		//encode the current story into a sharable url
 		//a tiny json format which gets compressed by LZMA then b64url
@@ -1761,8 +1767,8 @@ Current version: 9
 						//handle importing settings
 						if (story.savedsettings && story.savedsettings != "") {
 							let tmpapikey1 = localsettings.my_api_key;
-							let tmpapikey2 = localsettings.stable_api_key;
-							localsettings = story.savedsettings;
+							let tmpapikey2 = localsettings.stable_api_key;							
+							import_props_into_object(localsettings,story.savedsettings);
 							localsettings.my_api_key = tmpapikey1;
 							localsettings.stable_api_key = tmpapikey2;
 						}
@@ -1915,7 +1921,7 @@ Current version: 9
 								msgboxYesNo("This story includes custom settings. Do you want to import them?","Import Story Settings",()=>{
 									let tmpapikey1 = localsettings.my_api_key;
 									let tmpapikey2 = localsettings.stable_api_key;
-									localsettings = loaded_storyobj.savedsettings;
+									import_props_into_object(localsettings,loaded_storyobj.savedsettings);
 									localsettings.my_api_key = tmpapikey1;
 									localsettings.stable_api_key = tmpapikey2;
 									hide_popups();
