@@ -1420,6 +1420,7 @@ Current version: 9
 		generate_images: "stable_diffusion", //"" is disabled and "*" is all, anything else is the model name pulled from stable horde
 		img_autogen: false,
 		img_allownsfw: true,
+		save_images: true,
 		last_selected_preset: 0,
 		enhanced_chat_ui: true,
 		export_settings: true, //affects if settings are included with the story and sharelinks
@@ -1805,17 +1806,28 @@ Current version: 9
 			// was formerly saved in newui format, regenerate a basic oldui file
 			loaded_storyobj = generate_base_storyobj();
 		}
+
+		let export_arr = gametext_arr;
+		if(!localsettings.save_images)
+		{
+			export_arr = [];
+			for (let i = 0; i < gametext_arr.length; ++i) {
+				export_arr.push(gametext_arr[i].replace(/<\|p\|.+?\|p\|>/g, "").replace(/<\|d\|.+?\|d\|>/g, ""));
+			}
+		}
+
+
 		loaded_storyobj.prompt = "";
 		loaded_storyobj.actions = [];
 		loaded_storyobj.actions_metadata = {};
-		if (gametext_arr.length > 0) {
-			loaded_storyobj.prompt = gametext_arr[0];
+		if (export_arr.length > 0) {
+			loaded_storyobj.prompt = export_arr[0];
 		}
-		for (var i = 1; i < gametext_arr.length; ++i) {
-			loaded_storyobj.actions.push(gametext_arr[i]);
+		for (var i = 1; i < export_arr.length; ++i) {
+			loaded_storyobj.actions.push(export_arr[i]);
 			let key = (i - 1).toString();
 			loaded_storyobj.actions_metadata[key] = {
-				"Selected Text": gametext_arr[i],
+				"Selected Text": export_arr[i],
 				"Alternative Text": []
 			};
 		}
@@ -2307,6 +2319,7 @@ Current version: 9
 		}
 		document.getElementById("sdmodels").innerHTML = sdmodelshtml;
 		document.getElementById("img_autogen").checked = localsettings.img_autogen;
+		document.getElementById("save_images").checked = localsettings.save_images;
 		document.getElementById("img_allownsfw").checked = localsettings.img_allownsfw;
 
 	}
@@ -2416,6 +2429,7 @@ Current version: 9
 		localsettings.speech_synth = document.getElementById("ttsselect").value;
 
 		localsettings.img_autogen = (document.getElementById("img_autogen").checked ? true : false);
+		localsettings.save_images = (document.getElementById("save_images").checked ? true : false);
 		localsettings.img_allownsfw = (document.getElementById("img_allownsfw").checked ? true : false);
 		if (localsettings.generate_images) {
 			document.getElementById("btn_genimg").classList.remove("hidden");
@@ -2492,6 +2506,7 @@ Current version: 9
 		current_anote = document.getElementById("anotetext").value;
 		current_anotetemplate = document.getElementById("anotetemplate").value;
 		hide_popups();
+		render_gametext();
 	}
 
 	function restart_new_game() {
@@ -4331,6 +4346,10 @@ Current version: 9
 									<div class="justifyleft settingsmall"  title="If NSFW is disabled, explicit images will be censored">Allow NSFW </div>	
 								   <input type="checkbox" id="img_allownsfw" style="margin:0px 0 0;">				
 								</div>
+								<div class="settinglabel">
+									<div class="justifyleft settingsmall"  title="Includes images when saving to json file">Save Images </div>	
+								   <input type="checkbox" id="save_images" style="margin:0px 0 0;">				
+								</div>
 							</div>
 						
 					</div>
@@ -4442,7 +4461,7 @@ Current version: 9
 			</div>
 			
 			<div class="popupfooter">				
-				<button type="button" class="btn btn-primary" onclick="save_wi();hide_popups()">Save</button>
+				<button type="button" class="btn btn-primary" onclick="save_wi();autosave();hide_popups()">Save</button>
 				<button type="button" class="btn btn-primary" onclick="revert_wi();hide_popups()">Cancel</button>
 			</div>
 		</div>
