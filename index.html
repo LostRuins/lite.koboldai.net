@@ -949,7 +949,11 @@ Current version: 9
 		}		
 		.workerTable{		
 			color: #ffffff;
-			font-size:1.5vw;
+			font-size:1.3vw;
+		}
+		.workerTable>tbody>tr>td{		
+			padding: 6px;
+			
 		}
 
 		.widelbtn
@@ -1999,8 +2003,13 @@ Current version: 9
 		for (var i = 0; i < wdata.length; ++i) {
 			let elem = wdata[i];
 			let tokenspersec = elem.performance.replace(" tokens per second", "");
+			if(tokenspersec.toLowerCase()=="no requests fulfilled yet")
+			{
+				tokenspersec = 0;
+			}
 			let style = (elem.trusted ? "style=\"color:#dd77ff;\"" : "");
-			str += "<tr><td>" + elem.name.substring(0, 32) + "</td><td>" + elem.models[0].substring(0, 32) + "</td><td>" + elem.max_length + " / " + elem.max_content_length + "</td><td>" + tokenspersec + "</td><td>" + elem.uptime + "</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "</td></tr>";
+			let brokenstyle = (elem.maintenance_mode ? "style=\"color:#ee4444;\"" : "")
+			str += "<tr><td>" + elem.name.substring(0, 32) + "</td><td>" + elem.models[0].substring(0, 32) + "</td><td>" + elem.max_length + " / " + elem.max_content_length + "<br>(" + tokenspersec + " T/s)</td><td "+brokenstyle+">" + elem.uptime + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "</td></tr>";
 		}
 		document.getElementById("workertable").innerHTML = str;
 	}
@@ -2172,6 +2181,7 @@ Current version: 9
 					let cm = (curr.models && curr.models.length > 0) ? curr.models[0] : "None";
 					let cn = curr.name;
 					let style = (curr.trusted ? "style=\"color:#b700ff;\"" : "");
+					style = (curr.maintenance_mode ? "style=\"color:#ee4444;\"" : style);
 					model_choices += "<option " + style + " value=\"" + i + "\">" + cn + " (" + cm + ")" + (curr.trusted ? " [Trusted]" : "") + "</option>";
 				}
 				document.getElementById("oaimodel").innerHTML = model_choices;
@@ -4483,7 +4493,7 @@ Current version: 9
 			<div class="workerTableDiv">
 			<table class="table text-center workerTable">
 			<thead class="sticky-top bg-white">
-			<tr><th>Name</th><th>Model</th><th>Capabilities</th><th>Speed</th><th>Uptime</th><th>Kudos</th></tr>
+			<tr><th>Name</th><th>Model</th><th>Capabilities</th><th>Uptime</th><th>Kudos</th></tr>
 			</thead>
 			<tbody id="workertable">			
 			</tbody>
