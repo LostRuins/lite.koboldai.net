@@ -9,6 +9,23 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
+Changelog of KoboldAI Lite 15 Feb 2023:
+- Added mouseover text showing the prompt that was used to generate each image. Prompt is not saved, it's only visible in current session.
+- Reworked the workers info table, added jobs done information, added maintenance color for workers.
+- Added indicator for trusted workers in worker table (Kudos highlighted in purple)
+- Added a toggle to control image saving in json files
+- Saved settings now combine with unconfigured defaults instead of overwriting them
+- Fixed author note not saving in some scenarios
+- Added a cancel button for world info editing, which reverts pending changes
+- Allow clicking checkbox label to toggle edit mode and enter sends
+- Fixed images not parsing correctly, made Stable Diffsion 1.5 the default Add Img model, disabled debug console by default
+- Increased default temperature, but lowered default rep pen slightly
+- Added extra shortcut to display worker list
+- Added support for generating images within new chat ui
+- Added custom endpoint selection in offline mode, allowing usage even if the entire kobold horde goes down
+- Added an option to keep AI selected or not when starting a new game
+- Improved overwrite checks when opening a file or sharelink with embedded settings
+
 Changelog of KoboldAI Lite 5 Feb 2023:
 - Slight tweaks to the new chat UI to improve usability
 - Added ability to **export settings** into saved files and shared urls
