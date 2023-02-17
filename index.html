@@ -2599,9 +2599,9 @@ Current version: 10
 		let p3 = input.lastIndexOf("?");
 		let last = Math.max(p1, p2, p3);
 		if (last > 0) {
-			return input.substring(0, last + 1).trim();
+			return input.substring(0, last + 1).trimEnd();
 		}
-		return input.trim();
+		return input.trimEnd();
 	}
 
 	function start_trim_to_sentence(input) {
@@ -2722,6 +2722,16 @@ Current version: 10
 				truncated_context = truncated_context.replace(/[\t ]+$/, '');
 			}
 
+			//for adventure mode, inject hidden context, even more if there's nothing in memory
+			if (localsettings.opmode == 2)
+			{
+				let injected = "[Interactive Fiction: Game Mode Enabled]\n[You are playing a choose-your-own-adventure game. Please input action.]\n";
+				if (current_anote.length == 0 && current_memory.length == 0) {				
+					injected += "\n\n\> Look\n\nYou look around, observing yourself and your surroundings.\n\n"			
+				}
+				truncated_context = injected + truncated_context;
+			}
+
 			//for chatmode, inject hidden context if AN and memory are empty, and if there's no story in context before the chat
 			if (localsettings.opmode == 3) {
 				let co = localsettings.chatopponent;
@@ -2746,7 +2756,7 @@ Current version: 10
 						truncated_context = injected + truncated_context;
 					}
 				}
-
+				
 				//if we can infer the name of our chat opponent, inject it to force bot response after ours
 				pending_context_preinjection = co + ":";				
 				truncated_context += pending_context_preinjection;
