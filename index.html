@@ -172,7 +172,7 @@ Current version: 10
 		}
 
 		#inputrow.show_mode {
-			grid-template-columns: 7% 83% 10%;
+			grid-template-columns: 50px auto 64px;
 		}
 
 		#inputrow {
@@ -181,6 +181,14 @@ Current version: 10
 			width: 100%;
 			display: grid;
 			grid-template-columns: 0% auto 64px;
+		}
+		.input_action
+		{
+			content:url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgBAMAAACBVGfHAAAAAXNSR0IB2cksfwAAAAlwSFlzAAAA7AAAAOwBeShxvQAAAB5QTFRFAAAA/rUT5uvzztXjq1kW5+r14ufw/8YF/8QHr1kWOCO8XQAAAAp0Uk5TAPr+/fwgpBqRPkYi9G8AAAC6SURBVHicjZCxDoIwEIZv0cLmryTiWl/AhOBOcgubcWAmDs5lglEWdWTwgT1MkGvj4A1N+/Xr3Z8S6VpcrXeurN1799baTIOzCMdQyANBg4+QHQIhq2fhMgqqZ/WfcAqE/LfQPR2REgzwoKUSIiB1uoMA3PWIEUCPMD1arHUG08YFvAz0Ymz0T8XMBWpPYMbWE7hs4L49+4R5aGalAbiU/OkEeiAZBGACst1RAFbjqp/IgA63CUQ6gtQbfGErFF7/nE4AAAAASUVORK5CYII=");
+		}
+		.input_story
+		{
+			content:url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgBAMAAACBVGfHAAAAAXNSR0IB2cksfwAAAAlwSFlzAAAAnQAAAJ0Bj3LnbgAAAB5QTFRF+OmvAAAA89Ze14Rw2cCY1k8/8eGhmEQ/+uqj87Jse3RL9AAAAAp0Uk5T/wD49//9of8rH/vnQeUAAAEOSURBVHicXdG9asMwFAXggx1COmoJ8VgNptkKcmqyGaKSB0i127RkLiTgNV2CVxMo9G177rVSm2ow0se5Vz/Gbdub6YBz2//w0sV59s0wbs5X806X1j4JFN4Bx45La9eE7OM1PANIBHKCuW7CAYgkkIWgEaWeYN5DjHA0AthIZF8ILAgrpBJJ21N1hyGCXXvGA2EJibxJQaVwgUQKlNIkj5AePNKyrWAJtYS952dH6AlpJaQViW3AXc/shlnZFoRHAhd6hpkjrLGEl7lShFKuphXgA0B23WtF+UmwCjy1VijUw70H4iPeH0KaIMl/DKZjIf/lWo/QCJjVSAMYUoSvCH80gjHdEZibCQjJJuYXZ+xAP6Rjil4AAAAASUVORK5CYII=");
 		}
 
 		#inputrowmode {
@@ -952,7 +960,7 @@ Current version: 10
 		}		
 		.workerTable{		
 			color: #ffffff;
-			font-size: 1.35vw;
+			font-size: 1.4vw;
 		}
 		.workerTable>tbody>tr>td{		
 			padding: min(0.4vw, 5px);
@@ -1430,6 +1438,7 @@ Current version: 10
 		trimsentences: false, //trim to last punctuation
 		trimwhitespace: true, //trim trailing whitespace
 		opmode: 1, //what mode are we in? 1=story, 2=adventure, 3=chat
+		adventure_is_action: false, //in adventure mode, determine story or action
 		chatname: "You", //name to use in chat
 		chatopponent: defaultchatopponent,
 		persist_session: true,
@@ -2507,6 +2516,7 @@ Current version: 10
 			document.getElementById('chatnamesection').classList.add('hidden')
 		}
 	}
+	
 
 	function prompt_overwrite() {
 		msgboxYesNo("You already have an existing persistent story. Do you want to overwrite it?","Overwrite Warning",confirm_overwrite,hide_popups);
@@ -2557,6 +2567,7 @@ Current version: 10
 		document.getElementById("chat_typed_input").value = "";
 		image_db = {};
 		completed_imgs_meta = {};
+		localsettings.adventure_is_action = false;
 		render_gametext();
 	}
 
@@ -2678,7 +2689,7 @@ Current version: 10
 				//if chat submitted was empty, add a newline
 				newgen = "\n";
 			}
-			if (localsettings.opmode == 2 && newgen != "" && gametext_arr.length > 0) {
+			if (localsettings.opmode == 2 && newgen != "" && localsettings.adventure_is_action) {
 				//append action for adventure mode, except for the first turn.
 				newgen = "\n\n\> " + newgen + "\n\n";
 			}
@@ -3450,6 +3461,25 @@ Current version: 10
 	}
 
 	function render_gametext(partialrefresh = false) {
+
+		//adventure mode has a toggle to choose action mode
+		if(localsettings.opmode==2)
+		{
+			document.getElementById("inputrow").classList.add("show_mode");
+			if(localsettings.adventure_is_action)
+			{
+				document.getElementById("adventure_mode_txt").innerText = "Action";
+				document.getElementById("adventure_mode_img").classList.add("input_action");
+				document.getElementById("adventure_mode_img").classList.remove("input_story");				
+			}else{
+				document.getElementById("adventure_mode_txt").innerText = "Story";
+				document.getElementById("adventure_mode_img").classList.remove("input_action");
+				document.getElementById("adventure_mode_img").classList.add("input_story");
+			}
+		}else{
+			document.getElementById("inputrow").classList.remove("show_mode");
+		}
+
 		if (gametext_arr.length == 0) {
 
 			if (perfdata == null) {
@@ -3596,7 +3626,7 @@ Current version: 10
 		//render onto enhanced chat interface if selected
 		let inEditMode = (document.getElementById("allowediting").checked?true:false);
 		if(localsettings.enhanced_chat_ui && localsettings.opmode==3 &&!inEditMode)
-		{		
+		{	
 			if(gametext_arr.length == 0)
 			{
 				render_enhanced_chat(document.getElementById("gametext").innerHTML); 
@@ -3781,6 +3811,12 @@ Current version: 10
 			localStorage.setItem("kaihordewebui_story", compressedstory);
 		}
 		console.log("autosave done");
+	}
+
+	function btn_adventure_mode()
+	{
+		localsettings.adventure_is_action = !localsettings.adventure_is_action;
+		render_gametext();
 	}
 
 	function btn_memory() {
@@ -4045,9 +4081,11 @@ Current version: 10
 				</div>		
 			</div>
 		<div class="">
-			<div id="inputrow">
-				<div id="inputrowmode">
-					<!--button type="button" class="btn btn-secondary hidden" id="btnmode">Mode:<br/><b id="btnmode_label">Story</b></button-->
+			<div id="inputrow" class="">
+				<div id="inputrowmode" style="padding-right: 4px;">					
+					<button type="button" class="btn btn-primary btn-secondary" id="btnmode" onclick="btn_adventure_mode()">
+						<img id="adventure_mode_img" class="input_story">
+						<br><b id="adventure_mode_txt" style="font-size: 10px;">Story</b></button>
 				</div>
 				<div id="inputrowleft" class="tokens-counted">
 					<textarea class="form-control" id="input_text" onkeypress="return handle_typing(event)" placeholder="Enter text here"></textarea>
