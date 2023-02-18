@@ -9,6 +9,11 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
+Changelog of KoboldAI Lite 18 Feb 2023:
+- New and improved Adventure Mode! Now you will be able to switch between Adventure and Story writing with a button toggle, similar to old main client UI.
+- Adventure mode now adds some context modification to improve coherency and get better responses. Try it!
+- The latest Retry action can now be undone if you don't like the newest result or press it by mistake
+
 Changelog of KoboldAI Lite 15 Feb 2023:
 - Added mouseover text showing the prompt that was used to generate each image. Prompt is not saved, it's only visible in current session.
 - Reworked the workers info table, added jobs done information, added maintenance color for workers.
