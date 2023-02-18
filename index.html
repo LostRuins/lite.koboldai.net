@@ -1408,6 +1408,8 @@ Current version: 10
 	//gametext_arr stores images inline, with the special format <|p|id|p|> or <|d|id|d|>, which is either an ID for loaded image data, or an ID for pending requests
 	var gametext_arr = []; //array of texts currently displayed
 	var redo_arr = []; //array of texts that are in the redo stack
+	var retry_prev_text = "" ; //when we retry, save the last version in case they want to undo
+	var redo_prev_text = ""; //if we undo a retry, save a copy here so it can be reverted with redo
 	var pending_response_id = ""; //guid of response pending from horde server
 	var poll_in_progress = false; //are we currently waiting for a text generation
 	var poll_ticks_passed = 0; //how much time passed after polling
@@ -2554,6 +2556,8 @@ Current version: 10
 	function restart_new_game() {
 		gametext_arr = [];
 		redo_arr = [];
+		retry_prev_text = "";
+		redo_prev_text = "";
 		nextgeneratedimagemilestone = generateimagesinterval;
 		pending_response_id = "";
 		v1_polled_response = null;
@@ -2697,6 +2701,8 @@ Current version: 10
 				gametext_arr.push(newgen);
 			}
 			redo_arr = [];
+			retry_prev_text = "";
+			redo_prev_text = "";
 			document.getElementById("input_text").value = "";
 			pending_response_id = "-1";
 			
@@ -3427,6 +3433,8 @@ Current version: 10
 			if (oldInnerText != edited) {
 				gametext_arr = [];
 				redo_arr = [];
+				retry_prev_text = "";
+				redo_prev_text = "";
 
 				gametext_elem.innerHTML = gametext_elem.innerHTML.replaceAll("<div><br></div>", "<br>");
 				gametext_elem.querySelectorAll('div.storyimg,div.storyimgfloat').forEach(
@@ -3942,25 +3950,46 @@ Current version: 10
 
 	function btn_back() {
 		if (pending_response_id == "" && gametext_arr.length > 0) {
-			let popped = gametext_arr.pop();
-			redo_arr.push(popped);
+			if(retry_prev_text!="")
+			{
+				redo_prev_text = gametext_arr.pop();
+				gametext_arr.push(retry_prev_text);
+				retry_prev_text = "";
+			}
+			else
+			{
+				let popped = gametext_arr.pop();
+				redo_arr.push(popped);
+			}
 			render_gametext();
 		}
 	}
 
 	function btn_redo() {
-		if (pending_response_id == "" && redo_arr.length > 0) {
-			let popped = redo_arr.pop();
-			gametext_arr.push(popped);
-			render_gametext();
+		if (pending_response_id == "") {
+			if (redo_arr.length > 0) {
+				retry_prev_text = "";
+				let popped = redo_arr.pop();
+				gametext_arr.push(popped);
+				render_gametext();
+			}else if (redo_prev_text != "") {
+				retry_prev_text = gametext_arr.pop();
+				gametext_arr.push(redo_prev_text);
+				redo_prev_text = "";
+				render_gametext();
+			} 
 		}
 	}
 
 	function btn_retry() {
 		//do not retry if story is only 1 part long
 		if (pending_response_id == "" && gametext_arr.length > 1) {
-			btn_back();
+			let temp = gametext_arr[gametext_arr.length-1];
+			redo_prev_text = "";
+			retry_prev_text = "";
+			gametext_arr.pop();
 			submit_generation();
+			retry_prev_text = temp;
 			redo_arr = [];
 		}
 	}
