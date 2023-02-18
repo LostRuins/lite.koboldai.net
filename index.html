@@ -1441,6 +1441,7 @@ Current version: 10
 		trimwhitespace: true, //trim trailing whitespace
 		opmode: 1, //what mode are we in? 1=story, 2=adventure, 3=chat
 		adventure_is_action: false, //in adventure mode, determine story or action
+		adventure_context_mod: true, //extra injection for adventure mode
 		chatname: "You", //name to use in chat
 		chatopponent: defaultchatopponent,
 		persist_session: true,
@@ -2326,6 +2327,8 @@ Current version: 10
 		document.getElementById("tfs_s").value = localsettings.tfs_s;
 		document.getElementById("generate_images").value = localsettings.generate_images;
 		document.getElementById("enhanced_chat_ui").checked = localsettings.enhanced_chat_ui;
+		document.getElementById("adventure_context_mod").checked = localsettings.adventure_context_mod;
+		
 
 		//prepare the input for sampler order
 		let samplerstr = localsettings.sampler_order.toString();
@@ -2458,6 +2461,7 @@ Current version: 10
 		localsettings.trimwhitespace = (document.getElementById("trimwhitespace").checked ? true : false);
 		localsettings.persist_session = (document.getElementById("persist_session").checked ? true : false);
 		localsettings.enhanced_chat_ui = (document.getElementById("enhanced_chat_ui").checked ? true : false);
+		localsettings.adventure_context_mod = (document.getElementById("adventure_context_mod").checked ? true : false);
 		localsettings.generate_images = document.getElementById("generate_images").value;
 		localsettings.opmode = document.getElementById("opmode").value;
 		localsettings.chatname = document.getElementById("chatname").value;
@@ -2512,10 +2516,15 @@ Current version: 10
 	}
 
 	function toggle_opmode() {
+
+		document.getElementById('chatnamesection').classList.add('hidden')
+		document.getElementById('adventuresection').classList.add('hidden')	
+
 		if (document.getElementById('opmode').value == 3) {
 			document.getElementById('chatnamesection').classList.remove('hidden')
-		} else {
-			document.getElementById('chatnamesection').classList.add('hidden')
+		}
+		if (document.getElementById('opmode').value == 2) {
+			document.getElementById('adventuresection').classList.remove('hidden')
 		}
 	}
 	
@@ -2729,12 +2738,11 @@ Current version: 10
 			}
 
 			//for adventure mode, inject hidden context, even more if there's nothing in memory
-			if (localsettings.opmode == 2)
+			if (localsettings.opmode == 2  && localsettings.adventure_context_mod)
 			{
-				let injected = "[Interactive Fiction: Game Mode Enabled]\n[You are playing a choose-your-own-adventure game. Please input action.]\n";
-				if (current_anote.length == 0 && current_memory.length == 0) {				
-					injected += "\n\n\> Look\n\nYou look around, observing yourself and your surroundings.\n\n"			
-				}
+				let injected = "[Interactive Fiction: Game Mode Enabled]\n[You are playing a choose-your-own-adventure game. Please input action.]\n";					
+				injected += "\n\n\> Look\n\nYou look around, observing yourself and your surroundings.\n\n"			
+				
 				truncated_context = injected + truncated_context;
 			}
 
@@ -4503,6 +4511,10 @@ Current version: 10
 								<div class="justifyleft settingsmall" title="Switches to an aesthetic messenger style UI">Aesthetic Chat UI </div>	
 							   <input type="checkbox" id="enhanced_chat_ui" style="margin:0px 0 0;">
 							</div>	
+							</div>	
+							<div id="adventuresection" class="settinglabel hidden" style="padding-top: 3px;">
+								<div class="justifyleft settingsmall" title="Modified the context to improve adventure quality">Improved Prompt </div>	
+							   <input type="checkbox" id="adventure_context_mod" style="margin:0px 0 0;">
 							</div>								
 						</div>
 					</div>
