@@ -1450,6 +1450,7 @@ Current version: 10
 		img_autogen: false,
 		img_allownsfw: true,
 		save_images: true,
+		case_sensitive_wi: false,
 		last_selected_preset: 0,
 		enhanced_chat_ui: true,
 		export_settings: true, //affects if settings are included with the story and sharelinks
@@ -2815,7 +2816,12 @@ Current version: 10
 
 			//if world info exists, we inject it right after the memory
 			//for each matching key
-			let lowercase_context = truncated_context.toLowerCase();
+			let wimatch_context = truncated_context;
+			if (!localsettings.case_sensitive_wi) 
+			{
+				wimatch_context = wimatch_context.toLowerCase();
+			}
+
 			if (current_wi.length > 0) {
 				for (var x = 0; x < current_wi.length; ++x) {
 					let wi = current_wi[x];
@@ -2835,13 +2841,23 @@ Current version: 10
 						shoulduse = true;
 					}
 					else if (!wi.selective || invalidseckey) {
-						shoulduse = wiks.some(k => lowercase_context.includes(k.trim().toLowerCase()));
+						if (localsettings.case_sensitive_wi) {
+							shoulduse = wiks.some(k => wimatch_context.includes(k.trim()));
+						} else {
+							shoulduse = wiks.some(k => wimatch_context.includes(k.trim().toLowerCase()));
+						}
 					} else {
 						let wiks2 = wi.keysecondary.split(",");
-						let t1 = wiks.some(k => lowercase_context.includes(k.trim().toLowerCase()));
-						let t2 = wiks2.some(k => lowercase_context.includes(k.trim().toLowerCase()));
-
-						shoulduse = (t1 && t2);
+						if (localsettings.case_sensitive_wi) {
+							let t1 = wiks.some(k => wimatch_context.includes(k.trim()));
+							let t2 = wiks2.some(k => wimatch_context.includes(k.trim()));
+							shoulduse = (t1 && t2);
+						} else {
+							let t1 = wiks.some(k => wimatch_context.includes(k.trim().toLowerCase()));
+							let t2 = wiks2.some(k => wimatch_context.includes(k.trim().toLowerCase()));
+							shoulduse = (t1 && t2);
+						}
+						
 					}
 
 					if (shoulduse) {
@@ -3915,6 +3931,7 @@ Current version: 10
 			current_wi[i].keysecondary = document.getElementById("wikeysec" + i).value;
 			current_wi[i].content = document.getElementById("wival" + i).value;
 		}
+		localsettings.case_sensitive_wi = (document.getElementById("case_sensitive_wi").checked?true:false);
 	}
 
 	let backup_wi_obj = [];
@@ -3928,6 +3945,7 @@ Current version: 10
 	}
 
 	function btn_wi() {
+		document.getElementById("case_sensitive_wi").checked = (localsettings.case_sensitive_wi?true:false);
 		document.getElementById("wicontainer").classList.remove("hidden");
 	
 		let wilist = document.getElementById("wilist");
@@ -4594,8 +4612,12 @@ Current version: 10
 			<div class="wilist" id="wilist">
 						
 			</div>
-			
-			<div class="popupfooter">				
+			<div class="settinglabel" style="padding: 4px;">
+				<div class="justifyleft settingsmall" title="Controls whether the world info keys are matched in a case-sensitive way.">Case Sensitive Keys </div>	
+			   <input type="checkbox" id="case_sensitive_wi" style="margin:0px 0 0;">				
+			</div>	
+			<div class="popupfooter">	
+						
 				<button type="button" class="btn btn-primary" onclick="save_wi();autosave();hide_popups()">Save</button>
 				<button type="button" class="btn btn-primary" onclick="revert_wi();hide_popups()">Cancel</button>
 			</div>
