@@ -1639,6 +1639,26 @@ Current version: 10
 		}
 	};
 
+	function get_cursor_position() {
+			let editor = document.getElementById("gametext");
+
+			let position = 0;
+			const isSupported = typeof window.getSelection !== "undefined";
+			if (isSupported) {
+				const selection = window.getSelection();
+				if (selection.rangeCount !== 0) {
+					const range = window.getSelection().getRangeAt(0);
+					const preCaretRange = range.cloneRange();
+					preCaretRange.selectNodeContents(editor);
+					//preCaretRange.setStart(range.startContainer, 0);
+					preCaretRange.setEnd(range.endContainer, range.endOffset);
+					position = preCaretRange.toString().length;
+				}
+			}
+			return position;
+
+		}
+
 	function selectElementContents(el) {
 		var range = document.createRange();
 		range.selectNodeContents(el);
@@ -3460,6 +3480,15 @@ Current version: 10
 		}
 	}
 
+	function click_gametext()
+	{
+		if(document.getElementById("allowediting").checked)
+		{
+			let cursorpos = get_cursor_position();
+			//todo: highlighting selected, but need to handle render regex correctly
+		}
+	}
+
 	function merge_edit_field() {
 		if (gametext_arr.length > 0 && document.getElementById("allowediting").checked) {
 			let oldInnerText = concat_gametext(true, "\n");
@@ -3501,10 +3530,10 @@ Current version: 10
 		}
 	}
 
-	function concat_gametext(stripimg = false, stripimg_replace_str = "") {
+	function concat_gametext(stripimg = false, stripimg_replace_str = "", append_before_segment="",append_after_segment="") {
 		let fulltxt = "";
 		for (let i = 0; i < gametext_arr.length; ++i) {
-			fulltxt += gametext_arr[i];
+			fulltxt += (append_before_segment + gametext_arr[i] + append_after_segment);
 		}
 		if (stripimg) {
 			fulltxt = fulltxt.replace(/<\|p\|.+?\|p\|>/g, stripimg_replace_str);
@@ -3554,7 +3583,9 @@ Current version: 10
 
 		}
 		else {
-			let fulltxt = concat_gametext(false);
+			//todo: handle regex search with in chunks?
+			//let fulltxt = concat_gametext(false,"","<span class='txchunk'>","</span>");
+			let fulltxt = concat_gametext(false,"","","");
 
 			if(localsettings.opmode==3)
 			{		
@@ -4135,7 +4166,7 @@ Current version: 10
 		<div id="normalinterface">
 		<div id="maineditbody" class="layer-container">
 			<div class="layer-bottom" id="gamescreen">
-				<span id="gametext" contenteditable="false" onblur="merge_edit_field()">
+				<span id="gametext" contenteditable="false" onclick="click_gametext()" onblur="merge_edit_field()">
 					<p>Connecting...</p>
 				</span>
 				<div class="hidden" id="wimenu">
