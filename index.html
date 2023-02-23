@@ -2094,11 +2094,17 @@ Current version: 10
 
 	var onYesFn = null;
 	var onNoFn = null;
-	function msgboxYesNo(text,title,onYes,onNo)
+	function msgboxYesNo(text,title,onYes,onNo, isHtml=false)
 	{
+		if (!text) { text = ""; }
 		document.getElementById("yesnocontainer").classList.remove("hidden");
-		document.getElementById("yesnocontainertitle").innerText = title;
-		document.getElementById("yesnocontainertext").innerText = text;
+		document.getElementById("yesnocontainertitle").innerText = title;		
+		if(isHtml)
+		{
+			document.getElementById("yesnocontainertext").innerHTML = text;
+		}else{
+			document.getElementById("yesnocontainertext").innerText = text;
+		}
 		onYesFn = onYes;
 		onNoFn = onNo;
 	}
@@ -2323,6 +2329,46 @@ Current version: 10
 				} else {
 					document.getElementById("kudos_bal").innerText = uname+"\nKudos Balance: " + kuds;
 				}
+
+				//if valid username, check for broken workers
+				if(data.worker_ids && data.worker_ids.length>0)
+				{
+					get_workers((wdata)=>{
+						for (var i = 0; i < wdata.length; ++i) {
+							let elem = wdata[i];
+							if(elem.maintenance_mode==true && data.worker_ids.includes(elem.id))
+							{
+								let bodytxt = "You have a worker <span class=\"color_red\">"+elem.name+"</span> that has been put into maintenance mode for malfunctioning.<br><br>"
+								+"<b>Please only re-enable it if you have already fixed the problems!</b><br><br>"
+								+"Would you like to restore this worker back online?";
+								msgboxYesNo(bodytxt,"Clear Maintenance Mode",()=>{
+									document.getElementById("yesnocontainer").classList.add("hidden");
+
+									fetch(worker_endpoint+"/"+elem.id, {
+									method: 'PUT',
+									headers: {
+										'Content-Type': 'application/json',
+										'apikey': newapikey,
+									},
+									body: JSON.stringify({"maintenance": false}),
+									})
+									.then((response) => response.json())
+									.then((data) => {
+										msgbox(JSON.stringify(data),"Request Clear Maintenance");
+									})
+									.catch((error) => {
+										console.error('Error:', error);
+									});	
+
+								},()=>{
+									document.getElementById("yesnocontainer").classList.add("hidden");
+								},true);
+								break;
+							}
+						}
+					});
+				}
+
 			})
 			.catch((error) => {
 				console.error('Error:', error);
