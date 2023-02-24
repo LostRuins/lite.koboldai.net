@@ -1124,6 +1124,11 @@ Current version: 10
 			margin-bottom: 0;
 			display: block;
 		}
+
+		.hlchunk
+		{
+			color:#cedaf0;
+		}
 		
 	</style>
 	<style>
@@ -1418,6 +1423,7 @@ Current version: 10
 	var pending_response_id = ""; //guid of response pending from horde server
 	var poll_in_progress = false; //are we currently waiting for a text generation
 	var poll_ticks_passed = 0; //how much time passed after polling
+	var prev_hl_chunk = null; //will store the last highlighted element
 	var pending_context_preinjection = ""; //this will be injected before the AI's next RESPONSE
 	var current_memory = ""; //stored memory
 	var current_anote = ""; //stored author note
@@ -2658,6 +2664,7 @@ Current version: 10
 		image_db = {};
 		completed_imgs_meta = {};
 		localsettings.adventure_is_action = false;
+		prev_hl_chunk = null;
 		render_gametext();
 	}
 
@@ -2677,10 +2684,9 @@ Current version: 10
 			document.getElementById("allowediting").checked = false;
 			document.getElementById("gametext").contentEditable = false;
 		}
-		if(localsettings.opmode==3)
-		{
-			render_gametext();
-		}
+		
+		render_gametext();
+		
 	}
 
 	function end_trim_to_sentence(input) {
@@ -2772,12 +2778,12 @@ Current version: 10
 
 			if (localsettings.opmode == 3 && newgen != "") {
 				//append chatname for chatmode
-				newgen = "\n" + localsettings.chatname + ": " + newgen + "\n";
+				newgen = "\n" + localsettings.chatname + ": " + newgen + "";
 			}
 			else if(localsettings.opmode==3 && newgen.trim()=="")
 			{
-				//if chat submitted was empty, add a newline
-				newgen = "\n";
+				//if chat submitted was empty, add a newline? (or not)
+				newgen = "";
 			}
 			if (localsettings.opmode == 2 && newgen != "" && localsettings.adventure_is_action) {
 				//append action for adventure mode, except for the first turn.
@@ -2855,7 +2861,8 @@ Current version: 10
 				}
 				
 				//if we can infer the name of our chat opponent, inject it to force bot response after ours
-				pending_context_preinjection = co + ":";				
+				co = co.replaceAll("\n","");
+				pending_context_preinjection = "\n"+co + ":";				
 				truncated_context += pending_context_preinjection;
 
 			}
@@ -3235,7 +3242,7 @@ Current version: 10
 			if(gentxt!="" && gentxt[0]!=" " && localsettings.opmode==3)
 			{
 				//if the response doesnt come with a space, add one in chat
-				gentxt = " " +gentext;
+				gentxt = " " +gentext;				
 			}
 			gentxt = pending_context_preinjection + gentxt;
 			pending_context_preinjection = "";
@@ -3534,8 +3541,20 @@ Current version: 10
 	{
 		if(document.getElementById("allowediting").checked)
 		{
-			let cursorpos = get_cursor_position();
-			//todo: highlighting selected, but need to handle render regex correctly
+			const isSupported = typeof window.getSelection !== "undefined";
+			if (isSupported) {
+				const selection = window.getSelection();
+				if(selection.focusNode!=null && selection.focusNode.parentElement!=null
+				&& selection.focusNode.parentElement.classList.contains("txtchunk"))
+				{
+					if(prev_hl_chunk!=null)
+					{
+						prev_hl_chunk.classList.remove("hlchunk");
+					}
+					prev_hl_chunk = selection.focusNode.parentElement;
+					prev_hl_chunk.classList.add("hlchunk");
+				}
+			}
 		}
 	}
 
@@ -3577,13 +3596,22 @@ Current version: 10
 				render_gametext(true);
 				console.log("Merged edit field. Parts:" + splitmergedstory.length);
 			}
+
+			if (prev_hl_chunk != null) {
+				prev_hl_chunk.classList.remove("hlchunk");
+				prev_hl_chunk = null;
+			}
 		}
 	}
 
 	function concat_gametext(stripimg = false, stripimg_replace_str = "", append_before_segment="",append_after_segment="") {
 		let fulltxt = "";
 		for (let i = 0; i < gametext_arr.length; ++i) {
-			fulltxt += (append_before_segment + gametext_arr[i] + append_after_segment);
+			if (gametext_arr[i].trim() == "" || gametext_arr[i].trim() == "\n") {
+				fulltxt += (gametext_arr[i]);
+			} else {
+				fulltxt += (append_before_segment + gametext_arr[i] + append_after_segment);
+			}
 		}
 		if (stripimg) {
 			fulltxt = fulltxt.replace(/<\|p\|.+?\|p\|>/g, stripimg_replace_str);
@@ -3639,13 +3667,15 @@ Current version: 10
 
 		}
 		else {
-			//todo: handle regex search with in chunks?
-			//let fulltxt = concat_gametext(false,"","<span class='txchunk'>","</span>");
-			let fulltxt = concat_gametext(false,"","","");
+			let fulltxt = "";
+			if (document.getElementById("allowediting").checked) {
+				fulltxt = concat_gametext(false, "", "<span class=\"txtchunk\">", "</span>");
+			} else {
+				fulltxt = concat_gametext(false, "", "", "");
+			}
 
 			if(localsettings.opmode==3)
-			{		
-
+			{	
 				//for chat mode, highlight our name in blue and opponent in red			
 				let m_name = "\n" + localsettings.chatname + ": ";
 			
