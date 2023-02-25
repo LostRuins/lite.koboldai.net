@@ -9,6 +9,18 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
+Changelog of KoboldAI Lite 25 Feb 2023:
+- Massive overhaul of horde integration. Now supports the new merge with combined stable horde! 
+- But even better, now KoboldAI Lite supports **multiple Horde clusters**. It is able to retrieve model and worker lists from any number of different Horde clusters, and combine them into a unified list, automatically dispatching requests and receiving responses from the correct endpoints. If your selected API key is incompatible with the selected cluster, it will instead use the anonymous key.
+- Added text chunk highlighting in edit mode, selecting the cursor on text in edit mode will now highlight the parent chunk.
+- Display the horde username when selecting API key
+- Added a dynamic favicon that changes when text is finished generating
+- Added a popup to allow an easy way for users to deactivate maintenance mode from inside kobold lite. Now, when you input your API key, if it detects that you have a worker that has been set to maintenace mode, it will show a popup asking if you wish to bring your worker back online.
+- Minor regression fixes for bugs during image loading in edit mode, and API key selection errors.
+- Adventure prompt injection is now optional, and can be toggled in settings
+- Added a toggle to make world info keys case sensitive
+- Removed support for legacy V1 submit endpoint as the new horde does not have it.
+
 Changelog of KoboldAI Lite 18 Feb 2023:
 - New and improved Adventure Mode! Now you will be able to switch between Adventure and Story writing with a button toggle, similar to old main client UI.
 - Adventure mode now adds some context modification to improve coherency and get better responses. Try it!
