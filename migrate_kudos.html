@@ -1,0 +1,174 @@
+<script>
+ 
+ let oldapikey = "";
+ let newusername = "";
+
+ let kudstogo = 0;
+ let olduname = "";
+
+ function show_tf_warn()
+ {
+	document.getElementById("tfwarn").style.color = "#9933ff";
+	document.getElementById("tfwarn").innerText = "Permanently transfer "+kudstogo+" Kudos from "+olduname+" (Old Horde) to "+newusername+" (New Horde).\n\nTHIS CANNOT BE UNDONE";
+ }
+
+ function step2()
+ {
+	oldapikey = document.getElementById("oldapikey").value;
+	document.getElementById("outputtxt").innerText = "Please wait...";
+	fetch("https://koboldai.net/api/v2/find_user",
+	{
+		method: 'GET',
+		headers: {
+			'apikey': document.getElementById("oldapikey").value,
+		},
+	})
+	.then((response) => response.json())
+	.then((data) => {
+		let uname = data.username;
+		let kuds = data.kudos;
+		if (uname != null && uname != "") {			
+			document.getElementById("outputtxt").style.color = "blue";
+			document.getElementById("p1").style.display = "none";
+			document.getElementById("p2").style.display = "block";
+			olduname = uname;
+			kudstogo = kuds;
+			document.getElementById("outputtxt").innerText = "Old Horde User found: "+uname+"\nKudos Balance: " + kuds;
+		}
+		else
+		{
+			document.getElementById("outputtxt").style.color = "red";
+			document.getElementById("outputtxt").innerText = "Unable to fetch user with your provided API Key! (Error 1)";
+		}
+	
+	})
+	.catch((error) => {
+		document.getElementById("outputtxt").style.color = "red";
+		document.getElementById("outputtxt").innerText = "Error: " + error;
+	});
+
+ }
+
+ function step3()
+ {
+	let nwinput = document.getElementById("newapikey").value;
+	document.getElementById("outputtxt").innerText = "Please wait...";
+	fetch("https://horde.koboldai.net/api/v2/find_user",
+	{
+		method: 'GET',
+		headers: {
+			'apikey': nwinput,
+		},
+	})
+	.then((response) => response.json())
+	.then((data) => {
+		let uname = data.username;
+		let kuds = data.kudos;
+		if (uname != null && uname != "") {			
+			document.getElementById("outputtxt").style.color = "blue";
+			document.getElementById("p2").style.display = "none";
+			document.getElementById("p3").style.display = "block";
+			newusername = uname;
+			document.getElementById("outputtxt").innerText = "New Horde User found: "+uname+"\nKudos Balance: " + kuds;
+			show_tf_warn();
+		}
+		else
+		{
+			//try searching as username instead
+			if(nwinput.includes("#"))
+			{
+				nwinput = nwinput.split("#")[1];
+				fetch("https://horde.koboldai.net/api/v2/users/"+nwinput)
+				.then((response) => response.json())
+				.then((data2) => {
+					let uname = data2.username;
+					let kuds = data2.kudos;
+					if (uname != null && uname != "") {			
+						document.getElementById("outputtxt").style.color = "blue";
+						document.getElementById("p2").style.display = "none";
+						document.getElementById("p3").style.display = "block";
+						newusername = uname;
+						document.getElementById("outputtxt").innerText = "New Horde User found: "+uname+"\nKudos Balance: " + kuds;
+						show_tf_warn();
+					}else{
+						document.getElementById("outputtxt").style.color = "red";
+						document.getElementById("outputtxt").innerText = "Unable to fetch user with your provided input! (Error 4)";
+					}
+				})
+				.catch((error2) => {
+					document.getElementById("outputtxt").style.color = "red";
+					document.getElementById("outputtxt").innerText = "Unable to fetch user with your provided input! (Error 3)";
+				});
+			}
+			else
+			{
+				document.getElementById("outputtxt").style.color = "red";
+				document.getElementById("outputtxt").innerText = "Unable to fetch user with your provided input! (Error 2)";
+			}
+		}
+	
+	})
+	.catch((error) => {
+		document.getElementById("outputtxt").style.color = "red";
+		document.getElementById("outputtxt").innerText = "Error: " + error;
+	});
+
+ }
+
+ function confirm_tx()
+ {
+	document.getElementById("p3").style.display = "none";
+	fetch("https://koboldai.net/api/v2/kudos/transfer/kai",
+	{
+		method: 'POST', 
+		headers: {
+			'apikey': oldapikey,
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify({"username": newusername}),
+	})
+	.then((response) => response.json())
+	.then((data) => {
+		if(data.new_kudos)
+		{
+			document.getElementById("outputtxt").style.color = "blue";
+			document.getElementById("outputtxt").innerText = "Kudos migrated successfully!\nNew Kudos: "+data.new_kudos+"\n\nYou may now close this page.";
+		}else{
+			document.getElementById("outputtxt").style.color = "red";
+			document.getElementById("outputtxt").innerText = "Kudos Migration Failed!\n" + JSON.stringify(data)+"\n\nPlease contact us on KoboldAI Discord with any issues!\nInclude both your old and new horde usernames, but do not reveal your API keys.";
+		}
+		
+	})
+	.catch((error) => {
+		document.getElementById("outputtxt").style.color = "red";
+		document.getElementById("outputtxt").innerText = "Error: " + error;
+	});
+ }
+
+
+
+</script>
+
+<h3>Kudos Migration Tool</h3> 
+<p>This will transfer <b>ALL</b> your Kudos from the old KoboldAI horde to the new merged StableHorde.</p>
+<hr>
+<p id="outputtxt" style="color:black;">Ready to begin.</p>
+<hr>
+<div id="p1" style="display: block;">
+<p>Step 1 - Please enter your KoboldAI API Key (For original KoboldAI.net horde)</p>
+<p><input type="text" placeholder="Original API Key" value="" id="oldapikey">
+<button type="button" id="b1" onclick="step2()">Go Step 2</button></p>
+</div>
+<div id="p2" style="display: none;">
+<p>Step 2 - Please enter your NEW API Key, OR new full username (e.g. Bobby#1234) from the merged horde.</p>
+<p><input type="text" placeholder="New API Key OR Username" value="" id="newapikey">
+<button type="button" id="b2" onclick="step3()">Go Step 3</button></p>
+</div>
+<div id="p3" style="display: none;">
+<p>Step 3 - Please confirm the transfer (THIS PROCESS IS IRREVERSIBLE).</p>
+<b><p id="tfwarn">Loading...</p></b>
+<button type="button" id="b3" onclick="confirm_tx()">CONFIRM TRANSFER</button>
+
+</div>
+
+
