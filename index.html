@@ -1440,19 +1440,10 @@ Current version: 11
 
 	const stablehorde_url = "https://stablehorde.net";
 
-	const text_hordes = [
-		{
-			baseurl: "https://koboldai.net",
-			get perf_endpoint(){return this.baseurl  + "/api/v2/status/performance"},
-			get models_endpoint(){return this.baseurl  + "/api/v2/status/models"},
-			get submit_endpoint(){return this.baseurl  + "/api/v2/generate/async"},
-			get polling_endpoint(){return this.baseurl  + "/api/v2/generate/check"},
-			get output_endpoint(){return this.baseurl  + "/api/v2/generate/status"},
-			get worker_endpoint(){return this.baseurl  + "/api/v2/workers"},
-			get finduser_endpoint(){return this.baseurl  + "/api/v2/find_user"},
-		},
+	const text_hordes = [		
 		{
 			baseurl: "https://horde.koboldai.net",
+			tag: "🍀",
 			get perf_endpoint(){return this.baseurl  + "/api/v2/status/performance"},
 			get models_endpoint(){return this.baseurl  + "/api/v2/status/models?type=text"},
 			get submit_endpoint(){return this.baseurl  + "/api/v2/generate/text/async"},
@@ -1460,7 +1451,18 @@ Current version: 11
 			get output_endpoint(){return this.baseurl  + "/api/v2/generate/text/status"},
 			get worker_endpoint(){return this.baseurl  + "/api/v2/workers?type=text"},
 			get finduser_endpoint(){return this.baseurl  + "/api/v2/find_user"},
-		},		
+		},
+		{
+			baseurl: "https://koboldai.net",
+			tag: "🍁",
+			get perf_endpoint(){return this.baseurl  + "/api/v2/status/performance"},
+			get models_endpoint(){return this.baseurl  + "/api/v2/status/models"},
+			get submit_endpoint(){return this.baseurl  + "/api/v2/generate/async"},
+			get polling_endpoint(){return this.baseurl  + "/api/v2/generate/check"},
+			get output_endpoint(){return this.baseurl  + "/api/v2/generate/status"},
+			get worker_endpoint(){return this.baseurl  + "/api/v2/workers"},
+			get finduser_endpoint(){return this.baseurl  + "/api/v2/find_user"},
+		}	
 	];
 
 	function find_text_horde(clusterurl)
@@ -1813,6 +1815,18 @@ Current version: 11
 		}
 	}
 
+	function get_most_common_cluster(arr)
+	{
+		let pickedcluster = arr[0].cluster;
+		let b={}, maxi=0;
+		for(let ki=0;ki<arr.length;++ki) {
+			let k = arr[ki].cluster;
+			if(b[k]) b[k]++; else b[k]=1;
+			if(maxi < b[k]) { pickedcluster=k; maxi=b[k]; }
+		}
+		return pickedcluster;
+	}
+
 	function generate_compressed_story(strip_images=false) {
 		//encode the current story into a sharable url
 		//a tiny json format which gets compressed by LZMA then b64url
@@ -1903,71 +1917,59 @@ Current version: 11
 			console.log("Importing story: " + storyjson);
 
 			//fetch the model list
-			multifetch(models_endpoints,(resArr,errArr)=>{
-				if(resArr && resArr.length>0)
-				{
-					let mdls = [];
-					for(let i=0;i<resArr.length;++i)
+			fetch_models((mdls) => {
+				//can we find the model that's used? if yes load it, otherwise load the first one
+				if (mdls.length == 0) {
+					msgbox("No models available. Unable to load.");
+				} else {
+
+					selected_models = [];
+					for (var i = 0; i < mdls.length; ++i) {
+						if (story.md.includes(cyrb_hash(mdls[i].name))) {
+							selected_models.push(mdls[i]);
+						}
+					}	
+
+					if (selected_models.length == 0) //no matching models, just assign one
 					{
-						let cur = resArr[i].data;
-						if (cur) 
-						{
-							for (let x = 0; x < cur.length; ++x) {
-								let mdl = cur[x];
-								mdl.cluster = resArr[i].cluster;
-								mdls.push(mdl);
-							}
-						}
+						selected_models.push(mdls[0]);
 					}
 
-					//can we find the model that's used? if yes load it, otherwise load the first one
-					if (mdls.length == 0) {
-						msgbox("No models available. Unable to load.");
-					} else {
-
-						selected_models = [];
-						for (var i = 0; i < mdls.length; ++i) {
-							if (story.md.includes(cyrb_hash(mdls[i].name))) {
-								selected_models.push(mdls[i]);
-							}
-						}
-						if (selected_models.length == 0) //no matching models, just assign one
-						{
-							selected_models.push(mdls[0]);
-						}
-						restart_new_game();
-
-						gametext_arr = story.ga;
-						if (story.ca && story.ca != "") {
-							current_anote = story.ca;
-							current_anotetemplate = story.ct;
-						}
-						if (story.cm && story.cm != "") {
-							current_memory = story.cm;
-						}
-						if (story.cwi && story.cwi.length > 0) {
-							current_wi = story.cwi;
-						}
-
-						//handle importing settings
-						if (story.savedsettings && story.savedsettings != "") {
-							let tmpapikey1 = localsettings.my_api_key;
-							let tmpapikey2 = localsettings.stable_api_key;
-							let tmphc = localsettings.home_cluster;
-							import_props_into_object(localsettings, story.savedsettings);
-							localsettings.my_api_key = tmpapikey1;
-							localsettings.stable_api_key = tmpapikey2;
-							localsettings.home_cluster = tmphc;
-						}
-
-						render_gametext();
+					const allMatched1 = selected_models.every(item => item.cluster === selected_models[0].cluster);
+								
+					if(!allMatched1)
+					{	
+						//if conflicted, get the most numerous cluster (mode)					
+						let pickedcluster = get_most_common_cluster(selected_models);
+						selected_models = selected_models.filter(item => item.cluster === pickedcluster);						
 					}
 
-				}
-				else
-				{
-					console.log("Error: " + errArr);
-					msgbox("Failed to fetch models!\nPlease check your network connection.");
+					restart_new_game();
+
+					gametext_arr = story.ga;
+					if (story.ca && story.ca != "") {
+						current_anote = story.ca;
+						current_anotetemplate = story.ct;
+					}
+					if (story.cm && story.cm != "") {
+						current_memory = story.cm;
+					}
+					if (story.cwi && story.cwi.length > 0) {
+						current_wi = story.cwi;
+					}
+
+					//handle importing settings
+					if (story.savedsettings && story.savedsettings != "") {
+						let tmpapikey1 = localsettings.my_api_key;
+						let tmpapikey2 = localsettings.stable_api_key;
+						let tmphc = localsettings.home_cluster;
+						import_props_into_object(localsettings, story.savedsettings);
+						localsettings.my_api_key = tmpapikey1;
+						localsettings.stable_api_key = tmpapikey2;
+						localsettings.home_cluster = tmphc;
+					}
+
+					render_gametext();
 				}
 			});
 
@@ -2191,6 +2193,24 @@ Current version: 11
 							{
 								wd.max_context_length = wd.max_content_length;
 							}
+							//remove duplicates, matching by name since ID will be different
+							// let exist = wdata.filter(w=>(w.name==wd.name && w.cluster!=wd.cluster));
+							// if(exist.length>0)
+							// {
+							// 	//keep the one with the higher priority
+							// 	let oldcluster = find_text_horde(exist[0].cluster);
+							// 	let newcluster = find_text_horde(wd.cluster);
+							// 	if(oldcluster && newcluster && newcluster.priority < oldcluster.priority)
+							// 	{
+							// 		//swap to new one if priority more important, otherwise do nothing
+							// 		wdata = wdata.filter(w => w!=exist[0]);
+							// 		wdata.push(wd);
+							// 	}
+							// }
+							// else
+							// {
+							// 	wdata.push(wd);
+							// }
 							wdata.push(wd);
 						}
 					}
@@ -2220,9 +2240,11 @@ Current version: 11
 			{
 				tokenspersec = 0;
 			}
+			let parentcluster = find_text_horde(elem.cluster);
+			let clustertag = ((parentcluster&&parentcluster.tag!="")?" ["+parentcluster.tag+"]":"");
 			let style = (elem.trusted ? "style=\"color:#dd77ff;\"" : "");
 			let brokenstyle = (elem.maintenance_mode ? "style=\"color:#ee4444;\"" : "")
-			str += "<tr><td>" + elem.name.substring(0, 32) + "</td><td>" + elem.models[0].substring(0, 32) + "</td><td>" + elem.max_length + " / " + elem.max_context_length + "<br>(" + tokenspersec + " T/s)</td><td "+brokenstyle+">" + elem.uptime + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "</td></tr>";
+			str += "<tr><td>" + elem.name.substring(0, 32) + "</td><td>" + elem.models[0].substring(0, 32) + "</td><td>" + elem.max_length + " / " + elem.max_context_length + "<br>(" + tokenspersec + " T/s)</td><td "+brokenstyle+">" + elem.uptime + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "</td><td>"+clustertag+"</td></tr>";
 		}
 		document.getElementById("workertable").innerHTML = str;
 	}
@@ -2365,14 +2387,8 @@ Current version: 11
 		document.getElementById("customendpointcontainer").classList.remove("hidden");
 	}
 
-	//function to allow selection of models
-	function display_models() {
-		document.getElementById("oaimodel").innerHTML = "";
-		document.getElementById("loadmodelcontainer").classList.remove("hidden");
-		document.getElementById("apikey").value = localsettings.my_api_key;
-		document.getElementById("stableapikey").value = localsettings.stable_api_key;
-		let manualworker = (document.getElementById("manualworker").checked ? true : false);
-
+	function fetch_models(onDoneCallback)
+	{
 		//fetch the model list
 		multifetch(models_endpoints,(resArr,errArr)=>{
 			if(resArr && resArr.length>0)
@@ -2386,26 +2402,43 @@ Current version: 11
 						for (let x = 0; x < cur.length; ++x) {
 							let mdl = cur[x];
 							mdl.cluster = resArr[i].cluster;
-							mdls.push(mdl);
+							mdls.push(mdl);	
 						}
 					}
 				}
 
-				models_data = mdls;
-				if (!manualworker) {
-					let model_choices = "";
-					for (let i = 0; i < models_data.length; ++i) {
-						let curr = models_data[i];
-						model_choices += "<option value=\"" + i + "\">" + curr.name + " (Queue: " + curr.queued + ", Speed: " + curr.performance + ", Qty: " + curr.count + ")</option>";
-					}
-					model_choices += "<option style=\"color:#d79223;\" value=\"9999\">[Custom Remote Play Endpoint]</option>";
-					document.getElementById("oaimodel").innerHTML = model_choices;
-				}
+				onDoneCallback(mdls);
 			}
 			else
 			{
 				console.log("Error: " + errArr);
 				msgbox("Failed to fetch models!\nPlease check your network connection.");
+			}
+		});
+	}
+
+	//function to allow selection of models
+	function display_models() {
+		document.getElementById("oaimodel").innerHTML = "";
+		document.getElementById("loadmodelcontainer").classList.remove("hidden");
+		document.getElementById("apikey").value = localsettings.my_api_key;
+		document.getElementById("stableapikey").value = localsettings.stable_api_key;
+		let manualworker = (document.getElementById("manualworker").checked ? true : false);
+
+		//fetch the model list
+		fetch_models((mdls)=>{
+			models_data = mdls;
+			if (!manualworker) {
+				let model_choices = "";
+				for (let i = 0; i < models_data.length; ++i) {
+					let curr = models_data[i];
+					let parentcluster = find_text_horde(curr.cluster);
+					let clustertag = ((parentcluster&&parentcluster.tag!="")?"["+parentcluster.tag+"] ":"");
+					
+					model_choices += "<option value=\"" + i + "\">" + clustertag + curr.name + " (Queue: " + curr.queued + ", Speed: " + curr.performance + ", Qty: " + curr.count + ")</option>";
+				}
+				model_choices += "<option style=\"color:#d79223;\" value=\"9999\">[Custom Remote Play Endpoint]</option>";
+				document.getElementById("oaimodel").innerHTML = model_choices;
 			}
 		});
 
@@ -2417,11 +2450,13 @@ Current version: 11
 					let curr = worker_data[i];
 					let cm = (curr.models && curr.models.length > 0) ? curr.models[0] : "None";
 					let cn = curr.name;
+					let parentcluster = find_text_horde(curr.cluster);
+					let clustertag = ((parentcluster&&parentcluster.tag!="")?"["+parentcluster.tag+"] ":"");
 					let style = (curr.trusted ? "style=\"color:#b700ff;\"" : "");
 					style = (curr.maintenance_mode ? "style=\"color:#ee4444;\"" : style);
-					let extratag = (curr.trusted ? " [Trusted]" : "");
-					extratag = (curr.maintenance_mode ? " [Maintenance]" : extratag);
-					model_choices += "<option " + style + " value=\"" + i + "\">" + cn + " (" + cm + ")" + extratag + "</option>";
+					let extratag = (curr.trusted ? " 💜" : "");
+					extratag = (curr.maintenance_mode ? " ⛔" : extratag);
+					model_choices += "<option " + style + " value=\"" + i + "\">" + clustertag + cn + " (" + cm + ")" + extratag + "</option>";
 				}
 				document.getElementById("oaimodel").innerHTML = model_choices;
 			}
@@ -2446,36 +2481,51 @@ Current version: 11
 			}
 
 			if (selected_idx_arr.length > 0) {
-				selected_models = [];
-
-				//if the misdirect fix hack is enabled, pick a specific worker ids to use
-				selected_workers = [];
+				let prep_sel_models = [];
+				let prep_sel_workers = []; //if selected, pick a specific worker ids to use
+				
 				let manualworker = (document.getElementById("manualworker").checked ? true : false);
 
 				for (var i = 0; i < selected_idx_arr.length; ++i) {
 					if (manualworker) //we are looping through selected workers
 					{
 						let addedworker = worker_data[selected_idx_arr[i]];
-						selected_workers.push(addedworker);
+						prep_sel_workers.push(addedworker);
 						let modnames = addedworker.models;
 						for (var j = 0; j < modnames.length; ++j) {
 							let addedmodel = models_data.find(element => element.name == modnames[j]);
-							if (!selected_models.includes(addedmodel)) {
-								selected_models.push(addedmodel);
+							if (!prep_sel_models.includes(addedmodel)) {
+								prep_sel_models.push(addedmodel);
 							}
 						}
 					}
 					else //we are looping through selected models
 					{
 						let addedmodel = models_data[selected_idx_arr[i]];
-						selected_models.push(addedmodel);
+						prep_sel_models.push(addedmodel);
 					}
 				}
 
+				const allMatched1 = prep_sel_models.every(item => item.cluster === prep_sel_models[0].cluster);
+				const allMatched2 = prep_sel_workers.every(item => item.cluster === prep_sel_workers[0].cluster);
+								
+				if(!allMatched1 || !allMatched2)
+				{
+					if (prep_sel_workers.length > 0) {
+						let pickedcluster = get_most_common_cluster(prep_sel_workers);
+						prep_sel_workers = prep_sel_workers.filter(item => item.cluster === pickedcluster);
+						prep_sel_models = prep_sel_models.filter(item => item.cluster === pickedcluster);
+					} else {
+						let pickedcluster = get_most_common_cluster(prep_sel_models);
+						prep_sel_models = prep_sel_models.filter(item => item.cluster === pickedcluster);
+					}
+				}
+
+				selected_models = prep_sel_models;
+				selected_workers = prep_sel_workers;
 				localsettings.my_api_key = document.getElementById("apikey").value;
 				localsettings.stable_api_key = document.getElementById("stableapikey").value;
-				if(desired_new_home_cluster!=null)
-				{
+				if (desired_new_home_cluster != null) {
 					localsettings.home_cluster = desired_new_home_cluster;
 					desired_new_home_cluster = null;
 				}
@@ -2483,8 +2533,13 @@ Current version: 11
 				document.getElementById("connectstatus").innerHTML = "Connected to KoboldAI Horde!";
 
 				render_gametext();
-
 				hide_popups();
+
+				if(!allMatched1 || !allMatched2)
+				{
+					msgbox("You've selected multiple workers from different clusters. Only one cluster will be used.","Caution");
+				}
+				
 			}
 		}
 	}
@@ -2570,10 +2625,13 @@ Current version: 11
 						desired_new_home_cluster = validFoundCluster;
 						let kuds = validFoundDat.kudos;
 						let uname = validFoundDat.username;
+						let parentcluster = find_text_horde(desired_new_home_cluster);
+						let clustertag = ((parentcluster&&parentcluster.tag!="")?"["+parentcluster.tag+"] ":"");
+					
 						if (kuds < 0) {
-							document.getElementById("kudos_bal").innerText = uname + "\nKudos Balance: 0";
+							document.getElementById("kudos_bal").innerText = clustertag + uname + "\nKudos Balance: 0";
 						} else {
-							document.getElementById("kudos_bal").innerText = uname + "\nKudos Balance: " + kuds;
+							document.getElementById("kudos_bal").innerText = clustertag + uname + "\nKudos Balance: " + kuds;
 						}
 						//if valid username, check for broken workers
 						handle_maintenance_clear(validFoundDat, validFoundCluster, newapikey);
@@ -5009,7 +5067,7 @@ Current version: 11
 			<div class="workerTableDiv">
 			<table class="table text-center workerTable">
 			<thead class="sticky-top bg-white">
-			<tr><th>Name</th><th>Model</th><th>Capabilities</th><th>Uptime</th><th>Kudos</th></tr>
+			<tr><th>Name</th><th>Model</th><th>Capabilities</th><th>Uptime</th><th>Kudos</th><th>Cluster</th></tr>
 			</thead>
 			<tbody id="workertable">			
 			</tbody>
