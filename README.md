@@ -10,8 +10,10 @@ You can run it directly from your desktop or throw it on some web server and ser
 - Concedo
 
 Changelog of KoboldAI Lite 25 Feb 2023:
-- Massive overhaul of horde integration. Now supports the new merge with combined stable horde! 
-- But even better, it's also backwards compatible. Now KoboldAI Lite supports **multiple Horde clusters** from both types. It is able to retrieve model and worker lists from any number of different Horde clusters, and combine them into a unified list, automatically dispatching requests and receiving responses from the correct endpoints. If your selected API key is incompatible with the selected cluster, it will instead use the anonymous key. If a worker is duplicated on multiple clusters, the merged horde cluster will be prioritized.
+- **Massive overhaul** of horde integration. Now Lite supports the new merge with combined stable horde! 
+- But even better, it's also backwards compatible. Now KoboldAI Lite *also* supports **multiple Horde clusters** from both types together. It is able to retrieve model and worker lists from any number of different Horde clusters, and combine them into a unified list, automatically dispatching requests and receiving responses from the correct endpoints. 
+- If your selected API key is incompatible with the selected cluster, it will instead use the anonymous key. 
+- Each model and worker on each cluster is annotated with a symbol, if a worker is duplicated on multiple clusters you can use this to tell them apart.
 - Added text chunk highlighting in edit mode, selecting the cursor on text in edit mode will now highlight the parent chunk.
 - Display the horde username when selecting API key, and shows which cluster it belongs to
 - Hide API keys when not selected (as a password field)
