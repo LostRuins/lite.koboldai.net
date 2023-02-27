@@ -1440,6 +1440,7 @@ Current version: 11
 
 
 	//here is my shit integration of KAI Horde's API. You're welcome. -Concedo.
+	const default_client_agent = "KoboldAiLite:11";
 
 	const stablehorde_url = "https://stablehorde.net";
 
@@ -1448,6 +1449,7 @@ Current version: 11
 			baseurl: "https://horde.koboldai.net",
 			tag: "🤖",
 			sort_order: 1,
+			client_agent: default_client_agent,
 			get perf_endpoint(){return this.baseurl  + "/api/v2/status/performance"},
 			get models_endpoint(){return this.baseurl  + "/api/v2/status/models?type=text"},
 			get submit_endpoint(){return this.baseurl  + "/api/v2/generate/text/async"},
@@ -1460,6 +1462,7 @@ Current version: 11
 			baseurl: "https://koboldai.net",
 			tag: "👹",
 			sort_order: 2,
+			client_agent: null,
 			get perf_endpoint(){return this.baseurl  + "/api/v2/status/performance"},
 			get models_endpoint(){return this.baseurl  + "/api/v2/status/models"},
 			get submit_endpoint(){return this.baseurl  + "/api/v2/generate/async"},
@@ -1501,6 +1504,7 @@ Current version: 11
 	const cors_proxy = "https://proxy.concedo.workers.dev"
 
 	const defaultchatopponent = "KoboldAI";
+
 
 	//all configurable globals
 	var perfdata = null; //if it's null, we are not connected
@@ -3377,13 +3381,19 @@ Current version: 11
 
 				//use anon key if we are generating for a model outside our home cluster
 				let apikeytouse = (selectedhorde.baseurl==localsettings.home_cluster?localsettings.my_api_key:defaultsettings.my_api_key);
+				let clientagenttouse = selectedhorde.client_agent;
+				let subpostheaders = {
+					'Content-Type': 'application/json',
+					'apikey': apikeytouse,
+				};
+				if(clientagenttouse!=null)
+				{
+					subpostheaders['Client-Agent'] = clientagenttouse;
+				}
 
 				fetch(selectedhorde.submit_endpoint, {
 					method: 'POST', // or 'PUT'
-					headers: {
-						'Content-Type': 'application/json',
-						'apikey': apikeytouse,
-					},
+					headers: subpostheaders,
 					body: JSON.stringify(submit_payload),
 				})
 					.then((response) => response.json())
@@ -3487,7 +3497,7 @@ Current version: 11
 			method: 'POST', // or 'PUT'
 			headers: {
 				'Content-Type': 'application/json',
-				'Client-Agent': 'KoboldAiLite',
+				'Client-Agent': default_client_agent,
 				'apikey': localsettings.stable_api_key,
 			},
 			body: JSON.stringify(genimg_payload),
