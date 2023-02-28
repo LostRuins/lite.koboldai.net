@@ -1096,7 +1096,7 @@ Current version: 11
 			}
 		}
 
-		/* #oaimodel
+		/* #pickedmodel
 		{
 			height: 120px;
 		} */
@@ -2410,7 +2410,7 @@ Current version: 11
 
 	//function to allow selection of models
 	function display_models() {
-		document.getElementById("oaimodel").innerHTML = "";
+		document.getElementById("pickedmodel").innerHTML = "";
 		document.getElementById("loadmodelcontainer").classList.remove("hidden");
 		document.getElementById("apikey").value = localsettings.my_api_key;
 		document.getElementById("stableapikey").value = localsettings.stable_api_key;
@@ -2425,11 +2425,11 @@ Current version: 11
 					let curr = models_data[i];
 					let parentcluster = find_text_horde(curr.cluster);
 					let clustertag = ((parentcluster&&parentcluster.tag!="")?"["+parentcluster.tag+"] ":"");
-					
-					model_choices += "<option value=\"" + i + "\">" + clustertag + curr.name + " (Queue: " + curr.queued + ", Speed: " + curr.performance + ", Qty: " + curr.count + ")</option>";
+					let alrselected = (selected_models.filter(x=>(x.cluster==curr.cluster&&x.name==curr.name)).length>0)?" selected":"";
+					model_choices += "<option value=\"" + i + "\" "+alrselected+">" + clustertag + curr.name + " (Queue: " + curr.queued + ", Speed: " + curr.performance + ", Qty: " + curr.count + ")</option>";
 				}
 				model_choices += "<option style=\"color:#d79223;\" value=\"9999\">[Custom Remote Play Endpoint]</option>";
-				document.getElementById("oaimodel").innerHTML = model_choices;
+				document.getElementById("pickedmodel").innerHTML = model_choices;
 			}
 		});
 
@@ -2447,9 +2447,10 @@ Current version: 11
 					style = (curr.maintenance_mode ? "style=\"color:#ee4444;\"" : style);
 					let extratag = (curr.trusted ? " 💜" : "");
 					extratag = (curr.maintenance_mode ? " ⛔" : extratag);
-					model_choices += "<option " + style + " value=\"" + i + "\">" + clustertag + cn + " (" + cm + ")" + extratag + "</option>";
+					let alrselected = (selected_workers.filter(x=>(x.cluster==curr.cluster&&x.name==curr.name)).length>0)?" selected":"";
+					model_choices += "<option " + style + " value=\"" + i + "\" "+alrselected+">" + clustertag + cn + " (" + cm + ")" + extratag + "</option>";
 				}
-				document.getElementById("oaimodel").innerHTML = model_choices;
+				document.getElementById("pickedmodel").innerHTML = model_choices;
 			}
 		});
 
@@ -2457,7 +2458,7 @@ Current version: 11
 
 
 	function confirm_models() {
-		let selected_idx_arr = Array.from(document.getElementById("oaimodel").selectedOptions).map(({ value }) => value);
+		let selected_idx_arr = Array.from(document.getElementById("pickedmodel").selectedOptions).map(({ value }) => value);
 
 		if (selected_idx_arr.length == 1 && selected_idx_arr[0] == 9999) //custom endpoint
 		{			
@@ -3548,7 +3549,7 @@ Current version: 11
 	}
 
 	function handle_incoming_text(gentxt, genworker, genkudos) {
-		
+
 		//always trim incomplete sentences for adventure and chat
 		if (localsettings.opmode == 2 || localsettings.opmode == 3 || localsettings.trimsentences == true) {
 			gentxt = end_trim_to_sentence(gentxt);
@@ -4674,7 +4675,7 @@ Current version: 11
 					<span style="float:right;">
 					<a href="#" class="color_green" onclick="get_and_show_workers()">[See Current Volunteers] </a>
 					</span>	
-					<select class="form-control" id="oaimodel" size="6" multiple></select>
+					<select class="form-control" id="pickedmodel" size="6" multiple></select>
 				</div>
 
 				<div class="justifyleft anotelabel">
