@@ -9,6 +9,13 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
+Changelog of KoboldAI Lite 2 Mar 2023:
+- Added option to beep when generation is completed.
+- Highlight previously selected models and workers when revisiting the AI panel.
+- KoboldAI Lite is now released under AGPL License
+- Fixed chatmode parsing bugs
+- Removed some of the unpopular samplers as it was too cluttered
+
 Changelog of KoboldAI Lite 25 Feb 2023:
 - **Massive overhaul** of horde integration. Now Lite supports the new merge with combined stable horde! 
 - But even better, it's also backwards compatible. Now KoboldAI Lite *also* supports **multiple Horde clusters** from both types together. It is able to retrieve model and worker lists from any number of different Horde clusters, and combine them into a unified list, automatically dispatching requests and receiving responses from the correct endpoints. 
