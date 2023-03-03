@@ -1463,20 +1463,20 @@ Current version: 12
 			get output_endpoint(){return this.baseurl  + "/api/v2/generate/text/status"},
 			get worker_endpoint(){return this.baseurl  + "/api/v2/workers?type=text"},
 			get finduser_endpoint(){return this.baseurl  + "/api/v2/find_user"},
-		},
-		{
-			baseurl: "https://koboldai.net",
-			tag: "👹",
-			sort_order: 2,
-			client_agent: null,
-			get perf_endpoint(){return this.baseurl  + "/api/v2/status/performance"},
-			get models_endpoint(){return this.baseurl  + "/api/v2/status/models"},
-			get submit_endpoint(){return this.baseurl  + "/api/v2/generate/async"},
-			get polling_endpoint(){return this.baseurl  + "/api/v2/generate/check"},
-			get output_endpoint(){return this.baseurl  + "/api/v2/generate/status"},
-			get worker_endpoint(){return this.baseurl  + "/api/v2/workers"},
-			get finduser_endpoint(){return this.baseurl  + "/api/v2/find_user"},
-		}	
+		}
+		// ,{
+		// 	baseurl: "https://koboldai.net",
+		// 	tag: "👹",
+		// 	sort_order: 2,
+		// 	client_agent: null,
+		// 	get perf_endpoint(){return this.baseurl  + "/api/v2/status/performance"},
+		// 	get models_endpoint(){return this.baseurl  + "/api/v2/status/models"},
+		// 	get submit_endpoint(){return this.baseurl  + "/api/v2/generate/async"},
+		// 	get polling_endpoint(){return this.baseurl  + "/api/v2/generate/check"},
+		// 	get output_endpoint(){return this.baseurl  + "/api/v2/generate/status"},
+		// 	get worker_endpoint(){return this.baseurl  + "/api/v2/workers"},
+		// 	get finduser_endpoint(){return this.baseurl  + "/api/v2/find_user"},
+		// }	
 	];
 
 	function find_text_horde(clusterurl)
@@ -1548,7 +1548,6 @@ Current version: 12
 
 	var localsettings = {
 		my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
-		stable_api_key: "0000000000", //same as above, for stable horde
 		home_cluster: text_hordes[0].baseurl, //which horde does this api key belongs to
 
 		autoscroll: false, //automatically scroll to bottom on render
@@ -1893,7 +1892,6 @@ Current version: 12
 			story.savedsettings = JSON.parse(JSON.stringify(localsettings));
 			//redact some values
 			story.savedsettings.my_api_key = "0000000000";
-			story.savedsettings.stable_api_key = "0000000000";
 		}
 		var storyjson = JSON.stringify(story);
 		console.log("Exporting story: " + storyjson);
@@ -1991,11 +1989,9 @@ Current version: 12
 					//handle importing settings
 					if (story.savedsettings && story.savedsettings != "") {
 						let tmpapikey1 = localsettings.my_api_key;
-						let tmpapikey2 = localsettings.stable_api_key;
 						let tmphc = localsettings.home_cluster;
 						import_props_into_object(localsettings, story.savedsettings);
 						localsettings.my_api_key = tmpapikey1;
-						localsettings.stable_api_key = tmpapikey2;
 						localsettings.home_cluster = tmphc;
 					}
 
@@ -2069,7 +2065,6 @@ Current version: 12
 			loaded_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
 			//redact some values
 			loaded_storyobj.savedsettings.my_api_key = "0000000000";
-			loaded_storyobj.savedsettings.stable_api_key = "0000000000";
 		}
 
 		var a = document.getElementById("tempfile");
@@ -2143,11 +2138,9 @@ Current version: 12
 								//prompt to import settings
 								msgboxYesNo("This story includes custom settings. Do you want to import them?","Import Story Settings",()=>{
 									let tmpapikey1 = localsettings.my_api_key;
-									let tmpapikey2 = localsettings.stable_api_key;
 									let tmphc = localsettings.home_cluster;
 									import_props_into_object(localsettings,loaded_storyobj.savedsettings);
 									localsettings.my_api_key = tmpapikey1;
-									localsettings.stable_api_key = tmpapikey2;
 									localsettings.home_cluster = tmphc;
 									hide_popups();
 									render_gametext();
@@ -2434,7 +2427,6 @@ Current version: 12
 		document.getElementById("pickedmodel").innerHTML = "";
 		document.getElementById("loadmodelcontainer").classList.remove("hidden");
 		document.getElementById("apikey").value = localsettings.my_api_key;
-		document.getElementById("stableapikey").value = localsettings.stable_api_key;
 		let manualworker = (document.getElementById("manualworker").checked ? true : false);
 
 		//fetch the model list
@@ -2519,6 +2511,10 @@ Current version: 12
 					}
 				}
 
+				//remove undefined and nulls
+				prep_sel_models = prep_sel_models.filter(x=>x);
+				prep_sel_workers = prep_sel_workers.filter(x=>x);
+
 				const allMatched1 = prep_sel_models.every(item => item.cluster === prep_sel_models[0].cluster);
 				const allMatched2 = prep_sel_workers.every(item => item.cluster === prep_sel_workers[0].cluster);
 								
@@ -2537,7 +2533,6 @@ Current version: 12
 				selected_models = prep_sel_models;
 				selected_workers = prep_sel_workers;
 				localsettings.my_api_key = document.getElementById("apikey").value;
-				localsettings.stable_api_key = document.getElementById("stableapikey").value;
 				if (desired_new_home_cluster != null) {
 					localsettings.home_cluster = desired_new_home_cluster;
 					desired_new_home_cluster = null;
@@ -2650,12 +2645,12 @@ Current version: 12
 						handle_maintenance_clear(validFoundDat, validFoundCluster, newapikey);
 					}
 					else {
-						document.getElementById("kudos_bal").innerHTML = "API Key Error<br>&nbsp;";
+						document.getElementById("kudos_bal").innerHTML = "API Key Error<br><a class='color_blue' href='https://horde.koboldai.net/register'>(Register New User)</a>";
 					}
 				}
 				else {
 					console.log("Error: " + errArr);
-					document.getElementById("kudos_bal").innerHTML = "API Key Error<br>&nbsp;";
+					document.getElementById("kudos_bal").innerHTML = "API Key Error<br><a class='color_blue' href='https://horde.koboldai.net/register'>(Register New User)</a>";
 				}
 			});
 		}
@@ -2666,21 +2661,13 @@ Current version: 12
 		var x = document.getElementById("apikey");
 		if (x.type === "password") {
 			x.type = "text";
-		}
-		x = document.getElementById("stableapikey");
-		if (x.type === "password") {
-			x.type = "text";
-		}
+		}		
 	}
 	function blur_api_keys() {
 		var x = document.getElementById("apikey");
 		if (x.type === "text") {
 			x.type = "password";
-		}
-		x = document.getElementById("stableapikey");
-		if (x.type === "text") {
-			x.type = "password";
-		}
+		}		
 	}
 
 	function display_settings() {
@@ -3521,7 +3508,7 @@ Current version: 12
 			headers: {
 				'Content-Type': 'application/json',
 				'Client-Agent': default_client_agent,
-				'apikey': localsettings.stable_api_key,
+				'apikey': localsettings.my_api_key,
 			},
 			body: JSON.stringify(genimg_payload),
 		})
@@ -4109,7 +4096,7 @@ Current version: 12
 			document.getElementById("btnsend").innerHTML = "Offline";
 			document.getElementById("fvico").href = favivon_normal;
 		}
-		else if (selected_models.length == 0) {
+		else if (selected_models.length == 0 && selected_workers.length == 0) {
 			document.getElementById("btnsend").disabled = true;
 			document.getElementById("btnsend").classList.add("wait");
 			document.getElementById("btnsend").classList.remove("btn-primary");
@@ -4685,14 +4672,8 @@ Current version: 12
 				
 				<input class="form-control" type="password" placeholder="Enter API Key (or use 0000000000)" value="" 
 					id="apikey" onfocus="focus_api_keys()" onblur="fetch_kudo_balance();blur_api_keys()">
-				<div class="justifyleft anotelabel">
-					Your Stable Horde API Key <span class="helpicon">?
-						<span class="helptext">You need an API key to use Stable Horde to generate images. Get one at
-							https://stablehorde.net/register or use the anonymous key 0000000000.</span>
-					</span>
-				</div>
-				<input class="form-control" type="password" placeholder="Enter API Key (or use 0000000000)" value=""
-					id="stableapikey"  onfocus="focus_api_keys()" onblur="blur_api_keys()">
+
+
 				<div class="justifyleft anotelabel">
 					Select Kobold Horde AI Model <span class="helpicon">?
 						<span class="helptext">These are the models currently provided by KoboldAI Horde
