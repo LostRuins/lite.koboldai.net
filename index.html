@@ -2260,7 +2260,7 @@ Current version: 12
 				tokenspersec = 0;
 			}
 			let parentcluster = find_text_horde(elem.cluster);
-			let clustertag = ((parentcluster&&parentcluster.tag!="")?" ["+parentcluster.tag+"]":"");
+			let clustertag = ((parentcluster&&parentcluster.tag!="")?" "+parentcluster.tag+"":"");
 			let style = (elem.trusted ? "style=\"color:#dd77ff;\"" : "");
 			let brokenstyle = (elem.maintenance_mode ? "style=\"color:#ee4444;\"" : "")
 			str += "<tr><td>" + elem.name.substring(0, 32) + "</td><td>" + elem.models[0].substring(0, 32) + "</td><td>" + elem.max_length + " / " + elem.max_context_length + "<br>(" + tokenspersec + " T/s)</td><td "+brokenstyle+">" + elem.uptime + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "</td><td>"+clustertag+"</td></tr>";
@@ -2443,41 +2443,81 @@ Current version: 12
 		document.getElementById("apikey").value = localsettings.my_api_key;
 		let manualworker = (document.getElementById("manualworker").checked ? true : false);
 
-		//fetch the model list
-		fetch_models((mdls)=>{
-			models_data = mdls;
-			if (!manualworker) {
-				let model_choices = "";
-				for (let i = 0; i < models_data.length; ++i) {
-					let curr = models_data[i];
-					let parentcluster = find_text_horde(curr.cluster);
-					let clustertag = ((parentcluster&&parentcluster.tag!="")?"["+parentcluster.tag+"] ":"");
-					let alrselected = (selected_models.filter(x=>(x.cluster==curr.cluster&&x.name==curr.name)).length>0)?" selected":"";
-					model_choices += "<option value=\"" + i + "\" "+alrselected+">" + clustertag + curr.name + " (Queue: " + curr.queued + ", Speed: " + curr.performance + ", Qty: " + curr.count + ")</option>";
+		let modelsdone = false;
+		let workersdone = false;
+		let postfetchdone = false;
+		function onBothFetchesDone() 
+		{
+			if (!postfetchdone) {
+				postfetchdone = true;
+
+				if (manualworker) {
+					let model_choices = "";
+					for (let i = 0; i < worker_data.length; ++i) {
+						let curr = worker_data[i];
+						let cm = (curr.models && curr.models.length > 0) ? curr.models[0] : "None";
+						let cn = curr.name;
+						let parentcluster = find_text_horde(curr.cluster);
+						let clustertag = ((parentcluster && parentcluster.tag != "") ? "" + parentcluster.tag + " " : "");
+						let style = (curr.trusted ? "style=\"color:#b700ff;\"" : "");
+						style = (curr.maintenance_mode ? "style=\"color:#ee4444;\"" : style);
+						let extratag = (curr.trusted ? " 💜" : "");
+						extratag = (curr.maintenance_mode ? " ⛔" : extratag);
+						let alrselected = (selected_workers.filter(x => (x.cluster == curr.cluster && x.name == curr.name)).length > 0) ? " selected" : "";
+						model_choices += "<option " + style + " value=\"" + i + "\" " + alrselected + ">" + clustertag + cn + " (" + cm + ")" + extratag + "</option>";
+					}
+					document.getElementById("pickedmodel").innerHTML = model_choices;
+				} else {
+					let model_choices = "";
+					for (let i = 0; i < models_data.length; ++i) {
+						let curr = models_data[i];
+						let parentcluster = find_text_horde(curr.cluster);
+						let clustertag = ((parentcluster && parentcluster.tag != "") ? "" + parentcluster.tag + " " : "");
+						let alrselected = (selected_models.filter(x => (x.cluster == curr.cluster && x.name == curr.name)).length > 0) ? " selected" : "";
+						let mperf = curr.performance;
+						if (mperf == 1000000) //a patch before the performance is properly fixed, we calculate it ourselves
+						{
+							let assocworkers = worker_data.filter(x => (x.cluster == curr.cluster && x.models.includes(curr.name)));
+							if (assocworkers.length > 0) 
+							{
+								mperf = 0;
+								for (let j = 0; j < assocworkers.length; ++j) {
+									let elem = assocworkers[j];
+									let tokenspersec = elem.performance.replace(" tokens per second", "");
+									if (tokenspersec.toLowerCase() == "no requests fulfilled yet") {
+										tokenspersec = 0;
+									}
+									mperf += parseFloat(tokenspersec);
+								}
+								console.log(mperf + " and " + assocworkers.length)
+								mperf /= (assocworkers.length*1.0);
+								mperf = mperf.toFixed(1)
+							}
+						}
+						model_choices += "<option value=\"" + i + "\" " + alrselected + ">" + clustertag + curr.name + " (Queue: " + curr.queued + ", Speed: " + mperf + ", Qty: " + curr.count + ")</option>";
+					}
+					model_choices += "<option style=\"color:#d79223;\" value=\"9999\">[Custom Remote Play Endpoint]</option>";
+					document.getElementById("pickedmodel").innerHTML = model_choices;
 				}
-				model_choices += "<option style=\"color:#d79223;\" value=\"9999\">[Custom Remote Play Endpoint]</option>";
-				document.getElementById("pickedmodel").innerHTML = model_choices;
+			}
+		}
+
+		//fetch the model list
+		fetch_models((mdls)=>{			
+			models_data = mdls;
+			modelsdone = true;
+			if(modelsdone && workersdone)
+			{
+				onBothFetchesDone();
 			}
 		});
 
 		get_workers((wdata) => {
 			worker_data = wdata;
-			if (manualworker) {
-				let model_choices = "";
-				for (let i = 0; i < worker_data.length; ++i) {
-					let curr = worker_data[i];
-					let cm = (curr.models && curr.models.length > 0) ? curr.models[0] : "None";
-					let cn = curr.name;
-					let parentcluster = find_text_horde(curr.cluster);
-					let clustertag = ((parentcluster&&parentcluster.tag!="")?"["+parentcluster.tag+"] ":"");
-					let style = (curr.trusted ? "style=\"color:#b700ff;\"" : "");
-					style = (curr.maintenance_mode ? "style=\"color:#ee4444;\"" : style);
-					let extratag = (curr.trusted ? " 💜" : "");
-					extratag = (curr.maintenance_mode ? " ⛔" : extratag);
-					let alrselected = (selected_workers.filter(x=>(x.cluster==curr.cluster&&x.name==curr.name)).length>0)?" selected":"";
-					model_choices += "<option " + style + " value=\"" + i + "\" "+alrselected+">" + clustertag + cn + " (" + cm + ")" + extratag + "</option>";
-				}
-				document.getElementById("pickedmodel").innerHTML = model_choices;
+			workersdone = true;
+			if(modelsdone && workersdone)
+			{
+				onBothFetchesDone();
 			}
 		});
 
@@ -2648,7 +2688,7 @@ Current version: 12
 						let kuds = validFoundDat.kudos;
 						let uname = validFoundDat.username;
 						let parentcluster = find_text_horde(desired_new_home_cluster);
-						let clustertag = ((parentcluster&&parentcluster.tag!="")?"["+parentcluster.tag+"] ":"");
+						let clustertag = ((parentcluster&&parentcluster.tag!="")?""+parentcluster.tag+" ":"");
 					
 						if (kuds < 0) {
 							document.getElementById("kudos_bal").innerText = clustertag + uname + "\nKudos Balance: 0";
