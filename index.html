@@ -190,7 +190,7 @@ Current version: 13
 			padding: 0px;
 			width: 100%;
 			display: grid;
-			grid-template-columns: 0% auto 64px;
+			grid-template-columns: 0% auto 62px;
 		}
 		.input_action
 		{
@@ -476,13 +476,41 @@ Current version: 13
 			transition: color 1s ease-in, text-shadow 1s ease-in;
 		}
 
+		.color_blueurl {
+			color: #d3e7ff;
+		}
+		.color_blueurl:hover {
+			color: #ffffff;
+		}
+		.color_blueurl:focus {
+			color: #d3e7ff;
+		}
+
 		.color_orange {
 			color: #f7a223;
 		}
-
 		.color_green {
 			color: #3bf723;
 		}
+
+
+		.bg_black {
+			background-color: #202020;
+		}
+		.bg_black:hover {
+			background-color: #202020;
+		}
+		.bg_black:focus {
+			background-color: #202020;
+		}
+		.bg_black:disabled {
+			background-color: #202020;
+		}
+		.bg_black:disabled:hover {
+			background-color: #202020;
+		}
+
+
 
 		.bg_green {
 			background-color: #129c00;
@@ -968,7 +996,7 @@ Current version: 13
 
 		.btn-secondary
 		{
-			padding: 2px 8px;
+			padding: 2px 6px;
 		}
 
 		.maincontainer {
@@ -1229,7 +1257,7 @@ Current version: 13
 		outline:none;
 	}
 
-	.chat_typed_input
+	.chat_typed_input_txt
 	{
 		width: calc(100% - 84px);
 		background: #86868638 none repeat scroll 0 0;
@@ -1599,6 +1627,7 @@ Current version: 13
 		persist_session: true,
 		speech_synth: 0, //0 is disabled
 		beep_on: false,
+		image_styles: "",
 		generate_images: "stable_diffusion", //"" is disabled and "*" is all, anything else is the model name pulled from stable horde
 		img_autogen: false,
 		img_allownsfw: true,
@@ -2300,6 +2329,16 @@ Current version: 13
 		msgbox("The AI Horde generates text using crowdsourced GPUs by volunteer workers. By default your inputs are not logged, but as Horde workers are open source, they can be modified to do so. \n\nIn all cases, the sender will *always be anonymous*, however you are still advised to avoid sending privacy sensitive information.","Disclaimer");
 	}
 
+	var pendingstyle = "";
+	function selectStyle()
+	{
+		inputBox("Style tags to use for generating images:\n(E.g. Gritty, Realistic, Anime, 3D Render, Drawing)\n\n","Extra Image Styles",pendingstyle,"Default Style",()=>{
+			let userinput = document.getElementById("inputboxcontainerinput").value;
+			pendingstyle = userinput;
+			console.log("Saved styles: " + pendingstyle);
+		},false);
+	}
+
 	function msgbox(text, title="Error Encountered", isHtml=false) {
 		if (!text) { text = ""; }
 		if(isHtml)
@@ -2329,6 +2368,24 @@ Current version: 13
 		}
 		onYesFn = onYes;
 		onNoFn = onNo;
+	}
+
+	var onInputboxOk = null;
+	function inputBox(text,title,inputVal,inputPlaceholder,onDone, isHtml=false)
+	{
+		if (!text) { text = ""; }
+		if (!title) { title = "User Input"; }
+		document.getElementById("inputboxcontainer").classList.remove("hidden");
+		document.getElementById("inputboxcontainertitle").innerText = title;		
+		if(isHtml)
+		{
+			document.getElementById("inputboxcontainertext").innerHTML = text;
+		}else{
+			document.getElementById("inputboxcontainertext").innerText = text;
+		}
+		document.getElementById("inputboxcontainerinput").value = escapeHtml(inputVal);
+		document.getElementById("inputboxcontainerinput").placeholder = escapeHtml(inputPlaceholder);
+		onInputboxOk = function(){document.getElementById("inputboxcontainer").classList.add("hidden");onDone();};
 	}
 	
 	function connect_custom_endpoint()
@@ -2605,6 +2662,10 @@ Current version: 13
 				selected_models = prep_sel_models;
 				selected_workers = prep_sel_workers;
 				localsettings.my_api_key = document.getElementById("apikey").value;
+				if(localsettings.my_api_key==null || localsettings.my_api_key=="")
+				{
+					localsettings.my_api_key = defaultsettings.my_api_key;
+				}
 				if (desired_new_home_cluster != null) {
 					localsettings.home_cluster = desired_new_home_cluster;
 					desired_new_home_cluster = null;
@@ -2767,6 +2828,7 @@ Current version: 13
 		document.getElementById("enhanced_chat_ui").checked = localsettings.enhanced_chat_ui;
 		document.getElementById("adventure_context_mod").checked = localsettings.adventure_context_mod;
 		
+		pendingstyle = localsettings.image_styles;
 
 		//prepare the input for sampler order
 		let samplerstr = localsettings.sampler_order.toString();
@@ -2914,6 +2976,7 @@ Current version: 13
 		localsettings.speech_synth = document.getElementById("ttsselect").value;
 		localsettings.beep_on = (document.getElementById("beep_on").checked?true:false);
 
+		localsettings.image_styles = pendingstyle;
 		localsettings.img_autogen = (document.getElementById("img_autogen").checked ? true : false);
 		localsettings.save_images = (document.getElementById("save_images").checked ? true : false);
 		localsettings.img_allownsfw = (document.getElementById("img_allownsfw").checked ? true : false);
@@ -3020,7 +3083,7 @@ Current version: 13
 		current_anotetemplate = "[Author's note: <|>]";
 		loaded_storyobj = generate_base_storyobj();
 		document.getElementById("input_text").value = "";
-		document.getElementById("chat_typed_input").value = "";
+		document.getElementById("chat_typed_input_txt").value = "";
 		image_db = {};
 		completed_imgs_meta = {};
 		localsettings.adventure_is_action = false;
@@ -3098,11 +3161,28 @@ Current version: 13
 	}
 
 	function abort_generation() {
+		let id_to_cancel = pending_response_id;		
 		console.log("Generation " + pending_response_id + " aborted");
 		pending_response_id = "";
 		poll_in_progress = false;
 		synchro_polled_response = null;
 		render_gametext();
+
+		//we do this last so its ok even if it fails		
+		if (pending_response_horde && id_to_cancel && id_to_cancel != "" && custom_kobold_endpoint == "") 
+		{
+			let cancelurl = pending_response_horde.output_endpoint + "/" + id_to_cancel;
+			fetch(cancelurl, {
+				method: 'DELETE'
+			})
+			.then((response) => response.json())
+			.then((data) => {
+				console.log(data);
+			})
+			.catch((error) => {
+				console.error('Error:', error);
+			});
+		}
 	}
 
 	function manual_gen_image() {
@@ -3542,6 +3622,12 @@ Current version: 13
 	}
 
 	function generate_new_image(sentence) {
+
+		if(localsettings.image_styles && localsettings.image_styles!="")
+		{
+			sentence = localsettings.image_styles + " " + sentence;
+		}
+
 		if (horde_img_filter_enabled) {
 			sentence = sanitize_horde_image_prompt(sentence);
 		}
@@ -3813,7 +3899,7 @@ Current version: 13
 	function poll_pending_response() {
 		if (pending_response_id && pending_response_id != "-1" && pending_response_id != "") {
 			++poll_ticks_passed;
-			if (poll_ticks_passed > 5) //10sec passed
+			if (poll_ticks_passed > 2) //4sec passed
 			{
 				document.getElementById("abortgen").classList.remove("hidden");
 			}
@@ -4351,7 +4437,7 @@ Current version: 13
 
 		if (!event.shiftKey && charCode == 13) {
 			let willsubmit = true;
-			let newgennotempty = (document.getElementById("chat_typed_input").value != "");
+			let newgennotempty = (document.getElementById("chat_typed_input_txt").value != "");
 			if (willsubmit) {
 				event.preventDefault();
 				//enter pressed, trigger auto submit
@@ -4364,9 +4450,9 @@ Current version: 13
 	function chat_submit_generation()
 	{
 		//easy solution is to just pump the text into the main box and submit it
-		document.getElementById("input_text").value = document.getElementById("chat_typed_input").value;
+		document.getElementById("input_text").value = document.getElementById("chat_typed_input_txt").value;
 		submit_generation();
-		document.getElementById("chat_typed_input").value = "";
+		document.getElementById("chat_typed_input_txt").value = "";
 	}
 	function chat_toggle_actionmenu()
 	{		
@@ -4688,10 +4774,10 @@ Current version: 13
 				<div id="inputrowleft" class="tokens-counted">
 					<textarea class="form-control" id="input_text" onkeypress="return handle_typing(event)" placeholder="Enter text here"></textarea>
 				</div>
-				<div id="inputrowright">
+				<div id="inputrowright" style="padding-right: 2px;">
 					<button type="button" class="btn btn-secondary wait" id="btnsend" disabled
 						onclick="submit_generation()">Not<br>Conn.</button>
-						<a href="#" id="abortgen" class="hidden" style="text-align: center;color: #ffaaaa;" onclick="abort_generation()"><b>[ABORT]</b></a>
+						<a href="#" id="abortgen" class="hidden bg_black" style="text-align: center;color: #ffaaaa;" onclick="abort_generation()"><b>[ABORT]</b></a>
 				</div>
 			</div>
 		</div>
@@ -4719,7 +4805,7 @@ Current version: 13
 			
 			<div class="chat_type_msg">				
 			  <div class="chat_input_msg_write">
-				<input id="chat_typed_input" class="chat_typed_input" type="text" placeholder="Type a message" onkeypress="return chat_handle_typing(event)"/>
+				<input id="chat_typed_input_txt" name="chats_text" type="text" class="chat_typed_input_txt" autocomplete="off" placeholder="Type a message" onkeypress="return chat_handle_typing(event)"/>
 				<button onclick="chat_submit_generation()" id="chat_msg_send_btn" class="chat_msg_send_btn" type="button"></button>
 				<button type="button" class="chat_msg_cust_btn" id="btn_chat_cust" onclick="chat_toggle_actionmenu()"></button>
 				</div>
@@ -4823,22 +4909,6 @@ Current version: 13
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="confirm_newgame()">Accept</button>
 				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
-			</div>
-		</div>
-	</div>
-
-	<div class="popupcontainer flex hidden" id="yesnocontainer">
-		<div class="popupbg flex"></div>
-		<div class="nspopup fixsize">
-			<div class="popuptitlebar">
-				<div class="popuptitletext" id="yesnocontainertitle"></div>
-			</div>
-			<div class="aidgpopuplistheader anotelabel" id="yesnocontainertext">
-				
-			</div>
-			<div class="popupfooter">
-				<button type="button" class="btn btn-primary" onclick="onYesFn()">Yes</button>
-				<button type="button" class="btn btn-primary" onclick="onNoFn()">No</button>
 			</div>
 		</div>
 	</div>
@@ -5010,6 +5080,8 @@ Current version: 13
 								<option value="stable_diffusion">
 							  </datalist>
 							<div id="genimgopt" class="">
+								<table>
+								<tr><td>
 								<div class="settinglabel">
 									<div class="justifyleft settingsmall"  title="Automatically generates images periodically as you write">Autogenerate </div>	
 								   <input type="checkbox" id="img_autogen" style="margin:0px 0 0;">				
@@ -5022,6 +5094,10 @@ Current version: 13
 									<div class="justifyleft settingsmall"  title="Includes images when saving to json file">Save Images </div>	
 								   <input type="checkbox" id="save_images" style="margin:0px 0 0;">				
 								</div>
+								</td>
+								<td class="settingsmall"><a class="color_blueurl" href="#" onclick="selectStyle()">Style<br>🎨</a></td>
+								</tr>
+								</table>
 							</div>
 						
 					</div>
@@ -5189,6 +5265,40 @@ Current version: 13
 				<button type="button" class="btn btn-primary" onclick="hide_popups()">Close</button>
 			</div>
 			<div class="box-label hidden" id="sharewarning">Warning: This story is very long. It may not load in some browsers. You should save it as a file instead.</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="yesnocontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup fixsize">
+			<div class="popuptitlebar">
+				<div class="popuptitletext" id="yesnocontainertitle"></div>
+			</div>
+			<div class="aidgpopuplistheader anotelabel" id="yesnocontainertext">
+				
+			</div>
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="onYesFn()">Yes</button>
+				<button type="button" class="btn btn-primary" onclick="onNoFn()">No</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="inputboxcontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup fixsize">
+			<div class="popuptitlebar">
+				<div class="popuptitletext" id="inputboxcontainertitle"></div>
+			</div>
+			<div class="aidgpopuplistheader anotelabel" id="inputboxcontainertext">
+				
+			</div>
+			<input class="form-control" type="text" placeholder="" value="" 
+			id="inputboxcontainerinput">
+
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="onInputboxOk()">OK</button>
+			</div>
 		</div>
 	</div>
 

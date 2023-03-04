@@ -9,6 +9,17 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
+Changelog of KoboldAI Lite 5 Mar 2023:
+- Added customizable prompt prefixes for generating images with stable horde! This appends a user selected prefix to all of the prompts when generating images on Stable Horde, it can be useful to automatically add a specific style to the images you want (e.g. Pencil Sketch, Anime)
+- Added proper handling for cancelling a pending text generation request.
+- 'Abort' option appearance delay reduced to 4 seconds, down from 10 seconds.
+- Explicitly disabled autocomplete for aesthetic chat mode input.
+- Improved disclaimer message, converted to a popup
+- UI made a bit more responsive in rescaling sizes for small screens. Disabled flexbox approach as it was breaking on some browsers.
+- Various fixes and UI tweaks to improve appearance
+- Added manually calculated speed for models
+- Preset samplers orders changed to follow main client, new preset "Inverted Mirror" added.
+
 Changelog of KoboldAI Lite 2 Mar 2023:
 - Added option to beep when generation is completed.
 - Highlight previously selected models and workers when revisiting the AI panel.
