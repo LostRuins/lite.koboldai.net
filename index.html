@@ -1399,6 +1399,14 @@ Current version: 13
 			.replace(/'/g, "&#039;");
 	}
 
+	function replaceAll(str, find, replace) 
+	{
+		function escapeRegExp(string) {
+			return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
+		}
+		return str.replace(new RegExp(escapeRegExp(find), 'g'), replace);
+	}
+
 	//similar to Promises allSettled, but I want to roll my own for better control and compatibility
 	/**
 	 * @param {[RequestInfo,RequestInit][]} fetchList , but can also be string[]
@@ -2199,6 +2207,7 @@ Current version: 13
 						render_gametext();
 					}
 				} catch (e) {
+					console.log(e)
 					msgbox("Could not load selected file. Is it valid?");
 				}
 
@@ -3212,7 +3221,7 @@ Current version: 13
 				}
 				
 				//if we can infer the name of our chat opponent, inject it to force bot response after ours
-				co = co.replaceAll("\n","");
+				co = replaceAll(co,"\n","");
 				pending_context_preinjection = "\n"+co + ":";				
 				truncated_context += pending_context_preinjection;
 
@@ -3960,7 +3969,9 @@ Current version: 13
 				retry_prev_text = "";
 				redo_prev_text = "";
 
-				gametext_elem.innerHTML = gametext_elem.innerHTML.replaceAll("<div><br></div>", "<br>");
+				//strip chunks
+				//gametext_elem.innerHTML = gametext_elem.innerHTML.replace(/<span class="txtchunk">(.+?)<\/span>/g, "$1");
+				gametext_elem.innerHTML = replaceAll(gametext_elem.innerHTML,"<div><br></div>", "<br>");
 				gametext_elem.querySelectorAll('div.storyimg,div.storyimgfloat').forEach(
 					(el) => {
 						let chimg = el.getElementsByTagName("img")[0];
@@ -4073,7 +4084,7 @@ Current version: 13
 				fulltxt = fulltxt.replace(regex, function (m) {
 					return `<span class="color_red">` + m + `</span>`;
 				});
-				fulltxt = fulltxt.replaceAll(m_name, `<span class="color_blue">` + m_name + `</span>`);
+				fulltxt = replaceAll(fulltxt,m_name, `<span class="color_blue">` + m_name + `</span>`);
 			
 			}
 
