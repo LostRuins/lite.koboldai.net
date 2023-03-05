@@ -5,7 +5,7 @@ This is a standalone web ui for KoboldAIs Horde, which requires no dependencies,
 Just copy this single static HTML file anywhere and open it in a browser. No dependencies.
 Or you can throw it on some web server and serve it there too. E.g. Github pages, nginx, whatever.
 Now rebranded as KoboldAI Lite
-Current version: 13
+Current version: 14
 -Concedo
 -->
 
@@ -1387,6 +1387,7 @@ Current version: 13
 	<script>
 		const favicon_busy = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgBAMAAACBVGfHAAAAAXNSR0IB2cksfwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAB5QTFRFAAAA459F8vrrV2hQWm5T2M2oeo9zWWtS6P3k1evQZQ2NdgAAAAp0Uk5TAP//7xr/5HYRi6G3mX8AAAEASURBVHicjZGxagMxDIY9GNr1hryAwaGd1frWQEQ8x+HuAXJEpbOPmG4ZkwcopG9byXYuCaHQf5I+0K9ftlKi0zl9/RzUVcdX+ny5Bc/fRGd1C05Ex0uDaaHUE31IOXKpPaDGPdGI2rfIIMLoEwC0CbkU4FIEIhog7QsgAuqM7QegYRSnFbhgWHNwyKZKr6S3TTA9oKzV8d0IaIIVCx6BXQEzs3mTEQ+hgCb0bQZuAhYELMUig9kDMH8BaZr/gWLqnVkXUNdysAsowRC2tlqU6HLcuk7k4/SSszOZzq/ncrYhW+Rnzg9AZUL2RLfrOoK0qIC/RtTi9JPaR4B07e/0C6jPUVuNXWqeAAAAAElFTkSuQmCC";
 		const favivon_normal = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAAXNSR0IB2cksfwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAEtQTFRFAAAA+XJ0l09PsVdXcTw842hqw2hmTi4vMCQlb2eUgWtl+tGpBAMDEw4NPCkoFw8PJBgXt5WBVkxW4Nvf7Lia3Z+MpJnAZ05HnJOTYIS/NAAAABl0Uk5TAv////v//vT9//3/Nna08qf+///////a/hkcROQAAAGUSURBVHiclZLRcoQgDEULBAKoIKjI/39pL4i7nbUPbcYZwJyES5Kvr3/YvIx1nn9zL4G4EwuTXX7xs4QFGEklOT6SBENERguhsWHFD2AVRhL8IEgawY8b5L4fYtg+TSl8+NMEu4G2P34Q67r6I+37dLyBfU/4PY/sInG2MR8vIHG01h9mHfq1hUUQtwYcLEcp+ltmwqutdy5HMwAfc8ExKtVSLEZZW13Jxb4Azq7UHFnFrtGItLliS1UDYOfctm3JhEtlEH5zzpZNDsC63AB1VysY3gqC3C2ytsNW6Q3IjCt91Qr9QK8MiFL4nUEpEyNLYmodxYo3RquVHWUmbbRu0QCbKWwNfil5zYeENrRRqtZrGEQYqdtW8FWHLl4bgZDLFLZdbS/UzP2AEGTufkt3xWSvwzJeh4GxHWD5qlgXOZ/n2ULuC/od4Pk8x9xhCekD0Bqd/DmXgbpEumRgrMPn1K6ecs4pJc/V0nE+x35KtfTJTJufpvPTD2DyNZ3e4wP3zDCHevg+yYvf09PfkHuK7/Vv9g2CjBTdqv3bFgAAAABJRU5ErkJggg==";
+		const scenario_db = {};
 	</script>
 
 	<script>
@@ -1513,7 +1514,6 @@ Current version: 13
 
 	//here is my shit integration of KAI Horde's API. You're welcome. -Concedo.
 	const default_client_agent = "KoboldAiLite:11";
-
 	const stablehorde_url = "https://stablehorde.net";
 
 	const text_hordes = [		
@@ -1572,11 +1572,13 @@ Current version: 13
 	const kobold_custom_maxctxlen_endpoint = "/api/latest/config/max_context_length";
 	const kobold_custom_genamt_endpoint = "/api/latest/config/max_length";	
 
+	//support for quick news updates
+	const news_endpoint = "https://news.concedo.workers.dev"
+
 	//if cors is restricted, fall back to our cors proxy
 	const cors_proxy = "https://proxy.concedo.workers.dev"
 
 	const defaultchatopponent = "KoboldAI";
-
 
 	//all configurable globals
 	var perfdata = null; //if it's null, we are not connected
@@ -1749,6 +1751,18 @@ Current version: 13
 		setInterval(poll_image_db, 4500); //check images every 4.5s
 
 		attempt_connect(false);
+
+		//fetch for news updates
+		fetch(news_endpoint)
+		.then(x => x.json())
+		.then(data => {
+			if(data && data!="" && data.newstitle && data.newstext && data.newstitle!="" && data.newstext!="")
+			{
+				msgbox(data.newstext,data.newstitle,true);
+			}
+		}).catch((error) => {
+			console.log("Error: " + error);
+		});
 	}
 
 	function attempt_connect(popup_aiselect=true) {
@@ -4781,7 +4795,7 @@ Current version: 13
 				</div>
 			</div>
 		</div>
-		<div class="" id="lastreq" style="color:#999999"><span class="color_gray" style="font-size:9pt;font-style: italic;">Note: Avoid sending privacy sensitive information. <a href="#" onclick="explain_horde()">Click here for more info</a>.</span></div>
+		<div class="" id="lastreq" style="color:#999999"><span class="color_gray" style="font-size:9pt;font-style: italic;">Avoid sending privacy sensitive information. <a href="#" onclick="explain_horde()">Click here for more info</a>.</span></div>
 		</div>
 
 		<div id="enhancedchatinterface" class="chat_mesgs hidden">
@@ -4811,7 +4825,7 @@ Current version: 13
 				</div>
 			</div>
 
-			<div class="" id="lastreq2" style="padding-top: 4px; color:#999999"><span class="color_gray" style="font-size:9pt;font-style: italic;">Note: Avoid sending privacy sensitive information. <a href="#" onclick="explain_horde()">Click here for more info</a>.</span></div>
+			<div class="" id="lastreq2" style="padding-top: 4px; color:#999999"><span class="color_gray" style="font-size:9pt;font-style: italic;">Avoid sending privacy sensitive information. <a href="#" onclick="explain_horde()">Click here for more info</a>.</span></div>
 		  </div>
 		</div>
 
