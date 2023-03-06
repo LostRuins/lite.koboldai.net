@@ -1529,6 +1529,7 @@ Current version: 14
 			get output_endpoint(){return this.baseurl  + "/api/v2/generate/text/status"},
 			get worker_endpoint(){return this.baseurl  + "/api/v2/workers?type=text"},
 			get finduser_endpoint(){return this.baseurl  + "/api/v2/find_user"},
+			get maintenance_endpoint(){return this.baseurl  + "/api/v2/workers"},
 		}
 		// ,{
 		// 	baseurl: "https://koboldai.net",
@@ -1542,6 +1543,7 @@ Current version: 14
 		// 	get output_endpoint(){return this.baseurl  + "/api/v2/generate/status"},
 		// 	get worker_endpoint(){return this.baseurl  + "/api/v2/workers"},
 		// 	get finduser_endpoint(){return this.baseurl  + "/api/v2/find_user"},
+		//  get maintenance_endpoint(){return this.baseurl  + "/api/v2/workers"},
 		// }	
 	];
 
@@ -1641,6 +1643,8 @@ Current version: 14
 
 		max_context_length: 1024,
 		max_length: 80,
+		auto_ctxlen: true,
+		auto_genamt: true,
 		rep_pen: 1.08,
 		rep_pen_range: 1024,
 		rep_pen_slope: 0.7,
@@ -2716,7 +2720,7 @@ Current version: 14
 								document.getElementById("yesnocontainer").classList.add("hidden");
 
 								let currhorde = find_text_horde(cluster);
-								fetch(currhorde.worker_endpoint + "/" + elem.id, {
+								fetch(currhorde.maintenance_endpoint + "/" + elem.id, {
 									method: 'PUT',
 									headers: {
 										'Content-Type': 'application/json',
@@ -2841,7 +2845,8 @@ Current version: 14
 		document.getElementById("generate_images").value = localsettings.generate_images;
 		document.getElementById("enhanced_chat_ui").checked = localsettings.enhanced_chat_ui;
 		document.getElementById("adventure_context_mod").checked = localsettings.adventure_context_mod;
-		
+		document.getElementById("auto_ctxlen").checked = localsettings.auto_ctxlen;
+		document.getElementById("auto_genamt").checked = localsettings.auto_genamt;
 		pendingstyle = localsettings.image_styles;
 
 		//prepare the input for sampler order
@@ -2989,7 +2994,9 @@ Current version: 14
 		localsettings.tfs_s = document.getElementById("tfs_s").value;
 		localsettings.speech_synth = document.getElementById("ttsselect").value;
 		localsettings.beep_on = (document.getElementById("beep_on").checked?true:false);
-
+		localsettings.auto_ctxlen = (document.getElementById("auto_ctxlen").checked ? true : false);
+		localsettings.auto_genamt = (document.getElementById("auto_genamt").checked ? true : false);
+		
 		localsettings.image_styles = pendingstyle;
 		localsettings.img_autogen = (document.getElementById("img_autogen").checked ? true : false);
 		localsettings.save_images = (document.getElementById("save_images").checked ? true : false);
@@ -3220,7 +3227,8 @@ Current version: 14
 		}
 	}
 
-	function submit_generation() {
+	function submit_generation() {	
+
 		let newgen = document.getElementById("input_text").value;		
 		if (newgen.trim() != "" || gametext_arr.length > 0 || current_memory != "" || current_anote != "") 
 		{
@@ -3427,12 +3435,51 @@ Current version: 14
 				truncated_context = truncated_memory + truncated_context;
 			}
 
+			//auto adjust settings if requested
+			let maxctxlen = localsettings.max_context_length;
+			let maxgenamt = localsettings.max_length;
+			if(localsettings.auto_genamt || localsettings.auto_ctxlen)
+			{
+				//get all workers running all selected models
+				let wrk_list = selected_workers;
+				if((wrk_list==null||wrk_list.length==0)&&(selected_models && selected_models.length>0))
+				{
+					wrk_list = [];
+					for (let ww = 0; ww < worker_data.length; ++ww) {
+						let curr = worker_data[ww];
+						for(let mm=0;mm<selected_models.length;++mm)
+						{
+							let x = selected_models[mm];
+							if(x.cluster == curr.cluster && curr.models.includes(x.name))
+							{
+								wrk_list.push(curr);
+								break;
+							}
+						}
+					}
+				}
+				
+				//get the minimum requires parameters, lowest common value for all selected
+				for(let ww=0;ww<wrk_list.length;++ww)
+				{
+					let curr = wrk_list[ww];
+					if(localsettings.auto_ctxlen)
+					{
+						maxctxlen = Math.min(curr.max_context_length,maxctxlen);
+					}
+					if(localsettings.auto_genamt)
+					{
+						maxgenamt = Math.min(curr.max_length,maxgenamt);
+					}
+				}
+			}
+
 			let submit_payload = {
 				"prompt": truncated_context,
 				"params": {
 					"n": 1,
-					"max_context_length": localsettings.max_context_length,
-					"max_length": localsettings.max_length,
+					"max_context_length": maxctxlen,
+					"max_length": maxgenamt,
 					"rep_pen": localsettings.rep_pen,
 					"temperature": localsettings.temperature,
 					"top_p": localsettings.top_p,
@@ -3714,7 +3761,7 @@ Current version: 14
 			if (image_db[pend_txt] != null) {
 				let qq = image_db[pend_txt].queue;
 				alttxt = image_db[pend_txt].alt?escapeHtml(image_db[pend_txt].alt):"";
-				waittime = (qq == 0 ? "Generating" : qq);
+				waittime = (qq == 0 ? "Generating" : (qq=="Starting"?qq:"Queue: " + qq));
 			} else {
 				console.log("Cannot render " + pend_txt);
 			}
@@ -4980,6 +5027,10 @@ Current version: 14
 							<div class="justifyleft">512</div>
 							<div class="justifyright">2048</div>
 						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="Automatically lowers settings if incompatible with existing workers">Auto-Adjust Limits </div>	
+						   <input type="checkbox" id="auto_ctxlen" style="margin:0px 0 0;">				
+						</div>
 					</div>
 
 					<br>
@@ -4998,6 +5049,10 @@ Current version: 14
 						<div class="settingminmax">
 							<div class="justifyleft">16</div>
 							<div class="justifyright">512</div>
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="Automatically lowers settings if incompatible with existing workers">Auto-Adjust Limits </div>	
+						   <input type="checkbox" id="auto_genamt" style="margin:0px 0 0;">				
 						</div>
 					</div>
 
