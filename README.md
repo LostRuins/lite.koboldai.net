@@ -9,6 +9,12 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
+curated adventures
+aetherroom import
+tavernai import
+fix autocomplete
+world info folders
+
 Changelog of KoboldAI Lite 5 Mar 2023:
 - Added customizable prompt prefixes for generating images with stable horde! This appends a user selected prefix to all of the prompts when generating images on Stable Horde, it can be useful to automatically add a specific style to the images you want (e.g. Pencil Sketch, Anime)
 - Added proper handling for cancelling a pending text generation request.
