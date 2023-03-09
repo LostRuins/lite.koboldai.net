@@ -1757,7 +1757,120 @@ Current version: 15
 		return str.replace(new RegExp(escapeRegExp(find), 'g'), replace);
 	}
 
-	
+	//import tavern png data. adapted from png-chunks-extract under MIT license
+	//accepts png input data, and returns the extracted JSON
+	function convertTavernPng(data)
+	{
+		console.log("Attempting PNG import...");		
+		var uint8 = new Uint8Array(4);
+		var int32 = new Int32Array(uint8.buffer);
+		var uint32 = new Uint32Array(uint8.buffer);
+
+		//check if png header is valid
+		if (!data || data[0] !== 0x89 || data[1] !== 0x50 || data[2] !== 0x4E || data[3] !== 0x47 || data[4] !== 0x0D || data[5] !== 0x0A || data[6] !== 0x1A || data[7] !== 0x0A) {
+			console.log("PNG header invalid")
+			return null;
+		}
+
+		var ended = false;
+		var chunks = [];
+		var idx = 8;
+
+		while (idx < data.length) {
+			// Read the length of the current chunk,
+			// which is stored as a Uint32.
+			uint8[3] = data[idx++];
+			uint8[2] = data[idx++];
+			uint8[1] = data[idx++];
+			uint8[0] = data[idx++];
+
+			// Chunk includes name/type for CRC check (see below).
+			var length = uint32[0] + 4;
+			var chunk = new Uint8Array(length);
+			chunk[0] = data[idx++];
+			chunk[1] = data[idx++];
+			chunk[2] = data[idx++];
+			chunk[3] = data[idx++];
+
+			// Get the name in ASCII for identification.
+			var name = (
+				String.fromCharCode(chunk[0]) +
+				String.fromCharCode(chunk[1]) +
+				String.fromCharCode(chunk[2]) +
+				String.fromCharCode(chunk[3])
+			);
+
+			// The IHDR header MUST come first.
+			if (!chunks.length && name !== 'IHDR') {
+				console.log('Warning: IHDR header missing');
+			}
+
+			// The IEND header marks the end of the file,
+			// so on discovering it break out of the loop.
+			if (name === 'IEND') {
+				ended = true;
+				chunks.push({
+					name: name,
+					data: new Uint8Array(0)
+				});
+				break;
+			}
+
+			// Read the contents of the chunk out of the main buffer.
+			for (var i = 4; i < length; i++) {
+				chunk[i] = data[idx++];
+			}
+
+			// Read out the CRC value for comparison.
+			// It's stored as an Int32.
+			uint8[3] = data[idx++];
+			uint8[2] = data[idx++];
+			uint8[1] = data[idx++];
+			uint8[0] = data[idx++];
+
+
+			// The chunk data is now copied to remove the 4 preceding
+			// bytes used for the chunk name/type.
+			var chunkData = new Uint8Array(chunk.buffer.slice(4));
+
+			chunks.push({
+				name: name,
+				data: chunkData
+			});
+		}
+
+		if (!ended) {
+			console.log('.png file ended prematurely: no IEND header was found');
+		}
+
+		//find the chunk with the chara name, just check first and last letter		
+		let found = chunks.filter(x => (
+			x.name == "tEXt" 
+			&& x.data.length > 6
+			&& String.fromCharCode(x.data[0]) == 'c') 
+			&& String.fromCharCode(x.data[4]) == 'a');
+
+		if (found.length==0)
+		{
+			console.log('PNG Image contains no story data');
+			return null;
+		}else{
+			try {
+				let b64buf = "";
+				let bytes = found[0].data; //skip the chara
+				for (var i = 6; i < bytes.length; i++) {
+					b64buf += String.fromCharCode(bytes[i]);
+				}
+				var decoded = JSON.parse(atob(b64buf));
+				console.log(decoded);
+				return decoded;		
+			} catch (e) {
+				console.log("Error decoding b64 in image: " + e);
+				return null;
+			}
+		}
+
+	}
 
 	//similar to Promises allSettled, but I want to roll my own for better control and compatibility
 	/**
@@ -1825,7 +1938,7 @@ Current version: 15
 	}
 
 	function playbeep() {
-    	var sound = new Audio("data:audio/wav;base64,UklGRkwBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YScBAAB/gIF/f4CAgIB/gH6AhH14goh8doOIfHmDhHyAg3t8h4N0fIyDc3yLgnZ/hX5+hH54hIl5dIeLeHSGiHp6g4F9g4J4foqBc36NgHN/iX95gYF8gYV6eIiIdneJiHd5hoN7f4J8f4Z/doGLfnSBin53gYV9foJ+fYWEd32Ig3l6iIF6gXyBhHqAgnuGhXCBknZzjYF2hX95h4B5g399iXp0joZugot3fod4foh7fIN9g4R0gI93dYyAdoeAd4aEeICCfoR8eIqEcoKJeH6HeX2IfnqCgYCAeoGIenqHgHqEgHmDhHp+g4CAfn2EgXqAhHx/g3x+hX97gYF/f36Agn59gn9+goB9gYJ9f4F/f39/gIB+gIB/gIB/f4F/f4CAf39/f4B/f4CAAA==");  
+    	var sound = new Audio("data:audio/wav;base64,UklGRkwBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YScBAAB8gIN8fICAgIB8gHmAjXVkhptyXYqbcmiKjXKAim5ymIpWcqmKU3Klhl18kXl5jXlkjZ5oVpelZFaUm2trioN1ioZkeaKDU3msgFN8nnxog4Nyg5FrZJubXWGem2FnlIpufIZyfJR8XYOleVaDonlhg5F1eYZ5dZGNYXWbimhrm4Nrg3KDjWt/hm6UkUmDvV1TrINdkXxol4Boinx1nmtWr5RChqVheZdkeZtucop1io1WgLNhWql/XZd/YZSNZH+GeY1yZKKNUIaeZHmYZ3WbeWuGg4B/a4Oba2uXgGuNf2iKjWt5ioB/eXWNg2t/jXJ8inJ5kXxug4N8fHl/hnl1hnx5hn91g4Z1fIN8fHx8f4B5gIB8gH98fIN8fH+AfHx8fH98fIB/AA==");  
 		sound.play();
 		console.log("beep sound");
 	}
@@ -2494,6 +2607,9 @@ Current version: 15
 		let input = event.target;
 
 		if (input.files.length > 0) {
+
+			var selectedFile = input.files[0];
+
 			let reader = new FileReader();
 			reader.onload = function () {
 				let text = reader.result;
@@ -2502,8 +2618,27 @@ Current version: 15
 					let new_loaded_storyobj = JSON.parse(text);
 					//we don't want to fiddle with the file as its very complex. only handle the parts we are interested in, and just leave the rest untouched.						
 					if (new_loaded_storyobj.prompt == null) {
-						//quick sanity check. if prompt does not exist, this is not a KAI save. abort.
-						msgbox("Could not load selected file. Does not appear to be a KAI story.");
+						//quick sanity check. if prompt does not exist, this is not a KAI save.
+
+						//check for tavernai fields
+						if (new_loaded_storyobj.name != null || new_loaded_storyobj.description != null ||
+							new_loaded_storyobj.personality != null) {
+							load_tavern_obj(new_loaded_storyobj);
+						}
+						else if (new_loaded_storyobj.char_name != null || new_loaded_storyobj.char_persona != null) 
+						{
+							//check for ooba text generation fields (character)
+							load_ooba_obj(new_loaded_storyobj);
+						}
+						else if (new_loaded_storyobj.data_visible != null && new_loaded_storyobj.data_visible.length>0) 
+						{
+							//check for ooba text generation fields (story)
+							load_ooba_obj2(new_loaded_storyobj);
+						}
+						else 
+						{
+							msgbox("Could not load selected json file. Does not appear to be a KoboldAI story or compatible format.");
+						}
 					} else {
 						//determine if oldui file or newui file format
 						restart_new_game();
@@ -2579,16 +2714,68 @@ Current version: 15
 					}
 				} catch (e) {
 					console.log(e)
-					msgbox("Could not load selected file. Is it valid?");
+					
+					//attempt to parse it as a png file
+					var pngfr = new FileReader();
+					pngfr.onload = function () {
+						var data = pngfr.result;	
+						var arr = new Uint8Array(data);											
+						var result = convertTavernPng(arr);
+						if(result!=null)
+						{
+							load_tavern_obj(result);
+						}
+						else
+						{
+							msgbox("Could not load selected file. Is it valid?");
+						}
+					};
+					pngfr.readAsArrayBuffer(selectedFile);	
 				}
 
 			};
-			reader.readAsText(input.files[0]);
+			reader.readAsText(selectedFile);
 			document.getElementById("loadfileinput").value = "";
 		} else {
 			console.log("No file to load")
 		}
 	};
+
+	function load_tavern_obj(obj)
+	{
+		let chatopponent = obj.name?obj.name:defaultchatopponent;
+		let memory = obj.description;
+		if(!memory || memory=="")
+		{
+			memory = obj.personality?obj.personality:"";
+		}
+		let scenario = obj.scenario?obj.scenario:"";
+		let greeting = obj.first_mes?obj.first_mes:"";
+		//post process
+		memory = replaceAll(memory,"{{char}}",chatopponent);
+		scenario = replaceAll(scenario,"{{char}}",chatopponent);
+		greeting = replaceAll(greeting,"{{char}}",chatopponent);
+		if(scenario!="")
+		{
+			scenario = "\n[Scenario: "+scenario+"]";
+		}
+		restart_new_game();
+		localsettings.chatname = "You";
+		localsettings.chatopponent = chatopponent;
+		gametext_arr.push("\n"+chatopponent+": "+greeting);			
+		current_memory = memory + scenario;
+		localsettings.opmode = 3;
+		localsettings.enhanced_chat_ui = true;
+		render_gametext();
+	}
+	function load_ooba_obj(obj)
+	{
+
+	}
+	function load_ooba_obj2(obj)
+	{
+
+	}
 
 	function get_aetherroom_scenario()
 	{
@@ -5376,7 +5563,7 @@ Current version: 15
 								</li>
 
 								<li class="nav-item hidden" id="topbtn_load">
-									<input type="file" id="loadfileinput" accept="text/json,application/json,.json,*.*,*" onchange="load_file(event)"
+									<input type="file" id="loadfileinput" accept="text/json,application/json,image/png,.png,.json,*.*,*" onchange="load_file(event)"
 										style="display:none;">
 									<a class="nav-link" href="#"
 										onclick="document.getElementById('loadfileinput').click()">Load</a>
