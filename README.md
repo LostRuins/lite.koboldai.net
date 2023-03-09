@@ -9,14 +9,14 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
-Changelog of KoboldAI Lite 10 Mar 2023:
-- Added a new feature - Quick Play Scenarios! Created 11 brand new *ORIGINAL* scenario prompts for use in KoboldAI. A mix of different types and genres, story, adventure and chat, were created from scratch for this showcase. 
-- You can launch scenarios from the top menu bar.
-- Each scenario comes preloaded with everything you need to jump right in - and optionally allows Kobold Lite to automatically select a suitable AI model for you. There is also a search input to filter through the scenarios, and a dropdown to select a scenario type.
+Changelog of KoboldAI Lite 9 Mar 2023:
+- Added a new feature - Quick Play Scenarios! Created 11 brand new *ORIGINAL* scenario prompts for use in KoboldAI. A mix of different types and genres, story, adventure and chat, were created from scratch for this showcase, so feel free to use any of them in your adventures! 
+- You can launch scenarios from the top menu bar. Each scenario comes preloaded with everything you need to jump right in - and optionally allows Kobold Lite to automatically select a suitable AI model for you. There is also a search input to filter through the scenarios, and a dropdown to select a scenario type.
 - Added support for importing custom aetherroom.club scenarios! Simply key in the prompt number or enter the URL, and Kobold Lite will do the rest. 
 - Another attempt at fixing the autocomplete bug in chat mode.
-- If you have a quality scenario prompt, and wish see it added here, please do let me know! Either message me in the KoboldAI Discord or on Reddit. Do note that all prompt text cannot contain copyrighted material, except where permitted by fair use law. *Scenarios should be original content. Please do not suggest anything that you don't have rights to or permission for, that breaks our ToS, or that could potentially get DMCA takedowns.*
 - Heard some early feedback that the colors on the scenario cards were too flashy. Please do let me know if I should change it.
+- If you have a quality scenario prompt, and wish see it added here, please do let me know! Either message me in the KoboldAI Discord or on Reddit with a .json file containing the story. Do note that all prompt text cannot contain copyrighted material, except where permitted by fair use law. *Scenarios should be original content. Please do not suggest anything that you don't have rights to or permission for, that breaks our ToS, or that could potentially get DMCA takedowns.*
+
 
 Changelog of KoboldAI Lite 5 Mar 2023:
 - Added customizable prompt prefixes for generating images with stable horde! This appends a user selected prefix to all of the prompts when generating images on Stable Horde, it can be useful to automatically add a specific style to the images you want (e.g. Pencil Sketch, Anime)
