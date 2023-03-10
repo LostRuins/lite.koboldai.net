@@ -9,6 +9,12 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
+Changelog of KoboldAI Lite 11 Mar 2023:
+- Added support for TavernAI character formats! Both importing PNG cards and JSON files are fully supported. Just load it like you would load a story normally.
+- Added support for importing Pygmalion / Oobabooga Text Generation Characters.
+- Increased volume of beep on complete.
+- Increased default size of memory input window and made widths dynamic on mobile screens.
+
 Changelog of KoboldAI Lite 9 Mar 2023:
 - Added a new feature - Quick Play Scenarios! Created 11 brand new *ORIGINAL* scenario prompts for use in KoboldAI. A mix of different types and genres, story, adventure and chat, were created from scratch for this showcase, so feel free to use any of them in your adventures! 
 - You can launch scenarios from the top menu bar. Each scenario comes preloaded with everything you need to jump right in - and optionally allows Kobold Lite to automatically select a suitable AI model for you. There is also a search input to filter through the scenarios, and a dropdown to select a scenario type.

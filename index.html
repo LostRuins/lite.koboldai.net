@@ -5,7 +5,7 @@ This is a standalone web ui for KoboldAIs Horde, which requires no dependencies,
 Just copy this single static HTML file anywhere and open it in a browser. No dependencies.
 Or you can throw it on some web server and serve it there too. E.g. Github pages, nginx, whatever.
 Now rebranded as KoboldAI Lite
-Current version: 15
+Current version: 16
 -Concedo
 -->
 
@@ -383,6 +383,15 @@ Current version: 15
 		.nspopup.fixsize {
 			width: 330px;
 		}
+		.nspopup.flexsize {
+			width: 540px;
+		}	
+		@media (max-width: 620px) {
+			.nspopup.flexsize {
+			width: 100%;
+			}
+		}
+
 
 		
 
@@ -2629,12 +2638,7 @@ Current version: 15
 						{
 							//check for ooba text generation fields (character)
 							load_ooba_obj(new_loaded_storyobj);
-						}
-						else if (new_loaded_storyobj.data_visible != null && new_loaded_storyobj.data_visible.length>0) 
-						{
-							//check for ooba text generation fields (story)
-							load_ooba_obj2(new_loaded_storyobj);
-						}
+						}						
 						else 
 						{
 							msgbox("Could not load selected json file. Does not appear to be a KoboldAI story or compatible format.");
@@ -2744,39 +2748,74 @@ Current version: 15
 	function load_tavern_obj(obj)
 	{
 		let chatopponent = obj.name?obj.name:defaultchatopponent;
+		let myname = "You";
 		let memory = obj.description;
 		if(!memory || memory=="")
 		{
 			memory = obj.personality?obj.personality:"";
 		}
 		let scenario = obj.scenario?obj.scenario:"";
+		let examplemsg = obj.mes_example?obj.mes_example:"";
 		let greeting = obj.first_mes?obj.first_mes:"";
 		//post process
 		memory = replaceAll(memory,"{{char}}",chatopponent);
 		scenario = replaceAll(scenario,"{{char}}",chatopponent);
 		greeting = replaceAll(greeting,"{{char}}",chatopponent);
+		examplemsg = replaceAll(examplemsg,"{{char}}",chatopponent);
+		memory = replaceAll(memory,"{{user}}",myname);
+		scenario = replaceAll(scenario,"{{user}}",myname);
+		greeting = replaceAll(greeting,"{{user}}",myname);
+		examplemsg = replaceAll(examplemsg,"{{user}}",myname);
 		if(scenario!="")
 		{
 			scenario = "\n[Scenario: "+scenario+"]";
 		}
+		if(examplemsg!="")
+		{
+			examplemsg = "\n"+examplemsg;
+		}
 		restart_new_game();
-		localsettings.chatname = "You";
+		localsettings.chatname = myname;
 		localsettings.chatopponent = chatopponent;
 		gametext_arr.push("\n"+chatopponent+": "+greeting);			
-		current_memory = memory + scenario;
+		current_memory = memory + examplemsg + scenario;
 		localsettings.opmode = 3;
-		localsettings.enhanced_chat_ui = true;
 		render_gametext();
 	}
 	function load_ooba_obj(obj)
 	{
-
+		let chatopponent = obj.char_name?obj.char_name:defaultchatopponent;
+		let myname = "You";
+		let memory = obj.char_persona?obj.char_persona:"";		
+		let scenario = obj.world_scenario?obj.world_scenario:"";
+		let examplemsg = obj.example_dialogue?obj.example_dialogue:"";
+		let greeting = obj.char_greeting?obj.char_greeting:"";
+		//post process
+		memory = replaceAll(memory,"{{char}}",chatopponent);
+		scenario = replaceAll(scenario,"{{char}}",chatopponent);
+		greeting = replaceAll(greeting,"{{char}}",chatopponent);
+		examplemsg = replaceAll(examplemsg,"{{char}}",chatopponent);
+		memory = replaceAll(memory,"{{user}}",myname);
+		scenario = replaceAll(scenario,"{{user}}",myname);
+		greeting = replaceAll(greeting,"{{user}}",myname);
+		examplemsg = replaceAll(examplemsg,"{{user}}",myname);
+		if(scenario!="")
+		{
+			scenario = "\n[Scenario: "+scenario+"]";
+		}
+		if(examplemsg!="")
+		{
+			examplemsg = "\n"+examplemsg;
+		}
+		restart_new_game();
+		localsettings.chatname = myname;
+		localsettings.chatopponent = chatopponent;
+		gametext_arr.push("\n"+chatopponent+": "+greeting);			
+		current_memory = memory + examplemsg + scenario;
+		localsettings.opmode = 3;
+		render_gametext();
 	}
-	function load_ooba_obj2(obj)
-	{
-
-	}
-
+	
 	function get_aetherroom_scenario()
 	{
 		inputBox("Enter aetherroom.club prompt URL, or 4-digit prompt number","Import from aetherroom.club","","https://aetherroom.club/1234", ()=>{
@@ -3087,7 +3126,7 @@ Current version: 15
 			let clustertag = ((parentcluster&&parentcluster.tag!="")?" "+parentcluster.tag+"":"");
 			let style = (elem.trusted ? "style=\"color:#dd77ff;\"" : "");
 			let brokenstyle = (elem.maintenance_mode ? "style=\"color:#ee4444;\"" : "")
-			str += "<tr><td>" + elem.name.substring(0, 32) + "</td><td>" + elem.models[0].substring(0, 32) + "</td><td>" + elem.max_length + " / " + elem.max_context_length + "<br>(" + tokenspersec + " T/s)</td><td "+brokenstyle+">" + elem.uptime + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "</td><td>"+clustertag+"</td></tr>";
+			str += "<tr><td>" + escapeHtml(elem.name.substring(0, 32)) + "</td><td>" + escapeHtml(elem.models[0].substring(0, 32)) + "</td><td>" + elem.max_length + " / " + elem.max_context_length + "<br>(" + tokenspersec + " T/s)</td><td "+brokenstyle+">" + elem.uptime + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "</td><td>"+clustertag+"</td></tr>";
 		}
 		document.getElementById("workertable").innerHTML = str;
 	}
@@ -3332,7 +3371,7 @@ Current version: 15
 						let extratag = (curr.trusted ? " 💜" : "");
 						extratag = (curr.maintenance_mode ? " ⛔" : extratag);
 						let alrselected = (selected_workers.filter(x => (x.cluster == curr.cluster && x.name == curr.name)).length > 0) ? " selected" : "";
-						model_choices += "<option " + style + " value=\"" + i + "\" " + alrselected + ">" + clustertag + cn + " (" + cm + ")" + extratag + "</option>";
+						model_choices += "<option " + style + " value=\"" + i + "\" " + alrselected + ">" + clustertag + escapeHtml(cn) + " (" + escapeHtml(cm) + ")" + extratag + "</option>";
 					}
 					document.getElementById("pickedmodel").innerHTML = model_choices;
 				} else {
@@ -3342,8 +3381,8 @@ Current version: 15
 						let parentcluster = find_text_horde(curr.cluster);
 						let clustertag = ((parentcluster && parentcluster.tag != "") ? "" + parentcluster.tag + " " : "");
 						let alrselected = (selected_models.filter(x => (x.cluster == curr.cluster && x.name == curr.name)).length > 0) ? " selected" : "";
-						let mperf = curr.performance;
-						if (mperf == 1000000) //a patch before the performance is properly fixed, we calculate it ourselves
+						let mperf = parseFloat(curr.performance);
+						if (!mperf || isNaN(mperf) || mperf >= 99999) //a patch before the performance is properly fixed, we calculate it ourselves
 						{
 							let assocworkers = worker_data.filter(x => (x.cluster == curr.cluster && x.models.includes(curr.name)));
 							if (assocworkers.length > 0) 
@@ -3361,7 +3400,7 @@ Current version: 15
 								mperf = mperf.toFixed(1)
 							}
 						}
-						model_choices += "<option value=\"" + i + "\" " + alrselected + ">" + clustertag + curr.name + " (Queue: " + curr.queued + ", Speed: " + mperf + ", Qty: " + curr.count + ")</option>";
+						model_choices += "<option value=\"" + i + "\" " + alrselected + ">" + clustertag + escapeHtml(curr.name) + " (Queue: " + curr.queued + ", Speed: " + mperf + ", Qty: " + curr.count + ")</option>";
 					}
 					model_choices += "<option style=\"color:#d79223;\" value=\"9999\">[Custom Remote Play Endpoint]</option>";
 					document.getElementById("pickedmodel").innerHTML = model_choices;
@@ -3850,6 +3889,7 @@ Current version: 15
 		{
 			selected_models = [];
 			selected_workers = [];
+			localsettings.opmode = 1;
 		}
 		restart_new_game();
 		hide_popups();
@@ -6092,12 +6132,12 @@ Current version: 15
 
 	<div class="popupcontainer flex hidden" id="memorycontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup fixsize higher">
+		<div class="nspopup flexsize higher">
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Memory</div>
 			</div>
 			<div class="justifyleft settinglabel">Memory</div>
-			<textarea class="form-control" id="memorytext"
+			<textarea class="form-control" id="memorytext" style="height: 120px;"
 				placeholder="Edit the memory to be sent with each request to the AI."></textarea>
 			<br>
 			<div class="justifyleft settinglabel">Author's Note</div>
