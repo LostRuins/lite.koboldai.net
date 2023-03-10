@@ -1010,8 +1010,19 @@ Current version: 16
 			}
 		}
 
-		.tokens-counted {
+		.tokens-in-box {
 			position: relative;
+		}
+		.token-budget {
+			right: 20px;
+			bottom: 3px;
+			color: gray;
+			position: absolute;
+			font-size: 8px;
+			-webkit-user-select: none;
+			-moz-user-select: none;
+			-ms-user-select: none;
+			user-select: none;
 		}
 
 		.btn-secondary
@@ -2076,6 +2087,7 @@ Current version: 16
 	var pending_found_story = null;
 	var horde_img_filter_enabled = true;
 	var temp_scenario = null;
+	var last_token_budget = ""; //to display token limits
 
 	var localsettings = {
 		my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
@@ -4035,6 +4047,7 @@ Current version: 16
 		completed_imgs_meta = {};
 		localsettings.adventure_is_action = false;
 		prev_hl_chunk = null;
+		last_token_budget = "";
 		render_gametext();
 	}
 
@@ -4242,8 +4255,8 @@ Current version: 16
 				}
 			}
 
-			//this is a hack since we dont have a proper tokenizer, but we can estimate 1 token per 3.25 characters
-			let max_allowed_characters = Math.floor(maxctxlen * 3.25);
+			//this is a hack since we dont have a proper tokenizer, but we can estimate 1 token per 3.3 characters
+			let max_allowed_characters = Math.floor(maxctxlen * 3.35);
 			if (current_memory == null || current_memory.trim() == "") 
 			{
 				//if there is no memory, then we can be a lot of lenient with the character counts since the backend will truncate excess anyway
@@ -4404,6 +4417,8 @@ Current version: 16
 				truncated_context = truncated_context.slice(0, anote_insert_idx) + truncated_anote + truncated_context.slice(anote_insert_idx);
 				truncated_context = truncated_memory + truncated_context;
 			}
+
+			last_token_budget = truncated_context.length  + "/" + max_allowed_characters;
 
 			
 			let submit_payload = {
@@ -5367,6 +5382,8 @@ Current version: 16
 			}
 			document.getElementById("abortgen").classList.add("hidden");
 		}
+
+		document.getElementById("token-budget").innerText = last_token_budget;
 	}
 
 	function render_enhanced_chat(input)
@@ -5832,8 +5849,9 @@ Current version: 16
 						<img id="adventure_mode_img" class="input_story">
 						<br><b id="adventure_mode_txt" style="font-size: 10px;">Story</b></button>
 				</div>
-				<div id="inputrowleft" class="tokens-counted">
+				<div id="inputrowleft" class="tokens-in-box">
 					<textarea class="form-control" id="input_text" onkeypress="return handle_typing(event)" placeholder="Enter text here"></textarea>
+					<span id="token-budget" class="token-budget"></span>
 				</div>
 				<div id="inputrowright" style="padding-right: 2px;">
 					<button type="button" class="btn btn-secondary wait" id="btnsend" disabled
