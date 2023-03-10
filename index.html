@@ -2029,6 +2029,9 @@ Current version: 16
 	const kobold_custom_maxctxlen_endpoint = "/api/latest/config/max_context_length";
 	const kobold_custom_genamt_endpoint = "/api/latest/config/max_length";	
 
+	const oai_models_endpoint = "https://api.openai.com/v1/models";
+	const oai_submit_endpoint = "https://api.openai.com/v1/completions";
+
 	//support for quick news updates
 	const news_endpoint = "https://news.concedo.workers.dev"
 
@@ -2066,6 +2069,8 @@ Current version: 16
 	//key is ID, body is {done:false,queue:10,result:""}
 	var stablemodels = []; //stored as {name,count}
 	var custom_kobold_endpoint = ""; //if set, does not use horde. Instead, attempts to use this sync endpoint
+	var custom_oai_key = ""; //if set, uses the OpenAI API to generate
+	var custom_oai_model = "";
 	var uses_cors_proxy = false; //we start off attempting a direct connection. switch to proxy if that fails
 	var synchro_polled_response = null;
 	var pending_found_story = null;
@@ -2380,6 +2385,11 @@ Current version: 16
 		for (var k in objToImport) {
 			existingObj[k] = objToImport[k];
 		}
+	}
+
+	function is_using_custom_ep()
+	{
+		return (custom_oai_key!=""||custom_kobold_endpoint!="");
 	}
 
 	function get_most_common_cluster(arr)
@@ -2994,7 +3004,7 @@ Current version: 16
 			hide_popups();
 			//assign model if necessary
 			let scenarioautopickai = document.getElementById("scenarioautopickai").checked?true:false;
-			if(selected_models.length == 0 && custom_kobold_endpoint=="")
+			if(selected_models.length == 0 && !is_using_custom_ep())
 			{
 				scenarioautopickai = true; //no selected model, pick a good one
 			}
@@ -3240,94 +3250,165 @@ Current version: 16
 		document.getElementById("inputboxcontainerinput").placeholder = escapeHtml(inputPlaceholder);
 		onInputboxOk = function(){document.getElementById("inputboxcontainer").classList.add("hidden");onDone();};
 	}
+
+	function customapi_dropdown()
+	{
+		let epchoice = document.getElementById("customapidropdown").value;
+		if(epchoice==0)
+		{
+			document.getElementById("koboldcustom").classList.remove("hidden");
+			document.getElementById("oaicustom").classList.add("hidden");
+		}
+		else if(epchoice==1)
+		{
+			document.getElementById("koboldcustom").classList.add("hidden");
+			document.getElementById("oaicustom").classList.remove("hidden");
+		}
+	}
+
 	
 	function connect_custom_endpoint()
 	{
-		let tmpep = document.getElementById("customendpoint").value;
-		if (tmpep != null && tmpep.trim() != "") 
-		{
-			hide_popups();
-			tmpep = tmpep.trim();
+		custom_kobold_endpoint = "";
+		custom_oai_key = "";
 
-			//remove trailing slash and pound
-			tmpep = tmpep.endsWith('#') ? tmpep.slice(0, -1) : tmpep;
-			tmpep = tmpep.endsWith('/') ? tmpep.slice(0, -1) : tmpep;
+		let epchoice = document.getElementById("customapidropdown").value;
+		if(epchoice==0) //connect to kobold endpoint
+		{	
+			let tmpep = document.getElementById("customendpoint").value;
+			if (tmpep != null && tmpep.trim() != "") {
+				hide_popups();
+				tmpep = tmpep.trim();
 
-			let proxy_part = "";
+				//remove trailing slash and pound
+				tmpep = tmpep.endsWith('#') ? tmpep.slice(0, -1) : tmpep;
+				tmpep = tmpep.endsWith('/') ? tmpep.slice(0, -1) : tmpep;
 
-			//we never attempt to proxy localhost addresses
-			let is_localhost = (tmpep.toLowerCase().includes("localhost") || 
-			tmpep.toLowerCase().includes("127.0.0.1"));
+				let proxy_part = "";
 
-			if (uses_cors_proxy && !is_localhost) {
-				proxy_part = cors_proxy + "?";
+				//we never attempt to proxy localhost addresses
+				let is_localhost = (tmpep.toLowerCase().includes("localhost") ||
+					tmpep.toLowerCase().includes("127.0.0.1"));
+
+				if (uses_cors_proxy && !is_localhost) {
+					proxy_part = cors_proxy + "?";
+				}
+				let urls = [
+					proxy_part + tmpep + kobold_custom_mdl_endpoint,
+					//proxy_part + tmpep + kobold_custom_maxctxlen_endpoint,
+					//proxy_part + tmpep + kobold_custom_genamt_endpoint
+				];
+
+				Promise.all(urls.map(url => fetch(url)
+					.then(response => response.json())))
+					.then(values => {
+						console.log(values)
+						let mdlname = values[0].result;
+						// let maxctxlen = values[1].value;
+						// let genamt = values[2].value;
+						if (!mdlname) {
+							msgbox("Error at Custom Kobold Endpoint!\n\nThe custom endpoint failed to respond correctly.\n\nNote that localhost IPs are not fully supported.");
+							selected_models = [];
+							selected_workers = [];
+							custom_kobold_endpoint = "";
+							render_gametext();
+						} else if (mdlname == "ReadOnly") {
+							msgbox("The custom endpoint is working, but no model was loaded.\n\nPlease select and load a model and try again.");
+							selected_models = [];
+							selected_workers = [];
+							custom_kobold_endpoint = "";
+							render_gametext();
+						} else {
+							//good to go
+							custom_kobold_endpoint = tmpep;
+							selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": mdlname, "count": 1 }];
+							selected_workers = [];
+							if (perfdata == null) {
+								//generate some fake perf data if horde is offline and using custom endpoint
+								perfdata = {
+									"queued_requests": 0,
+									"queued_tokens": 0,
+									"past_minute_tokens": 0,
+									"worker_count": 0
+								};
+								document.body.classList.add("connected");
+								document.getElementById("connectstatus").classList.remove("color_orange");
+								document.getElementById("connectstatus").classList.add("color_green");
+							}
+							document.getElementById("connectstatus").innerHTML = "Connected to Custom Endpoint";
+							render_gametext();
+						}
+					})
+					.catch(error => {
+
+						//on first error, do not give up, switch to cors proxy and try again. 
+						//if it still fails, then show error
+						console.log("Error: " + error);
+
+						if (uses_cors_proxy || is_localhost) {
+							msgbox("Failed to connect to Custom Kobold Endpoint!\n\nPlease check if KoboldAI is running at the url: " + tmpep + "\n\nNote that localhost IPs are not fully supported.");
+							selected_models = [];
+							selected_workers = [];
+							custom_kobold_endpoint = "";
+							render_gametext();
+						} else {
+							uses_cors_proxy = true; //fallback to cors proxy, this will remain for rest of session
+							connect_custom_endpoint(); //one more try
+						}
+					});
 			}
-			let urls = [
-				proxy_part + tmpep + kobold_custom_mdl_endpoint,
-				//proxy_part + tmpep + kobold_custom_maxctxlen_endpoint,
-				//proxy_part + tmpep + kobold_custom_genamt_endpoint
-			];
-
-			Promise.all(urls.map(url => fetch(url)
-				.then(response => response.json())))
-				.then(values => {
-					console.log(values)
-					let mdlname = values[0].result;
-					// let maxctxlen = values[1].value;
-					// let genamt = values[2].value;
-					if (!mdlname) {
-						msgbox("Error at Custom Kobold Endpoint!\n\nThe custom endpoint failed to respond correctly.\n\nNote that localhost IPs are not fully supported.");
-						selected_models = [];
-						selected_workers = [];
-						custom_kobold_endpoint = "";
-						render_gametext();
-					} else if (mdlname == "ReadOnly") {
-						msgbox("The custom endpoint is working, but no model was loaded.\n\nPlease select and load a model and try again.");
-						selected_models = [];
-						selected_workers = [];
-						custom_kobold_endpoint = "";
-						render_gametext();
-					} else {
+		}
+		else if(epchoice==1) //connect to OAI Endpoint
+		{			
+			let desired_oai_key = document.getElementById("custom_oai_key").value.trim();
+			
+			if(desired_oai_key!="")
+			{
+				hide_popups();
+				fetch(oai_models_endpoint, {
+					method: 'GET',
+					headers: {
+						'Authorization': 'Bearer '+desired_oai_key,
+					},
+				})
+				.then((response) => response.json())
+				.then((data) => {
+					console.log(data);
+					if (!data.error && data.data && data.data.length > 0) 
+					{
 						//good to go
-						custom_kobold_endpoint = tmpep;
-						selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": mdlname, "count": 1 }];
+						custom_oai_key = desired_oai_key;
+						custom_oai_model = document.getElementById("custom_oai_model").value.trim();
+						selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": custom_oai_model, "count": 1 }];
 						selected_workers = [];
-						if(perfdata==null)
-						{
+						if (perfdata == null) {
 							//generate some fake perf data if horde is offline and using custom endpoint
 							perfdata = {
-							"queued_requests": 0,
-							"queued_tokens": 0,
-							"past_minute_tokens": 0,
-							"worker_count": 0
+								"queued_requests": 0,
+								"queued_tokens": 0,
+								"past_minute_tokens": 0,
+								"worker_count": 0
 							};
 							document.body.classList.add("connected");
 							document.getElementById("connectstatus").classList.remove("color_orange");
-							document.getElementById("connectstatus").classList.add("color_green");				
-						}		
-						document.getElementById("connectstatus").innerHTML = "Connected to Custom Endpoint";
+							document.getElementById("connectstatus").classList.add("color_green");
+						}
+						document.getElementById("connectstatus").innerHTML = "Connected to OAI Endpoint";
 						render_gametext();
 					}
+					else
+					{
+						custom_oai_key = "";
+						msgbox(JSON.stringify(data.error.message));
+					}					
 				})
 				.catch(error => {
-
-					//on first error, do not give up, switch to cors proxy and try again. 
-					//if it still fails, then show error
-					console.log("Error: " + error);
-
-					if (uses_cors_proxy || is_localhost) {
-						msgbox("Failed to connect to Custom Kobold Endpoint!\n\nPlease check if KoboldAI is running at the url: " + tmpep + "\n\nNote that localhost IPs are not fully supported.");
-						selected_models = [];
-						selected_workers = [];
-						custom_kobold_endpoint = "";
-						render_gametext();
-					} else {
-						uses_cors_proxy = true; //fallback to cors proxy, this will remain for rest of session
-						connect_custom_endpoint(); //one more try
-					}
+				console.log("Error: " + error);
+				custom_oai_key = "";
+				msgbox("Error: " + error);
 				});
+			}
 		}
-		
 	}
 
 	function display_custom_endpoint()
@@ -3461,6 +3542,7 @@ Current version: 16
 			display_custom_endpoint();
 		} else {
 			custom_kobold_endpoint = "";
+			custom_oai_key = "";
 			//remove the Custom Endpoint if it's multi selected together with others.
 			const findex = selected_idx_arr.indexOf("9999");			
 			if (findex > -1) {
@@ -3645,15 +3727,23 @@ Current version: 16
 
 	function focus_api_keys() {
 		var x = document.getElementById("apikey");
-		if (x.type === "password") {
+		if (x && x.type === "password") {
+			x.type = "text";
+		}
+		x = document.getElementById("custom_oai_key");
+		if (x && x.type === "password") {
 			x.type = "text";
 		}		
 	}
 	function blur_api_keys() {
 		var x = document.getElementById("apikey");
-		if (x.type === "text") {
+		if (x && x.type === "text") {
 			x.type = "password";
-		}		
+		}
+		x = document.getElementById("custom_oai_key");
+		if (x && x.type === "text") {
+			x.type = "password";
+		}
 	}
 
 	function display_settings() {
@@ -4026,7 +4116,7 @@ Current version: 16
 		render_gametext();
 
 		//we do this last so its ok even if it fails		
-		if (pending_response_horde && id_to_cancel && id_to_cancel != "" && custom_kobold_endpoint == "") 
+		if (pending_response_horde && id_to_cancel && id_to_cancel != "" && !is_using_custom_ep()) 
 		{
 			let cancelurl = pending_response_horde.output_endpoint + "/" + id_to_cancel;
 			fetch(cancelurl, {
@@ -4116,7 +4206,7 @@ Current version: 16
 			//auto adjust settings if requested
 			let maxctxlen = localsettings.max_context_length;
 			let maxgenamt = localsettings.max_length;
-			if(custom_kobold_endpoint == "" && (localsettings.auto_genamt || localsettings.auto_ctxlen))
+			if(!is_using_custom_ep() && (localsettings.auto_genamt || localsettings.auto_ctxlen))
 			{
 				//get all workers running all selected models
 				let wrk_list = selected_workers;
@@ -4344,7 +4434,8 @@ Current version: 16
 			startTimeTaken(); //timestamp start request
 
 			//handle custom endpoint submit
-			if (custom_kobold_endpoint!="") {
+			if (is_using_custom_ep()) 
+			{
 				console.log("submit custom api");
 
 				pending_response_id = "submit-v1-dummy-id"; //dummy id
@@ -4354,7 +4445,7 @@ Current version: 16
 
 				//if this is set, we don't use horde, use the custom endpoint instead
 				let is_localhost = false;
-				if(custom_kobold_endpoint!="")
+				if (custom_kobold_endpoint != "") //handle for kai
 				{
 					//payload is just the params with prompt inside
 					let prompt = submit_payload.prompt;
@@ -4364,35 +4455,81 @@ Current version: 16
 					submit_payload.quiet = !showlog;
 
 					//we never attempt to proxy localhost addresses
-					is_localhost = (custom_kobold_endpoint.toLowerCase().includes("localhost") 
-					|| custom_kobold_endpoint.toLowerCase().includes("127.0.0.1"));
+					is_localhost = (custom_kobold_endpoint.toLowerCase().includes("localhost")
+						|| custom_kobold_endpoint.toLowerCase().includes("127.0.0.1"));
+
+
+					let proxy_part = "";
+
+					if (uses_cors_proxy && !is_localhost) {
+						proxy_part = cors_proxy + "?";
+					}
+
+					let sub_endpt = (proxy_part + custom_kobold_endpoint + kobold_custom_gen_endpoint);
+
+					fetch(sub_endpt, {
+						method: 'POST', // or 'PUT'
+						headers: {
+							'Content-Type': 'application/json',
+						},
+						body: JSON.stringify(submit_payload),
+					})
+						.then((response) => response.json())
+						.then((data) => {
+							console.log("sync finished response: " + JSON.stringify(data));
+							if (custom_kobold_endpoint != "" && data.results != null && data.results.length > 0) {
+								synchro_polled_response = data.results[0].text;
+							}
+							else {
+								//error occurred, maybe captcha failed
+								console.error("error occurred in v1 generation");
+								pending_response_id = "";
+								poll_in_progress = false;
+								synchro_polled_response = null;
+								render_gametext();
+								msgbox("Error occurred during text generation.");
+							}
+						})
+						.catch((error) => {
+							console.error('Error:', error);
+							pending_response_id = "";
+							poll_in_progress = false;
+							synchro_polled_response = null;
+							render_gametext();
+							msgbox("Error while submitting prompt: " + error);
+						});
 				}
+				else if(custom_oai_key!="")//handle for OAI
+				{
+					//original range between 1 and 3, scale to 0 and 2
+					let scaled_rep_pen = (submit_payload.params.rep_pen-1.0);
+					let oai_payload = 
+					{
+						"max_tokens": submit_payload.params.max_length,
+						"model": custom_oai_model,
+						"presence_penalty": scaled_rep_pen,
+						"prompt": submit_payload.prompt,
+						"temperature": submit_payload.params.temperature,
+						"top_p": submit_payload.params.top_p
+					}
 
-				let proxy_part = "";				
-			
-				if (uses_cors_proxy && !is_localhost) {
-					proxy_part = cors_proxy + "?";
-				}
-
-				let sub_endpt = (proxy_part+custom_kobold_endpoint+kobold_custom_gen_endpoint);
-
-				fetch(sub_endpt, {
-					method: 'POST', // or 'PUT'
-					headers: {
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify(submit_payload),
-				})
+					fetch(oai_submit_endpoint, {
+						method: 'POST', 
+						headers: {
+							'Content-Type': 'application/json',
+							'Authorization': 'Bearer '+custom_oai_key,
+						},
+						body: JSON.stringify(oai_payload),
+					})
 					.then((response) => response.json())
 					.then((data) => {
 						console.log("sync finished response: " + JSON.stringify(data));
-						if(custom_kobold_endpoint!="" && data.results!=null && data.results.length>0)
-						{
-							synchro_polled_response = data.results[0].text;
-						}						
+						if (custom_oai_key != "" && data.choices != null && data.choices.length > 0) {
+							synchro_polled_response = data.choices[0].text;
+						}
 						else {
 							//error occurred, maybe captcha failed
-							console.error("error occurred in v1 generation");
+							console.error("error occurred in OAI generation");
 							pending_response_id = "";
 							poll_in_progress = false;
 							synchro_polled_response = null;
@@ -4408,6 +4545,11 @@ Current version: 16
 						render_gametext();
 						msgbox("Error while submitting prompt: " + error);
 					});
+				}
+				else
+				{
+					console.log("Unknown sync endpoint!");
+				}
 			}
 			else {
 				console.log("submit v2 api");
@@ -4811,7 +4953,7 @@ Current version: 16
 			}
 			else {
 
-				if (custom_kobold_endpoint!="") {
+				if (is_using_custom_ep()) {
 					//v1 api only needs to check if data was received and stored into local object
 					poll_in_progress = true;
 					if (synchro_polled_response == null) {
@@ -5037,7 +5179,12 @@ Current version: 16
 				
 				if (custom_kobold_endpoint != "") {
 					whorun = "<br>You're using the custom KoboldAI endpoint at <span class=\"color_orange\">"+custom_kobold_endpoint+"</span>";
-				} else {
+				}
+				else if(custom_oai_key!="")
+				{
+					whorun = "<br>You're using the OpenAI API";
+				}
+				else {
 					whorun = "<br>There are <span class=\"color_orange\">" + selected_models.reduce((s, a) => s + a.count, 0) + "</span> <a class=\"color_green\" href=\"#\" onclick=\"get_and_show_workers()\">volunteer(s)</a> running selected models with a total queue length of <span class=\"color_orange\">"+ selected_models.reduce((s, a) => s + a.queued, 0) + "</span> tokens";
 				}
 				document.getElementById("gametext").innerHTML = "Welcome to <span class=\"color_cyan\">KoboldAI Lite</span>!<br>You are using the models <span class=\"color_green\">"
@@ -5830,7 +5977,13 @@ Current version: 16
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Custom Remote Play Endpoint</div>
 			</div>
-			<div class="aidgpopuplistheader anotelabel">
+			<div style="padding: 4px;">
+			<select style="padding:4px;" class="form-control" id="customapidropdown" onchange="customapi_dropdown()">
+				<option value="0">KoboldAI Remote Play</option>
+				<option value="1">OpenAI API</option>
+			</select>	
+			</div>
+			<div id="koboldcustom" class="aidgpopuplistheader anotelabel">
 				You can use this to connect to a KoboldAI instance running via a remote tunnel such as <span class="color_orange" style="font-weight: bold;">trycloudflare, localtunnel, ngrok</span>.<br><br>
 				Localhost IPs are not fully supported. You can use the remote address displayed in the <span class="color_orange" style="font-weight: bold;">remote-play.bat</span> window or <span class="color_orange" style="font-weight: bold;">colab window</span>, note that the model must be loaded first.<br><br>
 				<span class="color_green" style="font-weight: bold;">Please input URL of the KoboldAI instance.</span><br><br>
@@ -5839,6 +5992,19 @@ Current version: 16
 					<input type="checkbox" id="remoteconsolelog">
 					<div class="box-label" title="Will display outputs to the remote endpoint's console logs, useful for debugging.">Show Console Logging</div>					
 				</div>
+			</div>
+			<div id="oaicustom" class="aidgpopuplistheader anotelabel hidden">
+				Entering your OpenAI API key will allow you to use KoboldAI Lite with their API.<br><br>
+				Note that KoboldAI Lite takes no responsibility for your usage or consequences of this feature.<br>Only Temperature, Top-P and Repetition Penalty samplers are used.<br><br>
+				<span class="color_green" style="font-weight: bold;">Please input OpenAI API Key.</span><br><br>
+				<input class="form-control" type="password" id="custom_oai_key" placeholder="OpenAI API Key" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
+				Model Choice:<br>
+				<select style="padding:4px;" class="form-control" id="custom_oai_model">
+					<option value="text-davinci-003" selected="selected">text-davinci-003</option>
+					<option value="text-davinci-002">text-davinci-002</option>
+					<option value="text-davinci-001">text-davinci-001</option>
+					<option value="davinci">davinci</option>
+				</select>
 			</div>
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="connect_custom_endpoint()">Connect</button>
