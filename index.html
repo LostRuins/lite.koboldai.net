@@ -65,8 +65,9 @@ Current version: 16
 
 		#topmenu {
 			background-color: #757575;
-			padding: 10px;
+			padding: 8px;
 			display: flex;
+			line-height: normal;
 		}
 
 		body.connected #topmenu,
@@ -507,6 +508,9 @@ Current version: 16
 		}
 		.color_green {
 			color: #3bf723;
+		}
+		.color_darkgreen {
+			color: #63975c;
 		}
 
 
@@ -1191,6 +1195,12 @@ Current version: 16
 			text-decoration:none;
 		}
 		
+		.lastreq
+		{
+			font-size:9pt;
+			padding-top: 2px;
+			/* font-style: italic; */
+		}
 
 		.outerloader {	
 			display: flex;
@@ -4596,7 +4606,7 @@ Current version: 16
 		}
 	}
 
-	function handle_incoming_text(gentxt, genworker, genkudos) {
+	function handle_incoming_text(gentxt, genworker, genmdl, genkudos) {
 
 		//always trim incomplete sentences for adventure and chat
 		if (localsettings.opmode == 2 || localsettings.opmode == 3 || localsettings.trimsentences == true) {
@@ -4662,7 +4672,7 @@ Current version: 16
 		{
 			playbeep();
 		}
-		let lastreq = "Last request served by <a href=\"#\" onclick=\"get_and_show_workers()\">" + genworker + "</a> for " + genkudos + " kudos in " + getTimeTaken() + " seconds.";
+		let lastreq = "Last request served by <a href=\"#\" onclick=\"get_and_show_workers()\">" + genworker + "</a> using <span class=\"color_darkgreen\">"+genmdl+ "</span> for " + genkudos + " kudos in " + getTimeTaken() + " seconds.";
 		document.getElementById("lastreq").innerHTML = lastreq;
 		document.getElementById("lastreq2").innerHTML = lastreq;
 	}
@@ -4800,23 +4810,14 @@ Current version: 16
 						console.log("v1 handle recv reply");
 						pending_response_id = "";
 						poll_in_progress = false;
-						if (custom_kobold_endpoint != "") {
-							let resp = synchro_polled_response;
-							if (resp != null && resp != "") {
-								let gentxt = resp;
-								let genworker = "Custom Endpoint";
-								let genkudos = "0";
-								handle_incoming_text(gentxt, genworker, genkudos);
-							}
-						} else {
-							let v1_elem = synchro_polled_response;
-							if (v1_elem.text != null && v1_elem.text != "") {
-								let gentxt = v1_elem.text;
-								let genworker = v1_elem.server_name;
-								let genkudos = "unknown";
-								handle_incoming_text(gentxt, genworker, genkudos);
-							}
-						}
+						let resp = synchro_polled_response;
+						if (resp != null && resp != "") {
+							let gentxt = resp;
+							let genworker = "Custom Endpoint";
+							let genkudos = "0";
+							let genmdl = (selected_models.length>0?selected_models[0].name:"Unknown Model");
+							handle_incoming_text(gentxt, genworker, genmdl, genkudos);
+						}						
 						render_gametext();
 						synchro_polled_response = null;
 					}
@@ -4859,8 +4860,9 @@ Current version: 16
 											if (data.generations != null && data.generations.length > 0) {
 												let gentxt = data.generations[0].text;
 												let genworker = data.generations[0].worker_name;
+												let genmdl = data.generations[0].model;
 												let genkudos = data.kudos;
-												handle_incoming_text(gentxt, genworker, genkudos);
+												handle_incoming_text(gentxt, genworker, genmdl, genkudos);
 											}
 											render_gametext();
 										}).catch((error) => {
@@ -5681,7 +5683,7 @@ Current version: 16
 				</div>
 			</div>
 		</div>
-		<div class="" id="lastreq" style="color:#999999"><span class="color_gray" style="font-size:9pt;font-style: italic;">Avoid sending privacy sensitive information. <a href="#" onclick="explain_horde()">Click here for more info</a>.</span></div>
+		<div class="lastreq" id="lastreq" style="color:#999999"><span class="color_gray">Avoid sending privacy sensitive information. <a href="#" onclick="explain_horde()">Click here for more info</a>.</span></div>
 		</div>
 
 		<div id="enhancedchatinterface" class="chat_mesgs hidden">
@@ -5712,7 +5714,7 @@ Current version: 16
 				</div>
 			</div>
 
-			<div class="" id="lastreq2" style="padding-top: 4px; color:#999999"><span class="color_gray" style="font-size:9pt;font-style: italic;">Avoid sending privacy sensitive information. <a href="#" onclick="explain_horde()">Click here for more info</a>.</span></div>
+			<div class="lastreq" id="lastreq2" style="padding-top: 4px; color:#999999"><span class="color_gray">Avoid sending privacy sensitive information. <a href="#" onclick="explain_horde()">Click here for more info</a>.</span></div>
 		  </div>
 		</div>
 

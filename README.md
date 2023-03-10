@@ -14,6 +14,7 @@ Changelog of KoboldAI Lite 11 Mar 2023:
 - Added support for importing Pygmalion / Oobabooga Text Generation Characters.
 - Increased volume of beep on complete.
 - Increased default size of memory input window and made widths dynamic on mobile screens.
+- Added model name to post-gen worker kudos summary.
 
 Changelog of KoboldAI Lite 9 Mar 2023:
 - Added a new feature - Quick Play Scenarios! Created 11 brand new *ORIGINAL* scenario prompts for use in KoboldAI. A mix of different types and genres, story, adventure and chat, were created from scratch for this showcase, so feel free to use any of them in your adventures! 
