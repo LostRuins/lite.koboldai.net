@@ -1990,8 +1990,10 @@ Current version: 16
 
 
 	//here is my shit integration of KAI Horde's API. You're welcome. -Concedo.
-	const default_client_agent = "KoboldAiLite:11";
+	const default_client_agent = "KoboldAiLite:16";
 	const stablehorde_url = "https://stablehorde.net";
+	const poll_interval_base_text = 500;
+	const poll_interval_base_img = 3800;
 
 	const text_hordes = [		
 		{
@@ -2236,9 +2238,9 @@ Current version: 16
 			console.log("Voices loading...");
 		}
 
-		//start the polling script for async generation status checking every 2s
-		setInterval(poll_pending_response, 2000);
-		setInterval(poll_image_db, 4500); //check images every 4.5s
+		//start the polling script for async generation status checking every Xs
+		setInterval(poll_pending_response, poll_interval_base_text);
+		setInterval(poll_image_db, poll_interval_base_img); //check images every Xs
 
 		if (localmode) {
 			document.getElementById("customapidropdown").value = 0;
@@ -4977,10 +4979,20 @@ Current version: 16
 		img.src = inputDataUri;
 	}
 
-	function poll_pending_response() {
-		if (pending_response_id && pending_response_id != "-1" && pending_response_id != "") {
-			++poll_ticks_passed;
-			if (poll_ticks_passed > 2) //4sec passed
+	//clock speed is 500ms per tick
+	function poll_pending_response() 
+	{
+		++poll_ticks_passed;
+
+		//for horde requests, slow down by 3 times
+		if(!is_using_custom_ep() && poll_ticks_passed%3!=0)
+		{
+			return;
+		}
+
+		if (pending_response_id && pending_response_id != "-1" && pending_response_id != "") 
+		{			
+			if (poll_ticks_passed > (4/(poll_interval_base_text*0.001))) //4sec passed
 			{
 				document.getElementById("abortgen").classList.remove("hidden");
 			}
