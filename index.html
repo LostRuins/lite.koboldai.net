@@ -276,7 +276,18 @@ Current version: 16
 			resize: none;
 			overflow: auto;
 		}
-
+		.anotetempbox
+		{		
+			display: inline;
+			width: calc(100% - 98px);	
+		}
+		.anotetempscale
+		{
+			display: inline;	
+			width: 94px;
+			padding: 6px 3px;	
+		}
+	
 
 		
 		#popuptitlebar {
@@ -2071,6 +2082,7 @@ Current version: 16
 	var current_memory = ""; //stored memory
 	var current_anote = ""; //stored author note
 	var current_anotetemplate = "[Author\'s note: <|>]";
+	var anote_strength = 320; //distance from end
 	var current_wi = []; //each item stores a wi object.
 	var loaded_storyobj = generate_base_storyobj(); //for loading json story files from disk
 	var generateimagesinterval = 600; //if generated images is enabled, it will trigger after every 600 new characters in context. 
@@ -4030,6 +4042,7 @@ Current version: 16
 		current_memory = document.getElementById("memorytext").value;
 		current_anote = document.getElementById("anotetext").value;
 		current_anotetemplate = document.getElementById("anotetemplate").value;
+		anote_strength = document.getElementById("anote_strength").value;
 		hide_popups();
 		render_gametext();
 	}
@@ -4418,8 +4431,8 @@ Current version: 16
 				let augmented_len = truncated_memory.length + truncated_context.length + truncated_anote.length;
 				let excess_len = augmented_len - max_allowed_characters; //if > 0, then we exceeded context window
 				truncated_context = truncated_context.substring(excess_len);
-				//insert authors note 80 tokens before the ending (320 characters).
-				let anote_dist = 320;
+				//insert authors note 80 tokens before the ending (320 characters).				
+				let anote_dist = anote_strength;
 				let anote_insert_idx = clamp(truncated_context.length - anote_dist, 0, truncated_context.length);
 				truncated_context = truncated_context.slice(0, anote_insert_idx) + truncated_anote + truncated_context.slice(anote_insert_idx);
 				truncated_context = truncated_memory + truncated_context;
@@ -5563,6 +5576,7 @@ Current version: 16
 		document.getElementById("memorytext").value = current_memory;
 		document.getElementById("anotetext").value = current_anote;
 		document.getElementById("anotetemplate").value = current_anotetemplate;
+		document.getElementById("anote_strength").value = anote_strength;
 	}
 
 	function toggle_wi_sk(idx) {
@@ -6349,10 +6363,21 @@ Current version: 16
 			<textarea class="form-control" id="anotetext"
 				placeholder="Author's Note will be inserted close to end of context."></textarea>
 			<br>
-			<div class="justifyleft settinglabel">Author's Note Template</div>
-			<input class="form-control" type="text"
+			<div class="settinglabel">
+				<span class="justifyleft">Author's Note Template</span>
+				<span class="justifyright flex-push-right" >
+					A/N Strength
+				</span>	
+			</div>
+			
+			<input class="form-control anotetempbox" type="text"
 				placeholder="(the &lt;|&gt; will be replaced with the Author's Note text)" value="" id="anotetemplate">
-			<br>
+				<select style="padding:4px;" class="anotetempscale form-control" id="anote_strength">
+					<option value="480">Weak</option>
+					<option value="320">Medium</option>
+					<option value="160">Strong</option>
+				</select>
+			<br><br>
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="confirm_memory()">OK</button>
 				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>

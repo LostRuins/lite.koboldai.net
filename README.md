@@ -18,6 +18,8 @@ Changelog of KoboldAI Lite 11 Mar 2023:
 - Increased default size of memory input window and made widths dynamic on mobile screens.
 - Added model name to post-gen worker kudos summary.
 - Added url parameter scenario hotlink shortcut to a premade scenario (Credit: @mikeX)
+- Added option for Author's Note strength
+- Added 'local=1' param for running locally.
 
 Changelog of KoboldAI Lite 9 Mar 2023:
 - Added a new feature - Quick Play Scenarios! Created 11 brand new *ORIGINAL* scenario prompts for use in KoboldAI. A mix of different types and genres, story, adventure and chat, were created from scratch for this showcase, so feel free to use any of them in your adventures! 
