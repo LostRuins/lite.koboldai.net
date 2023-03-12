@@ -3404,6 +3404,7 @@ Current version: 16
 					headers: {
 						'Authorization': 'Bearer '+desired_oai_key,
 					},
+					referrerPolicy: 'no-referrer',
 				})
 				.then((response) => response.json())
 				.then((data) => {
@@ -4541,6 +4542,7 @@ Current version: 16
 				{
 					//original range between 1 and 3, scale to 0 and 2
 					let scaled_rep_pen = (submit_payload.params.rep_pen-1.0);
+					//logit bias prevents <|endoftext|>
 					let oai_payload = 
 					{
 						"max_tokens": submit_payload.params.max_length,
@@ -4548,7 +4550,8 @@ Current version: 16
 						"presence_penalty": scaled_rep_pen,
 						"prompt": submit_payload.prompt,
 						"temperature": submit_payload.params.temperature,
-						"top_p": submit_payload.params.top_p
+						"top_p": submit_payload.params.top_p,
+						"logit_bias" : {"50256": -100},
 					}
 
 					fetch(oai_submit_endpoint, {
@@ -4558,6 +4561,7 @@ Current version: 16
 							'Authorization': 'Bearer '+custom_oai_key,
 						},
 						body: JSON.stringify(oai_payload),
+						referrerPolicy: 'no-referrer',
 					})
 					.then((response) => response.json())
 					.then((data) => {
@@ -5051,29 +5055,32 @@ Current version: 16
 							}
 							else {
 								if (data.done == true) {
-									//complete, fetch final results
-									console.log("fetching completed generation for " + pending_response_id);
-									fetch(pending_response_horde.output_endpoint + "/" + pending_response_id)
-										.then(x => x.json())
-										.then(data => {
-											console.log("Finished " + pending_response_id + ": " + JSON.stringify(data));
-											pending_response_id = "";
-											poll_in_progress = false;
-											if (data.generations != null && data.generations.length > 0) {
-												let gentxt = data.generations[0].text;
-												let genworker = data.generations[0].worker_name;
-												let genmdl = data.generations[0].model;
-												let genkudos = data.kudos;
-												handle_incoming_text(gentxt, genworker, genmdl, genkudos);
-											}
-											render_gametext();
-										}).catch((error) => {
-											console.error('Error:', error);
-											pending_response_id = "";
-											poll_in_progress = false;
-											render_gametext();
-											msgbox("Error encountered during text generation!");
-										});
+
+									//complete, fetch final results. we wait 0.5s more as kudos may take time to calculate									
+									setTimeout(() => {
+										console.log("fetching completed generation for " + pending_response_id);
+										fetch(pending_response_horde.output_endpoint + "/" + pending_response_id)
+											.then(x => x.json())
+											.then(data => {
+												console.log("Finished " + pending_response_id + ": " + JSON.stringify(data));
+												pending_response_id = "";
+												poll_in_progress = false;
+												if (data.generations != null && data.generations.length > 0) {
+													let gentxt = data.generations[0].text;
+													let genworker = data.generations[0].worker_name;
+													let genmdl = data.generations[0].model;
+													let genkudos = data.kudos;
+													handle_incoming_text(gentxt, genworker, genmdl, genkudos);
+												}
+												render_gametext();
+											}).catch((error) => {
+												console.error('Error:', error);
+												pending_response_id = "";
+												poll_in_progress = false;
+												render_gametext();
+												msgbox("Error encountered during text generation!");
+											});
+									}, 500);									
 								}
 								else {
 									//still waiting, do nothing until next poll
