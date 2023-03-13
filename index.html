@@ -1725,7 +1725,7 @@ Current version: 16
 			"author":"Concedo",
 			"desc":"Something major has happened! It's all over the papers! But what?",
 			"opmode":1,			
-			"prefmodel1":["nerys","nerybus","janeway"],
+			"prefmodel1":["nerys","nerybus","janeway","erebus"],
 			"prefmodel2":[],
 			"prompt":"THE DAILY TIMES\n\nBREAKING NEWS\n\n",
 			"memory": `[The following is a newspaper article of an extremely shocking event. Viewer discretion is advised.]`,
@@ -3038,6 +3038,8 @@ Current version: 16
 			hide_popups();
 			//assign model if necessary
 			let scenarioautopickai = document.getElementById("scenarioautopickai").checked?true:false;
+			let scenarioallownsfw = document.getElementById("scenarioallownsfw").checked?true:false;
+			
 			if(selected_models.length == 0 && !is_using_custom_ep())
 			{
 				scenarioautopickai = true; //no selected model, pick a good one
@@ -3052,15 +3054,33 @@ Current version: 16
 					}
 					else 
 					{	
+						let nsfwmodels = ["erebus","shinen","horni","litv2","lit-6b"];
 						selected_models = [];
 						for (var i = 0; i < mdls.length; ++i) {
-							for (var j = 0; j < temp_scenario.prefmodel1.length; ++j) {
+							for (var j = 0; j < temp_scenario.prefmodel1.length; ++j) {							
 								if (mdls[i].name.trim().toLowerCase().includes(temp_scenario.prefmodel1[j].trim().toLowerCase()) ||
 									temp_scenario.prefmodel1[j].trim().toLowerCase().includes(mdls[i].name.trim().toLowerCase())) {
-									selected_models.push(mdls[i]);
+										
+									let allow = true;
+									if (!scenarioallownsfw) 
+									{
+										for(var k=0;k<nsfwmodels.length;++k)
+										{
+											if(mdls[i].name.trim().toLowerCase().includes(nsfwmodels[k]))
+											{
+												allow = false;
+												break;
+											}
+										}
+									}
+									if(allow)
+									{
+										selected_models.push(mdls[i]);
+									}
 								}
 							}
 						}
+						
 
 						if (selected_models.length == 0) //no selected model, secondary options
 						{
@@ -3069,7 +3089,22 @@ Current version: 16
 								for (var j = 0; j < temp_scenario.prefmodel2.length; ++j) {
 									if (mdls[i].name.trim().toLowerCase().includes(temp_scenario.prefmodel2[j].trim().toLowerCase()) ||
 										temp_scenario.prefmodel2[j].trim().toLowerCase().includes(mdls[i].name.trim().toLowerCase())) {
-										selected_models.push(mdls[i]);
+										let allow = true;
+										if (!scenarioallownsfw) 
+										{
+											for(var k=0;k<nsfwmodels.length;++k)
+											{
+												if(mdls[i].name.trim().toLowerCase().includes(nsfwmodels[k]))
+												{
+													allow = false;
+													break;
+												}
+											}
+										}
+										if(allow)
+										{
+											selected_models.push(mdls[i]);
+										}
 									}
 								}
 							}
@@ -6001,12 +6036,19 @@ Current version: 16
 							<option value="3">Chat</option>
 						</select>
 					</div>
-					<div class="justifyleft anotelabel" style="padding-left: 8px;">
+					<div class="justifyleft anotelabel" style="padding-left: 8px;">						
 						Automatically select AI model <span class="helpicon">?
 							<span class="helptext">This option picks a suitable AI model based on the selected scenario. If no text model is currently selected, an appropriate one will be automatically picked for you.</span>
 						</span>
 						<input type="checkbox" id="scenarioautopickai" checked>
+						<span><br>
+							Allow NSFW Models <span class="helpicon">?
+								<span class="helptext">If disabled, NSFW only models like Erebus will never be selected</span>
+							</span>
+							<input type="checkbox" id="scenarioallownsfw" checked>
+						</span>
 					</div>
+					
 					<div id="scenariogrid" class="justifyleft anotelabel scenariogrid">	
 					</div>
 					<div id="scenariodesc" class="scenariodesc">						
