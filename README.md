@@ -9,6 +9,15 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
+Changelog of KoboldAI Lite 13 Mar 2023:
+- Added support for the new replacement_filter on image horde! This should hopefully reduce frustration from being flagged for false positives when generating images. 
+- Added Horde registration signup link visible for anonymous users.
+- Added a toggle to avoid autopicking NSFW models when loading a scenario.
+- Added support for gpt-3.5-turbo as a custom OpenAI endpoint
+- Increased horde polling speed slightly, and a greater increase for custom endpoints - this should make custom endpoints much more responsive.
+- Added tooltip for sampler order.
+- Fixed empty responses from OpenAI by biasing against <|endoftext|>
+
 Changelog of KoboldAI Lite 11 Mar 2023:
 - Added support for TavernAI character formats! Both importing PNG cards and JSON files are fully supported. Just load it like you would load a story normally.
 - Added support for importing Pygmalion / Oobabooga Text Generation Characters.
