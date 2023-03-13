@@ -17,6 +17,7 @@ Changelog of KoboldAI Lite 13 Mar 2023:
 - Increased horde polling speed slightly, and a greater increase for custom endpoints - this should make custom endpoints much more responsive.
 - Added tooltip for sampler order.
 - Fixed empty responses from OpenAI by biasing against <|endoftext|>
+- Added a new TavernAI preset that duplicates the settings TavernAI uses. 
 
 Changelog of KoboldAI Lite 11 Mar 2023:
 - Added support for TavernAI character formats! Both importing PNG cards and JSON files are fully supported. Just load it like you would load a story normally.
