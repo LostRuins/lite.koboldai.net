@@ -5404,15 +5404,20 @@ Current version: 16
 				retry_prev_text = "";
 				redo_prev_text = "";
 
-				//strip chunks
-				//gametext_elem.innerHTML = gametext_elem.innerHTML.replace(/<span class="txtchunk">(.+?)<\/span>/g, "$1");
-				gametext_elem.innerHTML = replaceAll(gametext_elem.innerHTML,"<div><br></div>", "<br>");
+				//stash images
 				gametext_elem.querySelectorAll('div.storyimg,div.storyimgfloat').forEach(
 					(el) => {
 						let chimg = el.getElementsByTagName("img")[0];
 						el.replaceWith((chimg.alt == null || chimg.alt == "") ? ("<|d|" + chimg.src + "|d|>") : ("<|p|" + chimg.alt + "|p|>"))
 					}
 				);
+				//strip chunks					
+				gametext_elem.innerHTML = gametext_elem.innerHTML.replace(/<span class="(.+?)">(.+?)<\/span>/g, "$2");				
+				gametext_elem.innerHTML = gametext_elem.innerHTML.replace(/<span class="(.+?)">(.+?)<\/span>/g, "$2");
+				gametext_elem.innerHTML = replaceAll(gametext_elem.innerHTML,"<div><br><br><br></div>", "<br><br><br>");				
+				gametext_elem.innerHTML = replaceAll(gametext_elem.innerHTML,"<div><br><br></div>", "<br><br>");
+				gametext_elem.innerHTML = replaceAll(gametext_elem.innerHTML,"<div><br></div>", "<br>");
+				
 
 				//rather than dump it all into one history, let's split it into paragraphs
 				let fullmergedstory = gametext_elem.innerText;
@@ -5664,14 +5669,14 @@ Current version: 16
 			document.getElementById("normalinterface").classList.remove("hidden");
 		}
 
+		if (localsettings.persist_session) {
+			autosave();
+		}
 		if (partialrefresh == false) {
 			if (localsettings.autoscroll) {
 				document.getElementById("gametext").scrollTop = document.getElementById("gametext").scrollHeight;
 				document.getElementById("chat_msg_body").scrollTop = document.getElementById("chat_msg_body").scrollHeight;
-			}
-			if (localsettings.persist_session) {
-				autosave();
-			}
+			}			
 			document.getElementById("abortgen").classList.add("hidden");
 		}
 
