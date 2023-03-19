@@ -2238,6 +2238,7 @@ Current version: 16
 	var filter_enabled = true;
 	var temp_scenario = null;
 	var last_token_budget = ""; //to display token limits
+	var last_known_filename = "";
 
 	var localsettings = {
 		my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
@@ -2788,13 +2789,14 @@ Current version: 16
 		window.URL = window.URL || window.webkitURL;
 
 		var userAgent = window.navigator.userAgent;
+		let newfilename = (last_known_filename==""?"saved_story.json":last_known_filename);
 		if (userAgent.match(/AppleWebKit/) && (userAgent.match(/iPad/i) || userAgent.match(/iPhone/i))) {
 			var file = new Blob([JSON.stringify(loaded_storyobj)], { type: 'application/octet-stream' });
 			console.log("Special save handling for iphones")
 			// iPad or iPhone needs an extra download 			
 			var reader = new FileReader();
 			reader.onload = function (e) {
-				msgbox(`Right-Click or long press the link, and select (Save As)<br><h2><a href=` + reader.result + ` target='_blank' download="saved_story.json">Download Story</a></h2>`, "Save Story", true)
+				msgbox(`Right-Click or long press the link, and select (Save As)<br><h2><a href=` + reader.result + ` target='_blank' download="`+newfilename+`">Download Story</a></h2>`, "Save Story", true)
 			}
 			reader.readAsDataURL(file);
 		} else {
@@ -2807,7 +2809,7 @@ Current version: 16
 			tempfileurl = window.URL.createObjectURL(file);
 			a.href = tempfileurl;
 			a.target = '_blank';
-			a.download = "saved_story.json";
+			a.download = newfilename;
 			a.click();
 		}
 		
@@ -2819,6 +2821,11 @@ Current version: 16
 		if (input.files.length > 0) {
 
 			var selectedFile = input.files[0];
+			var selectedFilename = "";
+			if(selectedFile)
+			{
+				selectedFilename = input.files[0].name;
+			}
 
 			let reader = new FileReader();
 			reader.onload = function () {
@@ -2839,13 +2846,17 @@ Current version: 16
 						{
 							//check for ooba text generation fields (character)
 							load_ooba_obj(new_loaded_storyobj);
-						}						
+						}
 						else 
 						{
 							msgbox("Could not load selected json file. Does not appear to be a KoboldAI story or compatible format.");
 						}
 					} else {
 						kai_json_load(new_loaded_storyobj);
+						if(selectedFilename && selectedFilename!="")
+						{
+							last_known_filename = selectedFilename;
+						}
 					}
 				} catch (e) {
 					console.log(e)
@@ -4280,6 +4291,7 @@ Current version: 16
 		localsettings.adventure_is_action = false;
 		prev_hl_chunk = null;
 		last_token_budget = "";
+		last_known_filename = "";
 		render_gametext();
 	}
 
