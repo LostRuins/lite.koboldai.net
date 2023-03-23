@@ -9,6 +9,12 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
+Changelog of KoboldAI Lite 23 Mar 2023:
+- Integrated spellbook by Scale AI as a custom endpoint.
+- Added support for specifying a fixed port in local mode, using the URL parameters local=1&port=(port)
+- Added autosave upon ending of edit mode.
+- Save file hint remembers last known filename when opening.
+
 Changelog of KoboldAI Lite 13 Mar 2023:
 - Added support for the new replacement_filter on image horde! This should hopefully reduce frustration from being flagged for false positives when generating images. 
 - Added Horde registration signup link visible for anonymous users.
