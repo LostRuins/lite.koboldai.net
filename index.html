@@ -2192,6 +2192,8 @@ Current version: 16
 	const oai_submit_endpoint = "https://api.openai.com/v1/completions";
 	const oai_submit_endpoint_turbo = "https://api.openai.com/v1/chat/completions";
 
+	const scale_submit_endpoint = "https://dashboard.scale.com/spellbook/api/v2/deploy/"	
+
 	//support for quick news updates
 	const news_endpoint = "https://news.concedo.workers.dev"
 
@@ -2232,6 +2234,8 @@ Current version: 16
 	var custom_kobold_endpoint = ""; //if set, does not use horde. Instead, attempts to use this sync endpoint
 	var custom_oai_key = ""; //if set, uses the OpenAI API to generate
 	var custom_oai_model = "";
+	var custom_scale_key = "";
+	var custom_scale_ID = "";
 	var uses_cors_proxy = false; //we start off attempting a direct connection. switch to proxy if that fails
 	var synchro_polled_response = null;
 	var pending_found_story = null;
@@ -2565,7 +2569,7 @@ Current version: 16
 
 	function is_using_custom_ep()
 	{
-		return (custom_oai_key!=""||custom_kobold_endpoint!="");
+		return (custom_oai_key!=""||custom_kobold_endpoint!=""||custom_scale_key!="");
 	}
 
 	function get_most_common_cluster(arr)
@@ -3508,15 +3512,20 @@ Current version: 16
 	function customapi_dropdown()
 	{
 		let epchoice = document.getElementById("customapidropdown").value;
+		document.getElementById("oaicustom").classList.add("hidden");
+		document.getElementById("koboldcustom").classList.add("hidden");
+		document.getElementById("scalecustom").classList.add("hidden");
 		if(epchoice==0)
 		{
-			document.getElementById("koboldcustom").classList.remove("hidden");
-			document.getElementById("oaicustom").classList.add("hidden");
+			document.getElementById("koboldcustom").classList.remove("hidden");			
 		}
 		else if(epchoice==1)
 		{
-			document.getElementById("koboldcustom").classList.add("hidden");
 			document.getElementById("oaicustom").classList.remove("hidden");
+		}
+		else if(epchoice==2)
+		{
+			document.getElementById("scalecustom").classList.remove("hidden");
 		}
 	}
 
@@ -3525,6 +3534,7 @@ Current version: 16
 	{
 		custom_kobold_endpoint = "";
 		custom_oai_key = "";
+		custom_scale_key = "";
 
 		let epchoice = document.getElementById("customapidropdown").value;
 		if(epchoice==0) //connect to kobold endpoint
@@ -3613,7 +3623,7 @@ Current version: 16
 			}
 		}
 		else if(epchoice==1) //connect to OAI Endpoint
-		{			
+		{
 			let desired_oai_key = document.getElementById("custom_oai_key").value.trim();
 			
 			if(desired_oai_key!="")
@@ -3660,6 +3670,73 @@ Current version: 16
 				.catch(error => {
 				console.log("Error: " + error);
 				custom_oai_key = "";
+				msgbox("Error: " + error);
+				});
+			}
+		}
+		else if(epchoice==2) //connect to Scale Endpoint
+		{
+			let desired_scale_key = document.getElementById("custom_scale_key").value.trim();
+			let desired_scale_ID = document.getElementById("custom_scale_ID").value.trim();
+			
+			desired_scale_ID = desired_scale_ID.split("#")[0];
+			desired_scale_ID = desired_scale_ID.split("?")[0];
+			if(desired_scale_ID.includes("dashboard.scale.com/spellbook/api/v2/deploy/") && 
+			desired_scale_key.length == 25 &&!desired_scale_key.includes(" ")&&!desired_scale_key.includes("/"))
+			{
+				desired_scale_ID = desired_scale_ID.split("dashboard.scale.com/spellbook/api/v2/deploy/")[1];
+			}
+			else
+			{
+				desired_scale_ID = "";
+				desired_scale_key = "";
+				msgbox("Invalid inputs, please try again.");
+			}
+
+			if(desired_scale_key!="" && desired_scale_ID!="")
+			{
+				hide_popups();
+				fetch(cors_proxy+"?"+ scale_submit_endpoint+desired_scale_ID, {
+					method: 'GET',
+					headers: {
+						'Authorization': 'Bearer '+desired_scale_key,
+					},
+					referrerPolicy: 'no-referrer',
+				})
+				.then((response) => response.json())
+				.then((data) => {
+					console.log(data);
+					if (data.message && data.message!="") 
+					{
+						//good to go
+						custom_scale_key = desired_scale_key;
+						custom_scale_ID = desired_scale_ID;
+						selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": "SpellbookScaleAI", "count": 1 }];
+						selected_workers = [];
+						if (perfdata == null) {
+							//generate some fake perf data if horde is offline and using custom endpoint
+							perfdata = {
+								"queued_requests": 0,
+								"queued_tokens": 0,
+								"past_minute_tokens": 0,
+								"worker_count": 0
+							};
+							document.body.classList.add("connected");
+							document.getElementById("connectstatus").classList.remove("color_orange");
+							document.getElementById("connectstatus").classList.add("color_green");
+						}
+						document.getElementById("connectstatus").innerHTML = "Connected to ScaleAI Endpoint";
+						render_gametext();
+					}
+					else
+					{
+						custom_scale_key = "";
+						msgbox("Cannot connect to Spellbook by ScaleAI");
+					}
+				})
+				.catch(error => {
+				console.log("Error: " + error);
+				custom_scale_key = "";
 				msgbox("Error: " + error);
 				});
 			}
@@ -3798,6 +3875,7 @@ Current version: 16
 		} else {
 			custom_kobold_endpoint = "";
 			custom_oai_key = "";
+			custom_scale_key = "";
 			//remove the Custom Endpoint if it's multi selected together with others.
 			const findex = selected_idx_arr.indexOf("9999");			
 			if (findex > -1) {
@@ -4857,6 +4935,46 @@ Current version: 16
 						msgbox("Error while submitting prompt: " + error);
 					});
 				}
+				else if(custom_scale_key!="")//handle for Scale
+				{
+					let targetep = cors_proxy+"?"+ scale_submit_endpoint+custom_scale_ID;					
+					let scale_payload = {"input": {"input": submit_payload.prompt }};
+					
+					fetch(targetep, {
+						method: 'POST', 
+						headers: {
+							'Content-Type': 'application/json',
+							'Authorization': 'Basic '+custom_scale_key,
+						},
+						body: JSON.stringify(scale_payload),
+						referrerPolicy: 'no-referrer',
+					})
+					.then((response) => response.json())
+					.then((data) => {
+						console.log("sync finished response: " + JSON.stringify(data));
+						if (custom_scale_key != "" && data.output != null && data.output!="") 
+						{
+							synchro_polled_response = data.output;
+						}
+						else {
+							//error occurred, maybe captcha failed
+							console.error("error occurred in Scale generation");
+							pending_response_id = "";
+							poll_in_progress = false;
+							synchro_polled_response = null;
+							render_gametext();
+							msgbox("Error occurred during text generation: " + JSON.stringify(data));
+						}
+					})
+					.catch((error) => {
+						console.error('Error:', error);
+						pending_response_id = "";
+						poll_in_progress = false;
+						synchro_polled_response = null;
+						render_gametext();
+						msgbox("Error while submitting prompt: " + error);
+					});
+				}
 				else
 				{
 					console.log("Unknown sync endpoint!");
@@ -5513,6 +5631,10 @@ Current version: 16
 				else if(custom_oai_key!="")
 				{
 					whorun = "<br>You're using the OpenAI API";
+				}
+				else if(custom_scale_key!="")
+				{
+					whorun = "<br>You're using the Spellbook by Scale AI API";
 				}
 				else {
 					whorun = "<br>There are <span class=\"color_orange\">" + selected_models.reduce((s, a) => s + a.count, 0) + "</span> <a class=\"color_green\" href=\"#\" onclick=\"get_and_show_workers()\">volunteer(s)</a> running selected models with a total queue length of <span class=\"color_orange\">"+ selected_models.reduce((s, a) => s + a.queued, 0) + "</span> tokens";
@@ -6323,6 +6445,7 @@ Current version: 16
 			<select style="padding:4px;" class="form-control" id="customapidropdown" onchange="customapi_dropdown()">
 				<option value="0">KoboldAI Remote Play</option>
 				<option value="1">OpenAI API</option>
+				<option value="2">Spellbook By Scale API</option>
 			</select>	
 			</div>
 			<div id="koboldcustom" class="aidgpopuplistheader anotelabel">
@@ -6348,6 +6471,15 @@ Current version: 16
 					<option value="davinci">davinci</option>
 					<option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
 				</select>
+			</div>
+			<div id="scalecustom" class="aidgpopuplistheader anotelabel hidden">
+				Uses Spellbook by Scale. This is an experimental endpoint. It may break at any time.<br><br>
+				This endpoint does not support custom settings - please configure all properties at the scale webpage. Note that KoboldAI Lite takes no responsibility for your usage or consequences of this feature.<br><span class="color_red">Due to CORS limitations, your connection will be proxied.</span><br><br>
+				<span class="color_green" style="font-weight: bold;">Please input Spellbook by Scale API Key.</span><br><br>
+				<input class="form-control" type="text" id="custom_scale_key" placeholder="Spellbook API Key" value=""><br>
+				
+				<span class="color_green" style="font-weight: bold;">Please input the Deployment URL provided from the website.</span><br><br>
+				<input class="form-control" type="text" id="custom_scale_ID" placeholder="https://dashboard.scale.com/spellbook/api/v2/deploy/a12345b" value="" ><br>
 			</div>
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="connect_custom_endpoint()">Connect</button>
