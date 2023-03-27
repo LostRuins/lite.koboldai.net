@@ -9,6 +9,12 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
+Changelog of KoboldAI Lite 28 Mar 2023:
+- Added pseudo-streaming for Kobold-based APIs, allowing a request to be divided into multiple smaller requests for faster responses.
+- Clickable image summries, select an image to view prompt used to generate. Also allows deleting old images from this UI.
+- Improved edit mode text merging, now remembers the newest chunk even if it's a sentence fragment.
+- Proper support for localhost mode, disabling all horde models when local flag is set. 
+
 Changelog of KoboldAI Lite 23 Mar 2023:
 - Integrated spellbook by Scale AI as a custom endpoint.
 - Added support for specifying a fixed port in local mode, using the URL parameters local=1&port=(port)

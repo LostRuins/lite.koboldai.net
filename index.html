@@ -5,7 +5,7 @@ This is a standalone web ui for KoboldAIs Horde, which requires no dependencies,
 Just copy this single static HTML file anywhere and open it in a browser. No dependencies.
 Or you can throw it on some web server and serve it there too. E.g. Github pages, nginx, whatever.
 Now rebranded as KoboldAI Lite
-Current version: 16
+Current version: 17
 -Concedo
 -->
 
@@ -556,6 +556,22 @@ Current version: 16
 			background-color: #8a8a8a;
 		}
 		.bg_green:disabled:hover {
+			background-color: #8a8a8a;
+		}
+
+		.bg_red {
+			background-color: #c40000;
+		}
+		.bg_red:hover {
+			background-color: #da0000;
+		}
+		.bg_red:focus {
+			background-color: #da0000;
+		}
+		.bg_red:disabled {
+			background-color: #8a8a8a;
+		}
+		.bg_red:disabled:hover {
 			background-color: #8a8a8a;
 		}
 
@@ -1292,7 +1308,7 @@ Current version: 16
 		{
 			float: right; 
 			position: relative;
-			padding: 4px;
+			padding: 4px;			
 		}
 		.storyimg
 		{		
@@ -1301,6 +1317,19 @@ Current version: 16
 			padding: 4px;
 			margin: 0 auto;
 		}
+		.zoomedimgdiv
+		{		
+			text-align: center;
+			position: relative;			
+			margin: 0 auto;
+			padding-top: 6px;
+			padding-bottom: 4px;
+		}
+		.zoomedimgdesc{
+			max-height: 120px;
+			overflow-y: auto;
+			overflow-x: hidden;			
+		}	
 		.mdlpicker::-webkit-calendar-picker-indicator {
               opacity: 100;
            }
@@ -2125,7 +2154,7 @@ Current version: 16
 
 
 	//here is my shit integration of KAI Horde's API. You're welcome. -Concedo.
-	const default_client_agent = "KoboldAiLite:16";
+	const default_client_agent = "KoboldAiLite:17";
 	const stablehorde_url = "https://stablehorde.net";
 	const poll_interval_base_text = 500;
 	const poll_interval_base_img = 3800;
@@ -2243,6 +2272,8 @@ Current version: 16
 	var temp_scenario = null;
 	var last_token_budget = ""; //to display token limits
 	var last_known_filename = "";
+	var localmode = false;
+	var localmodeport = 5000;
 
 	var localsettings = {
 		my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
@@ -2329,8 +2360,19 @@ Current version: 16
 		//disable debug log if not local
 		const urlParams = new URLSearchParams(window.location.search);
 		const dbgmode = urlParams.get('dbg');
-		const localmode = urlParams.get('local');
-		const localmodeport = urlParams.get('port');
+		const localflag = urlParams.get('local');
+		if (localflag)
+		{
+			localmode = true;
+			let inputport = urlParams.get('port');
+			if (window.location.port && window.location.port != 80 && window.location.port != 443) {
+				localmodeport = window.location.port;
+			}
+			if (inputport) {
+				localmodeport = parseInt(inputport);
+			}
+		}
+		
 		const fromfile = ( window.location.protocol == 'file:' );
 		if(!dbgmode && !fromfile){
 			if(!window.console) window.console = {};
@@ -2342,8 +2384,8 @@ Current version: 16
 
 		console.log("Init started");
 		try {
-			let loadedsettingsjson = localStorage.getItem("kaihordewebui_settings");
-			let loadedstorycompressed = localStorage.getItem("kaihordewebui_story");
+			let loadedsettingsjson = localStorage.getItem((localmode?"e_":"")+"kaihordewebui_settings");
+			let loadedstorycompressed = localStorage.getItem((localmode?"e_":"")+"kaihordewebui_story");
 			if (loadedsettingsjson != null && loadedsettingsjson != "" && loadedstorycompressed != null && loadedstorycompressed != "") {
 				let loadedsettings = JSON.parse(loadedsettingsjson);
 				//see if persist is enabled		
@@ -2384,18 +2426,7 @@ Current version: 16
 		setInterval(poll_pending_response, poll_interval_base_text);
 		setInterval(poll_image_db, poll_interval_base_img); //check images every Xs
 
-		if (localmode) {
-			document.getElementById("customapidropdown").value = 0;
-			let localport = 5000;
-			if(localmodeport)
-			{
-				localport = parseInt(localmodeport);
-			}
-			document.getElementById("customendpoint").value = "http://localhost:"+localport;
-			connect_custom_endpoint();
-		} else {
-			attempt_connect(false);
-		}
+		attempt_connect(false);
 
 		//fetch for news updates
 		fetch(news_endpoint)
@@ -2410,91 +2441,103 @@ Current version: 16
 		});
 	}
 
-	function attempt_connect(popup_aiselect=true) {
-		//fetch horde performance status as initial login
-		multifetch(perf_endpoints,(resArr,errArr)=>{
-			if(resArr && resArr.length>0)
-			{
-				perfdata = {
-					"queued_requests": 0,
-					"queued_tokens": 0,
-					"past_minute_tokens": 0,
-					"worker_count": 0
-				};
-				for(let i=0;i<resArr.length;++i)
-				{
-					let cur = resArr[i].data;
-					if(cur.hasOwnProperty("text_worker_count"))
-					{
-						//new horde api
-						perfdata.queued_requests += cur.queued_text_requests;
-						perfdata.worker_count += cur.text_worker_count;
-						perfdata.queued_tokens += cur.queued_tokens;
-						perfdata.past_minute_tokens += cur.past_minute_tokens;
-					}else{
-						//old horde api
-						perfdata.queued_requests += cur.queued_requests;
-						perfdata.worker_count += cur.worker_count;
-						perfdata.queued_tokens += cur.queued_tokens;
-						perfdata.past_minute_tokens += cur.past_minute_tokens;
+	function attempt_connect(popup_aiselect = true) 
+	{
+		if (localmode) {
+			document.getElementById("customapidropdown").value = 0;
+			
+			document.getElementById("customendpoint").value = "http://localhost:" + localmodeport;
+			connect_custom_endpoint();
+			document.getElementById("lastreq").innerHTML = document.getElementById("lastreq2").innerHTML = 
+			`<span class=color_gray>You're using Kobold Lite Embedded.</span>`;
+		}
+		else 
+		{
+			//fetch horde performance status as initial login
+			multifetch(perf_endpoints, (resArr, errArr) => {
+				if (resArr && resArr.length > 0) {
+					perfdata = {
+						"queued_requests": 0,
+						"queued_tokens": 0,
+						"past_minute_tokens": 0,
+						"worker_count": 0
+					};
+					for (let i = 0; i < resArr.length; ++i) {
+						let cur = resArr[i].data;
+						if (cur.hasOwnProperty("text_worker_count")) {
+							//new horde api
+							perfdata.queued_requests += cur.queued_text_requests;
+							perfdata.worker_count += cur.text_worker_count;
+							perfdata.queued_tokens += cur.queued_tokens;
+							perfdata.past_minute_tokens += cur.past_minute_tokens;
+						} else {
+							//old horde api
+							perfdata.queued_requests += cur.queued_requests;
+							perfdata.worker_count += cur.worker_count;
+							perfdata.queued_tokens += cur.queued_tokens;
+							perfdata.past_minute_tokens += cur.past_minute_tokens;
+						}
 					}
-				}
-				document.body.classList.add("connected");
-				document.getElementById("connectstatus").innerHTML = "Connected to KoboldAI Horde";
-				document.getElementById("connectstatus").classList.remove("color_orange");
-				document.getElementById("connectstatus").classList.add("color_green");
-				render_gametext();
+					document.body.classList.add("connected");
+					document.getElementById("connectstatus").innerHTML = "Connected to KoboldAI Horde";
+					document.getElementById("connectstatus").classList.remove("color_orange");
+					document.getElementById("connectstatus").classList.add("color_green");
+					render_gametext();
 
 
-				//read the url params, and autoload a shared story if found
-				const urlParams = new URLSearchParams(window.location.search);
-				const foundStory = urlParams.get('s');
-				const foundScenario = urlParams.get('scenario');
-				const nofiltermode = urlParams.get('nofilter');
-				if (nofiltermode) {
-					filter_enabled = false;
-					console.log("Safety filter is off. Use at your own risk.");
-				}
-				if (foundStory && foundStory != "") {
-					let safe_to_overwrite = (gametext_arr.length == 0 && current_memory == "" && current_anote == "" && current_wi.length == 0 && redo_arr.length == 0);
-					if (localsettings.persist_session && !safe_to_overwrite) {
-						pending_found_story = foundStory;
-						prompt_overwrite();
+					//read the url params, and autoload a shared story if found
+					const urlParams = new URLSearchParams(window.location.search);
+					const foundStory = urlParams.get('s');
+					const foundScenario = urlParams.get('scenario');
+					const nofiltermode = urlParams.get('nofilter');
+					if (nofiltermode) {
+						filter_enabled = false;
+						console.log("Safety filter is off. Use at your own risk.");
+					}
+					if (foundStory && foundStory != "") {
+						let safe_to_overwrite = (gametext_arr.length == 0 && current_memory == "" && current_anote == "" && current_wi.length == 0 && redo_arr.length == 0);
+						if (localsettings.persist_session && !safe_to_overwrite) {
+							pending_found_story = foundStory;
+							prompt_overwrite();
+						} else {
+							import_share_story(foundStory);
+						}
+						//purge url params
+						window.history.replaceState(null, null, window.location.pathname);
+					} else if (foundScenario && foundScenario != "") {
+						display_scenarios();
+						document.getElementById("scenariosearch").value = escapeHtml(foundScenario);
+						scenario_search();
+						const found = scenario_db.find(m => m.title.toLowerCase() == foundScenario.trim().toLowerCase());
+						if (found !== undefined) {
+							temp_scenario = found;
+							preview_temp_scenario();
+						}
+						//purge url params
+						window.history.replaceState(null, null, window.location.pathname);
 					} else {
-						import_share_story(foundStory);
-					}
-					//purge url params
-					window.history.replaceState(null, null, window.location.pathname);
-				} else if (foundScenario && foundScenario != "") {
-					display_scenarios();
-					document.getElementById("scenariosearch").value = escapeHtml(foundScenario);
-					scenario_search();
-					const found = scenario_db.find(m => m.title.toLowerCase() == foundScenario.trim().toLowerCase());
-					if (found !== undefined) {
-						temp_scenario = found;
-						preview_temp_scenario();
-					}
-					//purge url params
-					window.history.replaceState(null, null, window.location.pathname);
-				}else{
-					if(popup_aiselect)
-					{
-						display_models();
+						if (popup_aiselect) {
+							display_models();
+						}
 					}
 				}
-			}
-			else
-			{
-				msgbox("Failed to connect to KAI Horde!\nPlease check your network connection.");
-				document.body.classList.remove("connected");
-				document.getElementById("connectstatus").innerHTML = "Offline Mode";
-				document.getElementById("connectstatus").classList.add("color_orange");
-				document.getElementById("connectstatus").classList.remove("color_green");
-				render_gametext();
-			}
-		});
+				else {
+					msgbox("Failed to connect to KAI Horde!\nPlease check your network connection.");
+					document.body.classList.remove("connected");
+					document.getElementById("connectstatus").innerHTML = "Offline Mode";
+					document.getElementById("connectstatus").classList.add("color_orange");
+					document.getElementById("connectstatus").classList.remove("color_green");
+					render_gametext();
+				}
+			});
+		}
 
 		//fetch the stable horde model list once and store it forever, it likely wont change
+		fetch_image_models();
+	}
+
+	function fetch_image_models()
+	{
 		fetch(stablehorde_model_endpoint)
 			.then(x => x.json())
 			.then(shdata => {
@@ -2675,31 +2718,33 @@ Current version: 16
 			//fetch the model list
 			fetch_models((mdls) => {
 				//can we find the model that's used? if yes load it, otherwise load the first one
-				if (mdls.length == 0) {
+				if (mdls.length == 0 && !localmode) {
 					msgbox("No models available. Unable to load.");
-				} else {
+				} 
+				else 
+				{
+					if(!localmode)
+					{
+						selected_models = [];
+						for (var i = 0; i < mdls.length; ++i) {
+							if (story.md.includes(cyrb_hash(mdls[i].name))) {
+								selected_models.push(mdls[i]);
+							}
+						}
 
-					selected_models = [];
-					for (var i = 0; i < mdls.length; ++i) {
-						if (story.md.includes(cyrb_hash(mdls[i].name))) {
-							selected_models.push(mdls[i]);
+						if (selected_models.length == 0) //no matching models, just assign one
+						{
+							selected_models.push(mdls[0]);
+						}
+
+						const allMatched1 = selected_models.every(item => item.cluster === selected_models[0].cluster);
+
+						if (!allMatched1) {
+							//if conflicted, get the most numerous cluster (mode)					
+							let pickedcluster = get_most_common_cluster(selected_models);
+							selected_models = selected_models.filter(item => item.cluster === pickedcluster);
 						}
 					}
-
-					if (selected_models.length == 0) //no matching models, just assign one
-					{
-						selected_models.push(mdls[0]);
-					}
-
-					const allMatched1 = selected_models.every(item => item.cluster === selected_models[0].cluster);
-								
-					if(!allMatched1)
-					{	
-						//if conflicted, get the most numerous cluster (mode)					
-						let pickedcluster = get_most_common_cluster(selected_models);
-						selected_models = selected_models.filter(item => item.cluster === pickedcluster);						
-					}
-
 					restart_new_game();
 
 					gametext_arr = story.ga;
@@ -3206,17 +3251,22 @@ Current version: 16
 	}
 	function togglescenarioallownsfw()
 	{
-		if(selected_models.length==0)
+		if(localmode)
 		{
-			document.getElementById("scenarioautopickai").checked = true;
+			document.getElementById("scenarioautopickbox").classList.add("hidden");			
 		}
-		let scenarioautopickai = document.getElementById("scenarioautopickai").checked?true:false;
-		if(scenarioautopickai)
+		else
 		{
-			document.getElementById("scenarioallownsfwbox").classList.remove("hidden");
-		}else{
-			document.getElementById("scenarioallownsfwbox").classList.add("hidden");
-		}		
+			if (selected_models.length == 0) {
+				document.getElementById("scenarioautopickai").checked = true;
+			}
+			let scenarioautopickai = document.getElementById("scenarioautopickai").checked ? true : false;
+			if (scenarioautopickai) {
+				document.getElementById("scenarioallownsfwbox").classList.remove("hidden");
+			} else {
+				document.getElementById("scenarioallownsfwbox").classList.add("hidden");
+			}
+		}
 	}
 	function confirm_scenario()
 	{
@@ -3231,7 +3281,7 @@ Current version: 16
 			{
 				scenarioautopickai = true; //no selected model, pick a good one
 			}
-			if (scenarioautopickai) 
+			if (scenarioautopickai && !localmode) 
 			{
 				fetch_models((mdls) => 
 				{
@@ -3362,9 +3412,18 @@ Current version: 16
 	}
 
 	function get_and_show_workers() {
+		if(localmode)
+		{			
+			return;
+		}
 		get_workers((wdata) => { show_workers(wdata) });
 	}
 	function get_workers(onDoneCallback) {
+		if(localmode)
+		{
+			onDoneCallback([]);
+			return;
+		}
 		multifetch(worker_endpoints,(resArr,errArr)=>{
 			
 			if(resArr && resArr.length>0)
@@ -3437,11 +3496,12 @@ Current version: 16
 		document.getElementById("wicontainer").classList.add("hidden");
 		document.getElementById("customendpointcontainer").classList.add("hidden");
 		document.getElementById("quickstartcontainer").classList.add("hidden");
+		document.getElementById("zoomedimgcontainer").classList.add("hidden");
 	}
 
 	function explain_horde()
 	{
-		msgbox("The AI Horde generates text using crowdsourced GPUs by volunteer workers. By default your inputs are not logged, but as Horde workers are open source, they can be modified to do so. \n\nIn all cases, the sender will *always be anonymous*, however you are still advised to avoid sending privacy sensitive information.","Disclaimer");
+		msgbox("The AI Horde generates text using crowdsourced GPUs by volunteer workers. By default your inputs are not logged, but as Horde workers are open source, they can be modified to do so. <br><br>In all cases, the sender will *always be anonymous*, however you are still advised to avoid sending privacy sensitive information.<br><br>For any issues, you can find us on discord at <a class=\"color_blueurl\" href=\"https://koboldai.org/discord\">https://koboldai.org/discord</a>","Disclaimer",true);
 	}
 
 	var pendingstyle = "";
@@ -3538,7 +3598,7 @@ Current version: 16
 
 		let epchoice = document.getElementById("customapidropdown").value;
 		if(epchoice==0) //connect to kobold endpoint
-		{	
+		{
 			let tmpep = document.getElementById("customendpoint").value;
 			if (tmpep != null && tmpep.trim() != "") {
 				hide_popups();
@@ -3571,7 +3631,7 @@ Current version: 16
 						// let maxctxlen = values[1].value;
 						// let genamt = values[2].value;
 						if (!mdlname) {
-							msgbox("Error at Custom Kobold Endpoint!\n\nThe custom endpoint failed to respond correctly.\n\nNote that localhost IPs are not fully supported.");
+							msgbox("Error at Custom Kobold Endpoint!\n\nThe custom endpoint failed to respond correctly.");
 							selected_models = [];
 							selected_workers = [];
 							custom_kobold_endpoint = "";
@@ -3610,7 +3670,7 @@ Current version: 16
 						console.log("Error: " + error);
 
 						if (uses_cors_proxy || is_localhost) {
-							msgbox("Failed to connect to Custom Kobold Endpoint!\n\nPlease check if KoboldAI is running at the url: " + tmpep + "\n\nNote that localhost IPs are not fully supported.");
+							msgbox("Failed to connect to Custom Kobold Endpoint!\n\nPlease check if KoboldAI is running at the url: " + tmpep + "");
 							selected_models = [];
 							selected_workers = [];
 							custom_kobold_endpoint = "";
@@ -3750,6 +3810,11 @@ Current version: 16
 
 	function fetch_models(onDoneCallback)
 	{
+		if(localmode)
+		{
+			onDoneCallback(selected_models);
+			return;
+		}
 		//fetch the model list
 		multifetch(models_endpoints,(resArr,errArr)=>{
 			if(resArr && resArr.length>0)
@@ -4000,6 +4065,10 @@ Current version: 16
 	let desired_new_home_cluster = null;
 	function fetch_kudo_balance()
 	{
+		if(localmode)
+		{			
+			return;
+		}
 		desired_new_home_cluster = null;
 		let newapikey = document.getElementById("apikey").value;
 		if (newapikey != null && newapikey.trim() != "") {
@@ -4335,7 +4404,7 @@ Current version: 16
 	}
 
 	function confirm_newgame() {
-		if(!document.getElementById("keep_ai_selected").checked)
+		if(!localmode && !document.getElementById("keep_ai_selected").checked)
 		{
 			selected_models = [];
 			selected_workers = [];
@@ -5166,6 +5235,42 @@ Current version: 16
 			});
 	}
 
+	function click_image(target)
+	{
+		if(target)
+		{
+			document.getElementById("zoomedimgcontainer").classList.remove("hidden");
+			document.getElementById("zoomedimg").src = target.src;
+			let tmpdsc = target.title;
+			if(tmpdsc && tmpdsc!="")
+			{
+				tmpdsc = replaceAll(tmpdsc,"<br>"," ");
+				document.getElementById("zoomedimgdesc").innerText = tmpdsc;
+			}
+			else
+			{
+				document.getElementById("zoomedimgdesc").innerText = "No Saved Description";
+			}
+		}
+	}
+	function delete_curr_image()
+	{
+		let removesrc = document.getElementById("zoomedimg").src;
+		if (removesrc && removesrc != "") {
+			var matchingStr = ("<|d|" + removesrc + "|d|>")
+			for (let i = 0; i < gametext_arr.length; ++i) {
+				if (gametext_arr[i].includes(matchingStr)) {
+					gametext_arr[i] = gametext_arr[i].replace(matchingStr, "");
+					if (gametext_arr[i] == "") {
+						gametext_arr.splice(i, 1);
+					}
+					break;
+				}
+			}
+			render_gametext();
+		}
+	}
+	
 	function render_image_html(data, pend_txt = "", float=true) {
 		var dim = (localsettings.opmode == 2 ? 160 : 200); //adventure mode has smaller pictures
 		let siclass = (float?"storyimgfloat":"storyimg");
@@ -5186,7 +5291,7 @@ Current version: 16
 			if (completed_imgs_meta[imghash] != null) {				
 				alttxt = completed_imgs_meta[imghash].alt?escapeHtml(completed_imgs_meta[imghash].alt):"";			
 			}
-			return `<div class="`+siclass+`"><img src="` + data + `" width=` + dim + ` height=` + dim + ` title="`+alttxt+`" style="border-radius: 6%;"></div>`;
+			return `<div class="`+siclass+`"><img src="` + data + `" width=` + dim + ` height=` + dim + ` title="`+alttxt+`" style="border-radius: 6%; cursor: pointer;" onclick="return click_image(this);"></div>`;
 		}
 	}
 
@@ -5539,7 +5644,7 @@ Current version: 16
 				redo_arr = [];
 				retry_prev_text = "";
 				redo_prev_text = "";
-
+			
 				//stash images
 				gametext_elem.querySelectorAll('div.storyimg,div.storyimgfloat').forEach(
 					(el) => {
@@ -5547,7 +5652,16 @@ Current version: 16
 						el.replaceWith((chimg.alt == null || chimg.alt == "") ? ("<|d|" + chimg.src + "|d|>") : ("<|p|" + chimg.alt + "|p|>"))
 					}
 				);
-				//strip chunks					
+
+				let editedChunks = []; //use to count chunk lengths before merging
+				gametext_elem.querySelectorAll('span.txtchunk').forEach(
+					(el) => {
+						editedChunks.push(el.innerText);
+					}
+				);
+				
+
+				//strip chunks
 				gametext_elem.innerHTML = gametext_elem.innerHTML.replace(/<span class="(.+?)">(.+?)<\/span>/g, "$2");				
 				gametext_elem.innerHTML = gametext_elem.innerHTML.replace(/<span class="(.+?)">(.+?)<\/span>/g, "$2");
 				gametext_elem.innerHTML = replaceAll(gametext_elem.innerHTML,"<div><br><br><br></div>", "<br><br><br>");				
@@ -5557,21 +5671,54 @@ Current version: 16
 
 				//rather than dump it all into one history, let's split it into paragraphs
 				let fullmergedstory = gametext_elem.innerText;
-				let splittertoken = "\n";
-				if (fullmergedstory.includes("\n\n")) {
-					splittertoken = "\n\n";
-				}
-				let splitmergedstory = fullmergedstory.split(splittertoken);
-				for (var i = 0; i < splitmergedstory.length; ++i) {
-					if (i != 0) {
-						gametext_arr.push(splittertoken + splitmergedstory[i]);
-					} else {
-						gametext_arr.push(splitmergedstory[i]);
+
+				let newestChunk = "";
+				if(editedChunks.length>1) //split by chunk lengths in reverse order, we only want the newest
+				{
+					// for(let c=editedChunks.length-1;c>=0;--c)
+					// {
+					// 	let cl = editedChunks[c].length;
+					// 	if(c==0) 
+					// 	{
+					// 		cl = Math.max(cl,fullmergedstory.length); //for first element, fill remainder
+					// 	}
+					// 	var endpart = fullmergedstory.slice(-cl);
+					// 	fullmergedstory = fullmergedstory.slice(0,-cl);
+					// 	gametext_arr.unshift(endpart);
+					// }
+
+					let cl = editedChunks[editedChunks.length-1].length;
+					if(cl>0)
+					{
+						newestChunk = fullmergedstory.slice(-cl);
+						fullmergedstory = fullmergedstory.slice(0,-cl);
 					}
 				}
 
+				//split by newlines for the rest
+				if(fullmergedstory.length>0)
+				{
+					let splittertoken = "\n";
+					if (fullmergedstory.includes("\n\n")) {
+						splittertoken = "\n\n";
+					}
+					let splitmergedstory = fullmergedstory.split(splittertoken);
+					for (var i = 0; i < splitmergedstory.length; ++i) {
+						if (i != 0) {
+							gametext_arr.push(splittertoken + splitmergedstory[i]);
+						} else {
+							gametext_arr.push(splitmergedstory[i]);
+						}
+					}
+				}
+				if(newestChunk!="")
+				{
+					gametext_arr.push(newestChunk);
+				}
+				
+
 				render_gametext(true);
-				console.log("Merged edit field. Parts:" + splitmergedstory.length);
+				console.log("Merged edit field. Parts:" + gametext_arr.length);
 			}
 
 			if (prev_hl_chunk != null) {
@@ -5703,7 +5850,12 @@ Current version: 16
 
 		if (perfdata == null) {
 			document.getElementById("topbtn_reconnect").classList.remove("hidden"); 
-			document.getElementById("topbtn_customendpt").classList.remove("hidden"); 
+			if(localmode)
+			{
+				document.getElementById("topbtn_customendpt").classList.add("hidden"); 
+			}else{
+				document.getElementById("topbtn_customendpt").classList.remove("hidden"); 	
+			}
 			document.getElementById("topbtn_ai").classList.add("hidden");
 			document.getElementById("topbtn_newgame").classList.remove("hidden");
 			document.getElementById("topbtn_save").classList.remove("hidden");
@@ -5716,8 +5868,14 @@ Current version: 16
 			document.getElementById("topbtn_reconnect").classList.add("hidden");
 			document.getElementById("topbtn_customendpt").classList.add("hidden"); 
 			
-			if (selected_models.length == 0) {				
+			if(localmode)
+			{
+				document.getElementById("topbtn_ai").classList.add("hidden");
+			}else{
 				document.getElementById("topbtn_ai").classList.remove("hidden");
+			}
+
+			if (selected_models.length == 0) {	
 				document.getElementById("topbtn_newgame").classList.add("hidden");
 				document.getElementById("topbtn_save").classList.add("hidden");
 				document.getElementById("topbtn_load").classList.add("hidden");
@@ -5726,7 +5884,6 @@ Current version: 16
 				document.getElementById("topbtn_scenarios").classList.add("hidden");
 				document.getElementById("topbtn_quickplay").classList.remove("hidden");
 			} else { 
-				document.getElementById("topbtn_ai").classList.remove("hidden");
 				document.getElementById("topbtn_newgame").classList.remove("hidden");				
 				document.getElementById("topbtn_save").classList.remove("hidden");
 				document.getElementById("topbtn_load").classList.remove("hidden");
@@ -5975,10 +6132,10 @@ Current version: 16
 
 	function autosave() {
 		//autosave
-		localStorage.setItem("kaihordewebui_settings", JSON.stringify(localsettings));
+		localStorage.setItem((localmode?"e_":"")+"kaihordewebui_settings", JSON.stringify(localsettings));
 		if (localsettings.persist_session) {
 			let compressedstory = generate_compressed_story();
-			localStorage.setItem("kaihordewebui_story", compressedstory);
+			localStorage.setItem((localmode?"e_":"")+"kaihordewebui_story", compressedstory);
 		}
 		console.log("autosave done");
 	}
@@ -6355,7 +6512,7 @@ Current version: 16
 							<option value="3">Chat</option>
 						</select>
 					</div>
-					<div class="justifyleft anotelabel" style="padding-left: 8px;">						
+					<div id="scenarioautopickbox" class="justifyleft anotelabel" style="padding-left: 8px;">						
 						Automatically select AI model <span class="helpicon">?
 							<span class="helptext">This option picks a suitable AI model based on the selected scenario. If no text model is currently selected, an appropriate one will be automatically picked for you.</span>
 						</span>
@@ -6450,7 +6607,7 @@ Current version: 16
 			</div>
 			<div id="koboldcustom" class="aidgpopuplistheader anotelabel">
 				You can use this to connect to a KoboldAI instance running via a remote tunnel such as <span class="color_orange" style="font-weight: bold;">trycloudflare, localtunnel, ngrok</span>.<br><br>
-				Localhost IPs are not fully supported. You can use the remote address displayed in the <span class="color_orange" style="font-weight: bold;">remote-play.bat</span> window or <span class="color_orange" style="font-weight: bold;">colab window</span>, note that the model must be loaded first.<br><br>
+				Localhost IPs require host mode enabled. You can use the remote address displayed in the <span class="color_orange" style="font-weight: bold;">remote-play.bat</span> window or <span class="color_orange" style="font-weight: bold;">colab window</span>, note that the model must be loaded first.<br><br>
 				<span class="color_green" style="font-weight: bold;">Please input URL of the KoboldAI instance.</span><br><br>
 				<input class="form-control" id="customendpoint" placeholder="https://sample-remote-address.trycloudflare.com" value="">
 				<div class="box flex flex-push-right">
@@ -6882,6 +7039,27 @@ Current version: 16
 				<button type="button" class="btn btn-primary" onclick="hide_popups()">Close</button>
 			</div>
 			<div class="box-label hidden" id="sharewarning">Warning: This story is very long. It may not load in some browsers. You should save it as a file instead.</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="zoomedimgcontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup fixsize higher">
+			<div class="popuptitlebar">
+				<div class="popuptitletext">Image Information</div>
+			</div>
+
+			<div class="zoomedimgdiv">
+				<img id="zoomedimg" src="" style="border-radius: 6%;" width="300px" height="300px">
+			</div>
+
+			<div class="aidgpopuplistheader anotelabel zoomedimgdesc" id="zoomedimgdesc" style="word-wrap: break-word;">
+				Loading...
+			</div>
+			<div class="popupfooter">				
+				<button type="button" class="bg_red btn btn-primary" style="width: 124px;" onclick="delete_curr_image();hide_popups();">Delete Image</button>
+				<button type="button" class="btn btn-primary" onclick="hide_popups()">Close</button>
+			</div>
 		</div>
 	</div>
 
