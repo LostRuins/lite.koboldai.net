@@ -588,6 +588,9 @@ Current version: 17
 		.color_blue {
 			color: #828eff;
 		}
+		.color_yellow {
+			color: #f1dd21;
+		}
 
 		.color_pink {
 			color: #ffbdbd;
@@ -2110,6 +2113,71 @@ Current version: 17
 		}
 	}
 
+	//instead of a single fetch, optionally break it up into multiple repeated requests which update a local variable
+	function kobold_api_stream(sub_endpt,submit_payload,synchro_streaming_tokens_left,synchro_streaming_response = "",tokens_per_tick = 4096)
+	{
+		//called recursively
+		if(synchro_streaming_tokens_left<=0)
+		{
+			synchro_polled_response = synchro_streaming_response;
+			synchro_pending_stream = "";
+		}
+		else
+		{
+			let new_submit_payload = JSON.parse(JSON.stringify(submit_payload));
+			new_submit_payload.prompt += synchro_streaming_response;
+			new_submit_payload.max_length = Math.min(tokens_per_tick,synchro_streaming_tokens_left);
+			fetch(sub_endpt, {
+			method: 'POST', // or 'PUT'
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify(new_submit_payload),
+			})
+			.then((response) => response.json())
+			.then((data) => {
+				console.log("sync kobold_api_stream response: " + JSON.stringify(data));
+				if (custom_kobold_endpoint != "" && data.results != null && data.results.length > 0) {
+					synchro_streaming_response += data.results[0].text;
+					synchro_streaming_tokens_left -= tokens_per_tick;
+					if(pending_response_id!="")
+					{
+						synchro_pending_stream = synchro_streaming_response;
+						if(synchro_streaming_tokens_left>0 && synchro_pending_stream!="")
+						{
+							render_gametext();
+						}
+					}
+					else
+					{
+						synchro_pending_stream = "";
+						synchro_streaming_tokens_left = 0;
+					}
+					kobold_api_stream(sub_endpt,submit_payload,synchro_streaming_tokens_left,synchro_streaming_response,tokens_per_tick);
+				}
+				else {
+					//error occurred, maybe captcha failed
+					console.error("error occurred in v1 generation");
+					pending_response_id = "";
+					poll_in_progress = false;
+					synchro_polled_response = null;
+					synchro_pending_stream = "";
+					render_gametext();
+					msgbox("Error occurred during text generation.");
+				}
+			})
+			.catch((error) => {
+				console.error('Error:', error);
+				pending_response_id = "";
+				poll_in_progress = false;
+				synchro_polled_response = null;
+				synchro_pending_stream = "";
+				render_gametext();
+				msgbox("Error while submitting prompt: " + error);
+			});
+		}		
+	}
+
 	function playbeep() {
     	var sound = new Audio("data:audio/wav;base64,UklGRkwBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YScBAAB8gIN8fICAgIB8gHmAjXVkhptyXYqbcmiKjXKAim5ymIpWcqmKU3Klhl18kXl5jXlkjZ5oVpelZFaUm2trioN1ioZkeaKDU3msgFN8nnxog4Nyg5FrZJubXWGem2FnlIpufIZyfJR8XYOleVaDonlhg5F1eYZ5dZGNYXWbimhrm4Nrg3KDjWt/hm6UkUmDvV1TrINdkXxol4Boinx1nmtWr5RChqVheZdkeZtucop1io1WgLNhWql/XZd/YZSNZH+GeY1yZKKNUIaeZHmYZ3WbeWuGg4B/a4Oba2uXgGuNf2iKjWt5ioB/eXWNg2t/jXJ8inJ5kXxug4N8fHl/hnl1hnx5hn91g4Z1fIN8fHx8f4B5gIB8gH98fIN8fH+AfHx8fH98fIB/AA==");  
 		sound.play();
@@ -2267,6 +2335,7 @@ Current version: 17
 	var custom_scale_ID = "";
 	var uses_cors_proxy = false; //we start off attempting a direct connection. switch to proxy if that fails
 	var synchro_polled_response = null;
+	var synchro_pending_stream = ""; //used for token pseduo streaming for kobold api only
 	var pending_found_story = null;
 	var filter_enabled = true;
 	var temp_scenario = null;
@@ -2361,6 +2430,7 @@ Current version: 17
 		const urlParams = new URLSearchParams(window.location.search);
 		const dbgmode = urlParams.get('dbg');
 		const localflag = urlParams.get('local');
+		
 		if (localflag)
 		{
 			localmode = true;
@@ -2371,6 +2441,12 @@ Current version: 17
 			if (inputport) {
 				localmodeport = parseInt(inputport);
 			}
+		}
+		
+		const tokenstreaming = urlParams.get('streaming');
+		if(tokenstreaming)
+		{
+			document.getElementById("pseudostreaming").checked = true;
 		}
 		
 		const fromfile = ( window.location.protocol == 'file:' );
@@ -4431,6 +4507,7 @@ Current version: 17
 		nextgeneratedimagemilestone = generateimagesinterval;
 		pending_response_id = "";
 		synchro_polled_response = null;
+		synchro_pending_stream = "";
 		current_memory = "";
 		current_anote = "";
 		current_wi = [];
@@ -4457,16 +4534,11 @@ Current version: 17
 	}
 
 	function toggle_editable() {
-		if (gametext_arr.length > 0) {
-			document.getElementById("gametext").contentEditable = document.getElementById("allowediting").checked;
-		}
-		else {
+		if (gametext_arr.length == 0) 
+		{		
 			document.getElementById("allowediting").checked = false;
-			document.getElementById("gametext").contentEditable = false;
 		}
-		
-		render_gametext();
-		
+		render_gametext();		
 	}
 
 	function end_trim_to_sentence(input) {
@@ -4523,6 +4595,7 @@ Current version: 17
 		pending_response_id = "";
 		poll_in_progress = false;
 		synchro_polled_response = null;
+		synchro_pending_stream = "";
 		render_gametext();
 
 		//we do this last so its ok even if it fails		
@@ -4540,6 +4613,7 @@ Current version: 17
 				console.error('Error:', error);
 			});
 		}
+		document.getElementById("abortgen").classList.add("hidden");
 	}
 
 	function manual_gen_image() {
@@ -4854,6 +4928,7 @@ Current version: 17
 				poll_ticks_passed = 0;
 				poll_in_progress = false;
 				synchro_polled_response = null;
+				synchro_pending_stream = "";
 
 				//if this is set, we don't use horde, use the custom endpoint instead
 				let is_localhost = false;
@@ -4879,37 +4954,10 @@ Current version: 17
 
 					let sub_endpt = (proxy_part + custom_kobold_endpoint + kobold_custom_gen_endpoint);
 
-					fetch(sub_endpt, {
-						method: 'POST', // or 'PUT'
-						headers: {
-							'Content-Type': 'application/json',
-						},
-						body: JSON.stringify(submit_payload),
-					})
-						.then((response) => response.json())
-						.then((data) => {
-							console.log("sync finished response: " + JSON.stringify(data));
-							if (custom_kobold_endpoint != "" && data.results != null && data.results.length > 0) {
-								synchro_polled_response = data.results[0].text;
-							}
-							else {
-								//error occurred, maybe captcha failed
-								console.error("error occurred in v1 generation");
-								pending_response_id = "";
-								poll_in_progress = false;
-								synchro_polled_response = null;
-								render_gametext();
-								msgbox("Error occurred during text generation.");
-							}
-						})
-						.catch((error) => {
-							console.error('Error:', error);
-							pending_response_id = "";
-							poll_in_progress = false;
-							synchro_polled_response = null;
-							render_gametext();
-							msgbox("Error while submitting prompt: " + error);
-						});
+					let pseudostreaming = (document.getElementById("pseudostreaming").checked ? true : false);
+					
+					kobold_api_stream(sub_endpt,submit_payload,submit_payload.max_length,"",pseudostreaming?8:4096);
+					
 				}
 				else if(custom_oai_key!="")//handle for OAI
 				{
@@ -4981,6 +5029,7 @@ Current version: 17
 								pending_response_id = "";
 								poll_in_progress = false;
 								synchro_polled_response = null;
+								synchro_pending_stream = "";
 								render_gametext();
 								msgbox("Error, unknown OAI response");
 							}
@@ -4991,6 +5040,7 @@ Current version: 17
 							pending_response_id = "";
 							poll_in_progress = false;
 							synchro_polled_response = null;
+							synchro_pending_stream = "";
 							render_gametext();
 							msgbox("Error occurred during text generation.");
 						}
@@ -5000,6 +5050,7 @@ Current version: 17
 						pending_response_id = "";
 						poll_in_progress = false;
 						synchro_polled_response = null;
+						synchro_pending_stream = "";
 						render_gametext();
 						msgbox("Error while submitting prompt: " + error);
 					});
@@ -5031,6 +5082,7 @@ Current version: 17
 							pending_response_id = "";
 							poll_in_progress = false;
 							synchro_polled_response = null;
+							synchro_pending_stream = "";
 							render_gametext();
 							msgbox("Error occurred during text generation: " + JSON.stringify(data));
 						}
@@ -5040,6 +5092,7 @@ Current version: 17
 						pending_response_id = "";
 						poll_in_progress = false;
 						synchro_polled_response = null;
+						synchro_pending_stream = "";
 						render_gametext();
 						msgbox("Error while submitting prompt: " + error);
 					});
@@ -5486,9 +5539,9 @@ Current version: 17
 		{
 			return;
 		}
-
+		document.getElementById("abortgen").classList.add("hidden");
 		if (pending_response_id && pending_response_id != "-1" && pending_response_id != "") 
-		{			
+		{	
 			if (poll_ticks_passed > (4/(poll_interval_base_text*0.001))) //4sec passed
 			{
 				document.getElementById("abortgen").classList.remove("hidden");
@@ -5518,7 +5571,9 @@ Current version: 17
 							handle_incoming_text(gentxt, genworker, genmdl, genkudos);
 						}						
 						render_gametext();
+						document.getElementById("abortgen").classList.add("hidden");
 						synchro_polled_response = null;
+						synchro_pending_stream = "";						
 					}
 				}
 				else {
@@ -5534,6 +5589,7 @@ Current version: 17
 								pending_response_id = "";
 								poll_in_progress = false;
 								render_gametext();
+								document.getElementById("abortgen").classList.add("hidden");
 								let errmsg = "Error encountered during text generation!\n";
 								if (data.message != null) {
 									errmsg += data.message;
@@ -5566,11 +5622,13 @@ Current version: 17
 													handle_incoming_text(gentxt, genworker, genmdl, genkudos);
 												}
 												render_gametext();
+												document.getElementById("abortgen").classList.add("hidden");
 											}).catch((error) => {
 												console.error('Error:', error);
 												pending_response_id = "";
 												poll_in_progress = false;
 												render_gametext();
+												document.getElementById("abortgen").classList.add("hidden");
 												msgbox("Error encountered during text generation!");
 											});
 									}, 500);									
@@ -5602,6 +5660,7 @@ Current version: 17
 							pending_response_id = "";
 							poll_in_progress = false;
 							render_gametext();
+							document.getElementById("abortgen").classList.add("hidden");
 							msgbox("Error encountered during text generation!");
 						});
 				}
@@ -5745,7 +5804,10 @@ Current version: 17
 		return fulltxt;
 	}
 
-	function render_gametext(partialrefresh = false) {
+	function render_gametext(partialrefresh = false) 
+	{
+
+		document.getElementById("gametext").contentEditable = (document.getElementById("allowediting").checked && pending_response_id=="");
 
 		//adventure mode has a toggle to choose action mode
 		if(localsettings.opmode==2)
@@ -5804,6 +5866,10 @@ Current version: 17
 				fulltxt = concat_gametext(false, "", "<span class=\"txtchunk\">", "</span>");
 			} else {
 				fulltxt = concat_gametext(false, "", "", "");
+			}
+			if(synchro_pending_stream!="")
+			{
+				fulltxt += "<span class=\"color_yellow\">" + synchro_pending_stream + "</span>";
 			}
 
 			if(localsettings.opmode==3)
@@ -5973,8 +6039,7 @@ Current version: 17
 			if (localsettings.autoscroll) {
 				document.getElementById("gametext").scrollTop = document.getElementById("gametext").scrollHeight;
 				document.getElementById("chat_msg_body").scrollTop = document.getElementById("chat_msg_body").scrollHeight;
-			}			
-			document.getElementById("abortgen").classList.add("hidden");
+			}		
 		}
 
 		document.getElementById("token-budget").innerText = last_token_budget;
@@ -6611,9 +6676,12 @@ Current version: 17
 				<span class="color_green" style="font-weight: bold;">Please input URL of the KoboldAI instance.</span><br><br>
 				<input class="form-control" id="customendpoint" placeholder="https://sample-remote-address.trycloudflare.com" value="">
 				<div class="box flex flex-push-right">
+					<input type="checkbox" id="pseudostreaming">
+					<div class="box-label" title="Will simulate token streaming by breaking requests up into smaller ones.">Emulate Token Streaming</div>
 					<input type="checkbox" id="remoteconsolelog">
-					<div class="box-label" title="Will display outputs to the remote endpoint's console logs, useful for debugging.">Show Console Logging</div>					
+					<div class="box-label" title="Will display outputs to the remote endpoint's console logs, useful for debugging.">Show Console Logging</div>
 				</div>
+				
 			</div>
 			<div id="oaicustom" class="aidgpopuplistheader anotelabel hidden">
 				Entering your OpenAI API key will allow you to use KoboldAI Lite with their API.<br><br>
