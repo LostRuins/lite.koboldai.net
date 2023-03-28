@@ -2140,6 +2140,21 @@ Current version: 17
 				if (custom_kobold_endpoint != "" && data.results != null && data.results.length > 0) {
 					synchro_streaming_response += data.results[0].text;
 					synchro_streaming_tokens_left -= tokens_per_tick;
+
+					//handle some early stopping criterias
+					if (localsettings.opmode == 3) //stop on selfname found
+					{
+						let foundMyName = synchro_streaming_response.indexOf(localsettings.chatname + "\:");						
+						if (foundMyName != -1)
+						{
+							synchro_streaming_tokens_left = 0;
+						}
+					}
+					if(data.results[0].text=="") //stop on no output
+					{
+						synchro_streaming_tokens_left = 0;
+					}
+
 					if(pending_response_id!="")
 					{
 						synchro_pending_stream = synchro_streaming_response;
@@ -2150,9 +2165,11 @@ Current version: 17
 					}
 					else
 					{
-						synchro_pending_stream = "";
 						synchro_streaming_tokens_left = 0;
 					}
+
+					
+
 					kobold_api_stream(sub_endpt,submit_payload,synchro_streaming_tokens_left,synchro_streaming_response,tokens_per_tick);
 				}
 				else {
@@ -2442,7 +2459,7 @@ Current version: 17
 				localmodeport = parseInt(inputport);
 			}
 		}
-		
+
 		const tokenstreaming = urlParams.get('streaming');
 		if(tokenstreaming)
 		{
@@ -5869,7 +5886,7 @@ Current version: 17
 			}
 			if(synchro_pending_stream!="")
 			{
-				fulltxt += "<span class=\"color_yellow\">" + synchro_pending_stream + "</span>";
+				fulltxt += "<span class=\"color_yellow\">" + pending_context_preinjection + synchro_pending_stream + "</span>";
 			}
 
 			if(localsettings.opmode==3)
