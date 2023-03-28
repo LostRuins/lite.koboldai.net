@@ -10,8 +10,8 @@ You can run it directly from your desktop or throw it on some web server and ser
 - Concedo
 
 Changelog of KoboldAI Lite 28 Mar 2023:
-- Added token pseudo-streaming for Kobold-based APIs, allowing a request to be divided into multiple smaller requests for faster responses.
-- Clickable image summries, select an image to view prompt used to generate. Also allows deleting old images from this UI.
+- Added token pseudo-streaming for Kobold-based APIs, allowing a request to be divided into multiple smaller requests for faster responses. This works very similar to **Token Streaming** in the main kobold client. Note that there is a small performance impact, your request will take approximately 20% longer if it is enabled. You can toggle it when selecting a custom endpoint. Token Streaming is not available when using horde models.
+- Clickable image summaries, select an image to view prompt used to generate. Also allows deleting old images from this UI.
 - Improved edit mode text merging, now remembers the newest chunk even if it's a sentence fragment.
 - Proper support for localhost mode, disabling all horde models when local flag is set. 
 
