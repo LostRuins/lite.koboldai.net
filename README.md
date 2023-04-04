@@ -9,6 +9,13 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
+Changelog of KoboldAI Lite 4 Apr 2023:
+- Added a new mode: **Instruct Mode**! This is intended for instruct-like models and functions similar to ChatGPT, and can be used to generate much longer responses that normally possible in Chat mode. The prompt layout and format is Standford-Alpaca compatible, so you should have excellent results with similar models. You are recommended not to use author's note with this mode.
+- Re-enabled the Katherine scenario after some discussion with Henky... but it will only be accessible behind a mandatory AI-safety popup, so any potential users are aware of the implications.
+- Added support for custom host as a parameter in local mode.
+- Minor text change for custom endpoint option.
+- PSA: Horde badly needs more volunteers! Due to increased usage and slightly fewer workers, the text side of horde has recently been quite overloaded. If you're able to help out, please do! Even an anonymous worker running a small model helps! 
+
 Changelog of KoboldAI Lite 28 Mar 2023:
 - Added token pseudo-streaming for Kobold-based APIs, allowing a request to be divided into multiple smaller requests for faster responses. This works very similar to **Token Streaming** in the main kobold client. Note that there is a small performance impact, your request will take approximately 20% longer if it is enabled. You can toggle it when selecting a custom endpoint. Token Streaming is not available when using horde models.
 - Clickable image summaries, select an image to view prompt used to generate. Also allows deleting old images from this UI.
