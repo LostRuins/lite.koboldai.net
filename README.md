@@ -14,6 +14,7 @@ Changelog of KoboldAI Lite 4 Apr 2023:
 - Re-enabled the Katherine scenario after some discussion with Henky... but it will only be accessible behind a mandatory AI-safety popup, so any potential users are aware of the implications.
 - Added support for custom host as a parameter in local mode.
 - Minor text change for custom endpoint option.
+- Instruct mode also has a quick scenario for it.
 - PSA: Horde badly needs more volunteers! Due to increased usage and slightly fewer workers, the text side of horde has recently been quite overloaded. If you're able to help out, please do! Even an anonymous worker running a small model helps! 
 
 Changelog of KoboldAI Lite 28 Mar 2023:
