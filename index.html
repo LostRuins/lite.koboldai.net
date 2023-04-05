@@ -2424,6 +2424,7 @@ Current version: 18
 		case_sensitive_wi: false,
 		last_selected_preset: 0,
 		enhanced_chat_ui: true,
+		multiline_replies: false,
 		export_settings: true, //affects if settings are included with the story and sharelinks
 
 		max_context_length: 1024,
@@ -4336,6 +4337,7 @@ Current version: 18
 		document.getElementById("tfs_s").value = localsettings.tfs_s;
 		document.getElementById("generate_images").value = localsettings.generate_images;
 		document.getElementById("enhanced_chat_ui").checked = localsettings.enhanced_chat_ui;
+		document.getElementById("multiline_replies").checked = localsettings.multiline_replies;		
 		document.getElementById("adventure_context_mod").checked = localsettings.adventure_context_mod;
 		document.getElementById("auto_ctxlen").checked = localsettings.auto_ctxlen;
 		document.getElementById("auto_genamt").checked = localsettings.auto_genamt;
@@ -4472,6 +4474,7 @@ Current version: 18
 		localsettings.trimwhitespace = (document.getElementById("trimwhitespace").checked ? true : false);
 		localsettings.persist_session = (document.getElementById("persist_session").checked ? true : false);
 		localsettings.enhanced_chat_ui = (document.getElementById("enhanced_chat_ui").checked ? true : false);
+		localsettings.multiline_replies = (document.getElementById("multiline_replies").checked ? true : false);
 		localsettings.adventure_context_mod = (document.getElementById("adventure_context_mod").checked ? true : false);
 		localsettings.generate_images = document.getElementById("generate_images").value;
 		localsettings.opmode = document.getElementById("opmode").value;
@@ -4625,11 +4628,16 @@ Current version: 18
 		render_gametext();		
 	}
 
-	function end_trim_to_sentence(input) {
+	function end_trim_to_sentence(input,include_newline=false) {
 		let p1 = input.lastIndexOf(".");
 		let p2 = input.lastIndexOf("!");
 		let p3 = input.lastIndexOf("?");
 		let last = Math.max(p1, p2, p3);
+		if(include_newline)
+		{
+			let p4 = input.lastIndexOf("\n");
+			last = Math.max(last, p4);
+		}
 		if (last > 0) {
 			return input.substring(0, last + 1).trimEnd();
 		}
@@ -5469,12 +5477,19 @@ Current version: 18
 			if (foundMyName == -1) //if no name found
 			{
 				//if quotes found, split by quotes
-				if (gentxt.indexOf("\"") == 0 && gentxt.indexOf("\"", 1) > 0) {
-					let endquote = gentxt.indexOf("\"", 1);
-					splitresponse.push(gentxt.substring(0, endquote + 1));
-				} else {
-					//split to first newline
-					splitresponse = gentxt.split("\n");
+				if(localsettings.multiline_replies)
+				{
+					splitresponse.push(end_trim_to_sentence(gentxt,true));
+				}
+				else 
+				{
+					if (gentxt.indexOf("\"") == 0 && gentxt.indexOf("\"", 1) > 0) {
+						let endquote = gentxt.indexOf("\"", 1);
+						splitresponse.push(gentxt.substring(0, endquote + 1));
+					} else {
+						//split to first newline
+						splitresponse = gentxt.split("\n");
+					}
 				}
 			}
 			else {
@@ -7093,7 +7108,11 @@ Current version: 18
 							  <div class="settinglabel">
 								<div class="justifyleft settingsmall" title="Switches to an aesthetic messenger style UI">Aesthetic Chat UI </div>	
 							   <input type="checkbox" id="enhanced_chat_ui" style="margin:0px 0 0;">
-							</div>	
+							  </div>
+							  <div class="settinglabel">
+								<div class="justifyleft settingsmall" title="Whether to allow multiple lines in AI responses. Not recommended.">Multiline Replies </div>	
+							   <input type="checkbox" id="multiline_replies" style="margin:0px 0 0;">
+							</div>		
 							</div>	
 							<div id="adventuresection" class="settinglabel hidden" style="padding-top: 3px;">
 								<div class="justifyleft settingsmall">Improved Prompt <span class="helpicon">?<span
