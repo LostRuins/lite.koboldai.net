@@ -9,6 +9,16 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
+Changelog of KoboldAI Lite 6 Apr 2023:
+- Disable trim sentences on instruct by default, it is now optional
+- Added option to allow multiline responses in chat mode due to popular demand
+- Fix multiline bug in chat mode truncation
+- Multiline chat is now the *default option*. You may wish to disable it if using older models.
+- Made some setting slider values soft-capped instead of hard-capped, allowing a greater manually input range (not recommended though)
+- In Local mode, automatically infer the host from current url
+- Added support for importing plaintext files
+
+
 Changelog of KoboldAI Lite 4 Apr 2023:
 - Added a new mode: **Instruct Mode**! This is intended for instruct-like models and functions similar to ChatGPT, and can be used to generate much longer responses that normally possible in Chat mode. The prompt layout and format is Standford-Alpaca compatible, so you should have excellent results with similar models. You are recommended not to use author's note with this mode.
 - Re-enabled the Katherine scenario after some discussion with Henky... but it will only be accessible behind a mandatory AI-safety popup, so any potential users are aware of the implications.

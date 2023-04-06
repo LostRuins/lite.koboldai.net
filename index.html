@@ -5,7 +5,7 @@ This is a standalone web ui for KoboldAIs Horde, which requires no dependencies,
 Just copy this single static HTML file anywhere and open it in a browser. No dependencies.
 Or you can throw it on some web server and serve it there too. E.g. Github pages, nginx, whatever.
 Now rebranded as KoboldAI Lite
-Current version: 18
+Current version: 19
 -Concedo
 -->
 
@@ -2406,7 +2406,7 @@ Current version: 18
 		home_cluster: text_hordes[0].baseurl, //which horde does this api key belongs to
 
 		autoscroll: false, //automatically scroll to bottom on render
-		trimsentences: false, //trim to last punctuation
+		trimsentences: true, //trim to last punctuation
 		trimwhitespace: true, //trim trailing whitespace
 		opmode: 1, //what mode are we in? 1=story, 2=adventure, 3=chat, 4=instruct
 		adventure_is_action: false, //in adventure mode, determine story or action
@@ -2424,7 +2424,7 @@ Current version: 18
 		case_sensitive_wi: false,
 		last_selected_preset: 0,
 		enhanced_chat_ui: true,
-		multiline_replies: false,
+		multiline_replies: true,
 		export_settings: true, //affects if settings are included with the story and sharelinks
 
 		max_context_length: 1024,
@@ -2500,9 +2500,11 @@ Current version: 18
 				localmodeport = parseInt(inputport);
 			}
 
-			let inputhost = urlParams.get('host');			
+			let inputhost = urlParams.get('host');
 			if (inputhost) {
 				localmodehost = inputhost;
+			}else if(window.location.hostname && window.location.hostname!=""){
+				localmodehost = window.location.hostname;
 			}
 		}
 
@@ -3075,12 +3077,33 @@ Current version: 18
 							}
 							else {
 								//attempt to read as KAISTORY
-								result = UnzipKAISTORYFile(arr);
+								try {
+									result = UnzipKAISTORYFile(arr);
+								} catch (error) {
+									console.log("Unzip failed: " + error);
+									result = null;
+								}
+								
 								if (result != null) {
 									kai_json_load(result);
 								}
 								else {
-									msgbox("Could not load selected file. Is it valid?");
+									if(selectedFilename.endsWith(".txt"))
+									{
+										msgboxYesNo("Could not load selected file!<br><span class=\"color_red\">It appears to be invalid or corrupted!</span><br><br>Do you still want to import it as plaintext?", "Loading Failed",
+											() => {
+												//raw text import
+												restart_new_game();
+												gametext_arr.push(text);
+												hide_popups();
+												render_gametext();
+											}, () => {
+											hide_popups();
+										}, true)		
+									}else{
+										msgbox("Could not load selected file. Is it valid?");
+									}									
+																
 								}
 							}
 						}
@@ -4519,14 +4542,14 @@ Current version: 18
 		localsettings.last_selected_preset = document.getElementById("presets").value;
 
 		//clean and clamp invalid values
-		localsettings.max_context_length = cleannum(localsettings.max_context_length, 512, 2048);
-		localsettings.max_length = cleannum(localsettings.max_length, 16, 512);
-		localsettings.temperature = cleannum(localsettings.temperature, 0.1, 2);
-		localsettings.rep_pen = cleannum(localsettings.rep_pen, 1, 3);
-		localsettings.rep_pen_range = cleannum(localsettings.rep_pen_range, 0, 4096);
-		localsettings.rep_pen_slope = cleannum(localsettings.rep_pen_slope, 0, 10);
+		localsettings.max_context_length = cleannum(localsettings.max_context_length, 8, 8192);
+		localsettings.max_length = cleannum(localsettings.max_length, 1, 1024);
+		localsettings.temperature = cleannum(localsettings.temperature, 0.01, 5);
+		localsettings.rep_pen = cleannum(localsettings.rep_pen, 0.1, 5);
+		localsettings.rep_pen_range = cleannum(localsettings.rep_pen_range, 0, 8192);
+		localsettings.rep_pen_slope = cleannum(localsettings.rep_pen_slope, 0, 20);
 		localsettings.top_p = cleannum(localsettings.top_p, 0, 1);
-		localsettings.top_k = cleannum(localsettings.top_k, 0, 100);
+		localsettings.top_k = cleannum(localsettings.top_k, 0, 300);
 		localsettings.top_a = cleannum(localsettings.top_a, 0, 1);
 		localsettings.typ_s = cleannum(localsettings.typ_s, 0, 1);
 		localsettings.tfs_s = cleannum(localsettings.tfs_s, 0, 1);
@@ -4714,7 +4737,7 @@ Current version: 18
 		if (tclen > 0) {
 			var sentence = truncated_context.substring(tclen - 300, tclen);
 			sentence = start_trim_to_sentence(sentence);
-			sentence = end_trim_to_sentence(sentence);
+			sentence = end_trim_to_sentence(sentence,true);
 			if (sentence.length > 0) {
 				generate_new_image(sentence);
 				nextgeneratedimagemilestone = tclen + generateimagesinterval;
@@ -4904,7 +4927,7 @@ Current version: 18
 						nextgeneratedimagemilestone = tclen + generateimagesinterval; //set next milestone and trigger generation, using the last 300 characters advanced to the nearest sentence.
 						var sentence = truncated_context.substring(tclen - 300, tclen);
 						sentence = start_trim_to_sentence(sentence);
-						sentence = end_trim_to_sentence(sentence);
+						sentence = end_trim_to_sentence(sentence,true);
 						generate_new_image(sentence);
 					}
 				}
@@ -5453,9 +5476,9 @@ Current version: 18
 
 	function handle_incoming_text(gentxt, genworker, genmdl, genkudos) {
 
-		//always trim incomplete sentences for adventure and chat and instruct
-		if (localsettings.opmode == 2 || localsettings.opmode == 3 || localsettings.opmode == 4 || localsettings.trimsentences == true) {
-			gentxt = end_trim_to_sentence(gentxt);
+		//always trim incomplete sentences for adventure and chat
+		if (localsettings.opmode == 2 || localsettings.opmode == 3 || localsettings.trimsentences == true) {
+			gentxt = end_trim_to_sentence(gentxt,true);
 		}
 		
 		//if we are in adventure mode, truncate to action if it appears
@@ -5475,14 +5498,15 @@ Current version: 18
 			let foundMyName = gentxt.indexOf(localsettings.chatname + "\:");
 			let splitresponse = [];
 			if (foundMyName == -1) //if no name found
-			{
-				//if quotes found, split by quotes
+			{				
 				if(localsettings.multiline_replies)
 				{
-					splitresponse.push(end_trim_to_sentence(gentxt,true));
+					//already force trimmed to sentence, so just include whole thing
+					splitresponse.push(gentxt);
 				}
 				else 
 				{
+					//if quotes found, split by quotes
 					if (gentxt.indexOf("\"") == 0 && gentxt.indexOf("\"", 1) > 0) {
 						let endquote = gentxt.indexOf("\"", 1);
 						splitresponse.push(gentxt.substring(0, endquote + 1));
@@ -6581,7 +6605,7 @@ Current version: 18
 								</li>
 
 								<li class="nav-item hidden" id="topbtn_load">
-									<input type="file" id="loadfileinput" accept="text/json,application/json,image/png,image/webp,.kaistory,.webp,.png,.json,*.*,*" onchange="load_file(event)"
+									<input type="file" id="loadfileinput" accept="text/json,application/json,image/png,image/webp,.kaistory,.webp,.png,.json,.txt,*.*,*" onchange="load_file(event)"
 										style="display:none;">
 									<a class="nav-link" href="#"
 										onclick="document.getElementById('loadfileinput').click()">Load</a>
