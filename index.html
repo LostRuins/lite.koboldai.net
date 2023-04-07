@@ -49,6 +49,17 @@ Current version: 19
 			outline: none;
 		}
 
+		.settinglabel.mininiput {	
+			background-color: #ffffff;
+			color:#555;
+			border:0px solid #ccc;
+			border-radius: 4px;
+			width: 100%;
+		}
+		.settinglabel.mininiput:focus {	
+			color:#555;		
+		}
+
 		.settingsmall{
 			font-size: 10px;
 		}
@@ -76,13 +87,7 @@ Current version: 19
 		}
 
 
-		#chatname,#chatopponent{	
-			background-color: #ffffff;
-			color:#555;
-			border:0px solid #ccc;
-			border-radius: 4px;
-			width: 100%;
-		}
+		
 
 		#menuitems {
 			display: flex;
@@ -2178,12 +2183,12 @@ Current version: 19
 					}
 					if (localsettings.opmode == 4) //stop on selfname found
 					{
-						let foundStop = synchro_streaming_response.indexOf("\n### Instruction\:");						
+						let foundStop = synchro_streaming_response.indexOf("\n"+localsettings.instruct_starttag);						
 						if (foundStop != -1)
 						{
 							synchro_streaming_tokens_left = 0;
 						}
-						foundStop = synchro_streaming_response.indexOf("\n### Response\:");						
+						foundStop = synchro_streaming_response.indexOf("\n"+localsettings.instruct_endtag);						
 						if (foundStop != -1)
 						{
 							synchro_streaming_tokens_left = 0;
@@ -2413,6 +2418,8 @@ Current version: 19
 		adventure_context_mod: true, //extra injection for adventure mode
 		chatname: "You", //name to use in chat
 		chatopponent: defaultchatopponent,
+		instruct_starttag: "### Instruction:",
+		instruct_endtag: "### Response:",
 		persist_session: true,
 		speech_synth: 0, //0 is disabled
 		beep_on: false,
@@ -2503,7 +2510,7 @@ Current version: 19
 			let inputhost = urlParams.get('host');
 			if (inputhost) {
 				localmodehost = inputhost;
-			}else if(window.location.hostname && window.location.hostname!="" && !window.location.hostname.includes("koboldai.net")){
+			}else if(window.location.hostname && window.location.hostname!="" && !window.location.hostname.includes("koboldai.net") && !window.location.hostname.includes("kaihordewebui.github.io")){
 				localmodehost = window.location.hostname;
 			}
 		}
@@ -4354,6 +4361,8 @@ Current version: 19
 		document.getElementById("opmode").value = localsettings.opmode;
 		document.getElementById("chatname").value = localsettings.chatname;
 		document.getElementById("chatopponent").value = localsettings.chatopponent;
+		document.getElementById("instruct_starttag").value = localsettings.instruct_starttag;
+		document.getElementById("instruct_endtag").value = localsettings.instruct_endtag;
 		document.getElementById("top_k").value = localsettings.top_k;
 		document.getElementById("top_a").value = localsettings.top_a;
 		document.getElementById("typ_s").value = localsettings.typ_s;
@@ -4505,7 +4514,15 @@ Current version: 19
 		if (localsettings.chatname == null || localsettings.chatname == "") {
 			localsettings.chatname = "You";
 		}
-		localsettings.chatopponent = document.getElementById("chatopponent").value;
+		localsettings.chatopponent = document.getElementById("chatopponent").value.trim();
+		localsettings.instruct_starttag = document.getElementById("instruct_starttag").value.trim();
+		if (localsettings.instruct_starttag == null || localsettings.instruct_starttag == "") {
+			localsettings.instruct_starttag = "### Instruction:";
+		}
+		localsettings.instruct_endtag = document.getElementById("instruct_endtag").value;
+		if (localsettings.instruct_endtag == null || localsettings.instruct_endtag == "") {
+			localsettings.instruct_endtag = "### Response:";
+		}
 		localsettings.top_k = document.getElementById("top_k").value;
 		localsettings.top_a = document.getElementById("top_a").value;
 		localsettings.typ_s = document.getElementById("typ_s").value;
@@ -4562,14 +4579,18 @@ Current version: 19
 
 	function toggle_opmode() {
 
-		document.getElementById('chatnamesection').classList.add('hidden')
-		document.getElementById('adventuresection').classList.add('hidden')	
+		document.getElementById('chatnamesection').classList.add('hidden');
+		document.getElementById('adventuresection').classList.add('hidden');
+		document.getElementById('instructsection').classList.add('hidden')	;
 
 		if (document.getElementById('opmode').value == 3) {
 			document.getElementById('chatnamesection').classList.remove('hidden')
 		}
 		if (document.getElementById('opmode').value == 2) {
 			document.getElementById('adventuresection').classList.remove('hidden')
+		}
+		if (document.getElementById('opmode').value == 4) {
+			document.getElementById('instructsection').classList.remove('hidden')
 		}
 	}
 	
@@ -4765,7 +4786,7 @@ Current version: 19
 
 			if (localsettings.opmode == 4 && newgen != "") {
 				//append instruction for instruct mode
-				newgen = "\n\n### Instruction:\n\n" + newgen + "\n\n### Response:\n\n";
+				newgen = "\n\n"+localsettings.instruct_starttag+"\n\n" + newgen + "\n\n"+localsettings.instruct_endtag+"\n\n";
 			}
 			if (localsettings.opmode == 3 && newgen != "") {
 				//append chatname for chatmode
@@ -5530,19 +5551,19 @@ Current version: 19
 		//if we are in instruct mode, truncate to instruction
 		if (localsettings.opmode == 4)
 		{
-			let found = gentxt.indexOf("\n### Instruction\:");
+			let found = gentxt.indexOf("\n"+localsettings.instruct_starttag);
 			let splitresponse = [];
 			if (found != -1) //if found, truncate to it
 			{			
-				splitresponse = gentxt.split("\n### Instruction\:");
+				splitresponse = gentxt.split("\n"+localsettings.instruct_starttag);
 				gentxt = splitresponse[0];
 			}
 
-			found = gentxt.indexOf("\n### Response\:");
+			found = gentxt.indexOf("\n"+localsettings.instruct_endtag);
 			splitresponse = [];
 			if (found != -1) //if found, truncate to it
 			{			
-				splitresponse = gentxt.split("\n### Response\:");
+				splitresponse = gentxt.split("\n"+localsettings.instruct_endtag);
 				gentxt = splitresponse[0];
 			}
 		}
@@ -6028,11 +6049,11 @@ Current version: 19
 
 			if(localsettings.opmode==4 && !document.getElementById("allowediting").checked)
 			{
-				fulltxt = replaceAll(fulltxt, "\n\n### Instruction:\n\n", `\n\n<span class="hidden">### Instruction:\n</span><hr>\n<span class="color_cyan"><img src="`+human_square+`" style="padding:8px;border-radius: 8%;"/>`);
-				fulltxt = replaceAll(fulltxt, "\n\n### Response:\n\n", `</span>\n\n<hr><span class="hidden">### Response:\n</span>\n<img src="`+niko_square+`" style="padding:8px;border-radius: 8%;"/>`);
+				fulltxt = replaceAll(fulltxt, "\n\n"+localsettings.instruct_starttag+"\n\n", `\n\n<span class="hidden">`+localsettings.instruct_starttag+`\n</span><hr>\n<span class="color_cyan"><img src="`+human_square+`" style="padding:8px;border-radius: 8%;"/>`);
+				fulltxt = replaceAll(fulltxt, "\n\n"+localsettings.instruct_endtag+"\n\n", `</span>\n\n<hr><span class="hidden">`+localsettings.instruct_endtag+`\n</span>\n<img src="`+niko_square+`" style="padding:8px;border-radius: 8%;"/>`);
 			}else{
-				fulltxt = replaceAll(fulltxt, "\n### Instruction:", `<span class="color_gray">\n### Instruction:</span>`);
-				fulltxt = replaceAll(fulltxt, "\n### Response:", `<span class="color_gray">\n### Response:</span>`);
+				fulltxt = replaceAll(fulltxt, "\n"+localsettings.instruct_starttag, `<span class="color_gray">\n`+localsettings.instruct_starttag+`</span>`);
+				fulltxt = replaceAll(fulltxt, "\n"+localsettings.instruct_endtag, `<span class="color_gray">\n`+localsettings.instruct_endtag+`</span>`);
 			}
 
 			if(localsettings.opmode==3)
@@ -7125,8 +7146,8 @@ Current version: 19
 								  <th>AI Name</th>
 								</tr>
 								<tr>
-								<td><input class="" type="text" placeholder="(Enter Name)" value="" id="chatname" title="The name that you will be chatting as"></td>
-								<td><input class="" type="text" placeholder="(Auto)" value="" id="chatopponent"  title="The name of the person you want to chat with"></td>							
+								<td><input class="settinglabel mininiput" type="text" placeholder="(Enter Name)" value="" id="chatname" title="The name that you will be chatting as"></td>
+								<td><input class="settinglabel mininiput" type="text" placeholder="(Auto)" value="" id="chatopponent"  title="The name of the person you want to chat with"></td>							
 								</tr>								
 							  </table>	
 							  <div class="settinglabel">
@@ -7142,7 +7163,15 @@ Current version: 19
 								<div class="justifyleft settingsmall">Improved Prompt <span class="helpicon">?<span
 									class="helptext">Modifies the context, injecting tokens to improve adventure quality for adventure mode.</span></span> </div>	
 							   <input type="checkbox" id="adventure_context_mod" style="margin:0px 0 0;">
-							</div>								
+							</div>	
+							<div id="instructsection" class="settinglabel hidden" style="padding-top: 3px;">
+								<div class="justifyleft settingsmall">
+								Start Sequence:
+								<input class="settinglabel mininiput" type="text" placeholder="### Instruction:" value="" id="instruct_starttag" title="The sequence to start an instruction prompt">
+								End Sequence:
+								<input class="settinglabel mininiput" type="text" placeholder="### Response:" value="" id="instruct_endtag"  title="The sequence to end an instruction prompt">
+								</div>
+							</div>							
 						</div>
 					</div>
 				
