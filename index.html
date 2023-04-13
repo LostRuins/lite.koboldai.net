@@ -4903,7 +4903,7 @@ Current version: 19
 			}
 
 			//for instruct mode, add this
-			if (localsettings.opmode == 4)
+			if (localsettings.opmode == 4 && current_memory.length == 0)
 			{
 				let injected = "Below is an instruction that describes a task. Write a response that appropriately completes the request.\n\n";
 				truncated_context = injected + truncated_context;
@@ -4975,7 +4975,9 @@ Current version: 19
 			}
 
 			//we clip the memory if its too long, taking the last x chars (not the first)
-			let truncated_memory = current_memory.substring(current_memory.length - max_allowed_characters);
+			//memory or anote is allowed to be up to 0.9 times of ctx allowance
+			let max_mem_anote_len = Math.floor(max_allowed_characters*0.9);
+			let truncated_memory = current_memory.substring(current_memory.length - max_mem_anote_len);
 			if (truncated_memory != null && truncated_memory != "") {
 				truncated_memory += "\n";
 			}
@@ -5034,7 +5036,7 @@ Current version: 19
 
 			//we clip the authors note if its too long
 			let truncated_anote = current_anotetemplate.replace("<|>", current_anote);
-			truncated_anote = truncated_anote.substring(truncated_anote.length - max_allowed_characters);
+			truncated_anote = truncated_anote.substring(truncated_anote.length - max_mem_anote_len);
 
 			if (current_anote.length == 0) {
 				//if there's no authors note at all, don't include the template
