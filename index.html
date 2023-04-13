@@ -2210,9 +2210,7 @@ Current version: 19
 					else
 					{
 						synchro_streaming_tokens_left = 0;
-					}
-
-					
+					}				
 
 					kobold_api_stream(sub_endpt,submit_payload,synchro_streaming_tokens_left,synchro_streaming_response,tokens_per_tick);
 				}
@@ -2410,7 +2408,7 @@ Current version: 19
 		my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
 		home_cluster: text_hordes[0].baseurl, //which horde does this api key belongs to
 
-		autoscroll: false, //automatically scroll to bottom on render
+		autoscroll: true, //automatically scroll to bottom on render
 		trimsentences: true, //trim to last punctuation
 		trimwhitespace: true, //trim trailing whitespace
 		opmode: 1, //what mode are we in? 1=story, 2=adventure, 3=chat, 4=instruct
@@ -2433,7 +2431,7 @@ Current version: 19
 		enhanced_chat_ui: true,
 		multiline_replies: true,
 		export_settings: true, //affects if settings are included with the story and sharelinks
-		filter_comments: true, //on by default - filters <| |> comments, but breaks models that use instruct tokens like <|prompter|>
+		filter_comments: true, //on by default - filters <|comments|>, but breaks models that use instruct tokens like <|prompter|>
 
 		max_context_length: 1024,
 		max_length: 80,
@@ -3665,8 +3663,13 @@ Current version: 19
 			let parentcluster = find_text_horde(elem.cluster);
 			let clustertag = ((parentcluster&&parentcluster.tag!="")?" "+parentcluster.tag+"":"");
 			let style = (elem.trusted ? "style=\"color:#dd77ff;\"" : "");
-			let brokenstyle = (elem.maintenance_mode ? "style=\"color:#ee4444;\"" : "")
-			str += "<tr><td>" + escapeHtml(elem.name.substring(0, 32)) + "</td><td>" + escapeHtml(elem.models[0].substring(0, 32)) + "</td><td>" + elem.max_length + " / " + elem.max_context_length + "<br>(" + tokenspersec + " T/s)</td><td "+brokenstyle+">" + elem.uptime + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "</td><td>"+clustertag+"</td></tr>";
+			let brokenstyle = (elem.maintenance_mode ? "style=\"color:#ee4444;\"" : "");
+			let workerNameHtml = escapeHtml(elem.name.substring(0, 32));
+			if(elem.info && elem.info!="")
+			{
+				workerNameHtml = "<a class=\"color_blueurl\" href=\"#\" onclick=\"msgbox(\'"+escapeHtml(elem.info)+"\','Worker Info',false,false,hide_msgbox)\">"+workerNameHtml+"</a>";
+			}
+			str += "<tr><td>" + workerNameHtml + "</td><td>" + escapeHtml(elem.models[0].substring(0, 32)) + "</td><td>" + elem.max_length + " / " + elem.max_context_length + "<br>(" + tokenspersec + " T/s)</td><td "+brokenstyle+">" + elem.uptime + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "</td><td>"+clustertag+"</td></tr>";
 		}
 		document.getElementById("workertable").innerHTML = str;
 		document.getElementById("worktitlecount").innerText = "Worker List - Total "+wdata.length;
@@ -3706,7 +3709,12 @@ Current version: 19
 		},false);
 	}
 
-	function msgbox(text, title="Error Encountered", isHtml=false, noBtn=false) {
+	var msgboxOnDone = hide_popups;
+	function hide_msgbox() {
+		//hide msgbox ONLY
+		document.getElementById("msgboxcontainer").classList.add("hidden");
+	}
+	function msgbox(text, title="Error Encountered", isHtml=false, noBtn=false, onDoneFn=hide_popups) {
 		if (!text) { text = ""; }
 		if(isHtml)
 		{
@@ -3723,6 +3731,7 @@ Current version: 19
 		}else{
 			document.getElementById("msgboxbtnok").classList.remove("hidden");
 		}
+		msgboxOnDone = onDoneFn;
 		console.log("Msgbox: " + text);
 	}
 
@@ -4729,10 +4738,18 @@ Current version: 19
 	}
 
 	function abort_generation() {
-		let id_to_cancel = pending_response_id;		
+		let id_to_cancel = pending_response_id;	
+		
+		//flush any streaming text first
+		if(is_using_custom_ep() && pending_response_id!="" && synchro_pending_stream!="")
+		{
+			synchro_polled_response = synchro_pending_stream;
+			poll_pending_response();
+		}
+
 		console.log("Generation " + pending_response_id + " aborted");
 		pending_response_id = "";
-		poll_in_progress = false;
+		poll_in_progress = false;		
 		synchro_polled_response = null;
 		synchro_pending_stream = "";
 		render_gametext();
@@ -7202,7 +7219,7 @@ Current version: 19
 						   <input type="checkbox" id="export_settings" style="margin:0px 0 0;">				
 						</div>	
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Filters out comments (disable for instruct models using <|prompter|>)">Filter Comments </div>	
+							<div class="justifyleft settingsmall" title="Filters out &lt;|comment tags|&gt; from context">Filter Comment Tags </div>	
 						   <input type="checkbox" id="filter_comments" style="margin:0px 0 0;">				
 						</div>							
 					</div>
@@ -7382,7 +7399,7 @@ Current version: 19
 
 			</div>
 			<div class="popupfooter">
-				<button id="msgboxbtnok" type="button" class="btn btn-primary" onclick="hide_popups()">OK</button>
+				<button id="msgboxbtnok" type="button" class="btn btn-primary" onclick="msgboxOnDone()">OK</button>
 			</div>
 		</div>
 	</div>
