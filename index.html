@@ -2433,6 +2433,7 @@ Current version: 19
 		enhanced_chat_ui: true,
 		multiline_replies: true,
 		export_settings: true, //affects if settings are included with the story and sharelinks
+		filter_comments: true, //on by default - filters <| |> comments, but breaks models that use instruct tokens like <|prompter|>
 
 		max_context_length: 1024,
 		max_length: 80,
@@ -4355,6 +4356,7 @@ Current version: 19
 		document.getElementById("top_p").value = document.getElementById("top_p_slide").value = localsettings.top_p;
 		document.getElementById("autoscroll").checked = localsettings.autoscroll;
 		document.getElementById("export_settings").checked = localsettings.export_settings;
+		document.getElementById("filter_comments").checked = localsettings.filter_comments;
 		document.getElementById("trimsentences").checked = localsettings.trimsentences;
 		document.getElementById("trimwhitespace").checked = localsettings.trimwhitespace;
 		document.getElementById("persist_session").checked = localsettings.persist_session;
@@ -4502,6 +4504,7 @@ Current version: 19
 		localsettings.top_p = document.getElementById("top_p").value;
 		localsettings.autoscroll = (document.getElementById("autoscroll").checked ? true : false);
 		localsettings.export_settings = (document.getElementById("export_settings").checked ? true : false);
+		localsettings.filter_comments = (document.getElementById("filter_comments").checked ? true : false);		
 		localsettings.trimsentences = (document.getElementById("trimsentences").checked ? true : false);
 		localsettings.trimwhitespace = (document.getElementById("trimwhitespace").checked ? true : false);
 		localsettings.persist_session = (document.getElementById("persist_session").checked ? true : false);
@@ -5974,7 +5977,9 @@ Current version: 19
 		if (stripimg) {
 			fulltxt = fulltxt.replace(/<\|p\|.+?\|p\|>/g, stripimg_replace_str);
 			fulltxt = fulltxt.replace(/<\|d\|.+?\|d\|>/g, stripimg_replace_str);
-			fulltxt = fulltxt.replace(/<\|.+?\|>/g, ""); //remove normal comments too
+			if (localsettings.filter_comments) {
+				fulltxt = fulltxt.replace(/<\|.+?\|>/g, ""); //remove normal comments too
+			}
 		}
 		return fulltxt;
 	}
@@ -7195,7 +7200,11 @@ Current version: 19
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" title="Includes your current settings when saving or sharing your story">Export Settings </div>	
 						   <input type="checkbox" id="export_settings" style="margin:0px 0 0;">				
-						</div>				
+						</div>	
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="Filters out comments (disable for instruct models using <|prompter|>)">Filter Comments </div>	
+						   <input type="checkbox" id="filter_comments" style="margin:0px 0 0;">				
+						</div>							
 					</div>
 				
 
