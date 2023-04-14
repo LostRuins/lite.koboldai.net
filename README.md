@@ -9,6 +9,17 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
+Changelog of KoboldAI Lite 14 Apr 2023:
+- Now clamps maximum memory budget to 0.9x of the max context budget. This ensures there will always be room for a few lines of text, and prevents nonsensical responses that happened when the context had 0 length remaining after memory was added.
+- Author's note now automatically aligns with word boundaries, so it won't end up splitting a word into two.
+- Support for https in local mode.
+- If in instruct mode and memory is populated, do not inject the default Alpaca header. This was requested as Vicuna apparently uses a different header, which now can be configured into memory.
+- Added a popup to display worker extra description information on click. 
+- Made autoscroll enabled default.
+- Aborted incomplete generations in streaming mode are now preserved instead of discarded.
+- Added settings to optionally toggle filtering out <|comments|> for use in OpenAssistant styled models.
+- Allowed setting custom instruct delimiter sequences instead of the default Alpaca ones. 
+
 Changelog of KoboldAI Lite 6 Apr 2023:
 - Disable trim sentences on instruct by default, it is now optional
 - Added option to allow multiline responses in chat mode due to popular demand
