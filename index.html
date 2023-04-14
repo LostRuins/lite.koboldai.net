@@ -5057,7 +5057,21 @@ Current version: 19
 				truncated_context = truncated_context.substring(excess_len);
 				//insert authors note 80 tokens before the ending (320 characters).				
 				let anote_dist = anote_strength;
-				let anote_insert_idx = clamp(truncated_context.length - anote_dist, 0, truncated_context.length);
+				let anote_insert_idx = truncated_context.length - anote_dist;
+				//try to align anote with a word boundary
+				for(let i=0;i<10;++i)
+				{
+					if(anote_insert_idx>=0 && anote_insert_idx<truncated_context.length 
+					&& truncated_context[anote_insert_idx]!=" " && truncated_context[anote_insert_idx]!="."
+					&& truncated_context[anote_insert_idx]!="!" && truncated_context[anote_insert_idx]!="?"
+					&& truncated_context[anote_insert_idx]!="\n")
+					{
+						++anote_insert_idx;
+					}else{
+						break;
+					}
+				}
+				anote_insert_idx = clamp(anote_insert_idx, 0, truncated_context.length);
 				truncated_context = truncated_context.slice(0, anote_insert_idx) + truncated_anote + truncated_context.slice(anote_insert_idx);
 				truncated_context = truncated_memory + truncated_context;
 			}
