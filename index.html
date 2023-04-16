@@ -4829,7 +4829,7 @@ Current version: 21
 	function submit_generation() {	
 
 		let newgen = document.getElementById("input_text").value;
-		newgen = escapeHtml(newgen);	
+		
 		if (newgen.trim() != "" || gametext_arr.length > 0 || current_memory != "" || current_anote != "") 
 		{
 			if (localsettings.speech_synth > 0 && 'speechSynthesis' in window) {
@@ -5579,9 +5579,7 @@ Current version: 21
 	}
 
 	function handle_incoming_text(gentxt, genworker, genmdl, genkudos) {
-
-		gentxt = escapeHtml(gentxt);
-
+	
 		//always trim incomplete sentences for adventure and chat
 		if (localsettings.opmode == 2 || localsettings.opmode == 3 || localsettings.trimsentences == true) {
 			gentxt = end_trim_to_sentence(gentxt,true);
@@ -5954,7 +5952,7 @@ Current version: 21
 
 	function merge_edit_field() {
 		if (gametext_arr.length > 0 && document.getElementById("allowediting").checked) {
-			let oldInnerText = concat_gametext(true, "\n");
+			let oldInnerText = concat_gametext(true, "\n","","");
 			let gametext_elem = document.getElementById("gametext");
 			let edited = gametext_elem.innerText;
 
@@ -6047,13 +6045,18 @@ Current version: 21
 		}
 	}
 
-	function concat_gametext(stripimg = false, stripimg_replace_str = "", append_before_segment="",append_after_segment="") {
+	function concat_gametext(stripimg = false, stripimg_replace_str = "", append_before_segment="",append_after_segment="",escapeTxt=false) {
 		let fulltxt = "";
 		for (let i = 0; i < gametext_arr.length; ++i) {
-			if (gametext_arr[i].trim() == "" || gametext_arr[i].trim() == "\n") {
-				fulltxt += (gametext_arr[i]);
+			let extracted = (gametext_arr[i]);
+			if(escapeTxt)
+			{
+				extracted = escapeHtml(extracted);
+			}
+			if (extracted.trim() == "" || extracted.trim() == "\n") {
+				fulltxt += extracted;
 			} else {
-				fulltxt += (append_before_segment + gametext_arr[i] + append_after_segment);
+				fulltxt += (append_before_segment + extracted + append_after_segment);
 			}
 		}
 		if (stripimg) {
@@ -6125,9 +6128,9 @@ Current version: 21
 		else {
 			let fulltxt = "";
 			if (document.getElementById("allowediting").checked) {
-				fulltxt = concat_gametext(false, "", "<span class=\"txtchunk\">", "</span>");
+				fulltxt = concat_gametext(false, "", "<span class=\"txtchunk\">", "</span>",true);
 			} else {
-				fulltxt = concat_gametext(false, "", "", "");
+				fulltxt = concat_gametext(false, "", "", "",true);
 			}
 			if(synchro_pending_stream!="")
 			{
@@ -6294,7 +6297,7 @@ Current version: 21
 			}
 			else
 			{
-				render_enhanced_chat(concat_gametext(false,"")); 
+				render_enhanced_chat(concat_gametext(false,"","","",true)); 
 			}
 			document.getElementById("enhancedchatinterface").classList.remove("hidden");
 			document.getElementById("normalinterface").classList.add("hidden");
