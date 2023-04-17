@@ -5175,6 +5175,10 @@ Current version: 22
 					//for vesion 1.2.2 and later, send stopper tokens for chat and instruct
 					if (kobold_endpoint_version && kobold_endpoint_version != "" && compare_version_str(kobold_endpoint_version, "1.2.1") > 0) 
 					{
+						if (localsettings.opmode == 2) //stop on new action found
+						{
+							submit_payload.stop_sequence = ["\n\> "];
+						}
 						if (localsettings.opmode == 3) //stop on selfname found
 						{
 							submit_payload.stop_sequence = [localsettings.chatname + "\:"];
@@ -5602,11 +5606,11 @@ Current version: 22
 		//if we are in adventure mode, truncate to action if it appears
 		if (localsettings.opmode == 2)
 		{
-			let foundNextAction = gentxt.indexOf("\n> ");
+			let foundNextAction = gentxt.indexOf("\n\> ");
 			let splitresponse = [];
 			if (foundNextAction != -1) //if found, truncate to it
 			{			
-				splitresponse = gentxt.split("\n> ");
+				splitresponse = gentxt.split("\n\> ");
 				gentxt = splitresponse[0];
 			}			
 		}
@@ -6083,6 +6087,9 @@ Current version: 22
 				return unescapeHtml(m) ;
 			});
 			fulltxt = fulltxt.replace(/\[&lt;\|.+?\|&gt;\]/g, function (m) {
+				return unescapeHtml(m) ;
+			});
+			fulltxt = fulltxt.replace(/\n\n&gt; /g, function (m) {
 				return unescapeHtml(m) ;
 			});
 		}
