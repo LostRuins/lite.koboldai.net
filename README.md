@@ -17,7 +17,7 @@ Changelog of KoboldAI Lite 14 Apr 2023:
 - Added a popup to display worker extra description information on click. 
 - Made autoscroll enabled default.
 - Aborted incomplete generations in streaming mode are now preserved instead of discarded.
-- Added settings to optionally toggle filtering out <|comments|> for use in OpenAssistant styled models.
+- Added settings to optionally toggle filtering out [<|comments|>] for use in OpenAssistant styled models.
 - Allowed setting custom instruct delimiter sequences instead of the default Alpaca ones. 
 
 Changelog of KoboldAI Lite 6 Apr 2023:

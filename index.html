@@ -1847,6 +1847,15 @@ Current version: 21
 			.replace(/"/g, "&quot;")
 			.replace(/'/g, "&#039;");
 	}
+	function unescapeHtml(input)
+	{
+		return input
+			.replace(/&amp;/g, "&")
+			.replace(/&lt;/g, "<")
+			.replace(/&gt;/g, ">")
+			.replace(/&quot;/g, "\"")
+			.replace(/&#039;/g, "\'");
+	}
 
 	function isNumeric(n) 
 	{
@@ -2381,7 +2390,7 @@ Current version: 21
 	var selected_models = []; //this stores ALL selected models properties as array of objects
 	var worker_data = [];
 	var selected_workers = [];
-	//gametext_arr stores images inline, with the special format <|p|id|p|> or <|d|id|d|>, which is either an ID for loaded image data, or an ID for pending requests
+	//gametext_arr stores images inline, with the special format [<|p|id|p|>] or [<|d|id|d|>], which is either an ID for loaded image data, or an ID for pending requests
 	var gametext_arr = []; //array of texts currently displayed
 	var redo_arr = []; //array of texts that are in the redo stack
 	var retry_prev_text = "" ; //when we retry, save the last version in case they want to undo
@@ -2449,7 +2458,7 @@ Current version: 21
 		enhanced_chat_ui: true,
 		multiline_replies: true,
 		export_settings: true, //affects if settings are included with the story and sharelinks
-		filter_comments: true, //on by default - filters <|comments|>, but breaks models that use instruct tokens like <|prompter|>
+		filter_comments: true, //on by default - filters [<|comments|>]
 
 		max_context_length: 1024,
 		max_length: 80,
@@ -2813,7 +2822,7 @@ Current version: 21
 		{
 			export_arr = [];
 			for (let i = 0; i < gametext_arr.length; ++i) {
-				export_arr.push(gametext_arr[i].replace(/<\|p\|.+?\|p\|>/g, "").replace(/<\|d\|.+?\|d\|>/g, ""));
+				export_arr.push(gametext_arr[i].replace(/\[<\|p\|.+?\|p\|>\]/g, "").replace(/\[<\|d\|.+?\|d\|>\]/g, ""));
 			}
 		}
 
@@ -2925,6 +2934,7 @@ Current version: 21
 					restart_new_game();
 
 					gametext_arr = story.ga;
+					migrate_old_images_in_gametext();
 					if (story.ca && story.ca != "") {
 						current_anote = story.ca;
 						current_anotetemplate = story.ct;
@@ -2987,7 +2997,7 @@ Current version: 21
 		{
 			export_arr = [];
 			for (let i = 0; i < gametext_arr.length; ++i) {
-				export_arr.push(gametext_arr[i].replace(/<\|p\|.+?\|p\|>/g, "").replace(/<\|d\|.+?\|d\|>/g, ""));
+				export_arr.push(gametext_arr[i].replace(/\[<\|p\|.+?\|p\|>\]/g, "").replace(/\[<\|d\|.+?\|d\|>\]/g, ""));
 			}
 		}
 
@@ -3168,6 +3178,10 @@ Current version: 21
 			for (var i = 0; i < loaded_storyobj.actions.length; ++i) {
 				gametext_arr.push(loaded_storyobj.actions[i]);
 			}
+
+			//port over old images to the new format
+			migrate_old_images_in_gametext();
+
 			if (loaded_storyobj.anotetemplate) {
 				current_anotetemplate = loaded_storyobj.anotetemplate;
 			}
@@ -5502,7 +5516,7 @@ Current version: 21
 				console.log('genimg result:', data);
 				if (data.id && data.id != "") {
 					//for now, append the new image directly into the gtarr
-					let nimgtag = "<|p|" + data.id + "|p|>";
+					let nimgtag = "[<|p|" + data.id + "|p|>]";
 					gametext_arr.push(nimgtag);
 					image_db[data.id] = { done: false, queue: "Starting", result: "", alt:sentence };
 					console.log("New image queued " + nimgtag);
@@ -5540,7 +5554,7 @@ Current version: 21
 	{
 		let removesrc = document.getElementById("zoomedimg").src;
 		if (removesrc && removesrc != "") {
-			var matchingStr = ("<|d|" + removesrc + "|d|>")
+			var matchingStr = ("[<|d|" + removesrc + "|d|>]")
 			for (let i = 0; i < gametext_arr.length; ++i) {
 				if (gametext_arr[i].includes(matchingStr)) {
 					gametext_arr[i] = gametext_arr[i].replace(matchingStr, "");
@@ -5738,14 +5752,14 @@ Current version: 21
 		let hasChangedImage = false;
 		for (var i = 0; i < gametext_arr.length; ++i) {
 			//if there's no image in this segment, continue
-			if (/<\|p\|.+?\|p\|>/.test(gametext_arr[i])) {
+			if (/\[<\|p\|.+?\|p\|>\]/.test(gametext_arr[i])) {
 				for (let key in image_db) {
 					let img = image_db[key];
-					let matchstr = "<|p|" + key + "|p|>";
+					let matchstr = "[<|p|" + key + "|p|>]";
 					if (gametext_arr[i].includes(matchstr)) {
 						hasChangedImage = true; //set here to update timers
 						if (img.done == true && img.result != "") {
-							let newstr = "<|d|" + img.result + "|d|>";
+							let newstr = "[<|d|" + img.result + "|d|>]";
 							console.log("Replacing with Image: " + matchstr);
 							gametext_arr[i] = gametext_arr[i].replace(matchstr, newstr);
 							completed_imgs_meta[cyrb_hash(img.result)] = {alt:image_db[key].alt};
@@ -5966,7 +5980,7 @@ Current version: 21
 				gametext_elem.querySelectorAll('div.storyimg,div.storyimgfloat').forEach(
 					(el) => {
 						let chimg = el.getElementsByTagName("img")[0];
-						el.replaceWith((chimg.alt == null || chimg.alt == "") ? ("<|d|" + chimg.src + "|d|>") : ("<|p|" + chimg.alt + "|p|>"))
+						el.replaceWith((chimg.alt == null || chimg.alt == "") ? ("[<|d|" + chimg.src + "|d|>]") : ("[<|p|" + chimg.alt + "|p|>]"))
 					}
 				);
 
@@ -6051,7 +6065,7 @@ Current version: 21
 			let extracted = (gametext_arr[i]);
 			if(escapeTxt)
 			{
-				//extracted = escapeHtml(extracted);
+				extracted = escapeHtml(extracted);				
 			}
 			if (extracted.trim() == "" || extracted.trim() == "\n") {
 				fulltxt += extracted;
@@ -6059,14 +6073,48 @@ Current version: 21
 				fulltxt += (append_before_segment + extracted + append_after_segment);
 			}
 		}
+		//unscape special sequences
+		if (escapeTxt) 
+		{
+			fulltxt = fulltxt.replace(/\[&lt;\|p\|.+?\|p\|&gt;\]/g, function (m) {
+				return unescapeHtml(m);
+			});
+			fulltxt = fulltxt.replace(/\[&lt;\|d\|.+?\|d\|&gt;\]/g, function (m) {
+				return unescapeHtml(m) ;
+			});
+			fulltxt = fulltxt.replace(/\[&lt;\|.+?\|&gt;\]/g, function (m) {
+				return unescapeHtml(m) ;
+			});
+		}
 		if (stripimg) {
-			fulltxt = fulltxt.replace(/<\|p\|.+?\|p\|>/g, stripimg_replace_str);
-			fulltxt = fulltxt.replace(/<\|d\|.+?\|d\|>/g, stripimg_replace_str);
+			fulltxt = fulltxt.replace(/\[<\|p\|.+?\|p\|>\]/g, stripimg_replace_str);
+			fulltxt = fulltxt.replace(/\[<\|d\|.+?\|d\|>\]/g, stripimg_replace_str);
 			if (localsettings.filter_comments) {
-				fulltxt = fulltxt.replace(/<\|.+?\|>/g, ""); //remove normal comments too
+				fulltxt = fulltxt.replace(/\[<\|.+?\|>\]/g, ""); //remove normal comments too
 			}
 		}
 		return fulltxt;
+	}
+
+	function migrate_old_images_in_gametext()
+	{
+		let oldctx = concat_gametext(false, "", "", "", false);
+		//if we have no new images
+		if (!(/\[<\|p\|.+?\|p\|>\]/.test(oldctx)) && !(/\[<\|d\|.+?\|d\|>\]/.test(oldctx))) {
+			//but we also have old images
+			if ((/<\|p\|.+?\|p\|>/.test(oldctx)) || (/<\|d\|.+?\|d\|>/.test(oldctx))) {
+				
+				console.log("Migrating old images from saved story");
+				for (let i = 0; i < gametext_arr.length; ++i) {
+					gametext_arr[i] = gametext_arr[i].replace(/<\|p\|.+?\|p\|>/g, function (m) {
+						return "[" + m + "]";
+					});
+					gametext_arr[i] = gametext_arr[i].replace(/<\|d\|.+?\|d\|>/g, function (m) {
+						return "[" + m + "]";
+					});
+				}
+			}
+		}
 	}
 
 	function render_gametext(partialrefresh = false) 
@@ -6168,15 +6216,15 @@ Current version: 21
 			}
 		
 			//handle images
-			fulltxt = fulltxt.replace(/<\|p\|.+?\|p\|>/g, function (m) {
+			fulltxt = fulltxt.replace(/\[<\|p\|.+?\|p\|>\]/g, function (m) {
 				// m here means the whole matched string				
-				let inner = m.substring(4, m.length - 4);
+				let inner = m.substring(5, m.length - 5);
 				inner = render_image_html("", inner);
 				return inner;
 			});
-			fulltxt = fulltxt.replace(/<\|d\|.+?\|d\|>/g, function (m) {
+			fulltxt = fulltxt.replace(/\[<\|d\|.+?\|d\|>\]/g, function (m) {
 				// m here means the whole matched string				
-				let inner = m.substring(4, m.length - 4);
+				let inner = m.substring(5, m.length - 5);
 				inner = render_image_html(inner, "");
 				return inner;
 			});	
@@ -6389,19 +6437,19 @@ Current version: 21
 			if(curr.msg && curr.msg!="")
 			{
 				//convert the msg into images
-				curr.msg = curr.msg.replace(/<\|p\|.+?\|p\|>/g, function (m) {
+				curr.msg = curr.msg.replace(/\[<\|p\|.+?\|p\|>\]/g, function (m) {
 					// m here means the whole matched string				
-					let inner = m.substring(4, m.length - 4);
+					let inner = m.substring(5, m.length - 5);
 					inner = render_image_html("", inner,false);
 					return inner;
 				});
-				curr.msg = curr.msg.replace(/<\|d\|.+?\|d\|>/g, function (m) {
+				curr.msg = curr.msg.replace(/\[<\|d\|.+?\|d\|>\]/g, function (m) {
 					// m here means the whole matched string				
-					let inner = m.substring(4, m.length - 4);
+					let inner = m.substring(5, m.length - 5);
 					inner = render_image_html(inner, "",false);
 					return inner;
 				});
-				curr.msg = curr.msg.replace(/<\|.+?\|>/g, ""); //remove normal comments too
+				curr.msg = curr.msg.replace(/\[<\|.+?\|>\]/g, ""); //remove normal comments too
 			}
 
 			if(curr.myturn)
