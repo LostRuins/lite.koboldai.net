@@ -5,7 +5,7 @@ This is a standalone web ui for KoboldAIs Horde, which requires no dependencies,
 Just copy this single static HTML file anywhere and open it in a browser. No dependencies.
 Or you can throw it on some web server and serve it there too. E.g. Github pages, nginx, whatever.
 Now rebranded as KoboldAI Lite
-Current version: 23
+Current version: 24
 -Concedo
 -->
 
@@ -283,7 +283,7 @@ Current version: 23
 			padding-right: 10px;
 		}
 
-		#anotetemplate {
+		#extrastopseq, #anotetemplate {
 			background-color: #404040;
 			color: #ffffff;
 			resize: none;
@@ -2412,6 +2412,7 @@ Current version: 23
 	var current_memory = ""; //stored memory
 	var current_anote = ""; //stored author note
 	var current_anotetemplate = "[Author\'s note: <|>]";
+	var extrastopseq = "";
 	var anote_strength = 320; //distance from end
 	var current_wi = []; //each item stores a wi object.
 	var loaded_storyobj = generate_base_storyobj(); //for loading json story files from disk
@@ -4700,6 +4701,7 @@ Current version: 23
 		current_anote = document.getElementById("anotetext").value;
 		current_anotetemplate = document.getElementById("anotetemplate").value;
 		anote_strength = document.getElementById("anote_strength").value;
+		extrastopseq = document.getElementById("extrastopseq").value;
 		hide_popups();
 		render_gametext();
 	}
@@ -5208,6 +5210,11 @@ Current version: 23
 							if (localsettings.opmode == 4) //stop on selfname found
 							{
 								submit_payload.stop_sequence = ["\n" + localsettings.instruct_starttag, "\n" + localsettings.instruct_endtag];
+							}
+							if(extrastopseq!="")
+							{
+								let rep = replaceAll(extrastopseq,"\\n","\n");
+								submit_payload.stop_sequence.push(rep);
 							}
 						}
 
@@ -6571,6 +6578,7 @@ Current version: 23
 		document.getElementById("anotetext").value = current_anote;
 		document.getElementById("anotetemplate").value = current_anotetemplate;
 		document.getElementById("anote_strength").value = anote_strength;
+		document.getElementById("extrastopseq").value = extrastopseq;
 	}
 
 	function toggle_wi_sk(idx) {
@@ -7391,7 +7399,7 @@ Current version: 23
 
 	<div class="popupcontainer flex hidden" id="memorycontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup flexsize higher">
+		<div class="nspopup flexsize highest">
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Memory</div>
 			</div>
@@ -7408,7 +7416,7 @@ Current version: 23
 				<span class="justifyright flex-push-right" >
 					A/N Strength
 				</span>	
-			</div>
+			</div>			
 			
 			<input class="form-control anotetempbox" type="text"
 				placeholder="(the &lt;|&gt; will be replaced with the Author's Note text)" value="" id="anotetemplate">
@@ -7418,6 +7426,12 @@ Current version: 23
 					<option value="160">Strong</option>
 				</select>
 			<br><br>
+			<div class="justifyleft settinglabel">Extra Stopping Sequence (Kobold API Only) <span class="helpicon">?<span
+				class="helptext">Triggers the text generator to stop generating early if this sequence appears, in addition to default stop sequences.</span></span></div>		
+			<input class="form-control" type="text" placeholder="None" value="" id="extrastopseq">
+							
+
+			<br>
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="confirm_memory()">OK</button>
 				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
