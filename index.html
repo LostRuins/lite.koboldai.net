@@ -2847,6 +2847,10 @@ Current version: 24
 			story.ca = current_anote;
 			story.ct = current_anotetemplate;
 		}
+		if(extrastopseq!="")
+		{
+			story.ess = extrastopseq;
+		}
 		if (current_wi != null && current_wi.length > 0) {
 			story.cwi = current_wi;
 		}
@@ -2952,6 +2956,10 @@ Current version: 24
 					if (story.cwi && story.cwi.length > 0) {
 						current_wi = story.cwi;
 					}
+					if(story.ess && story.ess!="")
+					{
+						extrastopseq = story.ess;
+					}
 
 					//handle importing settings
 					if (story.savedsettings && story.savedsettings != "") {
@@ -3027,6 +3035,9 @@ Current version: 24
 		loaded_storyobj.authorsnote = current_anote;
 		loaded_storyobj.memory = current_memory;
 		loaded_storyobj.worldinfo = current_wi;
+
+		//extra unofficial fields
+		loaded_storyobj.extrastopseq = extrastopseq;
 
 		if (localsettings.export_settings) {
 			loaded_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
@@ -3200,6 +3211,9 @@ Current version: 24
 			}
 			if (loaded_storyobj.worldinfo) {
 				current_wi = loaded_storyobj.worldinfo;
+			}
+			if (loaded_storyobj.extrastopseq) {
+				extrastopseq = loaded_storyobj.extrastopseq;
 			}
 			if (loaded_storyobj.savedsettings && loaded_storyobj.savedsettings != "") {
 				//prompt to import settings
@@ -5214,7 +5228,14 @@ Current version: 24
 							if(extrastopseq!="")
 							{
 								let rep = replaceAll(extrastopseq,"\\n","\n");
-								submit_payload.stop_sequence.push(rep);
+								let srep = rep.split("||$||");
+								for(let i=0;i<srep.length;++i)
+								{
+									if(srep[i] && srep[i]!="")
+									{
+										submit_payload.stop_sequence.push(srep[i]);
+									}
+								}
 							}
 						}
 
@@ -7427,7 +7448,7 @@ Current version: 24
 				</select>
 			<br><br>
 			<div class="justifyleft settinglabel">Extra Stopping Sequence (Kobold API Only) <span class="helpicon">?<span
-				class="helptext">Triggers the text generator to stop generating early if this sequence appears, in addition to default stop sequences.</span></span></div>		
+				class="helptext">Triggers the text generator to stop generating early if this sequence appears, in addition to default stop sequences. If you want multiple sequences, separate them with the following delimiter: ||$||</span></span></div>		
 			<input class="form-control" type="text" placeholder="None" value="" id="extrastopseq">
 							
 
