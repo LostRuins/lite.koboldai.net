@@ -5007,6 +5007,18 @@ Current version: 26
 			//for chatmode, inject hidden context if AN and memory are empty, and if there's no story in context before the chat
 			if (localsettings.opmode == 3) {
 				let co = localsettings.chatopponent;
+
+				//randomize opponent if there is more than one
+				let hasMulti = false;
+				if(co.includes("||$||"))
+				{
+					let coarr = co.split("||$||");
+					coarr = coarr.filter(x=>(x&&x!=""));
+					coarr = coarr.map(x=>x.trim());
+					co = coarr[Math.floor(Math.random()*coarr.length)];
+					hasMulti = (coarr.length>1);
+				}
+
 				let me = localsettings.chatname;
 				if (co == null || co == "") {
 					co = defaultchatopponent;
@@ -5025,6 +5037,10 @@ Current version: 26
 				if (current_anote.length == 0 && current_memory.length == 0) {
 					if (gametext_arr.length > 0 && gametext_arr[0].startsWith("\n" + me + ": ")) {
 						let injected = "[The following is an interesting chat message log between " + me + " and " + co + ".]\n\n" + localsettings.chatname + ": Hi.\n" + co + ": Hello.";
+						if(hasMulti)
+						{
+							injected = "[The following is an interesting chat message log between " + me + " and multiple others.]\n\n" + localsettings.chatname + ": Hi.";
+						}
 						truncated_context = injected + truncated_context;
 					}
 				}
@@ -5218,6 +5234,17 @@ Current version: 26
 							if (localsettings.opmode == 3) //stop on selfname found
 							{
 								submit_payload.stop_sequence = [localsettings.chatname + "\:"];
+								//for multichat, everyone else becomes a stopper token
+								if(localsettings.chatopponent.includes("||$||"))
+								{
+									let coarr = localsettings.chatopponent.split("||$||");
+									coarr = coarr.filter(x=>(x&&x!=""));
+									coarr = coarr.map(x=>x.trim());
+									for(let n=0;n<coarr.length;++n)
+									{
+										submit_payload.stop_sequence.push(coarr[n] + "\:");
+									}
+								}
 							}
 							if (localsettings.opmode == 4) //stop on selfname found
 							{
