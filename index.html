@@ -2597,17 +2597,20 @@ Current version: 26
 
 		attempt_connect(false);
 
-		//fetch for news updates
-		fetch(localflag?news_endpoint:horde_news_endpoint)
-		.then(x => x.json())
-		.then(data => {
-			if(data && data!="" && data.newstitle && data.newstext && data.newstitle!="" && data.newstext!="")
-			{
-				msgbox(data.newstext,data.newstitle,true,data.nobtns);
-			}
-		}).catch((error) => {
-			console.log("Error: " + error);
-		});
+		//fetch for news updates, for local mode, we don't fetch any news info. They can find updates themselves.
+		if(!localflag)
+		{
+			fetch(localflag?news_endpoint:horde_news_endpoint)
+			.then(x => x.json())
+			.then(data => {
+				if(data && data!="" && data.newstitle && data.newstext && data.newstitle!="" && data.newstext!="")
+				{
+					msgbox(data.newstext,data.newstitle,true,data.nobtns);
+				}
+			}).catch((error) => {
+				console.log("Error: " + error);
+			});
+		}
 	}
 
 	function attempt_connect(popup_aiselect = true) 
@@ -2704,24 +2707,38 @@ Current version: 26
 			});
 		}
 
-		//fetch the stable horde model list once and store it forever, it likely wont change
-		fetch_image_models();
+		
+		//for local mode, we only fetch the SD model list after the field is selected
+		if(!localflag)
+		{
+			fetch_image_models();
+		}
 	}
 
-	function fetch_image_models()
+	var image_models_fetched = false; 
+	function fetch_image_models(onDoneCallback)
 	{
-		fetch(stablehorde_model_endpoint)
-			.then(x => x.json())
-			.then(shdata => {
-				stablemodels = [];
-				shdata = shdata.sort(function (a, b) { return b.count - a.count });
-				for (var i = 0; i < shdata.length; ++i) {
-					stablemodels.push({ name: shdata[i].name, count: shdata[i].count });
-				}
-				console.log("Loaded SD models list: " + stablemodels.length);
-			}).catch((error) => {
-				console.log("Error: " + error);
-			});
+		//fetch the stable horde model list once and store it forever, it likely wont change
+		if(!image_models_fetched)
+		{
+			fetch(stablehorde_model_endpoint)
+				.then(x => x.json())
+				.then(shdata => {
+					image_models_fetched = true;
+					stablemodels = [];
+					shdata = shdata.sort(function (a, b) { return b.count - a.count });
+					for (var i = 0; i < shdata.length; ++i) {
+						stablemodels.push({ name: shdata[i].name, count: shdata[i].count });
+					}
+					console.log("Loaded SD models list: " + stablemodels.length);
+					if(onDoneCallback!=null)
+					{
+						onDoneCallback();
+					}
+				}).catch((error) => {
+					console.log("Error: " + error);
+				});
+		}
 	}
 	
 	function get_cursor_position() {
@@ -4515,6 +4532,12 @@ Current version: 26
 	}
 	function clear_sd_model() {
 		document.getElementById("generate_images").value = "";
+		if(!image_models_fetched)
+		{
+			//doing it this way will be more buggy, 
+			//but since some anons are paranoid about privacy then whatever, only fetch it manually
+			fetch_image_models(display_settings);
+		}
 	}
 
 	function validate_samplers(savesetting = false) {
@@ -7559,18 +7582,24 @@ init();
 
 //this is needed for PWA to work on chrome, so users can install KoboldAI Lite to device
 if ('serviceWorker' in navigator) {
-	console.log("Try to register service worker...");	
-	try {
-		navigator.serviceWorker.register("sw.js")
-		.then(()=>{
-			console.log("service worker registered"); 
-		})
-		.catch(err=>{
-			console.log("error while registering service worker 2: " + err);
-		});
-	} catch (error) {
-		console.log("error while registering service worker 1: " + error.message);
-	}	
+
+	//for local mode, we do not load any PWA service worker.
+	//this will prevent PWA functionality locally but will avoid the scary 404 errors
+	if(localmode)
+	{
+		console.log("Try to register service worker...");	
+		try {
+			navigator.serviceWorker.register("sw.js")
+			.then(()=>{
+				console.log("service worker registered"); 
+			})
+			.catch(err=>{
+				console.log("error while registering service worker 2: " + err);
+			});
+		} catch (error) {
+			console.log("error while registering service worker 1: " + error.message);
+		}
+	}
 }
 else 
 {
