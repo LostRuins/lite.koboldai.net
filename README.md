@@ -9,6 +9,15 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
+Changelog of KoboldAI Lite 2 May 2023:
+- Added group conversation chat feature
+- Added customizable stop sequences for local API
+- Fixes to HTML code escaping
+- Switched to new comment format
+- Fixes for adventure mode
+- Clamp Top-P to 0.001 minimum, as required by horde
+- Added option for GPT-4 in API, and custom OAI endpoint urls
+
 Changelog of KoboldAI Lite 14 Apr 2023:
 - Now clamps maximum memory budget to 0.9x of the max context budget. This ensures there will always be room for a few lines of text, and prevents nonsensical responses that happened when the context had 0 length remaining after memory was added.
 - Author's note now automatically aligns with word boundaries, so it won't end up splitting a word into two.
