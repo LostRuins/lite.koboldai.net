@@ -6176,10 +6176,17 @@ Current version: 27
 			});
 			if(localsettings.opmode==3 && localsettings.chatname!="" && localsettings.chatopponent!="")
 			{
-				let a = escapeHtml(localsettings.chatname);
-				let b = escapeHtml(localsettings.chatopponent);
+				let a = escapeHtml(localsettings.chatname);				
 				fulltxt = replaceAll(fulltxt,a,localsettings.chatname);
-				fulltxt = replaceAll(fulltxt,b,localsettings.chatopponent);
+
+				// let b = escapeHtml(localsettings.chatopponent);
+				// fulltxt = replaceAll(fulltxt,b,localsettings.chatopponent);
+
+				//unescape other chat opponents too (match anything that is NOT us)		
+				var regex = new RegExp("\n(?!" + localsettings.chatname + ").+?\: ", "gi");
+				fulltxt = fulltxt.replace(regex, function (m) {
+					return unescapeHtml(m);
+				});
 			}
 			if(localsettings.opmode==4 && localsettings.instruct_starttag!="" && localsettings.instruct_endtag!="")
 			{
@@ -6305,9 +6312,9 @@ Current version: 27
 				//match anything that is NOT us, ie. opponents				
 				var regex = new RegExp("\n(?!" + localsettings.chatname + ").+?\: ", "gi");
 				fulltxt = fulltxt.replace(regex, function (m) {
-					return `<span class="color_red">` + m + `</span>`;
+					return `<span class="color_red">` + escapeHtml(m) + `</span>`;
 				});
-				fulltxt = replaceAll(fulltxt,m_name, `<span class="color_blue">` + m_name + `</span>`);
+				fulltxt = replaceAll(fulltxt,m_name, `<span class="color_blue">` + escapeHtml(m_name) + `</span>`);
 			
 			}
 
@@ -6557,10 +6564,10 @@ Current version: 27
 
 			if(curr.myturn)
 			{
-				let namepart = (curr.name!=""?`<span style="font-weight: bolder;color:#15e4c8b9;">`+curr.name+`</span><br>`:"");
+				let namepart = (curr.name!=""?`<span style="font-weight: bolder;color:#15e4c8b9;">`+escapeHtml(curr.name)+`</span><br>`:"");
 				newbodystr += `<div class="chat_outgoing_msg"><div class="chat_sent_msg"><p>`+namepart+curr.msg+`</p></div></div>`;
 			}else{
-				let namepart = (curr.name!=""?`<span style="font-weight: bolder;color:#e26374b9;">`+curr.name+`</span><br>`:"");
+				let namepart = (curr.name!=""?`<span style="font-weight: bolder;color:#e26374b9;">`+escapeHtml(curr.name)+`</span><br>`:"");
 				newbodystr += `<div class="incoming_msg"><div class="chat_received_msg"><div class="chat_received_withd_msg"><p>`+namepart+curr.msg+`</p></div></div></div>`;
 			}
 		}
