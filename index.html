@@ -5,7 +5,7 @@ This is a standalone web ui for KoboldAIs Horde, which requires no dependencies,
 Just copy this single static HTML file anywhere and open it in a browser. No dependencies.
 Or you can throw it on some web server and serve it there too. E.g. Github pages, nginx, whatever.
 Now rebranded as KoboldAI Lite
-Current version: 27
+Current version: 28
 -Concedo
 -->
 
@@ -580,6 +580,19 @@ Current version: 27
 		.color_red {
 			color: #ff7967;
 		}
+		.color_chat1 {
+			color: #da6060;
+		}
+		.color_chat2 {
+			color: #e0c158;
+		}
+		.color_chat3 {
+			color: #53c753;
+		}
+		.color_chat4 {
+			color: #b469ae;
+		}
+		
 		.color_blue {
 			color: #828eff;
 		}
@@ -1876,6 +1889,23 @@ Current version: 27
 		return str.replace(new RegExp(escapeRegExp(find), 'g'), replace);
 	}
 
+	function GetUniqueColor(idx)
+	{
+		switch(idx)
+		{
+			case 0:
+				return 'color_chat1';
+			case 1:
+				return 'color_chat2';
+			case 2:
+				return 'color_chat3';
+			case 3:
+				return 'color_chat4';
+			default:
+				return 'color_chat1';
+		}
+	}
+
 	//import tavern png data. adapted from png-chunks-extract under MIT license
 	//accepts png input data, and returns the extracted JSON
 	function convertTavernPng(data)
@@ -2333,6 +2363,7 @@ Current version: 27
 	const stablehorde_url = "https://stablehorde.net";
 	const poll_interval_base_text = 500;
 	const poll_interval_base_img = 3800;
+	const poll_interval_background = 1000;
 
 	const text_hordes = [		
 		{
@@ -2442,7 +2473,7 @@ Current version: 27
 	var localmodeport = 5000;
 	var localmodehost = "localhost";
 	var kobold_endpoint_version = ""; //used to track problematic versions to avoid sending extra fields
-
+	
 	var localsettings = {
 		my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
 		home_cluster: text_hordes[0].baseurl, //which horde does this api key belongs to
@@ -2469,8 +2500,8 @@ Current version: 27
 		last_selected_preset: 0,
 		enhanced_chat_ui: true,
 		multiline_replies: true,
+		idle_responses: false,
 		export_settings: true, //affects if settings are included with the story and sharelinks
-		filter_comments: true, //on by default - filters [<|comments|>]
 
 		max_context_length: 1024,
 		max_length: 80,
@@ -2611,6 +2642,7 @@ Current version: 27
 		//start the polling script for async generation status checking every Xs
 		setInterval(poll_pending_response, poll_interval_base_text);
 		setInterval(poll_image_db, poll_interval_base_img); //check images every Xs
+		setInterval(poll_background_tasks, poll_interval_background); //a basic update loop for running background tasks
 
 		attempt_connect(false);
 
@@ -4462,7 +4494,6 @@ Current version: 27
 		document.getElementById("top_p").value = document.getElementById("top_p_slide").value = localsettings.top_p;
 		document.getElementById("autoscroll").checked = localsettings.autoscroll;
 		document.getElementById("export_settings").checked = localsettings.export_settings;
-		document.getElementById("filter_comments").checked = localsettings.filter_comments;
 		document.getElementById("trimsentences").checked = localsettings.trimsentences;
 		document.getElementById("trimwhitespace").checked = localsettings.trimwhitespace;
 		document.getElementById("persist_session").checked = localsettings.persist_session;
@@ -4477,7 +4508,8 @@ Current version: 27
 		document.getElementById("tfs_s").value = localsettings.tfs_s;
 		document.getElementById("generate_images").value = localsettings.generate_images;
 		document.getElementById("enhanced_chat_ui").checked = localsettings.enhanced_chat_ui;
-		document.getElementById("multiline_replies").checked = localsettings.multiline_replies;		
+		document.getElementById("multiline_replies").checked = localsettings.multiline_replies;
+		document.getElementById("idle_responses").checked = localsettings.idle_responses;
 		document.getElementById("adventure_context_mod").checked = localsettings.adventure_context_mod;
 		document.getElementById("auto_ctxlen").checked = localsettings.auto_ctxlen;
 		document.getElementById("auto_genamt").checked = localsettings.auto_genamt;
@@ -4615,13 +4647,13 @@ Current version: 27
 		localsettings.rep_pen_range = document.getElementById("rep_pen_range").value;
 		localsettings.top_p = document.getElementById("top_p").value;
 		localsettings.autoscroll = (document.getElementById("autoscroll").checked ? true : false);
-		localsettings.export_settings = (document.getElementById("export_settings").checked ? true : false);
-		localsettings.filter_comments = (document.getElementById("filter_comments").checked ? true : false);		
+		localsettings.export_settings = (document.getElementById("export_settings").checked ? true : false);		
 		localsettings.trimsentences = (document.getElementById("trimsentences").checked ? true : false);
 		localsettings.trimwhitespace = (document.getElementById("trimwhitespace").checked ? true : false);
 		localsettings.persist_session = (document.getElementById("persist_session").checked ? true : false);
 		localsettings.enhanced_chat_ui = (document.getElementById("enhanced_chat_ui").checked ? true : false);
 		localsettings.multiline_replies = (document.getElementById("multiline_replies").checked ? true : false);
+		localsettings.idle_responses = (document.getElementById("idle_responses").checked ? true : false);
 		localsettings.adventure_context_mod = (document.getElementById("adventure_context_mod").checked ? true : false);
 		localsettings.generate_images = document.getElementById("generate_images").value;
 		localsettings.opmode = document.getElementById("opmode").value;
@@ -4747,6 +4779,7 @@ Current version: 27
 	}
 
 	function restart_new_game() {
+		idle_timer = 0;
 		gametext_arr = [];
 		redo_arr = [];
 		retry_prev_text = "";
@@ -4904,6 +4937,8 @@ Current version: 27
 		
 		if (newgen.trim() != "" || gametext_arr.length > 0 || current_memory != "" || current_anote != "") 
 		{
+			idle_timer = 0;
+			idle_triggered_counter = 0;
 			if (localsettings.speech_synth > 0 && 'speechSynthesis' in window) {
 				let utterance = new window.SpeechSynthesisUtterance(newgen);
 				utterance.voice = window.speechSynthesis.getVoices()[localsettings.speech_synth - 1];
@@ -5890,6 +5925,29 @@ Current version: 27
 		img.src = inputDataUri;
 	}
 
+	//runs every second
+	const idle_timer_max = 30000; //triggers a response after 15s idle
+	var idle_timer = 0; //used in chat mode to send multi replies
+	var idle_triggered_counter = 0;
+	function poll_background_tasks()
+	{	
+		let newgenempty = (document.getElementById("input_text").value == "");
+		let	chatinputempty = (document.getElementById("cht_inp").value == "");
+		if (localsettings.opmode == 3 && localsettings.idle_responses && newgenempty && chatinputempty && !document.getElementById("btnsend").disabled && idle_triggered_counter<2) 
+		{
+			idle_timer += 1000;
+			if (idle_timer > idle_timer_max) {
+				idle_timer = 0;
+				let nextcounter = ++idle_triggered_counter;			
+				submit_generation();
+				idle_triggered_counter = nextcounter;
+			}
+			console.log("Idling: " + idle_timer + ", " + idle_triggered_counter);
+		} else {
+			idle_timer = 0;
+		}
+	}
+
 	//clock speed is 500ms per tick
 	function poll_pending_response() 
 	{
@@ -6049,6 +6107,7 @@ Current version: 27
 					prev_hl_chunk = selection.focusNode.parentElement;
 					prev_hl_chunk.classList.add("hlchunk");
 				}
+				idle_timer = 0;
 			}
 		}
 	}
@@ -6202,9 +6261,10 @@ Current version: 27
 		if (stripimg) {
 			fulltxt = fulltxt.replace(/\[<\|p\|.+?\|p\|>\]/g, stripimg_replace_str);
 			fulltxt = fulltxt.replace(/\[<\|d\|.+?\|d\|>\]/g, stripimg_replace_str);
-			if (localsettings.filter_comments) {
-				fulltxt = fulltxt.replace(/\[<\|.+?\|>\]/g, ""); //remove normal comments too
-			}
+			
+			//always filter comments - new format
+			fulltxt = fulltxt.replace(/\[<\|.+?\|>\]/g, ""); //remove normal comments too
+			
 		}
 		return fulltxt;
 	}
@@ -6314,8 +6374,15 @@ Current version: 27
 			
 				//match anything that is NOT us, ie. opponents				
 				var regex = new RegExp("\n(?!" + localsettings.chatname + ").+?\: ", "gi");
+				let colormap = {}, colidx = 0;
 				fulltxt = fulltxt.replace(regex, function (m) {
-					return `<span class="color_red">` + escapeHtml(m) + `</span>`;
+					let oname = escapeHtml(m);
+					if(colormap[oname]==null)
+					{
+						colormap[oname] = GetUniqueColor(colidx);
+						++colidx;
+					}
+					return `<span class="`+colormap[oname]+`">` + oname + `</span>`;
 				});
 				fulltxt = replaceAll(fulltxt,m_name, `<span class="color_blue">` + escapeHtml(m_name) + `</span>`);
 			
@@ -6477,6 +6544,7 @@ Current version: 27
 			}		
 		}
 
+		idle_timer = 0;
 		document.getElementById("token-budget").innerText = last_token_budget;
 	}
 
@@ -6543,6 +6611,7 @@ Current version: 27
 			
 		}
 
+		let colormap = {}, colidx = 0;	
 		for(var i=0;i<chatunits.length;++i)
 		{
 			let curr = chatunits[i];
@@ -6570,7 +6639,13 @@ Current version: 27
 				let namepart = (curr.name!=""?`<span style="font-weight: bolder;color:#15e4c8b9;">`+escapeHtml(curr.name)+`</span><br>`:"");
 				newbodystr += `<div class="chat_outgoing_msg"><div class="chat_sent_msg"><p>`+namepart+curr.msg+`</p></div></div>`;
 			}else{
-				let namepart = (curr.name!=""?`<span style="font-weight: bolder;color:#e26374b9;">`+escapeHtml(curr.name)+`</span><br>`:"");
+				let oname = escapeHtml(curr.name);
+				if(colormap[oname]==null)
+				{
+					colormap[oname] = GetUniqueColor(colidx);
+					++colidx;
+				}
+				let namepart = (curr.name!=""?`<span class='`+colormap[oname]+`' style="font-weight: bolder;">`+oname+`</span><br>`:"");
 				newbodystr += `<div class="incoming_msg"><div class="chat_received_msg"><div class="chat_received_withd_msg"><p>`+namepart+curr.msg+`</p></div></div></div>`;
 			}
 		}
@@ -7403,14 +7478,18 @@ Current version: 27
 								<td><input class="settinglabel mininiput" type="text" placeholder="(Auto)" value="" id="chatopponent"  title="The name of the person you want to chat with"></td>							
 								</tr>								
 							  </table>	
-							  <div class="settinglabel">
-								<div class="justifyleft settingsmall" title="Switches to an aesthetic messenger style UI">Aesthetic Chat UI </div>	
-							   <input type="checkbox" id="enhanced_chat_ui" style="margin:0px 0 0;">
-							  </div>
-							  <div class="settinglabel">
-								<div class="justifyleft settingsmall" title="Whether to allow multiple lines in AI responses. Not recommended.">Multiline Replies </div>	
-							   <input type="checkbox" id="multiline_replies" style="margin:0px 0 0;">
-							</div>		
+							<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="Switches to an aesthetic messenger style UI">Aesthetic Chat UI </div>	
+							<input type="checkbox" id="enhanced_chat_ui" style="margin:0px 0 0;">
+							</div>
+							<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="Whether to allow multiple lines in AI responses. Not recommended.">Multiline Replies </div>	
+							<input type="checkbox" id="multiline_replies" style="margin:0px 0 0;">
+							</div>	
+							<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="Allow the AI to send more responses if you are idle.">Idle Responses </div>	
+							<input type="checkbox" id="idle_responses" style="margin:0px 0 0;">
+							</div>	
 							</div>	
 							<div id="adventuresection" class="settinglabel hidden" style="padding-top: 3px;">
 								<div class="justifyleft settingsmall">Improved Prompt <span class="helpicon">?<span
@@ -7449,10 +7528,6 @@ Current version: 27
 							<div class="justifyleft settingsmall" title="Includes your current settings when saving or sharing your story">Export Settings </div>	
 						   <input type="checkbox" id="export_settings" style="margin:0px 0 0;">				
 						</div>	
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Filters out &lt;|comment tags|&gt; from context">Filter Comment Tags </div>	
-						   <input type="checkbox" id="filter_comments" style="margin:0px 0 0;">				
-						</div>							
 					</div>
 				
 
