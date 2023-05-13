@@ -57,7 +57,7 @@ Current version: 28
 			outline: none;
 		}
 		.settinglabel input[type=checkbox] {
-			width: 4ch;	
+			width: 3ch;	
 		}
 
 		.settinglabel.mininiput {	
@@ -2505,6 +2505,7 @@ Current version: 28
 		enhanced_chat_ui: true,
 		multiline_replies: true,
 		idle_responses: false,
+		idle_duration: 60,
 		export_settings: true, //affects if settings are included with the story and sharelinks
 
 		max_context_length: 1024,
@@ -4514,6 +4515,7 @@ Current version: 28
 		document.getElementById("enhanced_chat_ui").checked = localsettings.enhanced_chat_ui;
 		document.getElementById("multiline_replies").checked = localsettings.multiline_replies;
 		document.getElementById("idle_responses").checked = localsettings.idle_responses;
+		document.getElementById("idle_duration").value = localsettings.idle_duration;
 		document.getElementById("adventure_context_mod").checked = localsettings.adventure_context_mod;
 		document.getElementById("instruct_context_mod").checked = localsettings.instruct_context_mod;
 		document.getElementById("auto_ctxlen").checked = localsettings.auto_ctxlen;
@@ -4659,6 +4661,7 @@ Current version: 28
 		localsettings.enhanced_chat_ui = (document.getElementById("enhanced_chat_ui").checked ? true : false);
 		localsettings.multiline_replies = (document.getElementById("multiline_replies").checked ? true : false);
 		localsettings.idle_responses = (document.getElementById("idle_responses").checked ? true : false);
+		localsettings.idle_duration = document.getElementById("idle_duration").value;
 		localsettings.adventure_context_mod = (document.getElementById("adventure_context_mod").checked ? true : false);
 		localsettings.instruct_context_mod = (document.getElementById("instruct_context_mod").checked ? true : false);
 		localsettings.generate_images = document.getElementById("generate_images").value;
@@ -5932,14 +5935,14 @@ Current version: 28
 	}
 
 	//runs every second
-	const idle_timer_max = 45000; //triggers a response after 45s idle.
 	var idle_timer = 0; //used in chat mode to send multi replies
 	var idle_triggered_counter = 0;
 	function poll_background_tasks()
 	{	
+		let idle_timer_max = localsettings.idle_duration*1000;
 		let newgenempty = (document.getElementById("input_text").value == "");
 		let	chatinputempty = (document.getElementById("cht_inp").value == "");
-		if (localsettings.opmode == 3 && localsettings.idle_responses && newgenempty && chatinputempty && !document.getElementById("btnsend").disabled && idle_triggered_counter<2) 
+		if (localsettings.opmode == 3 && localsettings.idle_responses && newgenempty && chatinputempty && !document.getElementById("btnsend").disabled && idle_triggered_counter<3) 
 		{
 			idle_timer += 1000;
 			if (idle_timer > idle_timer_max) {
@@ -7495,7 +7498,13 @@ Current version: 28
 							<div class="settinglabel">
 							<div class="justifyleft settingsmall" title="Allow the AI to send more responses if you are idle.">Idle Responses </div>	
 							<input type="checkbox" id="idle_responses" style="margin:0px 0 0;">
-							</div>	
+							<select style="padding:1px; height:auto; width: 30px; appearance: none; font-size: 7px;" class="form-control" id="idle_duration">
+								<option value="30">30s</option>
+								<option value="60">60s</option>
+								<option value="120">2m</option>
+								<option value="300">5m</option>
+							</select>
+							</div>
 							</div>	
 							<div id="adventuresection" class="settinglabel hidden" style="padding-top: 3px;">
 								<div class="justifyleft settingsmall">Improved Prompt <span class="helpicon">?<span
