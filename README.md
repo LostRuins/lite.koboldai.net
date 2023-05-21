@@ -9,6 +9,17 @@ You can run it directly from your desktop or throw it on some web server and ser
 
 - Concedo
 
+Changelog of KoboldAI Lite 21 May 2023:
+- Improved the spinning circle waiting animation to use less processing.
+- Fixed a bug with stopping sequences when in streaming mode.
+- Added a toggle to avoid inserting newlines in Instruct mode (good for Pygmalion and OpenAssistant based instruct models).
+- Added a toggle to enable basic markdown in instruct mode (off by default).
+- Added idle responses, automatic replies when you're afk for a while. Timer is customizable.
+- Group conversations are now color coded.
+- Instruct prompt can now be toggled off, set your own one in Memory.
+- Enabled resizable world info textboxes. 
+- Various other fixes and optimizations.
+
 Changelog of KoboldAI Lite 2 May 2023:
 - Added group conversation chat feature
 - Added customizable stop sequences for local API
