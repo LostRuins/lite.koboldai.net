@@ -5,7 +5,7 @@ This is a standalone web ui for KoboldAIs Horde, which requires no dependencies,
 Just copy this single static HTML file anywhere and open it in a browser. No dependencies.
 Or you can throw it on some web server and serve it there too. E.g. Github pages, nginx, whatever.
 Now rebranded as KoboldAI Lite
-Current version: 29
+Current version: 30
 -Concedo
 -->
 
@@ -1285,7 +1285,7 @@ Current version: 29
 			border-top: 6px solid #3498db;
 			/* Blue */
 			border-radius: 50%;
-			animation: spin 2s ease-in-out infinite;
+			animation: spin 4s linear infinite;
 		}
 		.innerloader.greenloader
 		{
@@ -1310,7 +1310,7 @@ Current version: 29
 			margin: auto;
 			align-items: center;
 			justify-content: center;
-			animation: spin 2s ease-in-out infinite;
+			animation: spin 4s linear infinite;
 
 			top: 0;
 			bottom: 0;
@@ -1364,26 +1364,50 @@ Current version: 29
 			0% {
 				transform: rotate(0deg);
 			}
-			22% {
+			12.4% {
 				transform: rotate(0deg);
+			}
+			12.5% {
+				transform: rotate(45deg);
+			}
+			24.9% {
+				transform: rotate(45deg);
 			}
 			25% {
 				transform: rotate(90deg);
 			}
-			47% {
+			37.4% {
 				transform: rotate(90deg);
+			}
+			37.5% {
+				transform: rotate(135deg);
+			}
+			49.9% {
+				transform: rotate(135deg);
 			}
 			50% {
 				transform: rotate(180deg);
 			}
-			72% {
+			62.4% {
 				transform: rotate(180deg);
+			}
+			62.5% {
+				transform: rotate(225deg);
+			}
+			74.9% {
+				transform: rotate(225deg);
 			}
 			75% {
 				transform: rotate(270deg);
 			}
-			97% {
+			87.4% {
 				transform: rotate(270deg);
+			}
+			87.5% {
+				transform: rotate(315deg);
+			}
+			99.9% {
+				transform: rotate(315deg);
 			}
 			100% {
 				transform: rotate(360deg);
@@ -1809,7 +1833,7 @@ Current version: 29
 			"prefmodel1":["llama","alpaca","nerybus","alpacino"],
 			"prefmodel2":["pygmalion","erebus","nerybus","opt"],
 			"prompt":"\nBob: So, did anyone want to order a pizza?\nMike: Yeah, I'm starving.",
-			"memory":`[You are in a class reunion, meeting a group of old former schoolmates. The following is a group conversation bewteen you and your friends.]`,
+			"memory":`[You are in a class reunion, meeting a group of old former schoolmates. The following is a group conversation between you and your friends.]`,
 			"authorsnote": "",
 			"worldinfo": []
 		},
@@ -2268,17 +2292,39 @@ Current version: 29
 					}
 					if (localsettings.opmode == 4) //stop on selfname found
 					{
-						let foundStop = synchro_streaming_response.indexOf("\n"+localsettings.instruct_starttag);						
+						let st = localsettings.instruct_has_newlines?("\n"+localsettings.instruct_starttag):(localsettings.instruct_starttag);
+						let et = localsettings.instruct_has_newlines?("\n"+localsettings.instruct_endtag):(localsettings.instruct_endtag);
+						let foundStop = synchro_streaming_response.indexOf(st);						
 						if (foundStop != -1)
 						{
 							synchro_streaming_tokens_left = 0;
 						}
-						foundStop = synchro_streaming_response.indexOf("\n"+localsettings.instruct_endtag);						
+						foundStop = synchro_streaming_response.indexOf(et);						
 						if (foundStop != -1)
 						{
 							synchro_streaming_tokens_left = 0;
 						}
 					}
+					
+					//stop on any stop token
+					if(extrastopseq!="")
+					{
+						let rep = replaceAll(extrastopseq,"\\n","\n");
+						let srep = rep.split("||$||");
+						if (srep.length > 0) {
+							for (let i = 0; i < srep.length; ++i) {
+								if (srep[i] && srep[i] != "") {
+									let foundStop = synchro_streaming_response.indexOf(srep[i]);						
+									if (foundStop != -1)
+									{
+										synchro_streaming_tokens_left = 0;
+										break;
+									}
+								}
+							}
+						}
+					}
+
 					if(data.results[0].text=="") //stop on no output
 					{
 						synchro_streaming_tokens_left = 0;
@@ -2512,6 +2558,8 @@ Current version: 29
 		chatopponent: defaultchatopponent,
 		instruct_starttag: "### Instruction:",
 		instruct_endtag: "### Response:",
+		instruct_has_newlines: true,
+		instruct_has_markdown: false,
 		persist_session: true,
 		speech_synth: 0, //0 is disabled
 		beep_on: false,
@@ -4526,7 +4574,7 @@ Current version: 29
 		document.getElementById("chatname").value = localsettings.chatname;
 		document.getElementById("chatopponent").value = localsettings.chatopponent;
 		document.getElementById("instruct_starttag").value = localsettings.instruct_starttag;
-		document.getElementById("instruct_endtag").value = localsettings.instruct_endtag;
+		document.getElementById("instruct_endtag").value = localsettings.instruct_endtag;		
 		document.getElementById("top_k").value = localsettings.top_k;
 		document.getElementById("top_a").value = localsettings.top_a;
 		document.getElementById("typ_s").value = localsettings.typ_s;
@@ -4538,6 +4586,8 @@ Current version: 29
 		document.getElementById("idle_duration").value = localsettings.idle_duration;
 		document.getElementById("adventure_context_mod").checked = localsettings.adventure_context_mod;
 		document.getElementById("instruct_context_mod").checked = localsettings.instruct_context_mod;
+		document.getElementById("instruct_has_newlines").checked = localsettings.instruct_has_newlines;
+		document.getElementById("instruct_has_markdown").checked = localsettings.instruct_has_markdown;
 		document.getElementById("auto_ctxlen").checked = localsettings.auto_ctxlen;
 		document.getElementById("auto_genamt").checked = localsettings.auto_genamt;
 		pendingstyle = localsettings.image_styles;
@@ -4684,6 +4734,8 @@ Current version: 29
 		localsettings.idle_duration = document.getElementById("idle_duration").value;
 		localsettings.adventure_context_mod = (document.getElementById("adventure_context_mod").checked ? true : false);
 		localsettings.instruct_context_mod = (document.getElementById("instruct_context_mod").checked ? true : false);
+		localsettings.instruct_has_markdown = (document.getElementById("instruct_has_markdown").checked ? true : false);
+		localsettings.instruct_has_newlines = (document.getElementById("instruct_has_newlines").checked ? true : false);
 		localsettings.generate_images = document.getElementById("generate_images").value;
 		localsettings.opmode = document.getElementById("opmode").value;
 		localsettings.chatname = document.getElementById("chatname").value;
@@ -4976,7 +5028,15 @@ Current version: 29
 
 			if (localsettings.opmode == 4 && newgen != "") {
 				//append instruction for instruct mode
-				newgen = "\n\n"+localsettings.instruct_starttag+"\n\n" + newgen + "\n\n"+localsettings.instruct_endtag+"\n\n";
+				if(localsettings.instruct_has_newlines)
+				{
+					newgen = "\n\n"+localsettings.instruct_starttag+"\n\n" + newgen + "\n\n"+localsettings.instruct_endtag+"\n\n";
+				}
+				else
+				{
+					newgen = localsettings.instruct_starttag + newgen + localsettings.instruct_endtag;
+				}
+				
 			}
 			if (localsettings.opmode == 3 && newgen != "") {
 				//append chatname for chatmode
@@ -5339,7 +5399,9 @@ Current version: 29
 							}
 							if (localsettings.opmode == 4) //stop on selfname found
 							{
-								submit_payload.stop_sequence = ["\n" + localsettings.instruct_starttag, "\n" + localsettings.instruct_endtag];
+								let st = localsettings.instruct_has_newlines?("\n"+localsettings.instruct_starttag):(localsettings.instruct_starttag);
+								let et = localsettings.instruct_has_newlines?("\n"+localsettings.instruct_endtag):(localsettings.instruct_endtag);
+								submit_payload.stop_sequence = [st, et];
 							}
 							if(extrastopseq!="")
 							{
@@ -5801,19 +5863,21 @@ Current version: 29
 		//if we are in instruct mode, truncate to instruction
 		if (localsettings.opmode == 4)
 		{
-			let found = gentxt.indexOf("\n"+localsettings.instruct_starttag);
+			let st = localsettings.instruct_has_newlines?("\n"+localsettings.instruct_starttag):(localsettings.instruct_starttag);
+			let et = localsettings.instruct_has_newlines?("\n"+localsettings.instruct_endtag):(localsettings.instruct_endtag);
+			let found = gentxt.indexOf(st);
 			let splitresponse = [];
 			if (found != -1) //if found, truncate to it
 			{			
-				splitresponse = gentxt.split("\n"+localsettings.instruct_starttag);
+				splitresponse = gentxt.split(st);
 				gentxt = splitresponse[0];
 			}
 
-			found = gentxt.indexOf("\n"+localsettings.instruct_endtag);
+			found = gentxt.indexOf(et);
 			splitresponse = [];
 			if (found != -1) //if found, truncate to it
 			{			
-				splitresponse = gentxt.split("\n"+localsettings.instruct_endtag);
+				splitresponse = gentxt.split(et);
 				gentxt = splitresponse[0];
 			}
 		}
@@ -6388,12 +6452,34 @@ Current version: 29
 			}
 
 			if(localsettings.opmode==4 && !document.getElementById("allowediting").checked)
-			{
-				fulltxt = replaceAll(fulltxt, "\n\n"+localsettings.instruct_starttag+"\n\n", `\n\n<span class="hidden">`+localsettings.instruct_starttag+`\n</span><hr>\n<span class="color_cyan"><img src="`+human_square+`" style="padding:8px;border-radius: 8%;"/>`);
-				fulltxt = replaceAll(fulltxt, "\n\n"+localsettings.instruct_endtag+"\n\n", `</span>\n\n<hr><span class="hidden">`+localsettings.instruct_endtag+`\n</span>\n<img src="`+niko_square+`" style="padding:8px;border-radius: 8%;"/>`);
+			{				
+				if(localsettings.instruct_has_newlines)
+				{
+					fulltxt = replaceAll(fulltxt, "\n\n"+localsettings.instruct_starttag+"\n\n", `\n\n<span class="hidden">`+localsettings.instruct_starttag+`\n</span><hr>\n<span class="color_cyan"><img src="`+human_square+`" style="padding:8px;border-radius: 8%;"/>`);
+					fulltxt = replaceAll(fulltxt, "\n\n"+localsettings.instruct_endtag+"\n\n", `</span>\n\n<hr><span class="hidden">`+localsettings.instruct_endtag+`\n</span>\n<img src="`+niko_square+`" style="padding:8px;border-radius: 8%;"/>`);
+					if(localsettings.instruct_has_markdown)
+					{
+						fulltxt = fulltxt.replace(/```([^`]+)```/g, "<pre><code>$1</code></pre>");
+						fulltxt = fulltxt.replace(/`([^`\n\r]+)`/g, "<code>$1</code>");
+						// fulltxt = fulltxt.replace(/\*\*(\S[^*]+\S)\*\*/g,"<strong>$1</strong>");
+						// fulltxt = fulltxt.replace(/\*(\S[^*]+\S)\*/g,"<em>$1</em>");
+					}
+				
+				}else{
+					fulltxt = replaceAll(fulltxt, localsettings.instruct_starttag, `\n\n<span class="hidden">`+localsettings.instruct_starttag+`</span><hr>\n<span class="color_cyan"><img src="`+human_square+`" style="padding:8px;border-radius: 8%;"/>`);
+					fulltxt = replaceAll(fulltxt, localsettings.instruct_endtag, `</span>\n\n<hr><span class="hidden">`+localsettings.instruct_endtag+`</span>\n<img src="`+niko_square+`" style="padding:8px;border-radius: 8%;"/>`);
+				}
 			}else{
-				fulltxt = replaceAll(fulltxt, "\n"+localsettings.instruct_starttag, `<span class="color_gray">\n`+localsettings.instruct_starttag+`</span>`);
-				fulltxt = replaceAll(fulltxt, "\n"+localsettings.instruct_endtag, `<span class="color_gray">\n`+localsettings.instruct_endtag+`</span>`);
+				if(localsettings.instruct_has_newlines)
+				{
+					fulltxt = replaceAll(fulltxt, "\n"+localsettings.instruct_starttag, `<span class="color_gray">\n`+localsettings.instruct_starttag+`</span>`);
+					fulltxt = replaceAll(fulltxt, "\n"+localsettings.instruct_endtag, `<span class="color_gray">\n`+localsettings.instruct_endtag+`</span>`);
+				}
+				else
+				{
+					fulltxt = replaceAll(fulltxt, localsettings.instruct_starttag, `<span class="color_gray">`+localsettings.instruct_starttag+`</span>`);
+					fulltxt = replaceAll(fulltxt, localsettings.instruct_endtag, `<span class="color_gray">`+localsettings.instruct_endtag+`</span>`);
+				}
 			}
 
 			if(localsettings.opmode==3)
@@ -7541,6 +7627,12 @@ Current version: 29
 								<div class="justifyleft settingsmall">Instruction Prompt <span class="helpicon">?<span
 									class="helptext">Modifies the context, adding the default Alpaca instruct prompt before the instruction.</span></span> </div>	
 							   <input type="checkbox" id="instruct_context_mod" style="margin:0px 0 0;">
+							   <div class="justifyleft settingsmall">Insert Newlines <span class="helpicon">?<span
+								class="helptext">Some instruct models like pygmalion may perform better without newlines.</span></span> </div>	
+								<input type="checkbox" id="instruct_has_newlines" style="margin:0px 0 0;">
+								<div class="justifyleft settingsmall">Enable Markdown <span class="helpicon">?<span
+									class="helptext">Allows the UI to use markdown formatting such as quotes and code blocks.</span></span> </div>	
+								<input type="checkbox" id="instruct_has_markdown" style="margin:0px 0 0;">
 							</div>							
 						</div>
 					</div>
