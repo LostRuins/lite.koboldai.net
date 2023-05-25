@@ -5,7 +5,7 @@ This is a standalone web ui for KoboldAIs Horde, which requires no dependencies,
 Just copy this single static HTML file anywhere and open it in a browser. No dependencies.
 Or you can throw it on some web server and serve it there too. E.g. Github pages, nginx, whatever.
 Now rebranded as KoboldAI Lite
-Current version: 33
+Current version: 34
 -Concedo
 -->
 
@@ -2736,6 +2736,50 @@ Current version: 33
 				console.log("Error: " + error);
 			});
 		}
+
+		//setup drag and drop zone for files
+		setupDragDrop();
+	}
+
+	function setupDragDrop()
+	{
+		const dropZone = document.getElementById('gamescreen');
+		dropZone.addEventListener(
+			"dragover",
+			(e) => {
+				e.preventDefault();
+				e.stopPropagation();
+			},
+			false
+		);
+		dropZone.addEventListener(
+			"drop",
+			(e) => {
+				e.preventDefault();
+				e.stopPropagation();
+
+				let draggedData = e.dataTransfer;
+				let files = draggedData.files;
+
+				console.log(files);
+				let safe_to_overwrite = (gametext_arr.length == 0 && current_memory == "" && current_anote == "" && current_wi.length == 0 && redo_arr.length == 0);
+				if(files.length>0 && files[0]!=null && files[0].name && files[0].name!="")
+				{
+					if(safe_to_overwrite)
+					{
+						load_selected_file(files[0]);
+					}else{
+						msgboxYesNo("Overwrite existing story?","Open File",()=>{
+							hide_popups();
+							load_selected_file(files[0]);
+						},()=>{
+							hide_popups();
+						});
+					}
+				}
+			},
+			false
+		);
 	}
 
 	function attempt_connect(popup_aiselect = true) 
@@ -3208,107 +3252,107 @@ Current version: 33
 		if (input.files.length > 0) {
 
 			var selectedFile = input.files[0];
-			var selectedFilename = "";
-			if(selectedFile)
-			{
-				selectedFilename = input.files[0].name;
-			}
-
-			let reader = new FileReader();
-			reader.onload = function () {
-				let text = reader.result;
-				console.log("Load file: " + text);
-				try {
-					let new_loaded_storyobj = JSON.parse(text);
-					//we don't want to fiddle with the file as its very complex. only handle the parts we are interested in, and just leave the rest untouched.						
-					if (new_loaded_storyobj.prompt == null) {
-						//quick sanity check. if prompt does not exist, this is not a KAI save.
-
-						//check for tavernai fields
-						if (new_loaded_storyobj.name != null || new_loaded_storyobj.description != null ||
-							new_loaded_storyobj.personality != null) {
-							load_tavern_obj(new_loaded_storyobj);
-						}
-						else if (new_loaded_storyobj.char_name != null || new_loaded_storyobj.char_persona != null) 
-						{
-							//check for ooba text generation fields (character)
-							load_ooba_obj(new_loaded_storyobj);
-						}
-						else 
-						{
-							msgbox("Could not load selected json file. Does not appear to be a KoboldAI story or compatible format.");
-						}
-					} else {
-						kai_json_load(new_loaded_storyobj);
-						if(selectedFilename && selectedFilename!="")
-						{
-							last_known_filename = selectedFilename;
-						}
-					}
-				} catch (e) {
-					console.log(e)
-					
-					//attempt to parse it as a png file
-					var pngfr = new FileReader();
-					pngfr.onload = function () {
-						var data = pngfr.result;	
-						var arr = new Uint8Array(data);											
-						var result = convertTavernPng(arr);
-						if(result!=null)
-						{
-							load_tavern_obj(result);
-						}
-						else
-						{
-							//attempt to read as WEBP
-							result = getTavernExifJSON(arr);
-							if(result!=null)
-							{
-								load_tavern_obj(result);
-							}
-							else {
-								//attempt to read as KAISTORY
-								try {
-									result = UnzipKAISTORYFile(arr);
-								} catch (error) {
-									console.log("Unzip failed: " + error);
-									result = null;
-								}
-								
-								if (result != null) {
-									kai_json_load(result);
-								}
-								else {
-									if(selectedFilename.endsWith(".txt"))
-									{
-										msgboxYesNo("Could not load selected file!<br><span class=\"color_red\">It appears to be invalid or corrupted!</span><br><br>Do you still want to import it as plaintext?", "Loading Failed",
-											() => {
-												//raw text import
-												restart_new_game();
-												gametext_arr.push(text);
-												hide_popups();
-												render_gametext();
-											}, () => {
-											hide_popups();
-										}, true)		
-									}else{
-										msgbox("Could not load selected file. Is it valid?");
-									}									
-																
-								}
-							}
-						}
-					};
-					pngfr.readAsArrayBuffer(selectedFile);	
-				}
-
-			};
-			reader.readAsText(selectedFile);
+			
+			load_selected_file(selectedFile);
+			
 			document.getElementById("loadfileinput").value = "";
 		} else {
 			console.log("No file to load")
 		}
 	};
+
+	function load_selected_file(selectedFile)
+	{
+		var selectedFilename = "";
+		if(selectedFile)
+		{
+			selectedFilename = selectedFile.name;
+		}
+
+		let reader = new FileReader();
+		reader.onload = function () {
+			let text = reader.result;
+			console.log("Load file: " + text);
+			try {
+				let new_loaded_storyobj = JSON.parse(text);
+				//we don't want to fiddle with the file as its very complex. only handle the parts we are interested in, and just leave the rest untouched.						
+				if (new_loaded_storyobj.prompt == null) {
+					//quick sanity check. if prompt does not exist, this is not a KAI save.
+
+					//check for tavernai fields
+					if (new_loaded_storyobj.name != null || new_loaded_storyobj.description != null ||
+						new_loaded_storyobj.personality != null) {
+						load_tavern_obj(new_loaded_storyobj);
+					}
+					else if (new_loaded_storyobj.char_name != null || new_loaded_storyobj.char_persona != null) {
+						//check for ooba text generation fields (character)
+						load_ooba_obj(new_loaded_storyobj);
+					}
+					else {
+						msgbox("Could not load selected json file. Does not appear to be a KoboldAI story or compatible format.");
+					}
+				} else {
+					kai_json_load(new_loaded_storyobj);
+					if (selectedFilename && selectedFilename != "") {
+						last_known_filename = selectedFilename;
+					}
+				}
+			} catch (e) {
+				console.log(e)
+
+				//attempt to parse it as a png file
+				var pngfr = new FileReader();
+				pngfr.onload = function () {
+					var data = pngfr.result;
+					var arr = new Uint8Array(data);
+					var result = convertTavernPng(arr);
+					if (result != null) {
+						load_tavern_obj(result);
+					}
+					else {
+						//attempt to read as WEBP
+						result = getTavernExifJSON(arr);
+						if (result != null) {
+							load_tavern_obj(result);
+						}
+						else {
+							//attempt to read as KAISTORY
+							try {
+								result = UnzipKAISTORYFile(arr);
+							} catch (error) {
+								console.log("Unzip failed: " + error);
+								result = null;
+							}
+
+							if (result != null) {
+								kai_json_load(result);
+							}
+							else {
+								if (selectedFilename.endsWith(".txt")) {
+									msgboxYesNo("Could not load selected file!<br><span class=\"color_red\">It appears to be invalid or corrupted!</span><br><br>Do you still want to import it as plaintext?", "Loading Failed",
+										() => {
+											//raw text import
+											restart_new_game();
+											gametext_arr.push(text);
+											hide_popups();
+											render_gametext();
+										}, () => {
+											hide_popups();
+										}, true)
+								} else {
+									msgbox("Could not load selected file. Is it valid?");
+								}
+
+							}
+						}
+					}
+				};
+				pngfr.readAsArrayBuffer(selectedFile);
+			}
+
+		};
+		reader.readAsText(selectedFile);
+	}
 
 	function kai_json_load(new_loaded_storyobj)
 	{
