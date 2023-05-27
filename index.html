@@ -5876,6 +5876,25 @@ Current version: 34
 	}
 
 	function handle_incoming_text(gentxt, genworker, genmdl, genkudos) {
+
+		//handle stopping tokens if they got missed (eg. horde)
+		if(extrastopseq!="")
+		{
+			let rep = replaceAll(extrastopseq,"\\n","\n");
+			let srep = rep.split("||$||");
+			if (srep.length > 0) {
+				for (let i = 0; i < srep.length; ++i) {
+					if (srep[i] && srep[i] != "") {
+						let foundStop = gentxt.indexOf(srep[i]);						
+						if (foundStop != -1)
+						{
+							//trim the gentxt
+							gentxt = gentxt.substr(0,foundStop) + srep[i];
+						}
+					}
+				}
+			}
+		}
 	
 		//always trim incomplete sentences for adventure and chat
 		if (localsettings.opmode == 2 || localsettings.opmode == 3 || localsettings.trimsentences == true) {
