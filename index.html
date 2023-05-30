@@ -5,7 +5,7 @@ This is a standalone web ui for KoboldAIs Horde, which requires no dependencies,
 Just copy this single static HTML file anywhere and open it in a browser. No dependencies.
 Or you can throw it on some web server and serve it there too. E.g. Github pages, nginx, whatever.
 Now rebranded as KoboldAI Lite
-Current version: 34
+Current version: 35
 -Concedo
 -->
 
@@ -3924,9 +3924,49 @@ Current version: 34
 		document.getElementById("worktitlecount").innerText = "Worker List - Total "+wdata.length;
 	}
 
+	function show_my_own_workers() 
+	{
+		let userData = lastValidFoundUserData;
+		let parentcluster = find_text_horde(lastValidFoundCluster);
+		lastValidFoundUserWorkers = [];
+		if (parentcluster && userData && userData.worker_ids && userData.worker_ids.length > 0)
+		{
+			let urls = userData.worker_ids.map(x=>parentcluster.maintenance_endpoint + "/" + x);
+			Promise.all(urls.map(url => fetch(url)
+				.then(response => response.json())))
+				.then(values => {
+					lastValidFoundUserWorkers = values;
+					console.log(values);
+					document.getElementById("myownworkercontainer").classList.remove("hidden");
+
+					let str = "";
+					for (var i = 0; i < values.length; ++i) {
+						let elem = values[i];						
+						let style = (elem.trusted ? "style=\"color:#dd77ff;\"" : "");
+						let brokenstyle = (elem.maintenance_mode ? "style=\"color:#ee4444;\"" : "");
+						let workerNameHtml = escapeHtml(elem.name.substring(0, 32));
+						let eleminfo = ((elem.info && elem.info!="")?elem.info:"");							
+						str += "<tr><td>" + workerNameHtml + "</td><td><input class='' style='color:#000000;' id='mwc_desc_"+i+"' placeholder='Worker Description' value='"+eleminfo+"''></td><td "+brokenstyle+">" + elem.uptime + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "</td><td>"+(elem.online?"Online":"Offline")+"</td><td><input type='checkbox' id='mwc_maint_"+i+"' "+(elem.maintenance_mode?"checked":"")+"></td></tr>";
+					}
+					document.getElementById("myownworkertable").innerHTML = str;
+					
+				})
+				.catch(error => 
+				{
+					console.log("Error: " + error);
+					msgbox(error,"Error fetching my workers");
+				});				
+		}
+		else
+		{
+			msgbox("Unable to find my horde workers.","No valid workers found");
+		}	
+	}
+
 	function hide_workertable()
 	{
 		document.getElementById("workercontainer").classList.add("hidden");
+		document.getElementById("myownworkercontainer").classList.add("hidden");
 	}
 	function hide_popups() {
 		document.getElementById("loadmodelcontainer").classList.add("hidden");
@@ -3936,6 +3976,7 @@ Current version: 34
 		document.getElementById("msgboxcontainer").classList.add("hidden");
 		document.getElementById("memorycontainer").classList.add("hidden");
 		document.getElementById("workercontainer").classList.add("hidden");
+		document.getElementById("myownworkercontainer").classList.add("hidden");
 		document.getElementById("sharecontainer").classList.add("hidden");
 		document.getElementById("wicontainer").classList.add("hidden");
 		document.getElementById("customendpointcontainer").classList.add("hidden");
@@ -4476,51 +4517,51 @@ Current version: 34
 		}
 	}
 
-	function handle_maintenance_clear(userData, cluster, newapikey)
+	function update_my_workers()
 	{
-		if (cluster == "" || cluster == null) {
-			console.log("Warning: Cannot clean maintenance, cluster is null");
-		} else {
-			if (userData.worker_ids && userData.worker_ids.length > 0) {
-				get_workers((wdata) => {
-					for (var i = 0; i < wdata.length; ++i) {
-						let elem = wdata[i];
-						if (elem.maintenance_mode == true && userData.worker_ids.includes(elem.id)) {
-							let bodytxt = "You have a worker <span class=\"color_red\">" + elem.name + "</span> that has been put into maintenance mode for malfunctioning.<br><br>"
-								+ "<b>Please only re-enable it if you have already fixed the problems!</b><br><br>"
-								+ "Would you like to restore this worker back online?";
-							msgboxYesNo(bodytxt, "Clear Maintenance Mode", () => {
-								document.getElementById("yesnocontainer").classList.add("hidden");
-
-								let currhorde = find_text_horde(cluster);
-								fetch(currhorde.maintenance_endpoint + "/" + elem.id, {
-									method: 'PUT',
-									headers: {
-										'Content-Type': 'application/json',
-										'apikey': newapikey,
-									},
-									body: JSON.stringify({ "maintenance": false }),
-								})
-									.then((response) => response.json())
-									.then((data) => {
-										msgbox(JSON.stringify(data), "Request Clear Maintenance");
-									})
-									.catch((error) => {
-										console.error('Error:', error);
-									});
-
-							}, () => {
-								document.getElementById("yesnocontainer").classList.add("hidden");
-							}, true);
-							break;
-						}
+		let newapikey = document.getElementById("apikey").value;
+		let parentcluster = find_text_horde(lastValidFoundCluster);
+		for(var i=0;i<lastValidFoundUserWorkers.length;++i)
+		{
+			let desc = document.getElementById("mwc_desc_"+i);
+			let maint = document.getElementById("mwc_maint_"+i);
+			if(desc && maint)
+			{
+				if((desc.value.trim()!="" && (lastValidFoundUserWorkers[i].info==null || lastValidFoundUserWorkers[i].info!=desc.value))||
+				(desc.value.trim()=="" && lastValidFoundUserWorkers[i].info!=null && lastValidFoundUserWorkers[i].info!="")||
+				(maint.checked!=lastValidFoundUserWorkers[i].maintenance_mode))
+				{
+					console.log("updating worker "+ lastValidFoundUserWorkers[i].id);
+					let wo = {"maintenance": maint.checked};
+					if(desc.value.trim()!="")
+					{
+						wo.info = desc.value.trim();
 					}
-				});
+					fetch(parentcluster.maintenance_endpoint + "/" + lastValidFoundUserWorkers[i].id, {
+						method: 'PUT',
+						headers: {
+							'Content-Type': 'application/json',
+							'apikey': newapikey,
+						},
+						body: JSON.stringify(wo),
+					})
+					.then((response) => response.json())
+					.then((data) => {
+						msgbox(JSON.stringify(data), "Update My Worker");
+					})
+					.catch((error) => {
+						console.error('Error:', error);
+					});
+				}
 			}
 		}
+		
 	}
 
 	let desired_new_home_cluster = null;
+	let lastValidFoundUserData = null;
+	let lastValidFoundCluster = null;
+	let lastValidFoundUserWorkers = [];
 	function fetch_kudo_balance()
 	{
 		if(localmode)
@@ -4542,8 +4583,8 @@ Current version: 34
 
 			multifetch(fu_zip, (resArr, errArr) => {
 				if (resArr && resArr.length > 0) {
-					let validFoundDat = null;
-					let validFoundCluster = "";
+					lastValidFoundUserData = null;
+					lastValidFoundCluster = "";
 					for (let i = 0; i < resArr.length; ++i) {
 						let curdat = resArr[i].data;
 						let clus = resArr[i].cluster;
@@ -4551,39 +4592,38 @@ Current version: 34
 							let uname = curdat.username;
 							console.log(curdat);
 							if (uname != null && uname != "") {
-								validFoundDat = curdat;
-								validFoundCluster = clus;
+								lastValidFoundUserData = curdat;
+								lastValidFoundCluster = clus;
 								break;
 							}
 						}
 					}
-					if (validFoundDat) {
-						desired_new_home_cluster = validFoundCluster;
-						let kuds = validFoundDat.kudos;
-						let uname = validFoundDat.username;
+					if (lastValidFoundUserData) {
+						desired_new_home_cluster = lastValidFoundCluster;
+						let kuds = lastValidFoundUserData.kudos;
+						let uname = lastValidFoundUserData.username;
 						let parentcluster = find_text_horde(desired_new_home_cluster);
 						let clustertag = ((parentcluster&&parentcluster.tag!="")?""+parentcluster.tag+" ":"");
-					
-						if (kuds < 0) {
-							document.getElementById("kudos_bal").innerText = clustertag + uname + "\nKudos Balance: 0";
+						let unameurl = "<a class='color_blueurl' href='#' onclick='show_my_own_workers()'>"+uname+"</a>";
+						if (kuds < 0) {							
+							document.getElementById("kudos_bal").innerHTML = clustertag + unameurl + "<br>Kudos Balance: 0";
 							if(uname.toLowerCase()=="anonymous#0")
 							{
 								document.getElementById("kudos_bal").innerHTML = clustertag + uname + "<br>"+
-								"<a class='color_blue' href='https://horde.koboldai.net/register'>(Register New User)</a>";
+								"<a class='color_blueurl' href='https://horde.koboldai.net/register'>(Register New User)</a>";
 							}
 						} else {
-							document.getElementById("kudos_bal").innerText = clustertag + uname + "\nKudos Balance: " + kuds;
+							document.getElementById("kudos_bal").innerHTML = clustertag + unameurl + "<br>Kudos Balance: " + kuds;
 						}
-						//if valid username, check for broken workers
-						handle_maintenance_clear(validFoundDat, validFoundCluster, newapikey);
+						
 					}
 					else {
-						document.getElementById("kudos_bal").innerHTML = "API Key Error<br><a class='color_blue' href='https://horde.koboldai.net/register'>(Register New User)</a>";
+						document.getElementById("kudos_bal").innerHTML = "API Key Error<br><a class='color_blueurl' href='https://horde.koboldai.net/register'>(Register New User)</a>";
 					}
 				}
 				else {
 					console.log("Error: " + errArr);
-					document.getElementById("kudos_bal").innerHTML = "API Key Error<br><a class='color_blue' href='https://horde.koboldai.net/register'>(Register New User)</a>";
+					document.getElementById("kudos_bal").innerHTML = "API Key Error<br><a class='color_blueurl' href='https://horde.koboldai.net/register'>(Register New User)</a>";
 				}
 			});
 		}
@@ -7343,7 +7383,7 @@ Current version: 34
 							https://horde.koboldai.net/register or use the anonymous key 0000000000.</span>
 					</span>
 					<span class="color_green" style="float:right; text-align: right;" id="kudos_bal">
-						Need a Key?<br><a class='color_blue' href='https://horde.koboldai.net/register'>(Register New User)</a>
+						Need a Key?<br><a class='color_blueurl' href='https://horde.koboldai.net/register'>(Register New User)</a>
 					</span>	
 				</div>
 				
@@ -7854,6 +7894,27 @@ Current version: 34
 			</div>
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="hide_workertable()">OK</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="myownworkercontainer">
+		<div class="popupbg flex"></div>
+		<div class="workerpopup">
+			<div class="popuptitlebar">
+				<div class="popuptitletext" id="myownworktitlecount">My Worker List</div>
+			</div>
+			<div class="workerTableDiv">
+			<table class="table text-center workerTable">
+			<thead class="sticky-top bg-white">
+			<tr><th>Name</th><th>Description</th><th>Uptime</th><th>Kudos</th><th>Status</th><th>Maintainence</th></tr>
+			</thead>
+			<tbody id="myownworkertable">			
+			</tbody>
+			</table>    
+			</div>
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="update_my_workers();hide_workertable()">OK</button>
 			</div>
 		</div>
 	</div>
