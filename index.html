@@ -5005,15 +5005,15 @@ Current version: 36
 		render_gametext();
 	}
 
+	let temp_automem_store = "";
 	function autogenerate_summary_memory()
 	{
-		let curmem = document.getElementById("memorytext").value;
-		
+		temp_automem_store = document.getElementById("memorytext").value;
 		let onOk = ()=>{
 			pending_response_id = "-1";
 			waiting_for_autosummary = true;
 			let max_allowed_characters = Math.floor(localsettings.max_context_length * 3.35)-100;
-			let truncated_context = curmem + concat_gametext(true, "");
+			let truncated_context = concat_gametext(true, "");
 			truncated_context = end_trim_to_sentence(truncated_context,true);
 			truncated_context.substring(truncated_context.length - max_allowed_characters);
 
@@ -5048,13 +5048,13 @@ Current version: 36
 		document.getElementById("memorytext").value = "[<|Generating summary, do not close window...|>]"
 		};
 
-		if(curmem.trim()=="" && gametext_arr.length==0)
+		if(gametext_arr.length==0 || (gametext_arr.length==1 && gametext_arr[0].trim()==""))
 		{
 			console.log("Cannot summarize nothing.")
 		}else{
-			if(curmem.trim()!="")
+			if(temp_automem_store.trim()!="")
 			{
-				msgboxYesNo("This will overwrite existing memory. Proceed?","Confirm Overwrite",()=>{
+				msgboxYesNo("This will modify existing memory. Proceed?","Confirm Modify",()=>{
 					document.getElementById("yesnocontainer").classList.add("hidden");
 					onOk();
 				},()=>{
@@ -5076,7 +5076,15 @@ Current version: 36
 		gentxt = gentxt.split("\n")[0];
 		//clean up text
 		gentxt = end_trim_to_sentence(gentxt,true);
-		document.getElementById("memorytext").value = "[Summary: "+gentxt+"]";
+		if(temp_automem_store.trim()=="")
+		{
+			document.getElementById("memorytext").value = "[Summary: "+gentxt+"]";
+		}
+		else
+		{
+			document.getElementById("memorytext").value = temp_automem_store + "\n\n[Summary Continued: "+gentxt+"]";
+		}
+		
 	}
 
 	function clear_poll_flags()
@@ -5260,6 +5268,7 @@ Current version: 36
 		
 		if (newgen.trim() != "" || gametext_arr.length > 0 || current_memory != "" || current_anote != "") 
 		{
+			waiting_for_autosummary = false;
 			idle_timer = 0;
 			idle_triggered_counter = 0;
 			if (localsettings.speech_synth > 0 && 'speechSynthesis' in window) {
