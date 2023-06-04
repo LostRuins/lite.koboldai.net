@@ -2782,6 +2782,7 @@ Current version: 36
 		);
 	}
 
+	let initial_fetched_kudos = false;
 	function attempt_connect(popup_aiselect = true) 
 	{
 		if (localmode) {
@@ -2881,6 +2882,12 @@ Current version: 36
 		if(!localflag)
 		{
 			fetch_image_models();
+		}
+		if(!initial_fetched_kudos && localsettings.my_api_key!=defaultsettings.my_api_key)
+		{
+			document.getElementById("apikey").value = localsettings.my_api_key;
+			initial_fetched_kudos = true;
+			fetch_kudo_balance();
 		}
 	}
 
@@ -3949,6 +3956,14 @@ Current version: 36
 						str += "<tr><td>" + workerNameHtml + "</td><td><input class='' style='color:#000000;' id='mwc_desc_"+i+"' placeholder='Worker Description' value='"+eleminfo+"''></td><td "+brokenstyle+">" + elem.uptime + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "</td><td>"+(elem.online?"Online":"Offline")+"</td><td><input type='checkbox' id='mwc_maint_"+i+"' "+(elem.maintenance_mode?"checked":"")+"></td></tr>";
 					}
 					document.getElementById("myownworkertable").innerHTML = str;
+
+					//save my api key in case
+					localsettings.my_api_key = document.getElementById("apikey").value;
+					if(localsettings.my_api_key==null || localsettings.my_api_key=="")
+					{
+						localsettings.my_api_key = defaultsettings.my_api_key;
+					}
+					autosave();
 					
 				})
 				.catch(error => 
