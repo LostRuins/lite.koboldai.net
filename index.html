@@ -5,7 +5,7 @@ This is a standalone web ui for KoboldAIs Horde, which requires no dependencies,
 Just copy this single static HTML file anywhere and open it in a browser. No dependencies.
 Or you can throw it on some web server and serve it there too. E.g. Github pages, nginx, whatever.
 Now rebranded as KoboldAI Lite
-Current version: 37
+Current version: 38
 -Concedo
 -->
 
@@ -48,6 +48,10 @@ Current version: 37
 
 		body {
 			background-color: #303030;
+		}
+		.invert_colors
+		{
+			filter: invert(1);
 		}
 
 		.settinglabel input {
@@ -604,6 +608,11 @@ Current version: 37
 		}
 		.color_pink {
 			color: #ffbdbd;
+		}
+
+		.hr_instruct
+		{
+			margin-top: 12px; margin-bottom: 12px;
 		}
 
 		.dropdown-menu {
@@ -2578,6 +2587,7 @@ Current version: 37
 		idle_responses: false,
 		idle_duration: 60,
 		export_settings: true, //affects if settings are included with the story and sharelinks
+		invert_colors: false,
 
 		max_context_length: 1024,
 		max_length: 80,
@@ -2708,6 +2718,9 @@ Current version: 37
 			document.getElementById("btn_genimg").classList.add("hidden");
 			document.getElementById("btn_genimg2").classList.add("hidden");
 		}
+
+		//invert colors
+		toggle_invert_colors();
 
 		//poke speech synth to preload voices
 		if ('speechSynthesis' in window) {
@@ -4730,6 +4743,7 @@ Current version: 37
 		document.getElementById("top_p").value = document.getElementById("top_p_slide").value = localsettings.top_p;
 		document.getElementById("autoscroll").checked = localsettings.autoscroll;
 		document.getElementById("export_settings").checked = localsettings.export_settings;
+		document.getElementById("invert_colors").checked = localsettings.invert_colors;
 		document.getElementById("trimsentences").checked = localsettings.trimsentences;
 		document.getElementById("trimwhitespace").checked = localsettings.trimwhitespace;
 		document.getElementById("persist_session").checked = localsettings.persist_session;
@@ -4877,6 +4891,16 @@ Current version: 37
 		}
 	}
 
+	function toggle_invert_colors()
+	{
+		if(localsettings.invert_colors)
+		{
+			document.body.classList.add("invert_colors");
+		}else{
+			document.body.classList.remove("invert_colors");
+		}
+	}
+
 	function confirm_settings() {
 		localsettings.max_context_length = document.getElementById("max_context_length").value;
 		localsettings.max_length = document.getElementById("max_length").value;
@@ -4886,7 +4910,8 @@ Current version: 37
 		localsettings.rep_pen_range = document.getElementById("rep_pen_range").value;
 		localsettings.top_p = document.getElementById("top_p").value;
 		localsettings.autoscroll = (document.getElementById("autoscroll").checked ? true : false);
-		localsettings.export_settings = (document.getElementById("export_settings").checked ? true : false);		
+		localsettings.export_settings = (document.getElementById("export_settings").checked ? true : false);
+		localsettings.invert_colors = (document.getElementById("invert_colors").checked ? true : false);	
 		localsettings.trimsentences = (document.getElementById("trimsentences").checked ? true : false);
 		localsettings.trimwhitespace = (document.getElementById("trimwhitespace").checked ? true : false);
 		localsettings.persist_session = (document.getElementById("persist_session").checked ? true : false);
@@ -4955,10 +4980,11 @@ Current version: 37
 		localsettings.rep_pen_range = cleannum(localsettings.rep_pen_range, 0, 8192);
 		localsettings.rep_pen_slope = cleannum(localsettings.rep_pen_slope, 0, 20);
 		localsettings.top_p = cleannum(localsettings.top_p, 0.002, 1);
-		localsettings.top_k = cleannum(localsettings.top_k, 0, 300);
+		localsettings.top_k = cleannum(Math.floor(localsettings.top_k), 0, 300);
 		localsettings.top_a = cleannum(localsettings.top_a, 0, 1);
 		localsettings.typ_s = cleannum(localsettings.typ_s, 0, 1);
 		localsettings.tfs_s = cleannum(localsettings.tfs_s, 0, 1);
+		toggle_invert_colors();
 
 		autosave(); //need to always autosave, so that we can switch back to non persistent sessions			
 
@@ -6825,8 +6851,8 @@ Current version: 37
 					fulltxt = simpleMarkdown(fulltxt);
 				}
 
-				fulltxt = replaceAll(fulltxt, `%SpcStg%`, `<br><br><hr><br><span class="color_cyan"><img src="`+human_square+`" style="padding:8px;border-radius: 8%;"/>`);
-				fulltxt = replaceAll(fulltxt, `%SpcEtg%`, `</span><br><br><hr><br><img src="`+niko_square+`" style="padding:8px;border-radius: 8%;"/>`);
+				fulltxt = replaceAll(fulltxt, `%SpcStg%`, `<hr class="hr_instruct"><span class="color_cyan"><img src="`+human_square+`" style="padding:8px;border-radius: 8%;"/>`);
+				fulltxt = replaceAll(fulltxt, `%SpcEtg%`, `</span><hr class="hr_instruct"><img src="`+niko_square+`" style="padding:8px;border-radius: 8%;"/>`);
 
 			}else{
 				fulltxt = replaceAll(fulltxt, localsettings.instruct_starttag, `<span class="color_gray">`+localsettings.instruct_starttag+`</span>`);
@@ -6878,6 +6904,11 @@ Current version: 37
 
 
 			fulltxt = fulltxt.replace(/(\r\n|\r|\n)/g, '<br>');
+
+			//if ends with a single <br> and nothing else, trim it
+			if (fulltxt.endsWith("<br>") && !fulltxt.endsWith("<br><br>")) {
+				fulltxt = fulltxt.slice(0, -4);
+			}
 
 			//console.log("FT:" + fulltxt);
 			document.getElementById("gametext").innerHTML = fulltxt;
@@ -8041,6 +8072,10 @@ Current version: 37
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" title="Includes your current settings when saving or sharing your story">Export Settings </div>	
 						   <input type="checkbox" id="export_settings" style="margin:0px 0 0;">				
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="Inverts all colors, simple light mode">Inverted Colors </div>	
+						   <input type="checkbox" id="invert_colors" style="margin:0px 0 0;">				
 						</div>	
 					</div>
 				
