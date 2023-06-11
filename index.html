@@ -3011,6 +3011,25 @@ Current version: 39
 		return (koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.29") > 0);
 	}
 
+	function should_use_pseudostreaming()
+	{
+		let pseudostreaming = (document.getElementById("pseudostreaming").checked ? true : false);
+		let pstreamamount = urlParams.get('streamamount');
+		if(is_using_newer_kcpp())
+		{
+			if(pstreamamount == null || pstreamamount <= 0)
+			{
+				pseudostreaming = false;
+			}
+		}
+
+		if(waiting_for_autosummary)
+		{
+			pseudostreaming = false;
+		}
+		return pseudostreaming;
+	}
+
 	function is_using_web_lite()
 	{
 		return (window.location.hostname.includes("koboldai.net") || window.location.hostname.includes("kaihordewebui.github.io"));
@@ -5785,23 +5804,14 @@ Current version: 39
 					}
 				}
 
-				let pseudostreaming = (document.getElementById("pseudostreaming").checked ? true : false);
-
-				let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_endpoint);
-				if(is_using_newer_kcpp())
-				{
-					pseudostreaming = false; //use a different endpoint
-				}
-
-				if(waiting_for_autosummary)
-				{
-					pseudostreaming = false;
-				}
+				let pseudostreaming = should_use_pseudostreaming();
 				let pstreamamount = urlParams.get('streamamount');
 				let streamchunk = 8; //8 tokens per stream tick by default
 				if (pstreamamount != null && pstreamamount > 0) {
 					streamchunk = pstreamamount;
 				}
+
+				let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_endpoint);
 
 				kobold_api_stream(sub_endpt, submit_payload, submit_payload.max_length, "", pseudostreaming ? streamchunk : 4096);
 
@@ -6490,11 +6500,11 @@ Current version: 39
 					if (synchro_polled_response == null) {
 						//still waiting, do nothing until next poll
 						console.log("v1 still awaiting reply");
-						let pseudostreaming = (document.getElementById("pseudostreaming").checked ? true : false);
-
+						let pseudostreaming = should_use_pseudostreaming();
+						let psflag = (document.getElementById("pseudostreaming").checked ? true : false);
 						//only check once every 3 ticks
-						if (pseudostreaming && !waiting_for_autosummary && is_using_newer_kcpp() && poll_ticks_passed%3==0) {
-
+						if (psflag && !pseudostreaming && !waiting_for_autosummary && poll_ticks_passed%3==0)
+						{
 							//get in-progress results
 							fetch(custom_kobold_endpoint + koboldcpp_check_endpoint, {
 								method: 'POST',
