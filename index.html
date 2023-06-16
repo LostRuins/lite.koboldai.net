@@ -1573,6 +1573,30 @@ Current version: 40
 		background: #838383 none repeat scroll 0 0;
 	}
 
+	.chat_msg_send_btn_abort {
+		background: #b73333 none repeat scroll 0 0;
+		border:none;
+		border-radius: 50%;
+		color: #fff;
+		cursor: pointer;
+		font-size: 15px;
+		height: 33px;
+		position: absolute;
+		right: 40px;
+		top: 11px;
+		width: 33px;
+		background-size: 50% !important;
+		background-repeat: no-repeat !important;
+ 		background-position: center !important;
+		background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgBAMAAACBVGfHAAAAAXNSR0IB2cksfwAAAAlwSFlzAAAA7AAAAOwBeShxvQAAAB5QTFRF////AAAA////////////////////////////////+ZDkTwAAAAp0Uk5T/wAGyhCtf+a2XPn1V7sAAADISURBVHicRdE7DoJQEEbhkxh8lJcYewqtLWgsDRswrEArWytqwgpM3LDM/DNAAcnJR3JnLuU3NCWe+n0rnGDKcIYXX6iC1A848AH6BbDzIGJgDvYWMUBFRxAHtByv9p0CbO4UJ/smQKEECTCHIKOABZEAFkQCeEhiwEMSAwoiDhTqUWdZwlm/TBl0yCCsQIQViJBj5tDkHmLoOcSYuRdyD7kXcg9x3J7nMoWTrV+DpnCie2l1UZ2HZwKRLZcFOOmp39U9w/ExNH9CeSgHcv95sAAAAABJRU5ErkJggg==') !important;
+	}
+	.chat_msg_send_btn_abort:hover {
+		background: #df3f3f none repeat scroll 0 0;
+	}
+	.chat_msg_send_btn_abort:disabled {
+		background: #838383 none repeat scroll 0 0;
+	}
+
 	.chat_msg_cust_btn {
 		background: #169c7b none repeat scroll 0 0;
 		border:none;
@@ -2606,7 +2630,7 @@ Current version: 40
 		last_selected_preset: 0,
 		enhanced_chat_ui: true,
 		multiline_replies: true,
-		idle_responses: false,
+		idle_responses: 0,
 		idle_duration: 60,
 		export_settings: true, //affects if settings are included with the story and sharelinks
 		invert_colors: false,
@@ -4846,7 +4870,7 @@ Current version: 40
 		document.getElementById("generate_images").value = localsettings.generate_images;
 		document.getElementById("enhanced_chat_ui").checked = localsettings.enhanced_chat_ui;
 		document.getElementById("multiline_replies").checked = localsettings.multiline_replies;
-		document.getElementById("idle_responses").checked = localsettings.idle_responses;
+		document.getElementById("idle_responses").value = localsettings.idle_responses;
 		document.getElementById("idle_duration").value = localsettings.idle_duration;
 		document.getElementById("adventure_context_mod").checked = localsettings.adventure_context_mod;
 		document.getElementById("instruct_has_newlines").checked = localsettings.instruct_has_newlines;
@@ -5004,7 +5028,7 @@ Current version: 40
 		localsettings.persist_session = (document.getElementById("persist_session").checked ? true : false);
 		localsettings.enhanced_chat_ui = (document.getElementById("enhanced_chat_ui").checked ? true : false);
 		localsettings.multiline_replies = (document.getElementById("multiline_replies").checked ? true : false);
-		localsettings.idle_responses = (document.getElementById("idle_responses").checked ? true : false);
+		localsettings.idle_responses = document.getElementById("idle_responses").value;
 		localsettings.idle_duration = document.getElementById("idle_duration").value;
 		localsettings.adventure_context_mod = (document.getElementById("adventure_context_mod").checked ? true : false);
 		localsettings.instruct_has_markdown = (document.getElementById("instruct_has_markdown").checked ? true : false);
@@ -6492,7 +6516,7 @@ Current version: 40
 		let idle_timer_max = localsettings.idle_duration*1000;
 		let newgenempty = (document.getElementById("input_text").value == "");
 		let	chatinputempty = (document.getElementById("cht_inp").value == "");
-		if (localsettings.opmode == 3 && localsettings.idle_responses && newgenempty && chatinputempty && !document.getElementById("btnsend").disabled && idle_triggered_counter<3)
+		if (localsettings.opmode == 3 && localsettings.idle_responses > 0 && newgenempty && chatinputempty && !document.getElementById("btnsend").disabled && idle_triggered_counter<localsettings.idle_responses)
 		{
 			idle_timer += 1000;
 			if (idle_timer > idle_timer_max) {
@@ -6538,7 +6562,7 @@ Current version: 40
 						let pseudostreaming = should_use_pseudostreaming();
 						let psflag = (document.getElementById("pseudostreaming").checked ? true : false);
 						//only check once every 3 ticks
-						if (psflag && !pseudostreaming && !waiting_for_autosummary && poll_ticks_passed%3==0)
+						if (psflag && !pseudostreaming && !waiting_for_autosummary && poll_ticks_passed%2==0)
 						{
 							//get in-progress results
 							fetch(custom_kobold_endpoint + koboldcpp_check_endpoint, {
@@ -7327,6 +7351,15 @@ Current version: 40
 		}
 
 		document.getElementById("chat_msg_send_btn").disabled = document.getElementById("btnsend").disabled;
+		if(document.getElementById("abortgen").classList.contains("hidden") && !document.getElementById("chat_msg_send_btn_abort").classList.contains("hidden"))
+		{
+			document.getElementById("chat_msg_send_btn_abort").classList.add("hidden");
+		}
+		else if(!document.getElementById("abortgen").classList.contains("hidden") && document.getElementById("chat_msg_send_btn_abort").classList.contains("hidden"))
+		{
+			document.getElementById("chat_msg_send_btn_abort").classList.remove("hidden");
+		}
+
 	}
 
 	function chat_handle_typing(event)
@@ -7744,6 +7777,7 @@ Current version: 40
 				<input id="cht_inp" type="text" name="chtchtinp" class="cht_inp" role="presentation" autocomplete="noppynop" spellcheck="true" placeholder="Type a message" value="" onkeypress="return chat_handle_typing(event)"/>
 
 				<button onclick="chat_submit_generation()" id="chat_msg_send_btn" class="chat_msg_send_btn" type="button"></button>
+				<button onclick="abort_generation()" id="chat_msg_send_btn_abort" class="hidden chat_msg_send_btn_abort" type="button"></button>
 				<button type="button" class="chat_msg_cust_btn" id="btn_chat_cust" onclick="chat_toggle_actionmenu()"></button>
 				</div>
 			</div>
@@ -8194,14 +8228,24 @@ Current version: 40
 							<input type="checkbox" id="multiline_replies" style="margin:0px 0 0;">
 							</div>
 							<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Allow the AI to send more responses if you are idle.">Idle Responses </div>
-							<input type="checkbox" id="idle_responses" style="margin:0px 0 0;">
-							<select style="padding:1px; height:auto; width: 30px; appearance: none; font-size: 8pt;" class="form-control" id="idle_duration">
+							<div class="justifyleft settingsmall" title="Allow the AI to send more responses if you are idle.">Idle Responses&nbsp;</div>
+							<select style="padding:1px; height:auto; width: 27px; appearance: none; font-size: 7pt;" class="form-control" id="idle_responses">
+								<option value="0">Off</option>
+								<option value="1">1x</option>
+								<option value="2">2x</option>
+								<option value="3">3x</option>
+								<option value="5">5x</option>
+								<option value="8">8x</option>
+							</select>
+							<select style="padding:1px; height:auto; width: 27px; appearance: none; font-size: 7pt;" class="form-control" id="idle_duration">
+								<option value="15">15s</option>
 								<option value="30">30s</option>
 								<option value="60">60s</option>
 								<option value="120">2m</option>
 								<option value="300">5m</option>
+								<option value="600">10m</option>
 							</select>
+
 							</div>
 							</div>
 							<div id="adventuresection" class="settinglabel hidden" style="padding-top: 3px;">
