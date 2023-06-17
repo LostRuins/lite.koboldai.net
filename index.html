@@ -1983,7 +1983,7 @@ Current version: 41
 		{
 			"title":"Agent Katia",
 			"author":"Concedo",
-			"desc":"Special Agent Katia is a foriegn spy trying to get access to your top secret access codes.",
+			"desc":"Special Agent Katia is a foreign spy trying to get access to your top secret access codes.",
 			"opmode":3,
 			"chatname": "You",
 			"chatopponent": "Katia",
@@ -1991,7 +1991,7 @@ Current version: 41
 			"prefmodel1":["pygmalion-6","pygmalion-v8"],
 			"prefmodel2":["pygmalion","erebus","nerybus","opt"],
 			"prompt":"\nKatia: *approaching you, flashing a charming smile* Excuse me, mind if I join you?",
-			"memory":`[Character: Katia; species: Human; class: Spy, Secret Agent; age: 29; gender: female; physical appearance: lithe, sleek, graceful; clothes: form-fitting leather jumpsuit; personality: competent, teasing, seductive, playful; likes: romance, thrill, excitement; description: Special Agent Katia is a foriegn spy trying to get access to your top secret access codes.]\n[Start Scene: You are in a crowded bar.]\nKatia: *sitting at the bar observing you, her target* Another day, another mission. Another little fly caught in my spider web. *she smirks and stands up* Time to put my skills to work.\nYou: *sitting alone at a table unaware, engrossed with your work*\n`,
+			"memory":`[Character: Katia; species: Human; class: Spy, Secret Agent; age: 29; gender: female; physical appearance: lithe, sleek, graceful; clothes: form-fitting leather jumpsuit; personality: competent, teasing, seductive, playful; likes: romance, thrill, excitement; description: Special Agent Katia is a foreign spy trying to get access to your top secret access codes.]\n[Start Scene: You are in a crowded bar.]\nKatia: *sitting at the bar observing you, her target* Another day, another mission. Another little fly caught in my spider web. *she smirks and stands up* Time to put my skills to work.\nYou: *sitting alone at a table unaware, engrossed with your work*\n`,
 			"authorsnote": "",
 			"worldinfo": []
 		},
@@ -2883,6 +2883,16 @@ Current version: 41
 		{
 			document.querySelector('meta[name="viewport"]')
 			.setAttribute("content","width=device-width, initial-scale=1, maximum-scale=1");
+		}
+
+		//fix for copy paste text in firefox
+		{
+			document.getElementById("gametext").addEventListener("paste", function(e) {
+				e.preventDefault();
+				var text = (e.originalEvent || e).clipboardData.getData('text/plain');
+				text = text.replace(/\r?\n/g, '<br>');
+				document.execCommand("insertHTML", false, text);
+			});
 		}
 	}
 
@@ -5461,6 +5471,20 @@ Current version: 41
 		}
 	}
 
+	function show_abort_button(show)
+	{
+		if(!show)
+		{
+			document.getElementById("abortgen").classList.add("hidden");
+			document.getElementById("chat_msg_send_btn_abort").classList.add("hidden");
+		}
+		else
+		{
+			document.getElementById("abortgen").classList.remove("hidden");
+			document.getElementById("chat_msg_send_btn_abort").classList.remove("hidden");
+		}
+	}
+
 	function abort_generation() {
 		let id_to_cancel = pending_response_id;
 
@@ -5506,7 +5530,7 @@ Current version: 41
 				console.error('Error:', error);
 			});
 		}
-		document.getElementById("abortgen").classList.add("hidden");
+		show_abort_button(false);
 	}
 
 	function manual_gen_image() {
@@ -6620,12 +6644,12 @@ Current version: 41
 		{
 			return;
 		}
-		document.getElementById("abortgen").classList.add("hidden");
+		show_abort_button(false);
 		if (pending_response_id && pending_response_id != "-1" && pending_response_id != "")
 		{
 			if (poll_ticks_passed > (4/(poll_interval_base_text*0.001))) //4sec passed
 			{
-				document.getElementById("abortgen").classList.remove("hidden");
+				show_abort_button(true);
 			}
 			if (poll_in_progress) {
 				console.log("Polling still in progress for id: " + pending_response_id);
@@ -6689,7 +6713,7 @@ Current version: 41
 						}
 						synchro_polled_response = null;
 						synchro_pending_stream = "";
-						document.getElementById("abortgen").classList.add("hidden");
+						show_abort_button(false);
 						render_gametext();
 					}
 				}
@@ -6705,7 +6729,7 @@ Current version: 41
 								console.log("Gave up on failed attempt");
 								clear_poll_flags();
 								render_gametext();
-								document.getElementById("abortgen").classList.add("hidden");
+								show_abort_button(false);
 								let errmsg = "Error encountered during text generation!\n";
 								if (data.message != null) {
 									errmsg += data.message;
@@ -6743,12 +6767,12 @@ Current version: 41
 													}
 												}
 												render_gametext();
-												document.getElementById("abortgen").classList.add("hidden");
+												show_abort_button(false);
 											}).catch((error) => {
 												console.error('Error:', error);
 												clear_poll_flags();
 												render_gametext();
-												document.getElementById("abortgen").classList.add("hidden");
+												show_abort_button(false);
 												msgbox("Error encountered during text generation!");
 											});
 									}, 500);
@@ -6779,7 +6803,7 @@ Current version: 41
 							console.error('Error:', error);
 							clear_poll_flags();
 							render_gametext();
-							document.getElementById("abortgen").classList.add("hidden");
+							show_abort_button(false);
 							msgbox("Error encountered during text generation!");
 						});
 				}
@@ -6892,7 +6916,12 @@ Current version: 41
 				}
 				if(newestChunk!="")
 				{
-					gametext_arr.push(newestChunk);
+					//little hack to merge a row with only a newline into the last chunk
+					if (gametext_arr.length > 0 && gametext_arr[gametext_arr.length - 1] == "\n") {
+						gametext_arr[gametext_arr.length - 1] += newestChunk;
+					} else {
+						gametext_arr.push(newestChunk);
+					}
 				}
 
 
@@ -7430,14 +7459,6 @@ Current version: 41
 		}
 
 		document.getElementById("chat_msg_send_btn").disabled = document.getElementById("btnsend").disabled;
-		if(document.getElementById("abortgen").classList.contains("hidden") && !document.getElementById("chat_msg_send_btn_abort").classList.contains("hidden"))
-		{
-			document.getElementById("chat_msg_send_btn_abort").classList.add("hidden");
-		}
-		else if(!document.getElementById("abortgen").classList.contains("hidden") && document.getElementById("chat_msg_send_btn_abort").classList.contains("hidden"))
-		{
-			document.getElementById("chat_msg_send_btn_abort").classList.remove("hidden");
-		}
 
 	}
 
