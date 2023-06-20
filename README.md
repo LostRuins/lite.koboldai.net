@@ -3,7 +3,7 @@
 
 This is a standalone Web UI for KoboldAI Client, KoboldCpp and AI Horde, which requires no dependencies, installation or setup. It's also capable of connecting to custom endpoints, include OpenAI, Claude, and both local and remote Kobold instances.
 
-![Preview](media/preview.png)
+![Preview](preview.png)
 
 Features:
 - Fully featured text editor in a single HTML page, designed for use with generative LLMs.
