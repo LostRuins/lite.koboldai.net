@@ -5,7 +5,7 @@ This is a standalone web ui for KoboldAIs Horde, which requires no dependencies,
 Just copy this single static HTML file anywhere and open it in a browser. No dependencies.
 Or you can throw it on some web server and serve it there too. E.g. Github pages, nginx, whatever.
 Now rebranded as KoboldAI Lite
-Current version: 42
+Current version: 43
 -Concedo
 -->
 
@@ -1758,9 +1758,8 @@ Current version: 42
 			"author":"Concedo",
 			"desc":"KoboldGPT is a state-of-the-art Artificial General Intelligence that is capable of answering a broad range of questions.",
 			"opmode":4,
-			"instruct_starttag": "### Instruction:",
-			"instruct_endtag": "### Response:",
-			"instruct_has_newlines": false,
+			"instruct_starttag": "\\n### Instruction:\\n",
+			"instruct_endtag": "\\n### Response:\\n",
 			"prefmodel1":["alpaca","gpt4all","supercot","wizard","vicuna","manticore","mantis","airoboros","chronos"],
 			"prefmodel2":["erebus","nerys","nerybus","janeway","opt"],
 			"prompt":"### Response:Hello, I am KoboldGPT, your personal AI assistant. What would you like to know?",
@@ -2091,6 +2090,23 @@ Current version: 42
 			}
 		}
 		return formatted;
+	}
+
+	function get_instruct_starttag(doTrim=true)
+	{
+		if(doTrim){
+			return replaceAll(localsettings.instruct_starttag, "\\n", "\n").trim();
+		} else {
+			return replaceAll(localsettings.instruct_starttag, "\\n", "\n");
+		}
+	}
+	function get_instruct_endtag(doTrim=true)
+	{
+		if(doTrim){
+			return replaceAll(localsettings.instruct_endtag, "\\n", "\n").trim();
+		} else {
+			return replaceAll(localsettings.instruct_endtag, "\\n", "\n");
+		}
 	}
 
 	//import tavern png data. adapted from png-chunks-extract under MIT license
@@ -2433,8 +2449,8 @@ Current version: 42
 					}
 					if (localsettings.opmode == 4) //stop on selfname found
 					{
-						let st = localsettings.instruct_has_newlines?("\n"+localsettings.instruct_starttag):(localsettings.instruct_starttag);
-						let et = localsettings.instruct_has_newlines?("\n"+localsettings.instruct_endtag):(localsettings.instruct_endtag);
+						let st = get_instruct_starttag(true);
+						let et = get_instruct_endtag(true);
 						let foundStop = synchro_streaming_response.indexOf(st);
 						if (foundStop != -1)
 						{
@@ -2704,9 +2720,8 @@ Current version: 42
 		adventure_context_mod: true, //extra injection for adventure mode
 		chatname: "You", //name to use in chat
 		chatopponent: defaultchatopponent,
-		instruct_starttag: "### Instruction:",
-		instruct_endtag: "### Response:",
-		instruct_has_newlines: true,
+		instruct_starttag: "\\n### Instruction:\\n",
+		instruct_endtag: "\\n### Response:\\n",
 		instruct_has_markdown: false,
 		persist_session: true,
 		speech_synth: 0, //0 is disabled
@@ -3877,13 +3892,6 @@ Current version: 42
 			if (temp_scenario.instruct_endtag) {
 				localsettings.instruct_endtag = temp_scenario.instruct_endtag;
 			}
-
-			if (temp_scenario.instruct_has_newlines===true) {
-				localsettings.instruct_has_newlines = true;
-			}else if (temp_scenario.instruct_has_newlines===false) {
-				localsettings.instruct_has_newlines = false;
-			}
-			localsettings.instruct_has_newlines = false;
 		}
 
 		render_gametext();
@@ -4981,7 +4989,6 @@ Current version: 42
 		document.getElementById("idle_responses").value = localsettings.idle_responses;
 		document.getElementById("idle_duration").value = localsettings.idle_duration;
 		document.getElementById("adventure_context_mod").checked = localsettings.adventure_context_mod;
-		document.getElementById("instruct_has_newlines").checked = localsettings.instruct_has_newlines;
 		document.getElementById("instruct_has_markdown").checked = localsettings.instruct_has_markdown;
 		document.getElementById("auto_ctxlen").checked = localsettings.auto_ctxlen;
 		document.getElementById("auto_genamt").checked = localsettings.auto_genamt;
@@ -5140,7 +5147,6 @@ Current version: 42
 		localsettings.idle_duration = document.getElementById("idle_duration").value;
 		localsettings.adventure_context_mod = (document.getElementById("adventure_context_mod").checked ? true : false);
 		localsettings.instruct_has_markdown = (document.getElementById("instruct_has_markdown").checked ? true : false);
-		localsettings.instruct_has_newlines = (document.getElementById("instruct_has_newlines").checked ? true : false);
 		localsettings.generate_images = document.getElementById("generate_images").value;
 		localsettings.opmode = document.getElementById("opmode").value;
 		localsettings.chatname = document.getElementById("chatname").value;
@@ -5148,13 +5154,13 @@ Current version: 42
 			localsettings.chatname = "You";
 		}
 		localsettings.chatopponent = document.getElementById("chatopponent").value.trim();
-		localsettings.instruct_starttag = document.getElementById("instruct_starttag").value.trim();
+		localsettings.instruct_starttag = document.getElementById("instruct_starttag").value;
 		if (localsettings.instruct_starttag == null || localsettings.instruct_starttag == "") {
-			localsettings.instruct_starttag = "### Instruction:";
+			localsettings.instruct_starttag = "\\n### Instruction:\\n";
 		}
 		localsettings.instruct_endtag = document.getElementById("instruct_endtag").value;
 		if (localsettings.instruct_endtag == null || localsettings.instruct_endtag == "") {
-			localsettings.instruct_endtag = "### Response:";
+			localsettings.instruct_endtag = "\\n### Response:\\n";
 		}
 		localsettings.top_k = document.getElementById("top_k").value;
 		localsettings.top_a = document.getElementById("top_a").value;
@@ -5596,15 +5602,7 @@ Current version: 42
 
 			if (localsettings.opmode == 4 && newgen != "") {
 				//append instruction for instruct mode
-				if(localsettings.instruct_has_newlines)
-				{
-					newgen = "\n\n"+localsettings.instruct_starttag+"\n\n" + newgen + "\n\n"+localsettings.instruct_endtag+"\n\n";
-				}
-				else
-				{
-					newgen = localsettings.instruct_starttag + newgen + localsettings.instruct_endtag;
-				}
-
+				newgen = get_instruct_starttag(false) + newgen + get_instruct_endtag(false);
 			}
 			if (localsettings.opmode == 3 && newgen != "") {
 				//append chatname for chatmode
@@ -5971,8 +5969,8 @@ Current version: 42
 					}
 					if (localsettings.opmode == 4) //stop on selfname found
 					{
-						let st = localsettings.instruct_has_newlines ? ("\n" + localsettings.instruct_starttag) : (localsettings.instruct_starttag);
-						let et = localsettings.instruct_has_newlines ? ("\n" + localsettings.instruct_endtag) : (localsettings.instruct_endtag);
+						let st = get_instruct_starttag(true);
+						let et = get_instruct_endtag(true);
 						submit_payload.stop_sequence = [st, et];
 					}
 					if (extrastopseq != "") {
@@ -6479,8 +6477,8 @@ Current version: 42
 		//if we are in instruct mode, truncate to instruction
 		if (localsettings.opmode == 4)
 		{
-			let st = localsettings.instruct_has_newlines?("\n"+localsettings.instruct_starttag):(localsettings.instruct_starttag);
-			let et = localsettings.instruct_has_newlines?("\n"+localsettings.instruct_endtag):(localsettings.instruct_endtag);
+			let st = get_instruct_starttag(true);
+			let et = get_instruct_endtag(true);
 			let found = gentxt.indexOf(st);
 			let splitresponse = [];
 			if (found != -1) //if found, truncate to it
@@ -7004,10 +7002,10 @@ Current version: 42
 			}
 			if(localsettings.opmode==4 && localsettings.instruct_starttag!="" && localsettings.instruct_endtag!="")
 			{
-				let a = escapeHtml(localsettings.instruct_starttag);
-				let b = escapeHtml(localsettings.instruct_endtag);
-				fulltxt = replaceAll(fulltxt,a,localsettings.instruct_starttag);
-				fulltxt = replaceAll(fulltxt,b,localsettings.instruct_endtag);
+				let a = escapeHtml(get_instruct_starttag(false));
+				let b = escapeHtml(get_instruct_endtag(false));
+				fulltxt = replaceAll(fulltxt,a,get_instruct_starttag(false));
+				fulltxt = replaceAll(fulltxt,b,get_instruct_endtag(false));
 			}
 		}
 		if (stripimg) {
@@ -7067,7 +7065,7 @@ Current version: 42
 			document.getElementById("btnmode").classList.add("hidden");
 		}
 
-		if (gametext_arr.length == 0) {
+		if (gametext_arr.length == 0 && !(synchro_pending_stream!="" && pending_response_id!="")) {
 
 			if (perfdata == null) {
 				document.getElementById("gametext").innerHTML = "Welcome to <span class=\"color_cyan\">KoboldAI Lite</span>!<br>You are in <span class=\"color_red\">Offline Mode</span>.<br>You will still be able to load and edit stories, but not generate new text."
@@ -7118,14 +7116,8 @@ Current version: 42
 
 			if(localsettings.opmode==4 && !document.getElementById("allowediting").checked)
 			{
-				if(localsettings.instruct_has_newlines)
-				{
-					fulltxt = replaceAll(fulltxt, "\n\n"+localsettings.instruct_starttag+"\n\n", `%SpcStg%`);
-					fulltxt = replaceAll(fulltxt, "\n\n"+localsettings.instruct_endtag+"\n\n", `%SpcEtg%`);
-				}else{
-					fulltxt = replaceAll(fulltxt, localsettings.instruct_starttag, `%SpcStg%`);
-					fulltxt = replaceAll(fulltxt, localsettings.instruct_endtag, `%SpcEtg%`);
-				}
+				fulltxt = replaceAll(fulltxt, get_instruct_starttag(false), `%SpcStg%`);
+				fulltxt = replaceAll(fulltxt, get_instruct_endtag(false), `%SpcEtg%`);
 
 				if(localsettings.instruct_has_markdown && synchro_pending_stream=="")
 				{
@@ -7139,12 +7131,12 @@ Current version: 42
 					fulltxt = simpleMarkdown(fulltxt);
 				}
 
-				fulltxt = replaceAll(fulltxt, `%SpcStg%`, `<hr class="hr_instruct"><span class="color_cyan"><img src="`+human_square+`" style="padding:8px;border-radius: 8%;"/>`);
-				fulltxt = replaceAll(fulltxt, `%SpcEtg%`, `</span><hr class="hr_instruct"><img src="`+niko_square+`" style="padding:8px;border-radius: 8%;"/>`);
+				fulltxt = replaceAll(fulltxt, `%SpcStg%`, `<hr class="hr_instruct"><span class="color_cyan"><img src="`+human_square+`" style="padding:3px 6px 3px 3px;border-radius: 8%;"/>`);
+				fulltxt = replaceAll(fulltxt, `%SpcEtg%`, `</span><hr class="hr_instruct"><img src="`+niko_square+`" style="padding:3px 6px 3px 3px;border-radius: 8%;"/>`);
 
 			}else{
-				fulltxt = replaceAll(fulltxt, localsettings.instruct_starttag, `<span class="color_gray">`+localsettings.instruct_starttag+`</span>`);
-				fulltxt = replaceAll(fulltxt, localsettings.instruct_endtag, `<span class="color_gray">`+localsettings.instruct_endtag+`</span>`);
+				fulltxt = replaceAll(fulltxt, get_instruct_starttag(true), `<span class="color_gray">`+escapeHtml(get_instruct_starttag(true))+`</span>`);
+				fulltxt = replaceAll(fulltxt, get_instruct_endtag(true), `<span class="color_gray">`+escapeHtml(get_instruct_endtag(true))+`</span>`);
 			}
 
 			if(localsettings.opmode==3)
@@ -8388,14 +8380,11 @@ Current version: 42
 									  <th>End Seq.<span class="helpicon">?<span class="helptext">The sequence to end an instruction prompt</span></span></th>
 									</tr>
 									<tr>
-									<td><input class="settinglabel mininiput" type="text" placeholder="### Instruction:" value="" id="instruct_starttag" title="The sequence to start an instruction prompt"></td>
-									<td><input class="settinglabel mininiput" type="text" placeholder="### Response:" value="" id="instruct_endtag"  title="The sequence to end an instruction prompt"></td>
+									<td><input class="settinglabel mininiput" type="text" placeholder="\\n### Instruction:\\n" value="" id="instruct_starttag" title="The sequence to start an instruction prompt"></td>
+									<td><input class="settinglabel mininiput" type="text" placeholder="\\n### Response:\\n" value="" id="instruct_endtag"  title="The sequence to end an instruction prompt"></td>
 									</tr>
 								</table>
 
-							   <div class="justifyleft settingsmall">Insert Newlines <span class="helpicon">?<span
-								class="helptext">Some instruct models like pygmalion may perform better without newlines.</span></span> </div>
-								<input type="checkbox" id="instruct_has_newlines" style="margin:0px 0 0;">
 								<div class="justifyleft settingsmall">Enable Markdown <span class="helpicon">?<span
 									class="helptext">Allows the UI to use markdown formatting such as quotes and code blocks.</span></span> </div>
 								<input type="checkbox" id="instruct_has_markdown" style="margin:0px 0 0;">
