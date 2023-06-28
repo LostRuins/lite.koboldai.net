@@ -5,7 +5,7 @@ This is a standalone web ui for KoboldAIs Horde, which requires no dependencies,
 Just copy this single static HTML file anywhere and open it in a browser. No dependencies.
 Or you can throw it on some web server and serve it there too. E.g. Github pages, nginx, whatever.
 Now rebranded as KoboldAI Lite
-Current version: 43
+Current version: 44
 -Concedo
 -->
 
@@ -2932,7 +2932,40 @@ Current version: 43
 	function setupDragDrop()
 	{
 		const dropZone = document.getElementById('gamescreen');
+		const dropZone2 = document.getElementById('chat_msg_body');
+
+		const onDropFn = function(e){
+			e.preventDefault();
+			e.stopPropagation();
+
+			let draggedData = e.dataTransfer;
+			let files = draggedData.files;
+
+			console.log(files);
+			let safe_to_overwrite = (gametext_arr.length == 0 && current_memory == "" && current_anote == "" && current_wi.length == 0 && redo_arr.length == 0);
+			if (files.length > 0 && files[0] != null && files[0].name && files[0].name != "") {
+				if (safe_to_overwrite) {
+					load_selected_file(files[0]);
+				} else {
+					msgboxYesNo("Overwrite existing story?", "Open File", () => {
+						hide_popups();
+						load_selected_file(files[0]);
+					}, () => {
+						hide_popups();
+					});
+				}
+			}
+		}
+
 		dropZone.addEventListener(
+			"dragover",
+			(e) => {
+				e.preventDefault();
+				e.stopPropagation();
+			},
+			false
+		);
+		dropZone2.addEventListener(
 			"dragover",
 			(e) => {
 				e.preventDefault();
@@ -2943,28 +2976,14 @@ Current version: 43
 		dropZone.addEventListener(
 			"drop",
 			(e) => {
-				e.preventDefault();
-				e.stopPropagation();
-
-				let draggedData = e.dataTransfer;
-				let files = draggedData.files;
-
-				console.log(files);
-				let safe_to_overwrite = (gametext_arr.length == 0 && current_memory == "" && current_anote == "" && current_wi.length == 0 && redo_arr.length == 0);
-				if(files.length>0 && files[0]!=null && files[0].name && files[0].name!="")
-				{
-					if(safe_to_overwrite)
-					{
-						load_selected_file(files[0]);
-					}else{
-						msgboxYesNo("Overwrite existing story?","Open File",()=>{
-							hide_popups();
-							load_selected_file(files[0]);
-						},()=>{
-							hide_popups();
-						});
-					}
-				}
+				onDropFn(e);
+			},
+			false
+		);
+		dropZone2.addEventListener(
+			"drop",
+			(e) => {
+				onDropFn(e);
 			},
 			false
 		);
@@ -3689,12 +3708,35 @@ Current version: 43
 		{
 			examplemsg = "\n"+examplemsg;
 		}
-		restart_new_game();
-		localsettings.chatname = myname;
-		localsettings.chatopponent = chatopponent;
-		gametext_arr.push("\n"+chatopponent+": "+greeting);
-		current_memory = memory + scenario + examplemsg + "\n<START>";
-		localsettings.opmode = 3;
+		let combinedmem = memory + scenario + examplemsg;
+		//check if it's a world info only card, if so, do not restart game
+		if(combinedmem.trim()=="" && greeting=="" && obj.entries)
+		{
+			console.log("Append Tavern WI");
+			current_wi = [];
+			for (let key in obj.entries) {
+				var itm = obj.entries[key];
+				let nwi = {
+					"key": itm.key.join(","),
+					"keysecondary": (itm.keysecondary.length > 0 ? itm.keysecondary.join(",") : ""),
+					"content": itm.content,
+					"comment": itm.comment,
+					"folder": null,
+					"selective": itm.selective,
+					"constant": itm.constant
+				};
+				current_wi.push(nwi);
+			}
+		}
+		else
+		{
+			restart_new_game();
+			localsettings.chatname = myname;
+			localsettings.chatopponent = chatopponent;
+			gametext_arr.push("\n"+chatopponent+": "+greeting);
+			current_memory = combinedmem + "\n<START>";
+			localsettings.opmode = 3;
+		}
 		render_gametext();
 	}
 	function load_ooba_obj(obj)
@@ -7116,8 +7158,15 @@ Current version: 43
 
 			if(localsettings.opmode==4 && !document.getElementById("allowediting").checked)
 			{
+				//accept all newline formats for backwards compatibility
+				fulltxt = replaceAll(fulltxt, "\n\n"+get_instruct_starttag(true)+"\n\n", `%SpcStg%`);
+				fulltxt = replaceAll(fulltxt, "\n\n"+get_instruct_endtag(true)+"\n\n", `%SpcEtg%`);
+				fulltxt = replaceAll(fulltxt, "\n"+get_instruct_starttag(true)+"\n", `%SpcStg%`);
+				fulltxt = replaceAll(fulltxt, "\n"+get_instruct_endtag(true)+"\n", `%SpcEtg%`);
 				fulltxt = replaceAll(fulltxt, get_instruct_starttag(false), `%SpcStg%`);
 				fulltxt = replaceAll(fulltxt, get_instruct_endtag(false), `%SpcEtg%`);
+				fulltxt = replaceAll(fulltxt, get_instruct_starttag(true), `%SpcStg%`);
+				fulltxt = replaceAll(fulltxt, get_instruct_endtag(true), `%SpcEtg%`);
 
 				if(localsettings.instruct_has_markdown && synchro_pending_stream=="")
 				{
