@@ -3407,6 +3407,21 @@ Current version: 44
 	}
 
 	var tempfileurl = null;
+	let newfilename = "";
+	function savenowfn()
+	{
+		var a = document.getElementById("tempfile");
+		var file = new Blob([JSON.stringify(loaded_storyobj)], { type: 'application/json' });
+		console.log("Normal save handling")
+		if (tempfileurl) {
+			window.URL.revokeObjectURL(tempfileurl);
+		}
+		tempfileurl = window.URL.createObjectURL(file);
+		a.href = tempfileurl;
+		a.target = '_blank';
+		a.download = newfilename;
+		setTimeout(function(){a.click()},20);
+	}
 	function save_file() {
 		//determine if oldui file or newui file format, but we always save to oldui format
 		let is_oldui = (loaded_storyobj.file_version == null);
@@ -3456,34 +3471,27 @@ Current version: 44
 			loaded_storyobj.savedsettings = null;
 		}
 
-		var a = document.getElementById("tempfile");
+
 		window.URL = window.URL || window.webkitURL;
 
 		var userAgent = window.navigator.userAgent;
-		let newfilename = (last_known_filename==""?"saved_story.json":last_known_filename);
-		// if (userAgent.match(/AppleWebKit/) && (userAgent.match(/iPad/i) || userAgent.match(/iPhone/i))) {
-		// 	var file = new Blob([JSON.stringify(loaded_storyobj)], { type: 'application/octet-stream' });
-		// 	console.log("Special save handling for iphones")
-		// 	// iPad or iPhone needs an extra download
-		// 	var reader = new FileReader();
-		// 	reader.onload = function (e) {
-		// 		msgbox(`Right-Click or long press the link, and select (Save As)<br><h2><a href=` + reader.result + ` target='_blank' download="`+newfilename+`">Download Story</a></h2>`, "Save Story", true)
-		// 	}
-		// 	reader.readAsDataURL(file);
-		// } else
-		{
+		newfilename = (last_known_filename==""?"saved_story.json":last_known_filename);
 
-			var file = new Blob([JSON.stringify(loaded_storyobj)], { type: 'application/json' });
-			console.log("Normal save handling for non-iphones")
-			if (tempfileurl) {
-				window.URL.revokeObjectURL(tempfileurl);
+		if (userAgent.match(/AppleWebKit/) && (userAgent.match(/iPad/i) || userAgent.match(/iPhone/i))) {
+			var file = new Blob([JSON.stringify(loaded_storyobj)], { type: 'application/octet-stream' });
+			console.log("Special save handling for iphones")
+			// iPad or iPhone needs an extra download
+			var reader = new FileReader();
+			reader.onload = function (e) {
+				msgbox(`<button type="button" class="btn btn-primary" id="ios_save" onclick="savenowfn()">Click to Save</button><br><h4>If that does not work, right-click or long press <a href=` + reader.result + ` target='_blank' download="`+newfilename+`">this link</a>, and select (Save As)</h4>`, "Save Story", true)
 			}
-			tempfileurl = window.URL.createObjectURL(file);
-			a.href = tempfileurl;
-			a.target = '_blank';
-			a.download = newfilename;
-			setTimeout(function(){a.click()},20);
+			reader.readAsDataURL(file);
 		}
+		else
+		{
+			savenowfn();
+		}
+
 
 	}
 
