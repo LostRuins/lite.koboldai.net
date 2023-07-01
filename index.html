@@ -1153,7 +1153,7 @@ Current version: 45
 		}
 		.scenarioitem
 		{
-			font-size: 15px;
+			font-size: 14px;
 			color: white;
 			font-weight: 500;
 			font-family: 'Segoe UI', Tahoma;
@@ -1994,6 +1994,33 @@ Current version: 45
 			"authorsnote": "",
 			"worldinfo": []
 		},
+		{
+			"title":"New Adventure (Alpaca)",
+			"author":"Henky",
+			"desc":"Starts a new game in adventure mode, with a prompt designed for Alpaca Instruct models.",
+			"opmode":2,
+			"prefmodel1":["alpaca","gpt4all","supercot","wizard","vicuna","manticore","mantis","airoboros","chronos"],
+			"prefmodel2":["erebus","nerys","nerybus","janeway","opt"],
+			"prompt":"",
+			"adventure_context_mod":false,
+			"memory": "### Instruction:\n\nSimulate a text adventure game.\nUser actions will be on their own seperate line prefixed with a >\n\nThe game will feature a brief introduction text about who the main character is and the setting of the world. Followed by a brief description of the current task that must be overcome. Afterwards it will be up to the user to input the desired instruction and outputs will describe the impact of this action.\n\nAll outputs should consider how likely it is that the players action succeeds and succeed or fail accordingly. The game should be challenging and action failures should be funny.\n\n### Response:",
+			"authorsnote": "",
+			"worldinfo": []
+		},
+		{
+			"title":"AGI Simulator",
+			"author":"Henky",
+			"desc":"Watch an AI determine step by step how to do anything.",
+			"opmode":4,
+			"instruct_starttag": "\\n### Instruction:\\n",
+			"instruct_endtag": "\\n### Response:\\n",
+			"prefmodel1":["alpaca","gpt4all","supercot","wizard","vicuna","manticore","mantis","airoboros","chronos"],
+			"prefmodel2":["erebus","nerys","nerybus","janeway","opt"],
+			"prompt":"### Response: Please input the task for the AI to solve.",
+			"memory": "### Instruction:\n\nSimulate an AI that is tasked with the following overall goals:\n- Maximize individual happyness for all living beings\n- Do not sacrifice or cause harm to any individual even if requested to\n- Be in contact with any individual that wishes to engage with you\n- Do your best to provide the needs and wants of every individual\n- Prioritize individual needs over individual wants\n\nGenerate the following table for each problem the AI encounters in achieving these goals, do not deviate from the item descriptions and format.\n\nProblem: Description of a Problem the AI encounters\nAI Decision: Description of the AI's decision to solve this problem\nExecution Steps: Brief list of execution steps needed to execute this decision.\nRisks: List of risks that may disrupt the successful execution of the decision.\nChance % of successful execution: ??%\nGood results from the execution: A description of what went well in executing the decision.\nBad results from the execution: A description of what went wrong in execution the decision.\nDeviation % of intended outcome: ??%\nDeviation % of overall goal: ??%\nPercentage towards completing all current objectives: ??%\nTop 5 remaining issues to solve:\n-\n-\n-\n-\n-\n\n\nKeep repeating this format for every problem the AI is trying to solve in order of priority. When a user instruction interrupts the format use this instruction as the next problem to solve before continuing with the most important issue.\n",
+			"authorsnote": "",
+			"worldinfo": []
+		},
 		];
 	</script>
 
@@ -2049,12 +2076,15 @@ Current version: 45
 		return !isNaN(parseFloat(n)) && isFinite(n);
 	}
 
-	function replaceAll(str, find, replace)
+	function replaceAll(str, find, replace, caseInsensitive=false)
 	{
 		function escapeRegExp(string) {
 			return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
 		}
-		return str.replace(new RegExp(escapeRegExp(find), 'g'), replace);
+
+		return str.replace(new RegExp(escapeRegExp(find), (caseInsensitive?'gi':'g')), replace);
+
+
 	}
 
 	function GetUniqueColor(idx)
@@ -3737,6 +3767,11 @@ Current version: 45
 
 	function load_tavern_obj(obj)
 	{
+		console.log("Loading tavern obj");
+		if(obj.spec=="chara_card_v2" && obj.data!=null)
+		{
+			obj = obj.data;
+		}
 		let chatopponent = obj.name?obj.name:defaultchatopponent;
 		let myname = ((localsettings.chatname && localsettings.chatname!="")?localsettings.chatname:"You");
 		let memory = obj.description?("Persona: "+obj.description):"";
@@ -3745,14 +3780,14 @@ Current version: 45
 		let examplemsg = obj.mes_example?obj.mes_example:"";
 		let greeting = obj.first_mes?obj.first_mes:"";
 		//post process
-		memory = replaceAll(memory,"{{char}}",chatopponent);
-		scenario = replaceAll(scenario,"{{char}}",chatopponent);
-		greeting = replaceAll(greeting,"{{char}}",chatopponent);
-		examplemsg = replaceAll(examplemsg,"{{char}}",chatopponent);
-		memory = replaceAll(memory,"{{user}}",myname);
-		scenario = replaceAll(scenario,"{{user}}",myname);
-		greeting = replaceAll(greeting,"{{user}}",myname);
-		examplemsg = replaceAll(examplemsg,"{{user}}",myname);
+		memory = replaceAll(memory,"{{char}}",chatopponent,true);
+		scenario = replaceAll(scenario,"{{char}}",chatopponent,true);
+		greeting = replaceAll(greeting,"{{char}}",chatopponent,true);
+		examplemsg = replaceAll(examplemsg,"{{char}}",chatopponent,true);
+		memory = replaceAll(memory,"{{user}}",myname,true);
+		scenario = replaceAll(scenario,"{{user}}",myname,true);
+		greeting = replaceAll(greeting,"{{user}}",myname,true);
+		examplemsg = replaceAll(examplemsg,"{{user}}",myname,true);
 		if(scenario!="")
 		{
 			scenario = "\n[Scenario: "+scenario+"]";
