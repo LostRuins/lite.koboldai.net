@@ -2818,8 +2818,8 @@ Current version: 47
 		max_length: 80,
 		auto_ctxlen: true,
 		auto_genamt: true,
-		rep_pen: 1.08,
-		rep_pen_range: 256,
+		rep_pen: 1.1,
+		rep_pen_range: 300,
 		rep_pen_slope: 0.7,
 		temperature: 0.7,
 		top_p: 0.92,
@@ -5958,7 +5958,7 @@ Current version: 47
 
 				let me = localsettings.chatname;
 				if (co == null || co == "") {
-					co = defaultchatopponent;
+					co = "";
 				}
 
 				//examine context to try to determine if there's an existing botname
@@ -5967,13 +5967,19 @@ Current version: 47
 				var foundopponent = tempfullsearchable.match(othernamesregex);
 
 				//if co is default, and we found an opponent, use their name instead
-				if (co == defaultchatopponent && foundopponent != null && foundopponent.length > 0) {
-					co = foundopponent[0].replace(": ", "");
+				if (co == "" && foundopponent != null && foundopponent.length > 0) {
+					let trimmed = foundopponent[0].replace(": ", "");
+					trimmed = trimmed.trim();
+					if(trimmed!=""){ co = trimmed; }
 				}
 
 				if (current_anote.length == 0 && current_memory.length == 0) {
 					if (gametext_arr.length > 0 && gametext_arr[0].startsWith("\n" + me + ": ")) {
 						let injected = "[The following is an interesting chat message log between " + me + " and " + co + ".]\n\n" + localsettings.chatname + ": Hi.\n" + co + ": Hello.";
+						if(co=="")
+						{
+							injected = "[The following is an interesting chat message log between " + me + " and someone else.]\n\n" + localsettings.chatname + ": Hi.";
+						}
 						if(hasMulti)
 						{
 							injected = "[The following is an interesting chat message log between " + me + " and multiple others.]\n\n" + localsettings.chatname + ": Hi.";
@@ -5983,8 +5989,16 @@ Current version: 47
 				}
 
 				//if we can infer the name of our chat opponent, inject it to force bot response after ours
-				co = replaceAll(co,"\n","");
-				pending_context_preinjection = "\n"+co + ":";
+				if(co!="")
+				{
+					co = replaceAll(co,"\n","");
+					pending_context_preinjection = "\n"+co + ":";
+				}
+				else
+				{
+					pending_context_preinjection = "\n";
+				}
+
 				truncated_context += pending_context_preinjection;
 
 			}
