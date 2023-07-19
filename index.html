@@ -5,7 +5,7 @@ This is a standalone web ui for KoboldAIs Horde, which requires no dependencies,
 Just copy this single static HTML file anywhere and open it in a browser. No dependencies.
 Or you can throw it on some web server and serve it there too. E.g. Github pages, nginx, whatever.
 Now rebranded as KoboldAI Lite
-Current version: 48
+Current version: 49
 -Concedo
 -->
 
@@ -2811,6 +2811,7 @@ Current version: 48
 		last_selected_preset: 0,
 		enhanced_chat_ui: true,
 		multiline_replies: false,
+		allow_continue_chat: false,
 		idle_responses: 0,
 		idle_duration: 60,
 		export_settings: true, //affects if settings are included with the story and sharelinks
@@ -5213,6 +5214,7 @@ Current version: 48
 		document.getElementById("generate_images").value = localsettings.generate_images;
 		document.getElementById("enhanced_chat_ui").checked = localsettings.enhanced_chat_ui;
 		document.getElementById("multiline_replies").checked = localsettings.multiline_replies;
+		document.getElementById("allow_continue_chat").checked = localsettings.allow_continue_chat;
 		document.getElementById("idle_responses").value = localsettings.idle_responses;
 		document.getElementById("idle_duration").value = localsettings.idle_duration;
 		document.getElementById("adventure_context_mod").checked = localsettings.adventure_context_mod;
@@ -5370,6 +5372,7 @@ Current version: 48
 		localsettings.persist_session = (document.getElementById("persist_session").checked ? true : false);
 		localsettings.enhanced_chat_ui = (document.getElementById("enhanced_chat_ui").checked ? true : false);
 		localsettings.multiline_replies = (document.getElementById("multiline_replies").checked ? true : false);
+		localsettings.allow_continue_chat = (document.getElementById("allow_continue_chat").checked ? true : false);
 		localsettings.idle_responses = document.getElementById("idle_responses").value;
 		localsettings.idle_duration = document.getElementById("idle_duration").value;
 		localsettings.adventure_context_mod = (document.getElementById("adventure_context_mod").checked ? true : false);
@@ -6002,7 +6005,16 @@ Current version: 48
 					pending_context_preinjection = "\n";
 				}
 
-				truncated_context += pending_context_preinjection;
+				if(localsettings.allow_continue_chat && newgen.trim() == "")
+				{
+					//allow continuing a previous bot reply instead of starting a new row.
+					pending_context_preinjection = "";
+				}
+				else
+				{
+					//start a new bot response
+					truncated_context += pending_context_preinjection;
+				}
 
 			}
 
@@ -6665,8 +6677,8 @@ Current version: 48
 			}
 		}
 
-		//always trim incomplete sentences for adventure and chat
-		if (localsettings.opmode == 2 || localsettings.opmode == 3 || localsettings.trimsentences == true) {
+		//always trim incomplete sentences for adventure and chat (if not multiline)
+		if (localsettings.opmode == 2 || (localsettings.opmode == 3 && !localsettings.allow_continue_chat) || localsettings.trimsentences == true) {
 			gentxt = end_trim_to_sentence(gentxt,true);
 		}
 
@@ -6754,7 +6766,10 @@ Current version: 48
 			window.speechSynthesis.speak(utterance);
 		}
 
-		gametext_arr.push(gentxt);
+		if(gentxt!="")
+		{
+			gametext_arr.push(gentxt);
+		}
 		if(localsettings.beep_on)
 		{
 			playbeep();
@@ -8042,7 +8057,7 @@ Current version: 48
 								</li>
 
 								<li class="nav-item hidden" id="topbtn_newgame">
-									<a class="nav-link" href="#" onclick="display_newgame()">New Game</a>
+									<a class="nav-link" href="#" onclick="display_newgame()">New Session</a>
 								</li>
 
 								<li class="nav-item hidden" id="topbtn_scenarios">
@@ -8618,6 +8633,10 @@ Current version: 48
 							<div class="settinglabel">
 							<div class="justifyleft settingsmall" title="Whether to allow multiple lines in AI responses. Not recommended.">Multiline Replies </div>
 							<input type="checkbox" id="multiline_replies" style="margin:0px 0 0;">
+							</div>
+							<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="Allow incomplete AI chat replies, which can be continued by pressing submit again. Not recommended.">Continue Bot Replies</div>
+							<input type="checkbox" id="allow_continue_chat" style="margin:0px 0 0;">
 							</div>
 
 							</div>
