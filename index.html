@@ -4017,26 +4017,11 @@ Current version: 52
 
 		localsettings.opmode = temp_scenario.opmode;
 		if (temp_scenario.opmode == 3) {
-			if (temp_scenario.enhanced_chat_ui===true) {
-				localsettings.enhanced_chat_ui = true;
-			}
-			else if(temp_scenario.enhanced_chat_ui===false)
-			{
-				localsettings.enhanced_chat_ui = false;
-			}
-			if (temp_scenario.multiline_replies===true) {
-				localsettings.multiline_replies = true;
-			}
-			else if(temp_scenario.multiline_replies===false)
-			{
-				localsettings.multiline_replies = false;
-			}
-			if (temp_scenario.chatopponent) {
-				localsettings.chatopponent = temp_scenario.chatopponent;
-			}
-			if (temp_scenario.chatname) {
-				localsettings.chatname = temp_scenario.chatname;
-			}
+			localsettings.enhanced_chat_ui = temp_scenario.enhanced_chat_ui;
+			localsettings.multiline_replies = temp_scenario.multiline_replies;
+			
+			if (temp_scenario.chatopponent) { localsettings.chatopponent = temp_scenario.chatopponent; }
+			if (temp_scenario.chatname) { localsettings.chatname = temp_scenario.chatname; }
 		}
 		if(temp_scenario.opmode == 2)
 		{
@@ -4059,12 +4044,9 @@ Current version: 52
 		}
 		if(temp_scenario.opmode == 4)
 		{
-			if (temp_scenario.instruct_starttag) {
-				localsettings.instruct_starttag = temp_scenario.instruct_starttag;
-			}
-			if (temp_scenario.instruct_endtag) {
-				localsettings.instruct_endtag = temp_scenario.instruct_endtag;
-			}
+			localsettings.enhanced_chat_ui = temp_scenario.enhanced_chat_ui;
+			if (temp_scenario.instruct_starttag) { localsettings.instruct_starttag = temp_scenario.instruct_starttag; }
+			if (temp_scenario.instruct_endtag) { localsettings.instruct_endtag = temp_scenario.instruct_endtag; }
 		}
 
 		render_gametext();
@@ -7591,18 +7573,15 @@ Current version: 52
 			document.getElementById("fvico").href = favicon_busy;
 		}
 
-		//render onto enhanced chat interface if selected
-		let inEditMode = (document.getElementById("allowediting").checked?true:false);
-		if(localsettings.enhanced_chat_ui && localsettings.opmode==3 &&!inEditMode)
+		//render onto enhanced chat interface if selected. Currently only applicable to Chat & Instruct modes.
+		let isStyleApplicable = localsettings.opmode == 3 || localsettings.opmode == 4;
+		let inEditMode = (document.getElementById("allowediting").checked ? true : false);
+		if (localsettings.enhanced_chat_ui && !inEditMode && isStyleApplicable)
 		{
-			if(gametext_arr.length == 0)
-			{
-				render_enhanced_chat(document.getElementById("gametext").innerHTML);
-			}
-			else
-			{
-				render_enhanced_chat(concat_gametext(false,"","","",true));
-			}
+			let textToRender = gametext_arr.length == 0 ? document.getElementById("gametext").innerHTML : concat_gametext(false, "", "", "", true);
+			if (localsettings.opmode == 3) { render_enhanced_chat(textToRender); }
+			else if (localsettings.opmode == 4) { render_enhanced_chat_instruct(textToRender); }
+
 			document.getElementById("enhancedchatinterface").classList.remove("hidden");
 			document.getElementById("normalinterface").classList.add("hidden");
 		}else{
@@ -7767,6 +7746,33 @@ Current version: 52
 
 		document.getElementById("chat_msg_send_btn").disabled = document.getElementById("btnsend").disabled;
 
+	}
+
+	function render_enhanced_chat_instruct(input)
+	{
+		var chatbody = document.getElementById("chat_msg_body");
+		if(!chatbody) { return; }
+
+		let you = get_instruct_starttag(); let bot = get_instruct_endtag();
+		let newbodystr = input.replaceAll(you + '\n', you).replaceAll(bot + '\n', bot).replaceAll(you + ' ', you).replaceAll(bot + ' ', bot);
+		if (newbodystr.endsWith(bot)) { newbodystr = newbodystr.slice(0, -bot.length); }
+		
+		// Style *Expressions* and "Speech". TODO: Add customization options
+		newbodystr = newbodystr.replaceAll(/&quot;(\S[^*]+\S)&quot;/g, `<em style='color:rgba(150, 150, 200, 1)'>"$1"</em>`);
+		newbodystr = newbodystr.replaceAll(/\*(\S[^*]+\S)\*/g,"<em style='opacity:0.7'>$1</em>");
+		
+		let youStyle = `</p></div></div></div><div class="incoming_msg"><div class="chat_received_msg"><div class="chat_received_withd_msg"><p>`;
+		let botStyle = `</p></div></div></div><div class="incoming_msg"><div class="chat_received_msg"><div class="chat_received_withd_msg" style='background-color:rgba(20, 20, 40, 0.4)'><p>`;
+		newbodystr = newbodystr.replaceAll(you, youStyle).replaceAll(bot, botStyle);		// Style incoming messages and outcoming messages appropriately.
+		chatbody.innerHTML = newbodystr.replaceAll('\r\n','<br>').replaceAll('\n','<br>');	// Replace the HTML and handle newlines as needed.
+
+		// Show the 
+		if (pending_response_id == "") { document.getElementById("chatistyping").classList.add("hidden"); }
+		else {
+			document.getElementById("chatistyping").classList.remove("hidden");
+			document.getElementById("chataityping").innerText = "The AI is typing...";
+		}
+		document.getElementById("chat_msg_send_btn").disabled = document.getElementById("btnsend").disabled;
 	}
 
 	function chat_handle_typing(event)
@@ -8187,8 +8193,7 @@ Current version: 52
 		</div>
 
 		<div id="enhancedchatinterface" class="chat_mesgs hidden">
-			<div id="chat_msg_body" class="chat_msg_history">
-			</div>
+			<div id="chat_msg_body" class="chat_msg_history"></div>
 			<div class="hidden" id="chatistyping" style="text-align:right;font-size:13px;color:#999999; padding-bottom: 3px;"><div style="padding-bottom: 2px;" id="chataityping">The AI is typing...</div><div style="padding-top:2px;text-align:right;" class="dot-flashing flex flex-push-right"></div></div>
 
 			<!-- A greatly simplified action menu for this mode -->
@@ -8660,10 +8665,6 @@ Current version: 52
 								</tr>
 							  </table>
 							<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Switches to an aesthetic messenger style UI">Aesthetic Chat UI </div>
-							<input type="checkbox" id="enhanced_chat_ui" style="margin:0px 0 0;">
-							</div>
-							<div class="settinglabel">
 							<div class="justifyleft settingsmall" title="Whether to allow multiple lines in AI responses. Not recommended.">Multiline Replies </div>
 							<input type="checkbox" id="multiline_replies" style="margin:0px 0 0;">
 							</div>
@@ -8679,7 +8680,18 @@ Current version: 52
 							   <input type="checkbox" id="adventure_context_mod" style="margin:0px 0 0;">
 							</div>
 							<div id="instructsection" class="settinglabel hidden" style="padding-top: 3px;">
-
+								<!-- TODO: Allow selecting name and picture for yourself and AI. This could be embeded on the left of each message.
+								<table class="settingsmall text-center" style="border-spacing: 4px 2px;	border-collapse: separate;">
+									<tr>
+									  <th>You <a class="color_blueurl" href="#" onclick="selectYourPicture()">🎨</a></th>
+									  <th>AI <a class="color_blueurl" href="#" onclick="selectBotPicture()">🎨</a> <span class="helpicon">?<span class="helptext">The name of the person you want to chat with. Multiple opponents can be specified, creating a group chat, separate their names with ||$||</span></span></th>
+									</tr>
+									<tr>
+										<td><input class="settinglabel mininiput" type="text" placeholder="(Enter Name)" value="" id="chatname" title="The name that you will be chatting as"></td>
+										<td><input class="settinglabel mininiput" type="text" placeholder="(Auto)" value="" id="chatopponent"  title="The name of the person you want to chat with"></td>
+									</tr>
+								</table>
+								-->
 								<table class="settingsmall text-center" style="border-spacing: 4px 2px;	border-collapse: separate;">
 									<tr>
 									  <th>Start Seq.<span class="helpicon">?<span class="helptext">The sequence to start an instruction prompt</span></span></th>
@@ -8741,6 +8753,10 @@ Current version: 52
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" title="Inverts all colors, simple light mode">Inverted Colors </div>
 						   <input type="checkbox" id="invert_colors" style="margin:0px 0 0;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="Switches to an aesthetic messenger style UI. Only applicable to Chat Mode & Instruct mode.">Aesthetic Chat UI </div>
+							<input type="checkbox" id="enhanced_chat_ui" style="margin:0px 0 0;">
 						</div>
 					</div>
 
