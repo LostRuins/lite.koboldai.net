@@ -7573,7 +7573,7 @@ Current version: 52
 			document.getElementById("fvico").href = favicon_busy;
 		}
 
-		//render onto enhanced chat interface if selected. Currently only applicable to Chat & Instruct modes.
+		// Render onto enhanced chat interface if selected. Currently only applicable to Chat & Instruct modes.
 		let isStyleApplicable = localsettings.opmode == 3 || localsettings.opmode == 4;
 		let inEditMode = (document.getElementById("allowediting").checked ? true : false);
 		if (localsettings.enhanced_chat_ui && !inEditMode && isStyleApplicable)
@@ -7582,9 +7582,18 @@ Current version: 52
 			if (localsettings.opmode == 3) { render_enhanced_chat(textToRender); }
 			else if (localsettings.opmode == 4) { render_enhanced_chat_instruct(textToRender); }
 
+			// Show the 'AI is typing' message if an answer is pending, and prevent the 'send button' from being clicked again.
+			if (!pending_response_id) { document.getElementById("chatistyping").classList.add("hidden"); }
+			else {
+				let aiName = (pending_context_preinjection && pending_context_preinjection.includes(":")) ? pending_context_preinjection.split(":")[0] : "The AI";
+				document.getElementById("chataityping").innerText = aiName + " is typing...";
+				document.getElementById("chatistyping").classList.remove("hidden");
+			}
+			document.getElementById("chat_msg_send_btn").disabled = document.getElementById("btnsend").disabled;
+
 			document.getElementById("enhancedchatinterface").classList.remove("hidden");
 			document.getElementById("normalinterface").classList.add("hidden");
-		}else{
+		} else {
 			document.getElementById("enhancedchatinterface").classList.add("hidden");
 			document.getElementById("normalinterface").classList.remove("hidden");
 		}
@@ -7728,51 +7737,24 @@ Current version: 52
 		}
 
 		chatbody.innerHTML = newbodystr;
-
-		if(pending_response_id=="")
-		{
-			document.getElementById("chatistyping").classList.add("hidden");
-		}else{
-			document.getElementById("chatistyping").classList.remove("hidden");
-			if(pending_context_preinjection!=null && pending_context_preinjection!="" && pending_context_preinjection.includes(":"))
-			{
-				//use chatopponent name if we have it. do not read from settings as the inferred name may be different
-				document.getElementById("chataityping").innerText = pending_context_preinjection.split(":")[0] + " is typing...";
-			}else{
-				document.getElementById("chataityping").innerText = "The AI is typing...";
-			}
-
-		}
-
-		document.getElementById("chat_msg_send_btn").disabled = document.getElementById("btnsend").disabled;
-
 	}
 
 	function render_enhanced_chat_instruct(input)
 	{
 		var chatbody = document.getElementById("chat_msg_body");
-		if(!chatbody) { return; }
+		if (!chatbody) { return; }
+		
+		let you = get_instruct_starttag(); let bot = get_instruct_endtag(); // Instruct tags will be used to wrap text in styled bubbles.
+		let youStyle = `</p></div></div></div><div class="incoming_msg" style='width:100%'><div class="chat_received_msg" style='width:100%'><div class="chat_received_withd_msg" style='width:100%'><p>`;
+		let botStyle = `</p></div></div></div><div class="incoming_msg" style='width:100%'><div class="chat_received_msg" style='width:100%'><div class="chat_received_withd_msg" style='width:100%;background-color:rgba(20, 20, 40, 0.4)'><p>`;
 
-		let you = get_instruct_starttag(); let bot = get_instruct_endtag();
+		// We'll transform the input to a well-formatted HTML string. First, trim any newline characters after seq_start and seq_end.
 		let newbodystr = input.replaceAll(you + '\n', you).replaceAll(bot + '\n', bot).replaceAll(you + ' ', you).replaceAll(bot + ' ', bot);
-		if (newbodystr.endsWith(bot)) { newbodystr = newbodystr.slice(0, -bot.length); }
-		
-		// Style *Expressions* and "Speech". TODO: Add customization options
+		if (newbodystr.endsWith(bot)) { newbodystr = newbodystr.slice(0, -bot.length); }		  // Remove the last endtag if it exists.
+		newbodystr = newbodystr.replaceAll(/\*(\S[^*]+\S)\*/g,`<em style='opacity:0.7'>$1</em>`); // Style *Expressions* and "Speech". TODO: Add customization options
 		newbodystr = newbodystr.replaceAll(/&quot;(.*?)&quot;/g, `<em style='color:rgba(150, 150, 200, 1)'>"$1"</em>`);
-		newbodystr = newbodystr.replaceAll(/\*(\S[^*]+\S)\*/g,"<em style='opacity:0.7'>$1</em>");
-		
-		let youStyle = `</p></div></div></div><div class="incoming_msg" style='width:100%><div class="chat_received_msg" style='width:100%><div class="chat_received_withd_msg" style='width:100%'><p>`;
-		let botStyle = `</p></div></div></div><div class="incoming_msg" style='width:100%><div class="chat_received_msg" style='width:100%><div class="chat_received_withd_msg" style='width:100%;background-color:rgba(20, 20, 40, 0.4)'><p>`;
-		newbodystr = newbodystr.replaceAll(you, youStyle).replaceAll(bot, botStyle);		// Style incoming messages and outcoming messages appropriately.
-		chatbody.innerHTML = newbodystr.replaceAll('\r\n','<br>').replaceAll('\n','<br>');	// Replace the HTML and handle newlines as needed.
-
-		// Show the 'AI is typing' message if an answer is pending, and prevent the 'send button' from being clicked again.
-		if (pending_response_id == "") { document.getElementById("chatistyping").classList.add("hidden"); }
-		else {
-			document.getElementById("chatistyping").classList.remove("hidden");
-			document.getElementById("chataityping").innerText = "The AI is typing...";
-		}
-		document.getElementById("chat_msg_send_btn").disabled = document.getElementById("btnsend").disabled;
+		newbodystr = newbodystr.replaceAll(you, youStyle).replaceAll(bot, botStyle);			  // Style incoming messages and outcoming messages appropriately.
+		chatbody.innerHTML = newbodystr.replaceAll('\r\n','<br>').replaceAll('\n','<br>');	      // Replace the HTML and handle newlines as needed.
 	}
 
 	function chat_handle_typing(event)
