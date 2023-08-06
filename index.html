@@ -5,7 +5,7 @@ This is a standalone web ui for KoboldAIs Horde, which requires no dependencies,
 Just copy this single static HTML file anywhere and open it in a browser. No dependencies.
 Or you can throw it on some web server and serve it there too. E.g. Github pages, nginx, whatever.
 Now rebranded as KoboldAI Lite
-Current version: 52
+Current version: 53
 -Concedo
 -->
 
@@ -3809,6 +3809,34 @@ Current version: 52
 		render_gametext();
 	}
 
+	function load_tavern_wi(obj)
+	{
+		console.log("Append Tavern WI");
+		current_wi = [];
+		for (let key in obj.entries) {
+			var itm = obj.entries[key];
+			var karr = itm.key;
+			if(!karr)
+			{
+				karr = itm.keys;
+			}
+			var ksarr = itm.keysecondary;
+			if(!ksarr)
+			{
+				ksarr = itm.secondary_keys;
+			}
+			let nwi = {
+				"key": karr.join(","),
+				"keysecondary": (ksarr.length > 0 ? ksarr.join(",") : ""),
+				"content": itm.content,
+				"comment": itm.comment,
+				"folder": null,
+				"selective": itm.selective,
+				"constant": itm.constant
+			};
+			current_wi.push(nwi);
+		}
+	}
 	function load_tavern_obj(obj)
 	{
 		console.log("Loading tavern obj");
@@ -3823,6 +3851,7 @@ Current version: 52
 		let scenario = obj.scenario?obj.scenario:"";
 		let examplemsg = obj.mes_example?obj.mes_example:"";
 		let greeting = obj.first_mes?obj.first_mes:"";
+
 		//post process
 		memory = replaceAll(memory,"{{char}}",chatopponent,true);
 		scenario = replaceAll(scenario,"{{char}}",chatopponent,true);
@@ -3844,21 +3873,7 @@ Current version: 52
 		//check if it's a world info only card, if so, do not restart game
 		if(combinedmem.trim()=="" && greeting=="" && obj.entries)
 		{
-			console.log("Append Tavern WI");
-			current_wi = [];
-			for (let key in obj.entries) {
-				var itm = obj.entries[key];
-				let nwi = {
-					"key": itm.key.join(","),
-					"keysecondary": (itm.keysecondary.length > 0 ? itm.keysecondary.join(",") : ""),
-					"content": itm.content,
-					"comment": itm.comment,
-					"folder": null,
-					"selective": itm.selective,
-					"constant": itm.constant
-				};
-				current_wi.push(nwi);
-			}
+			load_tavern_wi(obj);
 		}
 		else
 		{
@@ -3868,6 +3883,11 @@ Current version: 52
 			gametext_arr.push("\n"+chatopponent+": "+greeting);
 			current_memory = combinedmem + "\n<START>";
 			localsettings.opmode = 3;
+			//handle character book
+			if(obj.character_book && obj.character_book.entries && obj.character_book.entries.length>0)
+			{
+				load_tavern_wi(obj.character_book);
+			}
 		}
 		render_gametext();
 	}
