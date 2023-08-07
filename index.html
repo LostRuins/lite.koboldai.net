@@ -7776,17 +7776,18 @@ Current version: 53
 		let you = get_instruct_starttag(); let bot = get_instruct_endtag(); // Instruct tags will be used to wrap text in styled bubbles.
 		let sysStyle = `</p></div></div></div><div class="incoming_msg"><div class="chat_received_msg" style='width:100%'><div class="chat_received_withd_msg" style='width:100%;background-color:rgba(20, 40, 40, 0.8)'><p style='opacity:.8'>`;
 		let youStyle = `</p></div></div></div><div class="incoming_msg"><div class="chat_received_msg" style='width:100%'><div class="chat_received_withd_msg" style='width:100%'><p>`;
-		let botStyle = `</p></div></div></div><div class="incoming_msg"><div class="chat_received_msg" style='width:100%'><div class="chat_received_withd_msg" style='width:100%;background-color:rgba(20, 20, 40, 0.4)'><p>`;
+		let botStyle = `</p></div></div></div><div class="incoming_msg"><div class="chat_received_msg" style='width:100%'><div class="chat_received_withd_msg" style='width:100%;background-color:rgba(20, 20, 40, 1)'><p>`;
 
 		// We'll transform the input to a well-formatted HTML string. First, trim any newline characters after seq_start and seq_end.
 		let newbodystr = sysStyle + input.replaceAll(you + '\n', you).replaceAll(bot + '\n', bot).replaceAll(you + ' ', you).replaceAll(bot + ' ', bot);
-		if (newbodystr.endsWith(bot)) { newbodystr = newbodystr.slice(0, -bot.length); }		  	  // Remove the last endtag if it exists.
-		if (localsettings.instruct_has_markdown) {													  // Style *Expressions* and "Speech" if markdown is toggled.
+		if (newbodystr.endsWith(bot)) { newbodystr = newbodystr.slice(0, -bot.length); }  	// Remove the last endtag if it exists.
+		if (localsettings.instruct_has_markdown) {											// Style *Expressions*, "Speech", and code blocks if markdown is toggled.
 			newbodystr = newbodystr.replaceAll(/\*(\S[^*]+\S)\*/g,`<em style='opacity:0.7'>$1</em>`);
 			newbodystr = newbodystr.replaceAll(/&quot;(.*?)&quot;/g, `<em style='color:rgba(150, 150, 200, 1)'>"$1"</em>`);
+			let blocks = newbodystr.split(/(```.*?\n[\s\S]*?```)/gs); for (var i = 0; i < blocks.length; i++) { if (blocks[i].startsWith("```")) { blocks[i] = blocks[i].replaceAll(/```.*?\n([\s\S]*?)```/gs, `</p><pre style='margin:0px 100px 0px 20px;background-color:black;color:rgba(120, 5, 30, 1)'>$1</pre><p>`); } else { blocks[i] = blocks[i].replaceAll("```","`").replaceAll("``","`").replaceAll(/`(.*?)`/g, `<code>$1</code>`);} } newbodystr = blocks.join('');
 		}
-		newbodystr = newbodystr.replaceAll(you, youStyle).replaceAll(bot, botStyle);			  	  // Style incoming messages and outcoming messages appropriately.
-		chatbody.innerHTML = newbodystr.replaceAll('\r\n','<br>').replaceAll('\n','<br>');	          // Replace the HTML and handle newlines as needed.
+		newbodystr = newbodystr.replaceAll(you, youStyle).replaceAll(bot, botStyle);	  	// Style incoming messages and outcoming messages appropriately.
+		chatbody.innerHTML = newbodystr.replaceAll('\r\n','<br>').replaceAll('\n','<br>');	// Replace the HTML and handle newlines as needed.
 	}
 
 	function chat_handle_typing(event)
