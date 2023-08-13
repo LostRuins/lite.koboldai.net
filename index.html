@@ -7848,22 +7848,31 @@ Current version: 56
 	}
 
 	function render_enhanced_chat_instruct(input)
-	{	
-		let you = get_instruct_starttag(); let bot = get_instruct_endtag(); // Instruct tags will be used to wrap text in styled bubbles.
-		let sysStyle = `</p></div></div></div><div class="incoming_msg"><div class="chat_received_msg" style='width:100%'><div class="chat_received_withd_msg" style='width:100%;background-color:rgba(20, 40, 40, 0.8)'><p style='opacity:.8'>`;
-		let youStyle = `</p></div></div></div><div class="incoming_msg"><div class="chat_received_msg" style='width:100%'><div class="chat_received_withd_msg" style='width:100%;background-color:#29343a'><p>`;
-		let botStyle = `</p></div></div></div><div class="incoming_msg"><div class="chat_received_msg" style='width:100%'><div class="chat_received_withd_msg" style='width:100%;background-color:rgba(20, 20, 40, 1)'><p>`;
+	{
+		let you = '\n[USER_REPLY]\n'; let bot = '\n[AI_REPLY]\n';
+		let as = aestheticInstructUISettings;
+
+		console.error(as.action_color_you);
+		function image(role) { return `<img src='niko.png' style='width:100px; height:100px; margin: 10px 0px; border-radius: 0.1rem;'>`; }
+
+		function style(role) { 
+			return `</p></div></div>
+			<div style='display:flex; align-items:stretch; flex-direction: row;'>
+			${image(role)}
+			<div style='flex: 1; color: ${as[`text_color_${role}`].color}; background-color:${as[`bubbleColor_${role}`]}; padding: ${as.padding()}; margin: ${as.margin()};'>
+			<p style='font-size: ${as.font_size}px;'>`;
+		}
+		function wrapperSpan(role, type) { let textStyle = as[`${type}_color_${role}`]; return `<span style='color: ${textStyle.color}; font-style: ${textStyle.fontStyle}; font-weight: ${textStyle.fontWeight}'>$1</span>`; }
+
 
 		// We'll transform the input to a well-formatted HTML string. First, trim any newline characters after seq_start and seq_end.
-		let newbodystr = sysStyle + input.replaceAll(you + '\n', you).replaceAll(bot + '\n', bot).replaceAll(you + ' ', you).replaceAll(bot + ' ', bot);
-		if (newbodystr.endsWith(bot)) { newbodystr = newbodystr.slice(0, -bot.length); }  	// Remove the last endtag if it exists.
-		if (localsettings.instruct_has_markdown) {											// Style *Expressions*, "Speech", and code blocks if markdown is toggled.
-			newbodystr = newbodystr.replaceAll(/\*(\S[^*]+\S)\*/g,`<em style='opacity:0.7'>$1</em>`);
-			newbodystr = newbodystr.replaceAll(/&quot;(.*?)&quot;/g, `<em style='color:rgba(150, 150, 200, 1)'>"$1"</em>`);
-			let blocks = newbodystr.split(/(```.*?\n[\s\S]*?```)/gs); for (var i = 0; i < blocks.length; i++) { if (blocks[i].startsWith("```")) { blocks[i] = blocks[i].replaceAll(/```.*?\n([\s\S]*?)```/gs, `</p><pre style='margin:0px 100px 0px 20px;background-color:black;color:rgba(180, 35, 40, 1)'>$1</pre><p>`); } else { blocks[i] = blocks[i].replaceAll("```","`").replaceAll("``","`").replaceAll(/`(.*?)`/g, `<code style='background-color:black'>$1</code>`);} } newbodystr = blocks.join('');
-		}
-		newbodystr = newbodystr.replaceAll(you, youStyle).replaceAll(bot, botStyle);	// Style incoming messages and outcoming messages appropriately.
-		return newbodystr.replaceAll('\r\n','<br>').replaceAll('\n','<br>');			// Handle newlines as needed and return the render-ready string.
+		let newbodystr = (input.startsWith(you) || input.startsWith(bot)) ? input : style('sys') + input;
+		newbodystr = newbodystr.replaceAll(you + '\n', you).replaceAll(bot + '\n', bot).replaceAll(you + ' ', you).replaceAll(bot + ' ', bot).replaceAll('"', '&quot;');
+		newbodystr = newbodystr.replaceAll(/\*(\S[^*]+\S)\*/g,  wrapperSpan('you','action')).replaceAll(/&quot;(.*?)&quot;/g, wrapperSpan('you','speech'));
+		let blocks = newbodystr.split(/(```.*?\n[\s\S]*?```)/gs); for (var i = 0; i < blocks.length; i++) { if (blocks[i].startsWith("```")) { blocks[i] = blocks[i].replaceAll(/```.*?\n([\s\S]*?)```/gs, `<span><pre style='margin:0px 100px 0px 20px;background-color:${as.code_block_background};color:${as.code_block_foreground}'>$1</pre></span>`); } else { blocks[i] = blocks[i].replaceAll("```","`").replaceAll("``","`").replaceAll(/`(.*?)`/g, `<code style='background-color:black'>$1</code>`);} } newbodystr = blocks.join('');
+
+		newbodystr = newbodystr.replaceAll(you, style('you')).replaceAll(bot, style('AI'));	// Style incoming messages and outcoming messages appropriately.
+		return newbodystr.replaceAll('\r\n','<br>').replaceAll('\n','<br>');				// Replace the HTML and handle newlines as needed.
 	}
 
 	function chat_handle_typing(event)
@@ -8150,16 +8159,6 @@ Current version: 56
 		let v = isNaN(val) ? 0 : val;
 		return clamp(v, min, max);
 	};
-
-
-	function openAestheticUISettingsMenu() {
-		document.getElementById("aestheticsettingscontainer").classList.remove("hidden");
-	}
-	function hideAestheticUISettingsMenu() {
-		document.getElementById("aestheticsettingscontainer").classList.add("hidden");
-		render_gametext();
-	}
-
 	</script>
 
 
@@ -9234,7 +9233,7 @@ Current version: 56
 				</div>
 				<div style="background-color: black; flex: 1; padding: 10px;  padding-bottom: 0px; display: flex; flex-direction: column;">
 					<p>Style Preview</p>
-					<p id="aesthetic_text_preview" style="flex: 1; width: 100%; background-color: black; margin: 2px; text-align: left; word-wrap: break-word;"></p>
+					<div id="aesthetic_text_preview" style="flex: 0; width: 100%; background-color: black; margin: 2px; text-align: left; word-wrap: break-word;"></div>
 				</div>
 				<input type="color" id="colorPicker" style="display: none;">
 				<input type="color" id="colorPicker2" style="display: none;">
@@ -9257,11 +9256,10 @@ const aestheticTextStyleTypes = ['text', 'speech', 'action'];	 // One style per 
 const aestheticTextStyleRoles = ['uniform', 'you', 'AI', 'sys']; // Uniform for when you want all roles use the same styles.
 	
 class AestheticTextStyle {
-    constructor({color = 'rgba(255,255,255)', bold = false, italic = false, opacity = 1} = {}) {
+    constructor({color = 'rgba(255,255,255, 1)', bold = false, italic = false, opacity = 1} = {}) {
         this.color = color;
-        this.fontWeight = bold ? 'bold' : 'normal';
+		this.fontWeight = bold ? 'bold' : 'normal';
         this.fontStyle = italic ? 'italic' : 'normal';
-        this.opacity = opacity;
     }
 }
 
@@ -9273,11 +9271,13 @@ class AestheticInstructUISettings {
 
 		this.background_anchor_style = 'left';
 		this.background_margin = [10, 10, 10, 10];
-		this.background_padding = [10, 10, 10, 10];
+		this.background_padding = [10, 10, 10, 1];
 
 		this.show_portraits = true; // Shows/hides the rest of the fields below on the UI, and is also used on the display part of the code.
-		this.portrait_size = 100;
 		this.border_style = 'Circle';
+		this.portrait_size = 100;
+		this.portrait_width = 100;
+		this.portrait_height = 100;
 		this.border_color_you = 'rgba(0, 0, 0, 1)';
 		this.border_color_AI = 'rgba(0, 0 , 0, 1)';
 
@@ -9286,15 +9286,16 @@ class AestheticInstructUISettings {
 		this.use_uniform_colors = true; // Hides 'you, AI, sys' if set to true via settings UI.
 
 		for (let role of aestheticTextStyleRoles) {
-			this[`text_color_${role}`] = new AestheticTextStyle();
-			this[`speech_color_${role}`] = new AestheticTextStyle({ color: 'rgb(150, 150, 200)', italic: true });
-			this[`action_color_${role}`] = new AestheticTextStyle({ italic: true, opacity: 0.7 });
+			this[`text_color_${role}`] = new AestheticTextStyle({ color: 'rgba(255,255,255,1)'} );
+			this[`speech_color_${role}`] = new AestheticTextStyle({ color: 'rgba(150, 150, 200, 1)', italic: true });
+			this[`action_color_${role}`] = new AestheticTextStyle({ color: 'rgba(255,255,255, 0.7)', italic: true });
 		}
 
 		this.code_block_background = 'black';
 		this.code_block_foreground = 'rgba(180, 35, 40, 1)';
 	}
 
+	size() { return {width: this.portrait_width, height: this.border_style == 'Circle' ? this.portrait_width : this.portrait_height }};
 	padding() { return `${this.background_padding[2]}px ${this.background_padding[1]}px ${this.background_padding[3]}px ${this.background_padding[0]}px`; }
 	margin() { return `${this.background_margin[2]}px ${this.background_margin[1]}px ${this.background_margin[3]}px ${this.background_margin[0]}px`; }
 }
@@ -9338,6 +9339,14 @@ function initializeInstructUIFunctionality() {
 	refreshPreview(false);
 }
 
+function openAestheticUISettingsMenu() {
+	document.getElementById("aestheticsettingscontainer").classList.remove("hidden");
+}
+function hideAestheticUISettingsMenu() {
+	document.getElementById("aestheticsettingscontainer").classList.add("hidden");
+	render_gametext();
+}
+
 function refreshPreview(updateFromUI = true) {
 	if (updateFromUI) { updateDataFromUI(); }
 	updateUIFromData();
@@ -9369,6 +9378,7 @@ function updateUIFromData() {
 	for (let role of aestheticTextStyleRoles) {
 		for (let type of aestheticTextStyleTypes) {
 			setElementColor(`${role}-${type}-colorselector`, aestheticInstructUISettings[`${type}_color_${role}`]);
+			console.error(aestheticInstructUISettings[`${type}_color_${role}`]);
 		}
 		if (role != 'uniform') { document.getElementById(`${role}-bubble-colorselector`).style.backgroundColor = aestheticInstructUISettings[`bubbleColor_${role}`]; }
 	}
@@ -9399,8 +9409,8 @@ function updateUIFromData() {
 
 		element.style.color      = textStyle.color;
 		element.style.opacity    = textStyle.opacity;
-		element.style.fontWeight = textStyle.bold ? 'bold' : 'normal';
-		element.style.fontStyle  = textStyle.italic ? 'italic' : 'normal';
+		element.style.fontWeight = textStyle.fontWeight;
+		element.style.fontStyle  = textStyle.fontStyle;
 	}
 	function showOrHide(classID, value) {
 		if (value) { document.querySelectorAll(classID).forEach((x) => x.classList.remove('hidden')); }
@@ -9409,23 +9419,7 @@ function updateUIFromData() {
 }
 function updateTextPreview() {
 	let preview = `You are Mikago, a prestigious bot that's a supervillain.\n\nRoleplay in first person, be prestigious, don't be a bot. This is a fantasy world.\n\nCode blocks should be wrapped in triple backticks, like so:\nqqq\n<Some_\n-- multiline\n--- code here$\nqqq\n[AI_REPLY]\n*takes my hat off to greet the squad* "Greetings, I am Mikago, the prestigious!" *bows to the crew*\n*clears my throat* "Now, I'm sure there are many questions, but all will be answered in due time." *deep breath*\n[USER_REPLY]\n*raises eyebrow and looks at you* "Hm.. you don't seem very prestigious.. How do we know you're Mikago?"\nI check with the crew and we decide to test Mikago with a piece of info they should know.\n"Ok.. now, if you're REALLY Mikago, you would know the answer to this.." *pauses for dramatic effect* "How do you type code?"\n[AI_REPLY]\n*looks at you* "You serious?"\n[USER_REPLY]\n*draws my sword* "Yes. You should know the code to calculate the factorial of a number."\nThe crew also draws their weapons and point them at you, not giving you any space.\n[AI_REPLY]\n*backs off* "Woah, easy there.." *makes some steps backwards, but then stops*\n"I would normally take this as an insult to my prestige, but I understand your caution.." *takes a deep breath*\n"Well, if it's to prove myself, here goes the python code to calculate the factorial of a number.."\n\nMikago opens a live-code-portal with his magic and writes the code that was requested.\nqqq\ndef factorial(n):\n    if n == 0: return 1\n    else: return n * factorial(n-1)\nqqq\n*looks at you, getting impatient* "Are we ok now.. or do you want me to write the code of a game next?"\n[USER_REPLY]\n*sheathes my sword and approaches for a hug* "Oh, Mikago, my old friend, it is really you!"`;
-	let you = '\n[USER_REPLY]\n'; let bot = '\n[AI_REPLY]\n';
-	let as = aestheticInstructUISettings;
-	console.error(as.padding());
-	
-	
-	function style(role) { return `</p></div><div style='background-color:${as[`bubbleColor_${role}`]}; padding: ${as.padding()}; margin: ${as.margin()}'><p style='color: ${as[`text_color_${role}.color`]}; font-size: ${as.font_size}px'>`; }
-	function wrapperSpan(role, type) { let textStyle = as[`${type}_color_${role}`]; return `<span style='color: ${textStyle.color}; font-style: ${textStyle.fontStyle}; font-weight: ${textStyle.fontWeight}; opacity: ${textStyle.opacity}'>$1</span>`; }
-
-	// We'll transform the input to a well-formatted HTML string. First, trim any newline characters after seq_start and seq_end.
-	let newbodystr = (preview.startsWith(you) || preview.startsWith(bot)) ? preview : ('<div><p>' + style('sys') + preview);
-	newbodystr = newbodystr.replaceAll(you + '\n', you).replaceAll(bot + '\n', bot).replaceAll(you + ' ', you).replaceAll(bot + ' ', bot).replaceAll('qqq','```').replaceAll('"', '&quot;');
-	newbodystr = newbodystr.replaceAll(/\*(\S[^*]+\S)\*/g,  wrapperSpan('you','action')).replaceAll(/&quot;(.*?)&quot;/g, wrapperSpan('you','speech'));
-	let blocks = newbodystr.split(/(```.*?\n[\s\S]*?```)/gs); for (var i = 0; i < blocks.length; i++) { if (blocks[i].startsWith("```")) { blocks[i] = blocks[i].replaceAll(/```.*?\n([\s\S]*?)```/gs, `<span><pre style='margin:0px 100px 0px 20px;background-color:${as.code_block_background};color:${as.code_block_foreground}'>$1</pre></span>`); } else { blocks[i] = blocks[i].replaceAll("```","`").replaceAll("``","`").replaceAll(/`(.*?)`/g, `<code style='background-color:black'>$1</code>`);} } newbodystr = blocks.join('');
-
-	newbodystr = newbodystr.replaceAll(you, style('you')).replaceAll(bot, style('AI'));	// Style incoming messages and outcoming messages appropriately.
-	newbodystr = newbodystr.replaceAll('\r\n','<br>').replaceAll('\n','<br>');			// Replace the HTML and handle newlines as needed.
-	document.getElementById('aesthetic_text_preview').innerHTML = newbodystr;
+	document.getElementById('aesthetic_text_preview').innerHTML = render_enhanced_chat_instruct(preview.replaceAll('qqq', '```'));
 }
 </script>
 
