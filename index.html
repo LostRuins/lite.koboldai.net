@@ -7847,33 +7847,6 @@ Current version: 56
 		chatbody.innerHTML = newbodystr;
 	}
 
-	function render_enhanced_chat_instruct(input)
-	{
-		let you = '\n[USER_REPLY]\n'; let bot = '\n[AI_REPLY]\n';
-		let as = aestheticInstructUISettings;
-
-		console.error(as.action_color_you);
-		function image(role) { return `<img src='niko.png' style='width:100px; height:100px; margin: 10px 0px; border-radius: 0.1rem;'>`; }
-
-		function style(role) { 
-			return `</p></div></div>
-			<div style='display:flex; align-items:stretch; flex-direction: row;'>
-			${image(role)}
-			<div style='flex: 1; color: ${as[`text_color_${role}`].color}; background-color:${as[`bubbleColor_${role}`]}; padding: ${as.padding()}; margin: ${as.margin()};'>
-			<p style='font-size: ${as.font_size}px;'>`;
-		}
-		function wrapperSpan(role, type) { let textStyle = as[`${type}_color_${role}`]; return `<span style='color: ${textStyle.color}; font-style: ${textStyle.fontStyle}; font-weight: ${textStyle.fontWeight}'>$1</span>`; }
-
-
-		// We'll transform the input to a well-formatted HTML string. First, trim any newline characters after seq_start and seq_end.
-		let newbodystr = (input.startsWith(you) || input.startsWith(bot)) ? input : style('sys') + input;
-		newbodystr = newbodystr.replaceAll(you + '\n', you).replaceAll(bot + '\n', bot).replaceAll(you + ' ', you).replaceAll(bot + ' ', bot).replaceAll('"', '&quot;');
-		newbodystr = newbodystr.replaceAll(/\*(\S[^*]+\S)\*/g,  wrapperSpan('you','action')).replaceAll(/&quot;(.*?)&quot;/g, wrapperSpan('you','speech'));
-		let blocks = newbodystr.split(/(```.*?\n[\s\S]*?```)/gs); for (var i = 0; i < blocks.length; i++) { if (blocks[i].startsWith("```")) { blocks[i] = blocks[i].replaceAll(/```.*?\n([\s\S]*?)```/gs, `<span><pre style='margin:0px 100px 0px 20px;background-color:${as.code_block_background};color:${as.code_block_foreground}'>$1</pre></span>`); } else { blocks[i] = blocks[i].replaceAll("```","`").replaceAll("``","`").replaceAll(/`(.*?)`/g, `<code style='background-color:black'>$1</code>`);} } newbodystr = blocks.join('');
-
-		newbodystr = newbodystr.replaceAll(you, style('you')).replaceAll(bot, style('AI'));	// Style incoming messages and outcoming messages appropriately.
-		return newbodystr.replaceAll('\r\n','<br>').replaceAll('\n','<br>');				// Replace the HTML and handle newlines as needed.
-	}
 
 	function chat_handle_typing(event)
 	{
@@ -9084,11 +9057,15 @@ Current version: 56
 					<div style="padding: 10px;">
 						<!-- PRESET LOADING -->
 						<div>
-							<div class="settinglabel">
-								<div class="justifyleft settingsmall">RAWRRR Presets</div>
-								<select class="form-control" id="presets" style="height:24px;padding:0;margin:0px 0 0;" onchange="toggle_preset()">
-									<option value="1" title="Known Working Settings">[Default]</option>
-								</select>
+							<div class="settinglabel" style="display: flex;flex-direction: column; margin-top:5px; border-top: solid 1px rgba(180, 180, 255, 0.2);">
+								<div class="justifyleft settingsmall" style="font-size: 14px; margin-bottom: 2px;">RAWRRR Presets</div>
+								<div class="ui-settings-inline">
+									<select class="form-control" id="presets" style="width:300px;height:24px;padding:0;" onchange="toggle_UI_preset()">
+										<option value="1" title="Known Working Settings">[Default]</option>
+										<option value="1000" title="Known Working Settings">[Custom]</option>
+									</select>
+									<button class="btn btn-primary" style="height:25px; font-size: 12px;text-align: center; margin-left: 10px;">Save</button>
+								</div>
 							</div>
 						</div>
 
@@ -9118,6 +9095,10 @@ Current version: 56
 											<option value="0">Left</option>
 											<option value="1">Right</option>
 										</select>
+									</div>
+									<div class="ui-settings-inline">
+										<div style="margin-right:20px;">Min Height: </div>
+										<div class="instruct-settings-input"><input id ="instruct-min-backgroundHeight" type="number"/>px</div>
 									</div>
 									<div class="ui-settings-inline">
 										<div style="margin-right:20px;">Margin (px): </div>
@@ -9150,21 +9131,18 @@ Current version: 56
 										<input type="checkbox" style="height: 12px;align-self: center;">
 									</div>
 									<div class="ui-settings-inline">
-										<div style="margin-right:18px;">Portrait Size: </div>
-										<div><input type="number" placeholder="100" value="100" style='width:40px;height:20px;font-size:10px;'/> px</div>
-									</div>
-									<div class="ui-settings-inline">
-										<div style="margin-right:17px;">Border Style: </div>
-										<select class="form-control" id="presets" style="width:60px;height:16px;padding:0; font-size: 10px;">
-											<option value="0">None</option>
-											<option value="1">Square</option>
-											<option value="2">Circle</option>
+										<div style="margin-right:17px;">Portrait Style: </div>
+										<select class="form-control" id="instructBorderStyle" style="width:60px;height:16px;padding:0; font-size: 10px;">
+											<option value="None">None</option>
+											<option value="Circle">Circle</option>
+											<option value="Square">Square</option>
 										</select>
 									</div>
 									<div class="ui-settings-inline">
-										<div style="margin-right:8px;text-align: center;">Border Color: </div>
-										<div style="text-align: center; margin: 0px 10px">You 🖌️</div>
-										<div style="text-align: center; margin: 0px 10px">AI 🖌️</div>
+										<div style="margin-right:18px;">Portrait Size: </div>
+										<div>						 <span class="rectPortraitMode">W: </span><input id="portrait_width"  type="number" placeholder="100" value="100" style='width:40px;height:20px;font-size:10px;'/></div>
+										<div style="margin-left:5px"><span class="rectPortraitMode">H: </span><input id="portrait_height" type="number" placeholder="100" value="100" style='width:40px;height:20px;font-size:10px;' class="rectPortraitMode"/></div>
+										<div style="align-self: center;">px</div>
 									</div>
 								</div>
 							</div>
@@ -9270,16 +9248,14 @@ class AestheticInstructUISettings {
 		this.bubbleColor_AI = 'rgba(20, 20, 40, 1)';
 
 		this.background_anchor_style = 'left';
-		this.background_margin = [10, 10, 10, 10];
-		this.background_padding = [10, 10, 10, 1];
+		this.background_margin = [10, 10, 5, 5];
+		this.background_padding = [10, 10, 10, 0];
+		this.background_minHeight = 100;
 
 		this.show_portraits = true; // Shows/hides the rest of the fields below on the UI, and is also used on the display part of the code.
-		this.border_style = 'Circle';
-		this.portrait_size = 100;
+		this.border_style = 'None';
 		this.portrait_width = 100;
 		this.portrait_height = 100;
-		this.border_color_you = 'rgba(0, 0, 0, 1)';
-		this.border_color_AI = 'rgba(0, 0 , 0, 1)';
 
 		this.font_size = 12;
 		this.use_markdown = true;
@@ -9295,17 +9271,26 @@ class AestheticInstructUISettings {
 		this.code_block_foreground = 'rgba(180, 35, 40, 1)';
 	}
 
-	size() { return {width: this.portrait_width, height: this.border_style == 'Circle' ? this.portrait_width : this.portrait_height }};
 	padding() { return `${this.background_padding[2]}px ${this.background_padding[1]}px ${this.background_padding[3]}px ${this.background_padding[0]}px`; }
 	margin() { return `${this.background_margin[2]}px ${this.background_margin[1]}px ${this.background_margin[3]}px ${this.background_margin[0]}px`; }
+	portraitSize() { return { width: this.portrait_width, height: this.border_style == 'Circle' ? this.portrait_width : this.portrait_height }; }
+	portraitRadius() { return this.border_style == 'Circle' ? '1000rem' : '0.1rem'; }
 }
 
-const aestheticInstructUISettings = new AestheticInstructUISettings();
 const sideMapping = { 'left': 0, 'right': 1, 'top': 2, 'bottom': 3 };
+
+let aestheticInstructUISettings = new AestheticInstructUISettings();
+let tempAestheticInstructUISettings = new AestheticInstructUISettings();
 
 initializeInstructUIFunctionality();
 
 function initializeInstructUIFunctionality() {
+	const jsonString = localStorage.getItem('e_koboldLiteUICustomizationOptions');
+	if (jsonString) {
+		var obj = JSON.parse(jsonString);
+		for (let key in obj) { if (aestheticInstructUISettings.hasOwnProperty(key)) { aestheticInstructUISettings[key] = obj[key]; } }
+	}
+
 	document.querySelectorAll('.enhancedTextColorPicker').forEach(element => {
 		element.addEventListener('click', (e) => { colorPicker.clickedElement = e.target; colorPicker.click(); });
 		element.addEventListener('mouseover', () => element.style.cursor = "pointer");
@@ -9366,7 +9351,12 @@ function updateDataFromUI() {
 	aestheticInstructUISettings.code_block_background = document.getElementById('code-block-background-colorselector').style.color;
 	aestheticInstructUISettings.code_block_foreground = document.getElementById('code-block-foreground-colorselector').style.color;
 	aestheticInstructUISettings.font_size = document.getElementById('instruct-font-size').value;
+	aestheticInstructUISettings.border_style = document.getElementById('instructBorderStyle').value;
+	aestheticInstructUISettings.portrait_width = document.getElementById('portrait_width').value;
+	aestheticInstructUISettings.portrait_height = document.getElementById('portrait_height').value;
+	aestheticInstructUISettings.background_minHeight = document.getElementById('instruct-min-backgroundHeight').value;
 
+    localStorage.setItem('e_koboldLiteUICustomizationOptions', JSON.stringify(aestheticInstructUISettings, null, 2));
 
 	function getTextStyleFromElement(id) {
 		let element = document.getElementById(id);
@@ -9378,7 +9368,6 @@ function updateUIFromData() {
 	for (let role of aestheticTextStyleRoles) {
 		for (let type of aestheticTextStyleTypes) {
 			setElementColor(`${role}-${type}-colorselector`, aestheticInstructUISettings[`${type}_color_${role}`]);
-			console.error(aestheticInstructUISettings[`${type}_color_${role}`]);
 		}
 		if (role != 'uniform') { document.getElementById(`${role}-bubble-colorselector`).style.backgroundColor = aestheticInstructUISettings[`bubbleColor_${role}`]; }
 	}
@@ -9388,10 +9377,15 @@ function updateUIFromData() {
 	document.getElementById('code-block-background-colorselector').style.color = aestheticInstructUISettings.code_block_background;
 	document.getElementById('code-block-foreground-colorselector').style.color = aestheticInstructUISettings.code_block_foreground;
 	document.getElementById('instruct-font-size').value = aestheticInstructUISettings.font_size;
+	document.getElementById('instructBorderStyle').value = aestheticInstructUISettings.border_style;
+	document.getElementById('portrait_width').value = aestheticInstructUISettings.portrait_width;
+	document.getElementById('portrait_height').value = aestheticInstructUISettings.portrait_height;
+	document.getElementById('instruct-min-backgroundHeight').value = aestheticInstructUISettings.background_minHeight;
 
 	showOrHide('.uniform-mode-font', document.getElementById('instructModeCustomized').checked == false);
 	showOrHide('.custom-mode-font', document.getElementById('instructModeCustomized').checked == true);
-	showOrHide('.instruct-markdown-user', document.getElementById('instructModeMarkdown').checked == true)
+	showOrHide('.instruct-markdown-user', document.getElementById('instructModeMarkdown').checked == true);
+	showOrHide('.rectPortraitMode', document.getElementById('instructBorderStyle').value == 'Square');
 
 	document.querySelectorAll('.instruct-settings-input').forEach(element => {
 		const input = element.querySelector('input');
@@ -9417,6 +9411,44 @@ function updateUIFromData() {
 		else { document.querySelectorAll(classID).forEach((x) => x.classList.add('hidden')); }
 	}
 }
+function render_enhanced_chat_instruct(input)
+{
+	let you = '\n[USER_REPLY]\n'; let bot = '\n[AI_REPLY]\n';
+	let as = aestheticInstructUISettings;
+
+	
+	// We'll transform the input to a well-formatted HTML string. First, trim any newline characters after seq_start and seq_end.
+	let newbodystr = (input.startsWith(you) || input.startsWith(bot)) ? input : style('sys') + input;
+	newbodystr = newbodystr.replaceAll(you + '\n', you).replaceAll(bot + '\n', bot).replaceAll(you + ' ', you).replaceAll(bot + ' ', bot).replaceAll('"', '&quot;');
+	newbodystr = newbodystr.replaceAll(/\*(\S[^*]+\S)\*/g,  wrapperSpan('you','action')).replaceAll(/&quot;(.*?)&quot;/g, wrapperSpan('you','speech'));
+
+	newbodystr = newbodystr.replaceAll(you, style('you')).replaceAll(bot, style('AI'));	// Style incoming messages and outcoming messages appropriately.
+	return applyStylizedCodeBlocks().replaceAll('\r\n','<br>').replaceAll('\n','<br>');	// Stylize, handle newlines, and return the outcome string.
+
+	// Helper functions to allow stylizing properly.
+	function image(role) { return as.border_style == 'None' ? '' : `<img src='niko.png' style='width:${as.portraitSize().width}px; height:${as.portraitSize().height}px; margin: 10px 0px; border-radius: ${as.portraitRadius()};'>`; }
+	function style(role) { return `</p></div></div><div style='display:flex; align-items:stretch; flex-direction: row;'>${image(role)}<div style='flex: 1; color: ${as[`text_color_${role}`].color}; background-color:${as[`bubbleColor_${role}`]}; padding: ${as.padding()}; margin: ${as.margin()}; min-height:${as.background_minHeight}px; font-size: ${as.font_size}px; display: flex; flex-direction:column; align-items: flex-start; justify-content: center; border-radius: 15px'><p>`; }
+	function wrapperSpan(role, type) { let textStyle = as[`${type}_color_${role}`]; return `<span style='color: ${textStyle.color}; font-style: ${textStyle.fontStyle}; font-weight: ${textStyle.fontWeight}'>$1</span>`; }
+	function stylizedCodeBlocks() {
+		let blocks = newbodystr.split(/(```.*?\n[\s\S]${}```)/gs);
+		for (var i = 0; i < blocks.length; i++) {
+			if (blocks[i].startsWith("```")) { blocks[i] = blocks[i].replaceAll(/```.*?\n([\s\S]*?)```/gs, `</p><pre style='margin:0px 100px 0px 20px;background-color:${as.code_block_background};color:${as.code_block_foreground}'>$1</pre><p>`); }
+			else { blocks[i] = blocks[i].replaceAll("```","`").replaceAll("``","`").replaceAll(/`(.*?)`/g, `<code style='background-color:black'>$1</code>`);}
+		}
+		return blocks.join('');
+	}
+	function applyStylizedCodeBlocks() {
+		let blocks = newbodystr.split(/(```.*?\n[\s\S]*?```)/gs);
+		for (var i = 0; i < blocks.length; i++) {
+			if (blocks[i].startsWith("```")) { blocks[i] = blocks[i].replaceAll(/```.*?\n([\s\S]*?)```/gs, `</p><pre style='margin:0px 100px 0px 20px;background-color:${as.code_block_background};color:${as.code_block_foreground}'>$1</pre><p>`); }
+			else { blocks[i] = blocks[i].replaceAll("```","`").replaceAll("``","`").replaceAll(/`(.*?)`/g, `<code style='background-color:black'>$1</code>`);}
+		}
+		return blocks.join('');
+	}
+}
+
+
+
 function updateTextPreview() {
 	let preview = `You are Mikago, a prestigious bot that's a supervillain.\n\nRoleplay in first person, be prestigious, don't be a bot. This is a fantasy world.\n\nCode blocks should be wrapped in triple backticks, like so:\nqqq\n<Some_\n-- multiline\n--- code here$\nqqq\n[AI_REPLY]\n*takes my hat off to greet the squad* "Greetings, I am Mikago, the prestigious!" *bows to the crew*\n*clears my throat* "Now, I'm sure there are many questions, but all will be answered in due time." *deep breath*\n[USER_REPLY]\n*raises eyebrow and looks at you* "Hm.. you don't seem very prestigious.. How do we know you're Mikago?"\nI check with the crew and we decide to test Mikago with a piece of info they should know.\n"Ok.. now, if you're REALLY Mikago, you would know the answer to this.." *pauses for dramatic effect* "How do you type code?"\n[AI_REPLY]\n*looks at you* "You serious?"\n[USER_REPLY]\n*draws my sword* "Yes. You should know the code to calculate the factorial of a number."\nThe crew also draws their weapons and point them at you, not giving you any space.\n[AI_REPLY]\n*backs off* "Woah, easy there.." *makes some steps backwards, but then stops*\n"I would normally take this as an insult to my prestige, but I understand your caution.." *takes a deep breath*\n"Well, if it's to prove myself, here goes the python code to calculate the factorial of a number.."\n\nMikago opens a live-code-portal with his magic and writes the code that was requested.\nqqq\ndef factorial(n):\n    if n == 0: return 1\n    else: return n * factorial(n-1)\nqqq\n*looks at you, getting impatient* "Are we ok now.. or do you want me to write the code of a game next?"\n[USER_REPLY]\n*sheathes my sword and approaches for a hug* "Oh, Mikago, my old friend, it is really you!"`;
 	document.getElementById('aesthetic_text_preview').innerHTML = render_enhanced_chat_instruct(preview.replaceAll('qqq', '```'));
