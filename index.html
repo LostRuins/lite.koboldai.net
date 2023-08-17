@@ -5457,7 +5457,7 @@ Current version: 56
 		if (localsettings.chatname == null || localsettings.chatname == "") {
 			localsettings.chatname = "You";
 		}
-		localsettings.chatopponent = document.getElementById("chatopponent").value.trim();
+		localsettings.chatopponent = document.getElementById("chatopponent").value;
 		localsettings.instruct_starttag = document.getElementById("instruct_starttag").value;
 		if (localsettings.instruct_starttag == null || localsettings.instruct_starttag == "") {
 			localsettings.instruct_starttag = "\\n### Instruction:\\n";
@@ -5905,9 +5905,20 @@ Current version: 56
 				window.speechSynthesis.speak(utterance);
 			}
 
-			if (localsettings.opmode == 4 && newgen != "") {
-				//append instruction for instruct mode
-				newgen = get_instruct_starttag(false) + newgen + get_instruct_endtag(false);
+			if (localsettings.opmode == 4)
+			{
+				if(newgen != "")
+				{
+					//append instruction for instruct mode
+					newgen = get_instruct_starttag(false) + newgen + get_instruct_endtag(false);
+				}
+				else //may be continuting existing instruction OR starting a brand new session. check if first action
+				{
+					if(gametext_arr.length==0)
+					{
+						newgen = get_instruct_endtag(false); //bot response as first msg
+					}
+				}
 			}
 			if (localsettings.opmode == 3 && newgen != "") {
 				//append chatname for chatmode
@@ -6037,7 +6048,7 @@ Current version: 56
 				}
 
 				let me = localsettings.chatname;
-				if (co == null || co == "") {
+				if (co == null || co == "" || co.trim()=="") {
 					co = "";
 				}
 
@@ -6069,7 +6080,7 @@ Current version: 56
 				}
 
 				//if we can infer the name of our chat opponent, inject it to force bot response after ours
-				if(co!="")
+				if(co!="" && co.trim()!="")
 				{
 					co = replaceAll(co,"\n","");
 					pending_context_preinjection = "\n"+co + ":";
