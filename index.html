@@ -7490,14 +7490,11 @@ Current version: 56
 		else {
 			let fulltxt = "";
 			if (document.getElementById("allowediting").checked) {
-				fulltxt = concat_gametext(false, "", "<span class=\"txtchunk\">", "</span>",true);
+				fulltxt = concat_gametext(false, "", "%SpnStg%", "%SpnEtg%",true);
 			} else {
 				fulltxt = concat_gametext(false, "", "", "",true);
 			}
-			if(synchro_pending_stream!="")
-			{
-				fulltxt += "<span class=\"color_yellow\">" + escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream) + "</span>";
-			}
+
 
 			if(localsettings.opmode==4 && !document.getElementById("allowediting").checked)
 			{
@@ -7527,9 +7524,14 @@ Current version: 56
 				fulltxt = replaceAll(fulltxt, `%SpcEtg%`, `</span><hr class="hr_instruct"><img src="`+niko_square+`" style="padding:3px 6px 3px 3px;border-radius: 8%;"/>`);
 
 			}else{
-				fulltxt = replaceAll(fulltxt, get_instruct_starttag(true), `<span class="color_gray">`+escapeHtml(get_instruct_starttag(true))+`</span>`);
-				fulltxt = replaceAll(fulltxt, get_instruct_endtag(true), `<span class="color_gray">`+escapeHtml(get_instruct_endtag(true))+`</span>`);
+				fulltxt = replaceAll(fulltxt, get_instruct_starttag(true), `%SclStg%`+escapeHtml(get_instruct_starttag(true))+`%SpnEtg%`);
+				fulltxt = replaceAll(fulltxt, get_instruct_endtag(true), `%SclStg%`+escapeHtml(get_instruct_endtag(true))+`%SpnEtg%`);
 			}
+
+			//this is a hacky fix to handle instruct tags that use arrow brackets only
+			fulltxt = replaceAll(fulltxt, `%SpnStg%`, `<span class=\"txtchunk\">`);
+			fulltxt = replaceAll(fulltxt, `%SclStg%`,`<span class=\"color_gray\">`);
+			fulltxt = replaceAll(fulltxt, `%SpnEtg%`, `</span>`);
 
 			if(localsettings.opmode==3)
 			{
@@ -7558,6 +7560,12 @@ Current version: 56
 				fulltxt = fulltxt.replace(/\n\n\> .+?\n/g, function (m) {
 					return `<span class="color_green">` + m + `</span>`;
 				});
+			}
+
+			//streaming display
+			if(synchro_pending_stream!="")
+			{
+				fulltxt += "<span class=\"color_yellow\">" + escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream) + "</span>";
 			}
 
 			//handle images
