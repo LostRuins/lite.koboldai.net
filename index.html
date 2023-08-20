@@ -9151,7 +9151,7 @@ Current version: 56
 										<div style="margin-left:5px"><span class="rectPortraitMode">H: </span><input id="portrait_height" type="number" placeholder="100" value="100" style='width:40px;height:20px;font-size:10px;' class="rectPortraitMode"/></div>
 										<div style="align-self: center;">px</div>
 									</div>
-									
+
 								</div>
 							</div>
 						</div>
@@ -9238,10 +9238,10 @@ Current version: 56
 	#you-bubble-colorselector, #AI-bubble-colorselector, #sys-bubble-colorselector, #you-portrait, #AI-portrait { text-align: center; margin: 0px 10px; border-radius: 1rem; padding: 1px 6px; }
 </style>
 
-<script>	
+<script>
 const aestheticTextStyleTypes = ['text', 'speech', 'action'];	 // One style per speech type. Could add more later I guess.
 const aestheticTextStyleRoles = ['uniform', 'you', 'AI', 'sys']; // Uniform for when you want all roles use the same styles.
-	
+
 class AestheticTextStyle {
     constructor({color = 'rgba(255,255,255, 1)', bold = false, italic = false, opacity = 1} = {}) {
         this.color = color;
@@ -9310,7 +9310,7 @@ function initializeInstructUIFunctionality() {
 		element.addEventListener('click', (e) => {
 			let clrPicker = e.target.classList.contains('enhancedTextColorPicker') ? colorPicker : colorPicker_background;
 			clrPicker.clickedElement = e.target;
-			clrPicker.click(); 
+			clrPicker.click();
 		});
 		element.addEventListener('mouseover', () => element.style.cursor = "pointer");
 	});
@@ -9372,7 +9372,7 @@ function updateDataFromUI() {
 		}
 		if (role != 'uniform') { aestheticInstructUISettings[`bubbleColor_${role}`] = document.getElementById(`${role}-bubble-colorselector`).style.backgroundColor; }
 	}
-	
+
 	aestheticInstructUISettings.use_markdown = document.getElementById('instructModeMarkdown').checked;
 	aestheticInstructUISettings.use_uniform_colors = !document.getElementById('instructModeCustomized').checked;
 	aestheticInstructUISettings.code_block_background = document.getElementById('code-block-background-colorselector').style.color;
@@ -9396,7 +9396,7 @@ function updateDataFromUI() {
 		return new AestheticTextStyle({color: computedStyle.color, bold: computedStyle.fontWeight > 400, italic: computedStyle.fontStyle == 'italic', opacity: computedStyle.opacity});
 	}
 }
-function updateUIFromData() {	
+function updateUIFromData() {
 	for (let role of aestheticTextStyleRoles) {
 		for (let type of aestheticTextStyleTypes) {
 			setElementColor(`${role}-${type}-colorselector`, aestheticInstructUISettings[`${type}_color_${role}`]);
@@ -9432,7 +9432,7 @@ function updateUIFromData() {
 		const input = element.querySelector('input');
 		const type = element.getAttribute('data-type');
 		const side = element.getAttribute('data-side');
-		
+
 		if (type === 'margin') { input.value = aestheticInstructUISettings.background_margin[sideMapping[side]]; }
 		else if (type === 'padding') { input.value = aestheticInstructUISettings.background_padding[sideMapping[side]]; }
 	});
@@ -9458,7 +9458,7 @@ function render_enhanced_chat_instruct(input)
 	const contextDict = { sysOpen: '<sys_context_koboldlite_internal>', youOpen: '<user_context_koboldlite_internal>', AIOpen: '<AI_context_koboldlite_internal>', closeTag: '<end_of_context_koboldlite_internal>' }
 	let you = get_instruct_starttag(); let bot = get_instruct_endtag(); // Instruct tags will be used to wrap text in styled bubbles.
 	let as = aestheticInstructUISettings;
-	
+
 	// We'll transform the input to a well-formatted HTML string. First, trim any newline characters after seq_start and seq_end.
 	let newbodystr = (input.startsWith(you) || input.startsWith(bot)) ? input : style('sys') + input;
 	newbodystr = newbodystr.replaceAll(you + '\n', you).replaceAll(bot + '\n', bot).replaceAll(you + ' ', you).replaceAll(bot + ' ', bot).replaceAll('"', '&quot;');
@@ -9483,9 +9483,9 @@ function render_enhanced_chat_instruct(input)
 	function wrapperSpan(role, type) { let textStyle = as[`${type}_color_${role}`]; return `<span style='color: ${textStyle.color}; font-style: ${textStyle.fontStyle}; font-weight: ${textStyle.fontWeight}'>$1</span>`; }
 
 	function applyStylizedCodeBlocks() {
-		let blocks = newbodystr.split(/(```.*?\n[\s\S]*?```)/gs);
+		let blocks = newbodystr.split(/(```[\s\S]*?\n[\s\S]*?```)/g);
 		for (var i = 0; i < blocks.length; i++) {
-			if (blocks[i].startsWith("```")) { blocks[i] = blocks[i].replaceAll(/```.*?\n([\s\S]*?)```/gs, `</p><pre style='min-width:90%;margin:0px 100px 0px 20px;background-color:${as.code_block_background};color:${as.code_block_foreground}'>$1</pre><p>`); }
+			if (blocks[i].startsWith("```")) { blocks[i] = blocks[i].replace(/```[\s\S]*?\n([\s\S]*?)```/g, `</p><pre style='min-width:90%;margin:0px 100px 0px 20px;background-color:${as.code_block_background};color:${as.code_block_foreground}'>$1</pre><p>`); }
 			else { blocks[i] = blocks[i].replaceAll("```","`").replaceAll("``","`").replaceAll(/`(.*?)`/g, `<code style='background-color:black'>$1</code>`);}
 		}
 		return blocks.join('');
