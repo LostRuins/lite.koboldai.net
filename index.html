@@ -3023,6 +3023,9 @@ Current version: 56
 		//setup drag and drop zone for files
 		setupDragDrop();
 
+		//setup customization UI functionality
+		initializeInstructUIFunctionality();
+
 		//fix for iphone zooming
 		if(navigator.userAgent.indexOf('iPhone') > -1 )
 		{
@@ -6929,9 +6932,7 @@ Current version: 56
 										img.queue = 0;
 										let origImg = "data:image/jpeg;base64," + finalimg.generations[0].img;
 										//console.log("Original image: " + origImg);
-										compressImage(origImg, (newDataUri) => {
-											img.result = newDataUri;
-										});
+										compressImage(origImg, (newDataUri) => { img.result = newDataUri; }, 'jpeg');
 									}
 								})
 								.catch((error) => {
@@ -6980,7 +6981,7 @@ Current version: 56
 		}
 
 	}
-	function compressImage(inputDataUri, onDone) {
+	function compressImage(inputDataUri, onDone, format) {
 		let img = document.createElement('img');
 		let wantedWidth = 256;
 		let wantedHeight = 256;
@@ -6998,7 +6999,7 @@ Current version: 56
 			// We resize the image with the canvas method
 			ctx.drawImage(this, 0, 0, wantedWidth, wantedHeight);
 
-			var dataURI = canvas.toDataURL('image/jpeg', 0.33);
+			var dataURI = canvas.toDataURL(`image/${format}`, 0.33);
 			onDone(dataURI);
 		};
 
@@ -9244,11 +9245,13 @@ const aestheticTextStyleTypes = ['text', 'speech', 'action'];	 // One style per 
 const aestheticTextStyleRoles = ['uniform', 'you', 'AI', 'sys']; // Uniform for when you want all roles use the same styles.
 
 class AestheticTextStyle {
-    constructor({color = 'rgba(255,255,255, 1)', bold = false, italic = false, opacity = 1} = {}) {
-        this.color = color;
-		this.fontWeight = bold ? 'bold' : 'normal';
-        this.fontStyle = italic ? 'italic' : 'normal';
-    }
+	constructor(options) {
+    	options = options || {};
+    	this.color = options.color || 'rgba(255,255,255, 1)';
+    	this.fontWeight = options.bold ? 'bold' : 'normal';
+    	this.fontStyle = options.italic ? 'italic' : 'normal';
+    	this.opacity = options.opacity || 1;
+	}
 }
 
 class AestheticInstructUISettings {
@@ -9296,8 +9299,6 @@ const sideMapping = { 'left': 0, 'right': 1, 'top': 2, 'bottom': 3 };
 let aestheticInstructUISettings = new AestheticInstructUISettings();
 let tempAestheticInstructUISettings = new AestheticInstructUISettings();
 
-initializeInstructUIFunctionality();
-
 function initializeInstructUIFunctionality() {
 	// Load the default settings (by default), or the latest chosen ones (//TODO).
 	const jsonString = localStorage.getItem('e_koboldLiteUICustomizationOptions');
@@ -9339,9 +9340,8 @@ function initializeInstructUIFunctionality() {
             if (file) {
                 const reader = new FileReader();
                 reader.onload = function(img) {
-                    localStorage.setItem(element.id, img.target.result);
-					console.error(`${element.id.replace('-','_')} - ${img.target.result}`);
-					aestheticInstructUISettings[`${element.id.replace('-','_')}`] = img.target.result;
+					compressImage(img.target.result, loadCompressedImage, 'png');
+					function loadCompressedImage(compressedImageURI) { aestheticInstructUISettings[`${element.id.replace('-','_')}`] = compressedImageURI; updateDataFromUI(); }
                 }
                 reader.readAsDataURL(file);
             }
@@ -9386,9 +9386,7 @@ function updateDataFromUI() {
 	aestheticInstructUISettings.background_anchor_style_you = document.getElementById('background-anchor-style-you').value;
 	aestheticInstructUISettings.background_anchor_style_AI = document.getElementById('background-anchor-style-AI').value;
 
-	aestheticInstructUISettings.you_portrait = localStorage.getItem('you-portrait');
-	aestheticInstructUISettings.AI_portrait = localStorage.getItem('AI-portrait');
-
+	// NOTE: Portraits are loaded automatically from the json, and are stored to aestheticInstructUISettings directly.
     localStorage.setItem('e_koboldLiteUICustomizationOptions', JSON.stringify(aestheticInstructUISettings, null, 2));
 
 	function getTextStyleFromElement(id) {
