@@ -8330,20 +8330,15 @@ Current version: 57
 		}
 	}
 	function updateUIFromData() {
+		// Parse color settings and apply to the related parts in the UI.
 		for (let role of aestheticTextStyleRoles) {
 			for (let type of aestheticTextStyleTypes) {
 				setElementColor(`${role}-${type}-colorselector`, aestheticInstructUISettings[`${type}_color_${role}`]);
 			}
 			if (role != 'uniform') { document.getElementById(`${role}-bubble-colorselector`).style.backgroundColor = aestheticInstructUISettings[`bubbleColor_${role}`]; }
 		}
-		if (localStorage.getItem('you-portrait')) {
-			document.getElementById('you-portrait').src = localStorage.getItem('you-portrait');
-			console.error()
-		}
-		if (localStorage.getItem('AI-portrait')) {
-			document.getElementById('AI-portrait').src = localStorage.getItem('AI-portrait');
-		}
 
+		// Apply the settings from the json file to the UI.
 		document.getElementById('instructModeMarkdown').checked = aestheticInstructUISettings.use_markdown;
 		document.getElementById('instructModeCustomized').checked = !aestheticInstructUISettings.use_uniform_colors;
 		document.getElementById('code-block-background-colorselector').style.color = aestheticInstructUISettings.code_block_background;
@@ -8356,6 +8351,7 @@ Current version: 57
 		document.getElementById('background-anchor-style-AI').value = aestheticInstructUISettings.background_anchor_style_AI;
 		document.getElementById('background-anchor-style-you').value = aestheticInstructUISettings.background_anchor_style_you;
 
+		// Show or hide custumization UI elements based on whether they should be visible in the UI or not.
 		showOrHide('.uniform-mode-font', document.getElementById('instructModeCustomized').checked == false);
 		showOrHide('.custom-mode-font', document.getElementById('instructModeCustomized').checked == true);
 		showOrHide('.instruct-markdown-user', document.getElementById('instructModeMarkdown').checked == true);
@@ -8392,31 +8388,32 @@ Current version: 57
 		let you = get_instruct_starttag(); let bot = get_instruct_endtag(); // Instruct tags will be used to wrap text in styled bubbles.
 		let as = aestheticInstructUISettings;
 
-		// We'll transform the input to a well-formatted HTML string. First, trim any newline characters after seq_start and seq_end.
-		let newbodystr = (input.startsWith(you) || input.startsWith(bot)) ? input : style('sys') + input;
-		if (newbodystr.endsWith(bot)) { newbodystr = newbodystr.slice(0, -bot.length); }
+		// We'll transform the input to a well-formatted HTML string.
+		let newbodystr = (input.startsWith(you) || input.startsWith(bot)) ? input : style('sys') + input;			// First, create the string we'll transform. Style system bubble if we should.
+		if (newbodystr.endsWith(bot)) { newbodystr = newbodystr.slice(0, -bot.length); }							// Reduce any unnecessary spaces or newlines. Trim empty replies if they exist.
 		newbodystr = newbodystr.replaceAll(you + '\n', you).replaceAll(bot + '\n', bot).replaceAll(you + ' ', you).replaceAll(bot + ' ', bot).replaceAll('"', '&quot;');
-		newbodystr = newbodystr.replaceAll(you, style('you')).replaceAll(bot, style('AI')) + contextDict.closeTag; // Style incoming messages and outcoming messages appropriately.
-		if (aestheticInstructUISettings.use_markdown) {
-			for (let role of aestheticTextStyleRoles) {
-				newbodystr = newbodystr.replace(new RegExp(`${contextDict[`${role}Open`]}([^]*?)${contextDict.closeTag}`, 'g'), (match, p1) => {
-					let styleRole = aestheticInstructUISettings.use_uniform_colors ? 'uniform' : role;
-					return match.replace(/\*(\S[^*]+\S)\*/g, wrapperSpan(styleRole, 'action')).replace(/&quot;(.*?)&quot;/g, wrapperSpan(styleRole, 'speech'));
+		newbodystr = newbodystr.replaceAll(you, style('you')).replaceAll(bot, style('AI')) + contextDict.closeTag; 	// Style background of incoming and outgoing messages appropriately.
+		if (aestheticInstructUISettings.use_markdown) {																// If markdown is enabled, style the content of each bubble as well.
+			for (let role of aestheticTextStyleRoles) {																// ..starting by the "speech" and *actions* for each role.
+				let styleRole = aestheticInstructUISettings.use_uniform_colors ? 'uniform' : role;					// Uniform role is preferred if it's active on the settings.
+				newbodystr = newbodystr.replace(new RegExp(`${contextDict[`${role}Open`]}([^]*?)${contextDict.closeTag}`, 'g'), (match, p) => {
+					let replacedText = match.replace(/\*(\S[^*]+\S)\*/g, 	  wrapperSpan(styleRole, 'action'));	// Apply the actions style to *actions*.
+					replacedText = replacedText.replace(/&quot;(.*?)&quot;/g, wrapperSpan(styleRole, 'speech'));	// Apply the speech style to "speech".
+					return replacedText;
 				});
 			}
-			newbodystr = applyStylizedCodeBlocks();
+			newbodystr = applyStylizedCodeBlocks(); // Apply the code-block styling, if markdown is used.
 		}
-		return (newbodystr + "</p></div></div>\n").replaceAll('\r\n','<br>').replaceAll('\n','<br>');	// Stylize, handle newlines, and return the outcome string.
+		return newbodystr.replaceAll('\r\n','<br>').replaceAll('\n','<br>') + "</p></div></div><br>";	// Finally, convert newlines to HTML format and return the stylized string. *wink*
 
-		// Helper functions to allow styling properly.
+		// Helper functions to allow styling the chat log properly. These affect both the background of the chat bubbles and its content.
+		function style(role) { return `${contextDict.closeTag}</p></div></div><div style='display:flex; align-items:stretch; flex-direction: row;'>${image(role)}<div style='flex: 1; color: ${as[`text_color_${aestheticInstructUISettings.use_uniform_colors ? 'uniform' : role}`].color}; background-color:${as[`bubbleColor_${role}`]}; padding: ${as.padding()}; margin: ${as.margin()}; min-height:${as.background_minHeight}px; font-size: ${as.font_size}px; display: flex; flex-direction:column; align-items: flex-start; justify-content: center; border-radius: 15px'><p>${contextDict[`${role}Open`]}`; }
+		function wrapperSpan(role, type) { let textStyle = as[`${type}_color_${role}`]; return `<span style='color: ${textStyle.color}; font-style: ${textStyle.fontStyle}; font-weight: ${textStyle.fontWeight}'>$1</span>`; }
 		function image(role) {
 			const portraitSrc = localStorage.getItem(`${role}_portrait`) || as[`${role}_portrait`];
 			if (!portraitSrc || as.border_style == 'None' || role == 'sys') { return ''; }
 			return `<img src='${portraitSrc}' style='width:${as.portraitSize().width}px; height:${as.portraitSize().height}px; margin: 10px 0px; border-radius: ${as.portraitRadius()};'>`;
 		}
-		function style(role) { return `${contextDict.closeTag}</p></div></div><div style='display:flex; align-items:stretch; flex-direction: row;'>${image(role)}<div style='flex: 1; color: ${as[`text_color_${aestheticInstructUISettings.use_uniform_colors ? 'uniform' : role}`].color}; background-color:${as[`bubbleColor_${role}`]}; padding: ${as.padding()}; margin: ${as.margin()}; min-height:${as.background_minHeight}px; font-size: ${as.font_size}px; display: flex; flex-direction:column; align-items: flex-start; justify-content: center; border-radius: 15px'><p>${contextDict[`${role}Open`]}`; }
-		function wrapperSpan(role, type) { let textStyle = as[`${type}_color_${role}`]; return `<span style='color: ${textStyle.color}; font-style: ${textStyle.fontStyle}; font-weight: ${textStyle.fontWeight}'>$1</span>`; }
-
 		function applyStylizedCodeBlocks() {
 			let blocks = newbodystr.split(/(```[\s\S]*?\n[\s\S]*?```)/g);
 			for (var i = 0; i < blocks.length; i++) {
@@ -9422,8 +9419,8 @@ Current version: 57
 								<div style="margin-left: 20px;">
 									<div class="ui-settings-inline">
 										<div style="margin-right: 27px">Portraits: </div>
-										<div id="you-portrait">You 🖼️</div>
-										<div id="AI-portrait">AI 🖼️</div>
+										<div id="you-portrait">🖼️ Your Portrait</div>
+										<div id="AI-portrait">🖼️ AI's Portrait</div>
 									</div>
 								</div>
 								<div style="margin-left: 20px;">
