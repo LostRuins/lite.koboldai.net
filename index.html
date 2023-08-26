@@ -8231,7 +8231,7 @@ Current version: 57
 	const sideMapping = { 'left': 0, 'right': 1, 'top': 2, 'bottom': 3 };
 
 	let aestheticInstructUISettings = new AestheticInstructUISettings();
-	let tempAestheticInstructUISettings = new AestheticInstructUISettings();
+	let tempAestheticInstructUISettings = null; // These exist to act as backup when customizing, to revert when pressing the 'Cancel' button.
 
 	function initializeInstructUIFunctionality() {
 		// Load the default settings (by default), or the latest chosen ones (//TODO).
@@ -8288,10 +8288,17 @@ Current version: 57
 
 	function openAestheticUISettingsMenu() {
 		document.getElementById("aestheticsettingscontainer").classList.remove("hidden");
+		
+		tempAestheticInstructUISettings = JSON.parse(JSON.stringify(aestheticInstructUISettings));
+
 		updateTextPreview();
 	}
-	function hideAestheticUISettingsMenu() {
+	function hideAestheticUISettingsMenu(confirm) {
 		document.getElementById("aestheticsettingscontainer").classList.add("hidden");
+		
+		if (!confirm) { aestheticInstructUISettings = tempAestheticInstructUISettings; }
+		tempAestheticInstructUISettings = null;
+
 		render_gametext();
 	}
 
@@ -8405,24 +8412,25 @@ Current version: 57
 					return replacedText;
 				});
 			}
-			internalHTMLparts.forEach((part, index) => { newbodystr = newbodystr.replace(new RegExp(`<internal_html_${index}>`, 'g'), part); }); // Bring back the embedded HTML parts.
+			internalHTMLparts.forEach((part, index) => { newbodystr = newbodystr.replace(`<internal_html_${index}>`, part); }); // Bring back the embedded HTML parts.
 			newbodystr = applyStylizedCodeBlocks(); // Apply the code-block styling, if markdown is used.
 		}
-		return newbodystr.replaceAll('\r\n','<br>').replaceAll('\n','<br>') + "</p></div></div><br>";	// Finally, convert newlines to HTML format and return the stylized string.
+		return newbodystr.replaceAll('\r\n','<br>').replaceAll('\n','<br>') + '</p></div></div><br>';	// Finally, convert newlines to HTML format and return the stylized string.
+
 
 		// Helper functions to allow styling the chat log properly. These affect both the background of the chat bubbles and its content.
-		function style(role) { return `${contextDict.closeTag}</p></div></div><div style='display:flex; align-items:stretch; flex-direction: row;'>${image(role)}<div style='flex: 1; color: ${as[`text_color_${aestheticInstructUISettings.use_uniform_colors ? 'uniform' : role}`].color}; background-color:${as[`bubbleColor_${role}`]}; padding: ${as.padding()}; margin: ${as.margin()}; min-height:${as.background_minHeight}px; font-size: ${as.font_size}px; display: flex; flex-direction:column; align-items: flex-start; justify-content: center; border-radius: 15px'><p>${contextDict[`${role}Open`]}`; }
+		function style(role) { return `${contextDict.closeTag}</p></div></div><div style='display:flex; align-items:stretch; flex-direction: row;'>${image(role)}<div style='flex: 1; color: ${as[`text_color_${as.use_uniform_colors ? 'uniform' : role}`].color}; background-color:${as[`bubbleColor_${role}`]}; padding: ${as.padding()}; margin: ${as.margin()}; min-height:${as.background_minHeight}px; font-size: ${as.font_size}px; display: flex; flex-direction:column; align-items: flex-start; justify-content: center; border-radius: 15px'><p>${contextDict[`${role}Open`]}`; }
 		function wrapperSpan(role, type) { let textStyle = as[`${type}_color_${role}`]; return `<span style='color: ${textStyle.color}; font-style: ${textStyle.fontStyle}; font-weight: ${textStyle.fontWeight}'>$1</span>`; }
 		function image(role) {
 			const portraitSrc = localStorage.getItem(`${role}_portrait`) || as[`${role}_portrait`];
 			if (!portraitSrc || as.border_style == 'None' || role == 'sys') { return ''; }
-			return `<img src='${portraitSrc}' style='width:${as.portraitSize().width}px; height:${as.portraitSize().height}px; margin: 10px 0px; border-radius: ${as.portraitRadius()};'>`;
+			return `<img src='${portraitSrc}' style='width:${as.portraitSize().width}px; height:${as.portraitSize().height}px; margin: 10px 0px; border-radius: ${as.portraitRadius()}'>`;
 		}
 		function applyStylizedCodeBlocks() {
 			let blocks = newbodystr.split(/(```[\s\S]*?\n[\s\S]*?```)/g);
 			for (var i = 0; i < blocks.length; i++) {
-				if (blocks[i].startsWith("```")) { blocks[i] = blocks[i].replace(/```[\s\S]*?\n([\s\S]*?)```/g, `</p><pre style='min-width:80%;margin:0px 20px 0px 20px;background-color:${as.code_block_background};color:${as.code_block_foreground}'>$1</pre><p>`); }
-				else { blocks[i] = blocks[i].replaceAll("```","`").replaceAll("``","`").replaceAll(/`(.*?)`/g, `<code style='background-color:black'>$1</code>`);}
+				if (blocks[i].startsWith('```')) { blocks[i] = blocks[i].replace(/```[\s\S]*?\n([\s\S]*?)```/g, `</p><pre style='min-width:80%;margin:0px 100px 0px 20px;background-color:${as.code_block_background};color:${as.code_block_foreground}'>$1</pre><p>`); }
+				else { blocks[i] = blocks[i].replaceAll('```','`').replaceAll('``','`').replaceAll(/`(.*?)`/g, `<code style='background-color:black'>$1</code>`);}
 			}
 			return blocks.join('');
 		}
@@ -9508,8 +9516,8 @@ Current version: 57
 
 					</div>
 					<div class="popupfooter" id="aesthetic_instruct_footer" style="margin-top: -55px;height:55px;">
-						<button type="button" class="btn btn-primary" id="btn_settingsaccept" onclick="hideAestheticUISettingsMenu()">OK</button>
-						<button type="button" class="btn btn-primary" id="btn_settingsclose" onclick="hideAestheticUISettingsMenu()">Cancel</button>
+						<button type="button" class="btn btn-primary" id="btn_settingsaccept" onclick="hideAestheticUISettingsMenu(true)">OK</button>
+						<button type="button" class="btn btn-primary" id="btn_settingsclose" onclick="hideAestheticUISettingsMenu(false)">Cancel</button>
 					</div>
 				</div>
 				<div id="aesthetic_text_preview_panel" style="background-color: black; padding: 10px; height:100%; overflow-y: auto; ">
