@@ -8288,19 +8288,26 @@ Current version: 57
 	}
 
 	function openAestheticUISettingsMenu() {
+		tempAestheticInstructUISettings = deepCopyAestheticSettings(aestheticInstructUISettings);
 		document.getElementById("aestheticsettingscontainer").classList.remove("hidden");
-		
-		tempAestheticInstructUISettings = JSON.parse(JSON.stringify(aestheticInstructUISettings));
-
 		updateTextPreview();
+		
 	}
 	function hideAestheticUISettingsMenu(confirm) {
-		document.getElementById("aestheticsettingscontainer").classList.add("hidden");
-		
-		if (!confirm) { aestheticInstructUISettings = tempAestheticInstructUISettings; }
+		if (!confirm) { aestheticInstructUISettings = deepCopyAestheticSettings(tempAestheticInstructUISettings); updateUIFromData(); }
 		tempAestheticInstructUISettings = null;
 
+		document.getElementById("aestheticsettingscontainer").classList.add("hidden");
 		render_gametext();
+	}
+
+	function deepCopyAestheticSettings(original) {
+		const copy = new AestheticInstructUISettings();
+		for (const [key, value] of Object.entries(original)) {
+			if (value instanceof AestheticTextStyle) { copy[key] = new AestheticTextStyle({ color: value.color, bold: value.fontWeight === 'bold', italic: value.fontStyle === 'italic', opacity: value.opacity }); }
+			else { copy[key] = value; }
+		}
+		return copy;
 	}
 
 	function refreshPreview(updateFromUI = true) {
