@@ -6969,7 +6969,7 @@ Current version: 57
 										img.queue = 0;
 										let origImg = "data:image/jpeg;base64," + finalimg.generations[0].img;
 										//console.log("Original image: " + origImg);
-										compressImage(origImg, (newDataUri) => { img.result = newDataUri; }, 'jpeg');
+										compressImage(origImg, (newDataUri) => { img.result = newDataUri; }, true);
 									}
 								})
 								.catch((error) => {
@@ -7018,7 +7018,7 @@ Current version: 57
 		}
 
 	}
-	function compressImage(inputDataUri, onDone, format) {
+	function compressImage(inputDataUri, onDone, isJpeg=true) {
 		let img = document.createElement('img');
 		let wantedWidth = 256;
 		let wantedHeight = 256;
@@ -7036,7 +7036,16 @@ Current version: 57
 			// We resize the image with the canvas method
 			ctx.drawImage(this, 0, 0, wantedWidth, wantedHeight);
 
-			var dataURI = canvas.toDataURL(`image/${format}`, 0.33);
+			var dataURI = "";
+			if(isJpeg)
+			{
+				dataURI = canvas.toDataURL(`image/jpeg`, 0.33);
+			}
+			else
+			{
+				//png does not support compression by default, not recommended!
+				dataURI = canvas.toDataURL(`image/png`);
+			}
 			onDone(dataURI);
 		};
 
@@ -8274,8 +8283,10 @@ Current version: 57
 			const side = element.getAttribute('data-side');
 
 			input.addEventListener('input', function() {
-				if (type === 'margin') { aestheticInstructUISettings.background_margin[sideMapping[side]] = parseInt(this.value, 10); }
-				else if (type === 'padding') { aestheticInstructUISettings.background_padding[sideMapping[side]] = parseInt(this.value, 10); }
+				let clippedvalue = parseInt(this.value, 10);
+				clippedvalue = cleannum(clippedvalue, 0, 300);
+				if (type === 'margin') { aestheticInstructUISettings.background_margin[sideMapping[side]] = parseInt(clippedvalue, 10); }
+				else if (type === 'padding') { aestheticInstructUISettings.background_padding[sideMapping[side]] = parseInt(clippedvalue, 10); }
 			});
 		});
 
@@ -8289,7 +8300,7 @@ Current version: 57
 					const file = event.target.files[0];
 					const reader = new FileReader();
 					reader.onload = function(img) {
-						compressImage(img.target.result, loadCompressedImage, 'png');
+						compressImage(img.target.result, loadCompressedImage, true);
 						function loadCompressedImage(compressedImageURI) {
 							let isSelfPortrait = (element.id=="you-portrait");
 							if(isSelfPortrait)
@@ -8368,6 +8379,12 @@ Current version: 57
 		aestheticInstructUISettings.background_minHeight = document.getElementById('instruct-min-backgroundHeight').value;
 		// aestheticInstructUISettings.background_anchor_style_you = document.getElementById('background-anchor-style-you').value;
 		// aestheticInstructUISettings.background_anchor_style_AI = document.getElementById('background-anchor-style-AI').value;
+
+		//basic sanitization
+		aestheticInstructUISettings.font_size = cleannum(aestheticInstructUISettings.font_size, 5, 50);
+		aestheticInstructUISettings.portrait_width = cleannum(aestheticInstructUISettings.portrait_width, 10, 250);
+		aestheticInstructUISettings.portrait_height = cleannum(aestheticInstructUISettings.portrait_height, 10, 250);
+		aestheticInstructUISettings.background_minHeight = cleannum(aestheticInstructUISettings.background_minHeight, 0, 300);
 
 		// NOTE: Portraits are loaded automatically from the json, and are stored to aestheticInstructUISettings directly.
 		localStorage.setItem('e_koboldLiteUICustomizationOptions', JSON.stringify(aestheticInstructUISettings, null, 2));
