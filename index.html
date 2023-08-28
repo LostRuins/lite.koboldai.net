@@ -8207,7 +8207,7 @@ Current version: 57
 			// this.background_anchor_style_you = 'left';
 			// this.background_anchor_style_AI = 'left';
 			this.background_margin = [10, 10, 5, 0];
-			this.background_padding = [50, 50, 10, 0];
+			this.background_padding = [40, 40, 10, 0];
 			this.background_minHeight = 100;
 
 			this.show_portraits = true; // Shows/hides the rest of the fields below on the UI, and is also used on the display part of the code.
@@ -8251,6 +8251,9 @@ Current version: 57
 				var obj = JSON.parse(jsonString);
 				for (let key in obj) { if (aestheticInstructUISettings.hasOwnProperty(key)) { aestheticInstructUISettings[key] = obj[key]; } }
 			}
+		}else{
+			//reset to defaults
+			localStorage.setItem('e_koboldLiteUICustomizationOptions', JSON.stringify(aestheticInstructUISettings, null, 2));
 		}
 		// Initialize text colorPicker and background color pickers. Text colorPicker should change the foreground, and background colorPicker should change the background.
 		document.querySelectorAll('.enhancedTextColorPicker, .enhancedStandardColorPicker').forEach(element => {
@@ -8279,21 +8282,41 @@ Current version: 57
 		// Initialize functionality for the portrait pickers.
 		document.querySelectorAll('#you-portrait, #AI-portrait').forEach(element => {
 		element.addEventListener('click', (e) => {
-			document.getElementById('portraitFileInput').click();
-			document.getElementById('portraitFileInput').onchange = (event) => {
-				const file = event.target.files[0];
-				if (file) {
+			let finput = document.getElementById('portraitFileInput');
+			finput.click();
+			finput.onchange = (event) => {
+				if (event.target.files.length > 0 && event.target.files[0]) {
+					const file = event.target.files[0];
 					const reader = new FileReader();
 					reader.onload = function(img) {
 						compressImage(img.target.result, loadCompressedImage, 'png');
-						function loadCompressedImage(compressedImageURI) { aestheticInstructUISettings[`${element.id.replace('-','_')}`] = compressedImageURI; updateDataFromUI(); updateTextPreview(); }
+						function loadCompressedImage(compressedImageURI) {
+							let isSelfPortrait = (element.id=="you-portrait");
+							if(isSelfPortrait)
+							{
+								aestheticInstructUISettings.you_portrait = compressedImageURI;
+							}
+							else
+							{
+								aestheticInstructUISettings.AI_portrait = compressedImageURI;
+							}
+							updateDataFromUI(); updateTextPreview();
+						}
 					}
 					reader.readAsDataURL(file);
 				}
+				finput.value = "";
 			};
 		});
 		element.addEventListener('mouseover', () => element.style.cursor = "pointer");
 		});
+
+		document.getElementById("reset-portrait").addEventListener('click', (e) => {
+			aestheticInstructUISettings.you_portrait = null;
+			aestheticInstructUISettings.AI_portrait = niko_square;
+			updateDataFromUI(); updateTextPreview();
+		});
+
 		refreshPreview(false);
 	}
 
@@ -8452,7 +8475,7 @@ Current version: 57
 		function image(role) {
 			const portraitSrc = localStorage.getItem(`${role}_portrait`) || as[`${role}_portrait`];
 			if (!portraitSrc || as.border_style == 'None' || role == 'sys') { return ''; }
-			return `<img src='${portraitSrc}' style='width:${as.portraitSize().width}px; height:${as.portraitSize().height}px; margin: 10px 0px; border-radius: ${as.portraitRadius()}'>`;
+			return `<img src='${portraitSrc}' style='width:${as.portraitSize().width}px; height:${as.portraitSize().height}px; margin: 10px 6px; border-radius: ${as.portraitRadius()}'>`;
 		}
 		function applyStylizedCodeBlocks() {
 			let blocks = newbodystr.split(/(```[\s\S]*?\n[\s\S]*?```)/g);
@@ -9483,6 +9506,7 @@ Current version: 57
 											<option value="Circle">Round</option>
 											<option value="Rect">Rect</option>
 										</select>
+										<div id="reset-portrait" style="margin-left: 10px;"><a href="#" class="color_blueurl">(Reset to Defaults)</a></div>
 									</div>
 									<div class="ui-settings-inline">
 										<div style="margin-right:18px;">Portrait Size: </div>
