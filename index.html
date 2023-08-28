@@ -2922,6 +2922,16 @@ Current version: 57
 	//attempt to load settings
 	function init() {
 
+		//polyfill for forEach
+		if (window.NodeList && !NodeList.prototype.forEach) {
+			NodeList.prototype.forEach = function (callback, thisArg) {
+				thisArg = thisArg || window;
+				for (var i = 0; i < this.length; i++) {
+					callback.call(thisArg, this[i], i, this);
+				}
+			};
+		}
+
 		//uncompress compacted scenarios
 		for(let i=0;i<compressed_scenario_db.length;++i)
 		{
@@ -2930,7 +2940,7 @@ Current version: 57
 		}
 
 		//disable debug log if not local
-		const dbgmode = urlParams.get('dbg');
+		let dbgmode = urlParams.get('dbg');
 
 		if (localflag)
 		{
@@ -8291,7 +8301,7 @@ Current version: 57
 		tempAestheticInstructUISettings = deepCopyAestheticSettings(aestheticInstructUISettings);
 		document.getElementById("aestheticsettingscontainer").classList.remove("hidden");
 		updateTextPreview();
-		
+
 	}
 	function hideAestheticUISettingsMenu(confirm) {
 		if (!confirm) { aestheticInstructUISettings = deepCopyAestheticSettings(tempAestheticInstructUISettings); updateUIFromData(); }
@@ -8302,8 +8312,8 @@ Current version: 57
 	}
 
 	function deepCopyAestheticSettings(original) {
-		const copy = new AestheticInstructUISettings();
-		for (const [key, value] of Object.entries(original)) {
+		let copy = new AestheticInstructUISettings();
+		for (let [key, value] of Object.entries(original)) {
 			if (value instanceof AestheticTextStyle) { copy[key] = new AestheticTextStyle({ color: value.color, bold: value.fontWeight === 'bold', italic: value.fontStyle === 'italic', opacity: value.opacity }); }
 			else { copy[key] = value; }
 		}
@@ -8407,8 +8417,15 @@ Current version: 57
 		// We'll transform the input to a well-formatted HTML string.
 		let newbodystr = (input.startsWith(you) || input.startsWith(bot)) ? input : style('sys') + input;			// First, create the string we'll transform. Style system bubble if we should.
 		if (newbodystr.endsWith(bot)) { newbodystr = newbodystr.slice(0, -bot.length); }							// Reduce any unnecessary spaces or newlines. Trim empty replies if they exist.
-		newbodystr = newbodystr.replaceAll(you + '\n', you).replaceAll(bot + '\n', bot).replaceAll(you + ' ', you).replaceAll(bot + ' ', bot).replaceAll('"', '&quot;');
-		newbodystr = newbodystr.replaceAll(you, style('you')).replaceAll(bot, style('AI')) + contextDict.closeTag; 	// Style background of incoming and outgoing messages appropriately.
+		newbodystr = replaceAll(newbodystr,you + '\n', you);
+		newbodystr = replaceAll(newbodystr, bot + '\n', bot);
+		newbodystr = replaceAll(newbodystr, you + ' ', you);
+		newbodystr = replaceAll(newbodystr,bot + ' ', bot);
+		newbodystr = replaceAll(newbodystr,'"', '&quot;');
+		newbodystr = replaceAll(newbodystr,you + '\n', you);
+		newbodystr = replaceAll(newbodystr,you, style('you'));
+		newbodystr = replaceAll(newbodystr,bot, style('AI'));
+		newbodystr += contextDict.closeTag; 	// Style background of incoming and outgoing messages appropriately.
 		if (aestheticInstructUISettings.use_markdown) {																// If markdown is enabled, style the content of each bubble as well.
 			let internalHTMLparts = []; // We'll cache the embedded HTML parts here to keep them intact.
 			for (let role of aestheticTextStyleRoles) {																// ..starting by the "speech" and *actions* for each role.
@@ -8423,7 +8440,10 @@ Current version: 57
 			internalHTMLparts.forEach((part, index) => { newbodystr = newbodystr.replace(`<internal_html_${index}>`, part); }); // Bring back the embedded HTML parts.
 			newbodystr = applyStylizedCodeBlocks(); // Apply the code-block styling, if markdown is used.
 		}
-		return newbodystr.replaceAll('\r\n','<br>').replaceAll('\n','<br>') + '</p></div></div><br>';	// Finally, convert newlines to HTML format and return the stylized string.
+		let ret = newbodystr;
+		ret = replaceAll(ret,'\r\n','<br>');
+		ret = replaceAll(ret,'\n','<br>');
+		return ret + '</p></div></div><br>';	// Finally, convert newlines to HTML format and return the stylized string.
 
 
 		// Helper functions to allow styling the chat log properly. These affect both the background of the chat bubbles and its content.
@@ -8437,8 +8457,14 @@ Current version: 57
 		function applyStylizedCodeBlocks() {
 			let blocks = newbodystr.split(/(```[\s\S]*?\n[\s\S]*?```)/g);
 			for (var i = 0; i < blocks.length; i++) {
-				if (blocks[i].startsWith('```')) { blocks[i] = blocks[i].replace(/```[\s\S]*?\n([\s\S]*?)```/g, `</p><pre style='min-width:80%;margin:0px 100px 0px 20px;background-color:${as.code_block_background};color:${as.code_block_foreground}'>$1</pre><p>`); }
-				else { blocks[i] = blocks[i].replaceAll('```','`').replaceAll('``','`').replaceAll(/`(.*?)`/g, `<code style='background-color:black'>$1</code>`);}
+				if (blocks[i].startsWith('```')) { blocks[i] = blocks[i].replace(/```[\s\S]*?\n([\s\S]*?)```/g, `</p><pre style='min-width:80%;margin:0px 40px 0px 20px;background-color:${as.code_block_background};color:${as.code_block_foreground}'>$1</pre><p>`); }
+				else {
+					let bi = blocks[i];
+					bi = replaceAll(bi,'```','`');
+					bi = replaceAll(bi,'``','`');
+					bi = bi.replace(/`(.*?)`/g, `<code style='background-color:black'>$1</code>`);
+					blocks[i] = bi;
+				}
 			}
 			return blocks.join('');
 		}
@@ -8446,7 +8472,10 @@ Current version: 57
 
 	function updateTextPreview() {
 		let preview = `You are Mikago, a prestigious bot that's a supervillain.\n\nRoleplay in first person, be prestigious, don't be a bot. This is a fantasy world.\n\nCode blocks should be wrapped in triple backticks, like so:\nqqq\n<Some_\n-- multiline\n--- code here$\nqqq\n[AI_REPLY]\n*takes my hat off to greet the squad* "Greetings, I am Mikago, the prestigious!" *bows to the crew*\n*clears my throat* "Now, I'm sure there are many questions, but all will be answered in due time." *deep breath*\n[USER_REPLY]\n*draws my sword* "Yes. You should know the code to calculate the factorial of a number."\nThe crew also draws their weapons and point them at you, not giving you any space.\n[AI_REPLY]\n*backs off* "Woah, easy there.." *makes some steps backwards, but then stops*\n"I would normally take this as an insult to my prestige, but I understand your caution.." *takes a deep breath*\n"Well, if it's to prove myself, here goes the python code to calculate the factorial of a number.."\n\nMikago opens a live-code-portal with his magic and writes the code that was requested.\nqqq\ndef factorial(n):\n  if n == 0:\n    return 1\n  else:\n    return n * factorial(n-1)\nqqq\n*looks at you, getting impatient* "Are we ok now.. or do you want me to write the code of a game next?"\n[USER_REPLY]\n*sheathes my sword and approaches for a hug* "Oh, Mikago, my old friend, it is really you!"`;
-		document.getElementById('aesthetic_text_preview').innerHTML = render_enhanced_chat_instruct(preview.replaceAll('qqq', '```').replaceAll('\n[USER_REPLY]\n', get_instruct_starttag()).replaceAll('\n[AI_REPLY]\n', get_instruct_endtag()));
+		preview = replaceAll(preview,'qqq', '```');
+		preview = replaceAll(preview,'\n[USER_REPLY]\n', get_instruct_starttag());
+		preview = replaceAll(preview,'\n[AI_REPLY]\n', get_instruct_endtag());
+		document.getElementById('aesthetic_text_preview').innerHTML = render_enhanced_chat_instruct(preview);
 	}
 	</script>
 
