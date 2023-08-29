@@ -3905,8 +3905,6 @@ Current version: 57
 				"selective": itm.selective,
 				"constant": itm.constant
 			};
-			nwi.content = replaceAll(nwi.content,"{{char}}",chatopponent,true);
-			nwi.content = replaceAll(nwi.content,"{{user}}",myname,true);
 			current_wi.push(nwi);
 		}
 	}
@@ -3926,14 +3924,6 @@ Current version: 57
 		let greeting = obj.first_mes?obj.first_mes:"";
 
 		//post process
-		memory = replaceAll(memory,"{{char}}",chatopponent,true);
-		scenario = replaceAll(scenario,"{{char}}",chatopponent,true);
-		greeting = replaceAll(greeting,"{{char}}",chatopponent,true);
-		examplemsg = replaceAll(examplemsg,"{{char}}",chatopponent,true);
-		memory = replaceAll(memory,"{{user}}",myname,true);
-		scenario = replaceAll(scenario,"{{user}}",myname,true);
-		greeting = replaceAll(greeting,"{{user}}",myname,true);
-		examplemsg = replaceAll(examplemsg,"{{user}}",myname,true);
 		if(scenario!="")
 		{
 			scenario = "\n[Scenario: "+scenario+"]";
@@ -3973,14 +3963,6 @@ Current version: 57
 		let examplemsg = obj.example_dialogue?obj.example_dialogue:"";
 		let greeting = obj.char_greeting?obj.char_greeting:"";
 		//post process
-		memory = replaceAll(memory,"{{char}}",chatopponent);
-		scenario = replaceAll(scenario,"{{char}}",chatopponent);
-		greeting = replaceAll(greeting,"{{char}}",chatopponent);
-		examplemsg = replaceAll(examplemsg,"{{char}}",chatopponent);
-		memory = replaceAll(memory,"{{user}}",myname);
-		scenario = replaceAll(scenario,"{{user}}",myname);
-		greeting = replaceAll(greeting,"{{user}}",myname);
-		examplemsg = replaceAll(examplemsg,"{{user}}",myname);
 		if(scenario!="")
 		{
 			scenario = "\n[Scenario: "+scenario+"]";
@@ -5635,7 +5617,7 @@ Current version: 57
 
 			let long_story = (truncated_context.length>1800?true:false);
 			truncated_context += "\n### Instruction:Summarize the above text in a single paragraph of up to "+(long_story?"ten":"five")+" detailed sentences.\n### Response:";
-
+			truncated_context = replace_placeholders(truncated_context);
 		let submit_payload = {
 			"prompt": truncated_context,
 			"params": {
@@ -5789,6 +5771,19 @@ Current version: 57
 		render_gametext();
 	}
 
+	function replace_placeholders(inputtxt)
+	{
+		//only do this for chat and instruct modes
+		if(localsettings.opmode==3||localsettings.opmode==4)
+		{
+			inputtxt = replaceAll(inputtxt,"{{user}}",localsettings.chatname?localsettings.chatname:"You");
+			inputtxt = replaceAll(inputtxt,"{{char}}",localsettings.chatopponent?localsettings.chatopponent:defaultchatopponent);
+			inputtxt = replaceAll(inputtxt,"{{[INPUT]}}",get_instruct_starttag(false));
+			inputtxt = replaceAll(inputtxt,"{{[OUTPUT]}}",get_instruct_endtag(false));
+		}
+		return inputtxt;
+	}
+
 	function end_trim_to_sentence(input,include_newline=false) {
 		let last = -1;
 		let enders = ['.', '!', '?', '`', '*', '"', ')', '}', '`', ']', ';'];
@@ -5909,6 +5904,7 @@ Current version: 57
 
 	function manual_gen_image() {
 		let truncated_context = concat_gametext(true, "");
+		truncated_context = replace_placeholders(truncated_context);
 		var tclen = truncated_context.length;
 		if (tclen > 0) {
 			var sentence = truncated_context.substring(tclen - 300, tclen);
@@ -6267,6 +6263,7 @@ Current version: 57
 				truncated_context = truncated_context.slice(0, anote_insert_idx) + truncated_anote + truncated_context.slice(anote_insert_idx);
 				truncated_context = truncated_memory + truncated_context;
 			}
+			truncated_context = replace_placeholders(truncated_context);
 
 			last_token_budget = truncated_context.length  + "/" + max_allowed_characters;
 
@@ -7539,6 +7536,7 @@ Current version: 57
 				fulltxt = concat_gametext(false, "", "%SpnStg%", "%SpnEtg%",true);
 			} else {
 				fulltxt = concat_gametext(false, "", "", "",true);
+				fulltxt = replace_placeholders(fulltxt);
 			}
 
 
@@ -7755,6 +7753,7 @@ Current version: 57
 		if (!inEditMode && isStyleApplicable)
 		{
 			let textToRender = (gametext_arr.length == 0 ? document.getElementById("gametext").innerHTML : concat_gametext(false, "", "", "", true));
+			textToRender = replace_placeholders(textToRender);
 
 			if (localsettings.opmode == 3) { render_enhanced_chat(textToRender); }
 			else if (localsettings.opmode == 4) { document.getElementById("chat_msg_body").innerHTML = render_enhanced_chat_instruct(textToRender); }
