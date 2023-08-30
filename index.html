@@ -5,7 +5,7 @@ This is a standalone web ui for KoboldAIs Horde, which requires no dependencies,
 Just copy this single static HTML file anywhere and open it in a browser. No dependencies.
 Or you can throw it on some web server and serve it there too. E.g. Github pages, nginx, whatever.
 Now rebranded as KoboldAI Lite
-Current version: 57
+Current version: 58
 -Concedo
 -->
 
@@ -2839,6 +2839,7 @@ Current version: 57
 		autoscroll: true, //automatically scroll to bottom on render
 		trimsentences: true, //trim to last punctuation
 		trimwhitespace: false, //trim trailing whitespace
+		unban_tokens: false, //allow the EOS token when using locally
 		opmode: 1, //what mode are we in? 1=story, 2=adventure, 3=chat, 4=instruct
 		adventure_is_action: false, //in adventure mode, determine story or action
 		adventure_context_mod: true, //extra injection for adventure mode
@@ -5292,6 +5293,7 @@ Current version: 57
 		document.getElementById("invert_colors").checked = localsettings.invert_colors;
 		document.getElementById("trimsentences").checked = localsettings.trimsentences;
 		document.getElementById("trimwhitespace").checked = localsettings.trimwhitespace;
+		document.getElementById("unban_tokens").checked = localsettings.unban_tokens;
 		document.getElementById("persist_session").checked = localsettings.persist_session;
 		document.getElementById("opmode").value = localsettings.opmode;
 		document.getElementById("chatname").value = localsettings.chatname;
@@ -5461,6 +5463,7 @@ Current version: 57
 		localsettings.invert_colors = (document.getElementById("invert_colors").checked ? true : false);
 		localsettings.trimsentences = (document.getElementById("trimsentences").checked ? true : false);
 		localsettings.trimwhitespace = (document.getElementById("trimwhitespace").checked ? true : false);
+		localsettings.unban_tokens = (document.getElementById("unban_tokens").checked ? true : false);
 		localsettings.persist_session = (document.getElementById("persist_session").checked ? true : false);
 		localsettings.enhanced_chat_ui = (document.getElementById("enhanced_chat_ui").checked ? true : false);
 		localsettings.enhanced_instruct_ui = (document.getElementById("enhanced_instruct_ui").checked ? true : false);
@@ -6377,6 +6380,12 @@ Current version: 57
 							}
 						}
 					}
+				}
+
+				//version 1.2.4 and later supports unban tokens
+				if (kobold_endpoint_version && kobold_endpoint_version != "" && compare_version_str(kobold_endpoint_version, "1.2.3") > 0)
+				{
+					submit_payload.use_default_badwordids = (localsettings.unban_tokens?true:false);
 				}
 
 				let pseudostreaming = should_use_pseudostreaming();
@@ -9220,6 +9229,10 @@ Current version: 57
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" title="Trim trailing whitespace at the end of context">Trim Whitespace </div>
 						   <input type="checkbox" id="trimwhitespace" style="margin:0px 0 0;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="Allow the EOS token and others to be used">Unban Tokens (KAI) </div>
+						   <input type="checkbox" id="unban_tokens" style="margin:0px 0 0;">
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" title="Autosaves your current story and settings on exit, reloads when you return">Persist Session </div>
