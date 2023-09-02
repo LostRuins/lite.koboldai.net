@@ -8359,8 +8359,24 @@ Current version: 60
 			colorPicker.value = element.style[`${useBackground ? 'backgroundColor' : 'color'}`];
 			element.style.position = 'relative';
 			element.appendChild(colorPicker);
+			
+			// If we're on Safari browser and in iOS, we need some adjustments for the colorpickers to work.
+			// ..this happens because the clicks need to be directly done on the colorPicker for iOS in Safari.
+			if (/^((?!Chrome|Firefox).)*Safari/i.test(navigator.userAgent) && /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+				// Create a wrapper for the existing content. This will fix the offset slightly.
+				let contentWrapper = document.createElement('div');
+				contentWrapper.style.position = 'relative';
+				contentWrapper.style.zIndex = '0';
+				element.appendChild(contentWrapper);
+
+				// Finally, make the colorPicker directly clickable, and offset it slightly towards the text block.
+				colorPicker.style.zIndex = '1';
+				colorPicker.style.margin = '-20px';
+			}
+			else {
 				colorPicker.style.zIndex = '-1';
 				element.addEventListener('click', () => colorPicker.click());
+			}
 			
 			// Initialize the functionalities of the colorPicker
 			colorPicker.addEventListener('change', function() {
