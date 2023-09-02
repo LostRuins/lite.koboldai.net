@@ -2744,7 +2744,7 @@ Current version: 59
 	const stablehorde_output_endpoint = stablehorde_url + "/api/v2/generate/status";
 	const stablehorde_model_endpoint = stablehorde_url + "/api/v2/status/models";
 
-	const kobold_custom_gen_endpoint = "/api/v1/generate/";
+	const kobold_custom_gen_endpoint = "/api/v1/generate";
 	const kobold_custom_mdl_endpoint = "/api/v1/model";
 	const kobold_custom_version_endpoint = "/api/v1/info/version";
 	const kobold_custom_maxctxlen_endpoint = "/api/v1/config/max_context_length";
@@ -4624,18 +4624,20 @@ Current version: 59
 				tmpep = tmpep.endsWith('#') ? tmpep.slice(0, -1) : tmpep;
 				tmpep = tmpep.endsWith('/') ? tmpep.slice(0, -1) : tmpep;
 
+				if (tmpep != "" && (tmpep.trim().endsWith("/api") || tmpep.trim().endsWith("/api/v1")))
+				{
+					tmpep = tmpep.split("/api")[0];
+				}
 
-				let urls = [
+				let urls1 = [
 					apply_proxy_url(tmpep + kobold_custom_mdl_endpoint),
-					apply_proxy_url(tmpep + kobold_custom_version_endpoint),
 				];
 
-				Promise.all(urls.map(url => fetch(url)
+				Promise.all(urls1.map(url => fetch(url)
 					.then(response => response.json())))
 					.then(values => {
-						console.log(values)
+						console.log(values);
 						let mdlname = values[0].result;
-						let ep_version = values[1].result;
 						if (!mdlname) {
 							msgbox("Error at Custom Kobold Endpoint!\n\nThe custom endpoint failed to respond correctly.");
 							selected_models = [];
@@ -4649,9 +4651,24 @@ Current version: 59
 							custom_kobold_endpoint = "";
 							render_gametext();
 						} else {
+
+							//now we get the version number, however this is optional
+							//if it fails we can still proceed
+							let urls2 = [
+								apply_proxy_url(tmpep + kobold_custom_version_endpoint),
+							];
+							Promise.all(urls2.map(url => fetch(url)
+							.then(response => response.json())))
+							.then(values2 => {
+								console.log(values2);
+								let ep_version = values2[0].result;
+								kobold_endpoint_version = (ep_version?ep_version:"");
+							}).catch(error => {
+								console.log("Failed to get KAI version number: " + error);
+							});
+
 							//good to go
 							custom_kobold_endpoint = tmpep;
-							kobold_endpoint_version = (ep_version?ep_version:"");
 							selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": mdlname, "count": 1 }];
 							selected_workers = [];
 							if (perfdata == null) {
@@ -8540,7 +8557,12 @@ Current version: 59
 		let ret = newbodystr;
 		ret = replaceAll(ret,'\r\n','<br>');
 		ret = replaceAll(ret,'\n','<br>');
-		return portraitsStyling + ret + '</p></div></div><br>';	// Finally, convert newlines to HTML format and return the stylized string.
+		let ret2 = ""
+		if(synchro_pending_stream!="")
+		{
+			ret2 += `<div class="incoming_msg"><p>`+"<span class=\"color_yellow\">" + escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream) + "</span>"+`</p></div>`;
+		}
+		return portraitsStyling + ret + '</p>'+ret2+'</div></div><br>';	// Finally, convert newlines to HTML format and return the stylized string.
 
 		// Helper functions to allow styling the chat log properly. These affect both the background of the chat bubbles and its content.
 		function style(role) { return `${contextDict.closeTag}</p></div></div><div style='display:flex; align-items:stretch; flex-direction: row;'>${image(role)}<div style='flex: 1; color: ${as[`text_color_${as.use_uniform_colors ? 'uniform' : role}`].color}; background-color:${as[`bubbleColor_${role}`]}; padding: ${as.padding()}; margin: ${as.margin()}; min-height:${as.background_minHeight}px; font-size: ${as.font_size}px; display: flex; flex-direction:column; align-items: flex-start; justify-content: center; border-radius: 15px'><p>${contextDict[`${role}Open`]}`; }
