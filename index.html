@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please do not remove this line.
-Current version: 59
+Current version: 60
 -Concedo
 -->
 
@@ -5929,6 +5929,37 @@ Current version: 59
 		show_abort_button(false);
 	}
 
+	var addimgLongPressTimer = null;
+	function btn_addimg_longpress_start()
+	{
+		addimgLongPressTimer = setTimeout(()=>{
+			inputBox("Enter a prompt to generate an image with.","Generate Image Manually","","Enter a Prompt",()=>{
+				let userinput = document.getElementById("inputboxcontainerinput").value;
+				if(userinput.trim()!="")
+				{
+					var sentence = userinput.trim().substring(0, 300);
+					do_manual_gen_image(sentence);
+				}
+			},false);
+		}, 2000);
+	}
+	function btn_addimg_longpress_end()
+	{
+		clearTimeout(addimgLongPressTimer);
+	}
+
+	function do_manual_gen_image(sentence)
+	{
+		generate_new_image(sentence);
+		document.getElementById("btn_genimg").disabled = true;
+		document.getElementById("btn_genimg2").disabled = true;
+		//disable it for 10 sec to prevent spam
+		setTimeout(() => {
+			document.getElementById("btn_genimg").disabled = false;
+			document.getElementById("btn_genimg2").disabled = false;
+		}, 10000);
+	}
+
 	function manual_gen_image() {
 		let truncated_context = concat_gametext(true, "");
 		truncated_context = replace_placeholders(truncated_context);
@@ -5938,15 +5969,8 @@ Current version: 59
 			sentence = start_trim_to_sentence(sentence);
 			sentence = end_trim_to_sentence(sentence,true);
 			if (sentence.length > 0) {
-				generate_new_image(sentence);
 				nextgeneratedimagemilestone = tclen + generateimagesinterval;
-				document.getElementById("btn_genimg").disabled = true;
-				document.getElementById("btn_genimg2").disabled = true;
-				//disable it for 10 sec to prevent spam
-				setTimeout(() => {
-					document.getElementById("btn_genimg").disabled = false;
-					document.getElementById("btn_genimg2").disabled = false;
-				}, 10000);
+				do_manual_gen_image(sentence);
 			}
 		}
 	}
@@ -8155,7 +8179,7 @@ Current version: 59
 			render_gametext();
 		}
 
-		}, 3000);
+		}, 2000);
 	}
 	function btn_back_longpress_end()
 	{
@@ -8195,7 +8219,7 @@ Current version: 59
 			render_gametext();
 		}
 
-		}, 3000);
+		}, 2000);
 	}
 	function btn_redo_longpress_end()
 	{
@@ -8692,7 +8716,7 @@ Current version: 59
 					<button type="button" class="btn btn-primary" id="btn_actundo" onpointerdown="btn_back_longpress_start()" onpointerleave="btn_back_longpress_end()" onpointerup="btn_back_longpress_end()" onclick="btn_back()">Back</button>
 					<button type="button" class="btn btn-primary" id="btn_actredo" onpointerdown="btn_redo_longpress_start()" onpointerleave="btn_redo_longpress_end()" onpointerup="btn_redo_longpress_end()" onclick="btn_redo()">Redo</button>
 					<button type="button" class="btn btn-primary" id="btn_actretry" onclick="btn_retry()">Retry</button>
-					<button type="button" class="btn btn-primary bg_green" id="btn_genimg"  onclick="manual_gen_image()">Add Img</button>
+					<button type="button" class="btn btn-primary bg_green" id="btn_genimg" onpointerdown="btn_addimg_longpress_start()" onpointerleave="btn_addimg_longpress_end()" onpointerup="btn_addimg_longpress_end()" onclick="manual_gen_image()">Add Img</button>
 				</div>
 				<div class="box flex flex-push-right">
 					<input type="checkbox" id="entersubmit" checked>
@@ -8735,7 +8759,7 @@ Current version: 59
 					<button type="button" class="btn btn-primary" id="btn_actundo2" onpointerdown="btn_back_longpress_start()" onpointerleave="btn_back_longpress_end()" onpointerup="btn_back_longpress_end()" onclick="btn_back()">Back</button>
 					<button type="button" class="btn btn-primary" id="btn_actredo2" onpointerdown="btn_redo_longpress_start()" onpointerleave="btn_redo_longpress_end()" onpointerup="btn_redo_longpress_end()" onclick="btn_redo()">Redo</button>
 					<button type="button" class="btn btn-primary" id="btn_actretry2" onclick="btn_retry()">Retry</button>
-					<button type="button" class="btn btn-primary bg_green" id="btn_genimg2"  onclick="manual_gen_image()">Add Img</button>
+					<button type="button" class="btn btn-primary bg_green" id="btn_genimg2" onpointerdown="btn_addimg_longpress_start()" onpointerleave="btn_addimg_longpress_end()" onpointerup="btn_addimg_longpress_end()" onclick="manual_gen_image()">Add Img</button>
 					<button type="button" class="btn btn-primary" id="btn_aesthetics" onclick="openAestheticUISettingsMenu()">Customize UI</button>
 					<button type="button" class="btn btn-primary" id="btn_editmode" onclick="btn_editmode()">Edit</button>
 
