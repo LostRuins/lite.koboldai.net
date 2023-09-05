@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please do not remove this line.
-Current version: 60
+Current version: 61
 -Concedo
 -->
 
@@ -8118,11 +8118,18 @@ Current version: 60
 		backup_wi_obj = JSON.parse(JSON.stringify(current_wi)); //in case we need to reset
 	}
 
+	function wi_quick_search()
+	{
+		save_wi();
+		btn_wi();
+	}
+
 	function btn_wi() {
 		document.getElementById("case_sensitive_wi").checked = (localsettings.case_sensitive_wi?true:false);
 		document.getElementById("wicontainer").classList.remove("hidden");
 
 		let wilist = document.getElementById("wilist");
+		let qsval = document.getElementById("wiquicksearch").value;
 		selectionhtml = `<table style="border-collapse: separate; border-spacing: 1.5pt;">`;
 		for (var i = 0; i < current_wi.length; ++i) {
 			var curr = current_wi[i];
@@ -8130,7 +8137,13 @@ Current version: 60
 			var witxt = escapeHtml(curr.content);
 			var wisec = curr.keysecondary;
 
-			selectionhtml += `<tr id="wirow` + i + `"><td class="col-8" style="font-size: 10px;">` +
+			var ishidden = false;
+			if(qsval!="" && !winame.toLowerCase().includes(qsval) && !witxt.toLowerCase().includes(qsval))
+			{
+				ishidden = true;
+			}
+
+			selectionhtml += `<tr class='`+ (ishidden?"hidden":"") +`' id="wirow` + i + `"><td class="col-8" style="font-size: 10px;">` +
 				`<button type="button" class="btn btn-danger widelbtn" id="widel` + i + `" onclick="return del_wi(` + i + `)">X</button></td>` +
 				`<td class="col-6">
 		<input class="form-control wiinputkey" id="wikey`+ i + `" placeholder="Key(s)" value="` + winame + `">
@@ -8359,7 +8372,7 @@ Current version: 60
 			colorPicker.value = element.style[`${useBackground ? 'backgroundColor' : 'color'}`];
 			element.style.position = 'relative';
 			element.appendChild(colorPicker);
-			
+
 			// If we're on Safari browser and in iOS, we need some adjustments for the colorpickers to work.
 			// ..this happens because the clicks need to be directly done on the colorPicker for iOS in Safari.
 			if (/^((?!Chrome|Firefox).)*Safari/i.test(navigator.userAgent) && /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
@@ -8377,7 +8390,7 @@ Current version: 60
 				colorPicker.style.zIndex = '-1';
 				element.addEventListener('click', () => colorPicker.click());
 			}
-			
+
 			// Initialize the functionalities of the colorPicker
 			colorPicker.addEventListener('change', function() {
 				element.style[`${useBackground ? 'backgroundColor' : 'color'}`] = this.value;
@@ -9418,10 +9431,14 @@ Current version: 60
 			<div class="wilist" id="wilist">
 
 			</div>
+			<div style="float:right;">
+				<input class="settinglabel miniinput" style="margin: 3px; width: 100px;" type="text" placeholder="Quick Search" value="" id="wiquicksearch" oninput="wi_quick_search()">
+			</div>
 			<div class="settinglabel" style="padding: 4px;">
 				<div class="justifyleft settingsmall" title="Controls whether the world info keys are matched in a case-sensitive way.">Case Sensitive Keys </div>
 			   <input type="checkbox" id="case_sensitive_wi" style="margin:0px 0 0;">
 			</div>
+
 			<div class="popupfooter">
 
 				<button type="button" class="btn btn-primary" onclick="save_wi();autosave();hide_popups()">Save</button>
