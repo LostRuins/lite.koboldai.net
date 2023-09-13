@@ -959,6 +959,23 @@ Current version: 62
 			}
 		}
 
+		.settingsnav
+		{
+			margin-top: 6px;
+    		margin-left: 6px;
+		}
+
+		.settingsnav>li.active>a {
+			color: #0063ff!important;
+		}
+		.settingsnav>li>a{
+			border-radius: 8px 8px 0 0;
+			padding-top: 6px!important;
+			padding-bottom: 2px!important;
+			color: #666;
+			background-color: #b1b1b1;
+		}
+
 		.navbar-button-bar {
 			display: block;
 			height: 2px;
@@ -5300,8 +5317,30 @@ Current version: 62
 		}
 	}
 
+	var current_settings_tab_basic = true;
+	function display_settings_tab(isbasic)
+	{
+		current_settings_tab_basic = isbasic;
+		document.getElementById("settingsmenubasic_tab").classList.remove("active");
+		document.getElementById("settingsmenuadvanced_tab").classList.remove("active");
+		if (isbasic) {
+			document.getElementById("settingsmenubasic1").classList.remove("hidden");
+			document.getElementById("settingsmenubasic2").classList.remove("hidden");
+			document.getElementById("settingsmenuadvanced1").classList.add("hidden");
+			document.getElementById("settingsmenuadvanced2").classList.add("hidden");
+			document.getElementById("settingsmenubasic_tab").classList.add("active");
+		} else {
+			document.getElementById("settingsmenubasic1").classList.add("hidden");
+			document.getElementById("settingsmenubasic2").classList.add("hidden");
+			document.getElementById("settingsmenuadvanced1").classList.remove("hidden");
+			document.getElementById("settingsmenuadvanced2").classList.remove("hidden");
+			document.getElementById("settingsmenuadvanced_tab").classList.add("active");
+		}
+	}
+
 	function display_settings() {
 		document.getElementById("settingscontainer").classList.remove("hidden");
+		display_settings_tab(current_settings_tab_basic);
 		document.getElementById("max_context_length").value = document.getElementById("max_context_length_slide").value = localsettings.max_context_length;
 		document.getElementById("max_length").value = document.getElementById("max_length_slide").value = localsettings.max_length;
 		document.getElementById("temperature").value = document.getElementById("temperature_slide").value = localsettings.temperature;
@@ -5336,6 +5375,15 @@ Current version: 62
 		document.getElementById("instruct_has_markdown").checked = localsettings.instruct_has_markdown;
 		document.getElementById("auto_ctxlen").checked = localsettings.auto_ctxlen;
 		document.getElementById("auto_genamt").checked = localsettings.auto_genamt;
+		if(localflag)
+		{
+			document.getElementById("auto_ctxlen_panel").classList.add("hidden");
+			document.getElementById("auto_genamt_panel").classList.add("hidden");
+		}else{
+			document.getElementById("auto_ctxlen_panel").classList.remove("hidden");
+			document.getElementById("auto_genamt_panel").classList.remove("hidden");
+		}
+
 		pendingstyle = localsettings.image_styles;
 
 		//prepare the input for sampler order
@@ -5573,22 +5621,17 @@ Current version: 62
 		document.getElementById('chatnamesection').classList.add('hidden');
 		document.getElementById('adventuresection').classList.add('hidden');
 		document.getElementById('instructsection').classList.add('hidden');
-		document.getElementById('idlesection').classList.add('hidden');
 
 		if (document.getElementById('opmode').value == 1) {
-			document.getElementById('idlesection').classList.remove('hidden');
 		}
 		if (document.getElementById('opmode').value == 3) {
 			document.getElementById('chatnamesection').classList.remove('hidden');
-			document.getElementById('idlesection').classList.remove('hidden');
 		}
 		if (document.getElementById('opmode').value == 2) {
 			document.getElementById('adventuresection').classList.remove('hidden');
-			document.getElementById('idlesection').classList.remove('hidden');
 		}
 		if (document.getElementById('opmode').value == 4) {
 			document.getElementById('instructsection').classList.remove('hidden');
-			document.getElementById('idlesection').classList.remove('hidden');
 		}
 	}
 
@@ -8517,7 +8560,7 @@ Current version: 62
 		aestheticInstructUISettings.portrait_height = document.getElementById('portrait_height').value;
 		aestheticInstructUISettings.background_minHeight = document.getElementById('instruct-min-backgroundHeight').value;
 		aestheticInstructUISettings.centerHorizontally = document.getElementById('instructModeCenterHorizontally').checked;
-		
+
 		// aestheticInstructUISettings.background_anchor_style_you = document.getElementById('background-anchor-style-you').value;
 		// aestheticInstructUISettings.background_anchor_style_AI = document.getElementById('background-anchor-style-AI').value;
 
@@ -9051,9 +9094,14 @@ Current version: 62
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Settings</div>
 			</div>
+			<div><ul class="nav nav-tabs settingsnav">
+				<li id="settingsmenubasic_tab" class="active"><a class="" href="#" onclick="display_settings_tab(true)">Basic</a></li>
+				<li id="settingsmenuadvanced_tab" ><a class="" href="#" onclick="display_settings_tab(false)">Advanced</a></li>
+			  </ul></div>
 			<div class="aidgpopuplistheader">
-				<div class="settingsmenu" style="padding-bottom: 0px;" onchange="setting_tweaked()">
 
+				<!--basic settings menu top half-->
+				<div id="settingsmenubasic1" class="settingsmenu" style="padding-bottom: 0px;" onchange="setting_tweaked()">
 					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Quick Presets <span class="helpicon">?<span class="helptext">Pick from an easy selection of curated generation presets, or configure your own.</span></span></div>
@@ -9062,7 +9110,6 @@ Current version: 62
 							</select>
 						</div>
 					</div>
-
 					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Temperature <span class="helpicon">?<span
@@ -9098,7 +9145,7 @@ Current version: 62
 							<div class="justifyleft">512</div>
 							<div class="justifyright">2048</div>
 						</div>
-						<div class="settinglabel">
+						<div id="auto_ctxlen_panel" class="settinglabel">
 							<div class="justifyleft settingsmall" title="Automatically lowers settings if incompatible with existing workers">Auto-Adjust Limits </div>
 						   <input type="checkbox" id="auto_ctxlen" style="margin:0px 0 0;">
 						</div>
@@ -9121,7 +9168,7 @@ Current version: 62
 							<div class="justifyleft">16</div>
 							<div class="justifyright">512</div>
 						</div>
-						<div class="settinglabel">
+						<div id="auto_genamt_panel" class="settinglabel">
 							<div class="justifyleft settingsmall" title="Automatically lowers settings if incompatible with existing workers">Auto-Adjust Limits </div>
 						   <input type="checkbox" id="auto_genamt" style="margin:0px 0 0;">
 						</div>
@@ -9144,10 +9191,106 @@ Current version: 62
 						</div>
 					</div>
 
+
+
+					<div class="settingitem">
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Repetition Penalty <span class="helpicon">?<span
+										class="helptext">Used to penalize words that were already generated or belong to
+										the context (Going over 1.2 breaks 6B models).</span></span></div>
+							<input inputmode="numeric" class="justifyright flex-push-right settingsmall" id="rep_pen" value=80
+								oninput="
+						   document.getElementById('rep_pen_slide').value = this.value;">
+						</div>
+						<div><input type="range" class="form-range airange" min="1" max="3" step="0.01"
+								id="rep_pen_slide" oninput="
+						   document.getElementById('rep_pen').value = this.value;"></div>
+						<div class="settingminmax">
+							<div class="justifyleft">1</div>
+							<div class="justifyright">3</div>
+						</div>
+					</div>
+
+
+				</div>
+				<!-- basic settings menu bottom half-->
+				<div id="settingsmenubasic2" class="settingsmenu" style="padding-top: 0px;">
+
+
+					<div class="settingitem">
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Format <span class="helpicon">?<span class="helptext">Story Mode is best for novel style writing. Adventure Mode is best for Interactive Fiction RPGs. Chat Mode is best for chat conversations with the AI. Instruct mode is for giving the AI ChatGPT styled tasks.</span></span></div>
+							<select class="form-control" id="opmode" style="height:24px;padding:0;margin:0px 0 0;" onchange="toggle_opmode()">
+								<option value="1">Story Mode</option>
+								<option value="2">Adventure Mode</option>
+								<option value="3">Chat Mode</option>
+								<option value="4">Instruct Mode</option>
+							</select>
+
+
+						</div>
+					</div>
+
+					<div class="settingitem">
+					<div class="settinglabel">
+						<div id="chatnamesection" class="hidden">
+							<table class="settingsmall text-center" style="border-spacing: 4px 2px;	border-collapse: separate;">
+								<tr>
+								<th>Your Name</th>
+								<th>AI Name <span class="helpicon">?<span class="helptext">The name of the person you want to chat with. Multiple opponents can be specified, creating a group chat, separate their names with ||$||</span></span></th>
+								</tr>
+								<tr>
+								<td><input class="settinglabel miniinput" type="text" placeholder="(Enter Name)" value="" id="chatname" title="The name that you will be chatting as"></td>
+								<td><input class="settinglabel miniinput" type="text" placeholder="(Auto)" value="" id="chatopponent"  title="The name of the person you want to chat with"></td>
+								</tr>
+							  </table>
+							<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="Switches to an aesthetic messenger style UI">Aesthetic Chat UI </div>
+							<input type="checkbox" id="enhanced_chat_ui" style="margin:0px 0 0;">
+							</div>
+							<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="Whether to allow multiple lines in AI responses. Not recommended.">Multiline Replies </div>
+							<input type="checkbox" id="multiline_replies" style="margin:0px 0 0;">
+							</div>
+							<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="Allow incomplete AI chat replies, which can be continued by pressing submit again. Not recommended.">Continue Bot Replies</div>
+							<input type="checkbox" id="allow_continue_chat" style="margin:0px 0 0;">
+							</div>
+						</div>
+						<div id="adventuresection" class="settinglabel hidden" style="padding-top: 3px;">
+							<div class="justifyleft settingsmall">Adventure Prompt <span class="helpicon">?<span
+								class="helptext">Modifies the context, injecting tokens to improve adventure quality for adventure mode.</span></span> </div>
+						   <input type="checkbox" id="adventure_context_mod" style="margin:0px 0 0;">
+						</div>
+						<div id="instructsection" class="settinglabel hidden" style="padding-top: 3px;">
+							<table class="settingsmall text-center" style="border-spacing: 4px 2px;	border-collapse: separate;">
+								<tr>
+									<th>Start Seq.<span class="helpicon">?<span class="helptext">The sequence to start an instruction prompt</span></span></th>
+									<th>End Seq.<span class="helpicon">?<span class="helptext">The sequence to end an instruction prompt</span></span></th>
+								</tr>
+								<tr>
+								<td><input class="settinglabel miniinput" type="text" placeholder="\\n### Instruction:\\n" value="" id="instruct_starttag" title="The sequence to start an instruction prompt"></td>
+								<td><input class="settinglabel miniinput" type="text" placeholder="\\n### Response:\\n" value="" id="instruct_endtag"  title="The sequence to end an instruction prompt"></td>
+								</tr>
+							</table>
+							<div class="settinglabel">
+								<div class="justifyleft settingsmall" title="Switches to a UI style more suitable for RP. Enabling markdown together with this is recommended.">Aesthetic Instruct UI </div>
+								<input type="checkbox" id="enhanced_instruct_ui" style="margin:0px 5.5px;">
+							</div>
+							<div class="justifyleft settingsmall">Enable Markdown <span class="helpicon">?<span
+								class="helptext">Allows the UI to use markdown formatting such as quotes and code blocks.</span></span> </div>
+							<input type="checkbox" id="instruct_has_markdown" style="margin:0px 0 0;">
+						</div>
+					</div>
+					</div>
+				</div>
+
+				<!--advanced settings menu top-->
+				<div id="settingsmenuadvanced1" class="settingsmenu hidden" style="padding-bottom: 0px;" onchange="setting_tweaked()">
 					<div class="settingitem">
 						<div class="settinglabel">
 
-							<div class="justifyleft settingsmall">Advanced Settings <span class="helpicon">?<span class="helptext">These settings control alternative samplers configurations. They are inactive by default, you usually do not need to change them.</span></span></div>
+							<div class="justifyleft settingsmall">Advanced Sampler Config <span class="helpicon">?<span class="helptext">These settings control alternative samplers configurations. They are inactive by default, you usually do not need to change them.</span></span></div>
 							<table class="settingsmall text-center" style="border-spacing: 4px 2px;
 							border-collapse: separate;">
 								<tr>
@@ -9173,19 +9316,6 @@ Current version: 62
 
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Repetition Penalty <span class="helpicon">?<span
-										class="helptext">Used to penalize words that were already generated or belong to
-										the context (Going over 1.2 breaks 6B models).</span></span></div>
-							<input inputmode="numeric" class="justifyright flex-push-right settingsmall" id="rep_pen" value=80
-								oninput="
-						   document.getElementById('rep_pen_slide').value = this.value;">
-						</div>
-						<div><input type="range" class="form-range airange" min="1" max="3" step="0.01"
-								id="rep_pen_slide" oninput="
-						   document.getElementById('rep_pen').value = this.value;"></div>
-						<div class="settingminmax">
-							<div class="justifyleft">1</div>
-							<div class="justifyright">3</div>
 						</div>
 					</div>
 
@@ -9210,8 +9340,9 @@ Current version: 62
 						</div>
 
 					</div>
-					</div>
-					<div class="settingsmenu" style="padding-top: 0px;">
+				</div>
+				<!--advanced settings menu bottom-->
+				<div id="settingsmenuadvanced2" class="settingsmenu hidden" style="padding-top: 0px;" onchange="">
 					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Generate Images <span class="helpicon">?<span class="helptext">Use Stable Horde to insert AI generated images into your story.</span></span></div>
@@ -9240,7 +9371,6 @@ Current version: 62
 								</tr>
 								</table>
 							</div>
-
 					</div>
 
 					<div class="settingitem">
@@ -9255,92 +9385,28 @@ Current version: 62
 						</div>
 					</div>
 
-
 					<div class="settingitem">
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Format <span class="helpicon">?<span class="helptext">Story Mode is best for novel style writing. Adventure Mode is best for Interactive Fiction RPGs. Chat Mode is best for chat conversations with the AI. Instruct mode is for giving the AI ChatGPT styled tasks.</span></span></div>
-							<select class="form-control" id="opmode" style="height:24px;padding:0;margin:0px 0 0;" onchange="toggle_opmode()">
-								<option value="1">Story Mode</option>
-								<option value="2">Adventure Mode</option>
-								<option value="3">Chat Mode</option>
-								<option value="4">Instruct Mode</option>
+						<div id="idlesection" class="settinglabel">
+							<div class="justifyleft settingsmall" title="Allow the AI to send more responses if you are idle.">Idle Responses&nbsp;</div>
+							<select style="padding:1px; height:auto; width: 27px; appearance: none; font-size: 7pt;" class="form-control" id="idle_responses">
+								<option value="0">Off</option>
+								<option value="1">1x</option>
+								<option value="2">2x</option>
+								<option value="3">3x</option>
+								<option value="5">5x</option>
+								<option value="8">8x</option>
 							</select>
-							<div id="chatnamesection" class="hidden">
-								<table class="settingsmall text-center" style="border-spacing: 4px 2px;	border-collapse: separate;">
-								<tr>
-								  <th>Your Name</th>
-								  <th>AI Name <span class="helpicon">?<span class="helptext">The name of the person you want to chat with. Multiple opponents can be specified, creating a group chat, separate their names with ||$||</span></span></th>
-								</tr>
-								<tr>
-								<td><input class="settinglabel miniinput" type="text" placeholder="(Enter Name)" value="" id="chatname" title="The name that you will be chatting as"></td>
-								<td><input class="settinglabel miniinput" type="text" placeholder="(Auto)" value="" id="chatopponent"  title="The name of the person you want to chat with"></td>
-								</tr>
-							  </table>
-							<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Switches to an aesthetic messenger style UI">Aesthetic Chat UI </div>
-							<input type="checkbox" id="enhanced_chat_ui" style="margin:0px 0 0;">
-							</div>
-							<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Whether to allow multiple lines in AI responses. Not recommended.">Multiline Replies </div>
-							<input type="checkbox" id="multiline_replies" style="margin:0px 0 0;">
-							</div>
-							<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Allow incomplete AI chat replies, which can be continued by pressing submit again. Not recommended.">Continue Bot Replies</div>
-							<input type="checkbox" id="allow_continue_chat" style="margin:0px 0 0;">
-							</div>
-
-							</div>
-							<div id="adventuresection" class="settinglabel hidden" style="padding-top: 3px;">
-								<div class="justifyleft settingsmall">Improved Prompt <span class="helpicon">?<span
-									class="helptext">Modifies the context, injecting tokens to improve adventure quality for adventure mode.</span></span> </div>
-							   <input type="checkbox" id="adventure_context_mod" style="margin:0px 0 0;">
-							</div>
-							<div id="instructsection" class="settinglabel hidden" style="padding-top: 3px;">
-								<table class="settingsmall text-center" style="border-spacing: 4px 2px;	border-collapse: separate;">
-									<tr>
-										<th>Start Seq.<span class="helpicon">?<span class="helptext">The sequence to start an instruction prompt</span></span></th>
-										<th>End Seq.<span class="helpicon">?<span class="helptext">The sequence to end an instruction prompt</span></span></th>
-									</tr>
-									<tr>
-									<td><input class="settinglabel miniinput" type="text" placeholder="\\n### Instruction:\\n" value="" id="instruct_starttag" title="The sequence to start an instruction prompt"></td>
-									<td><input class="settinglabel miniinput" type="text" placeholder="\\n### Response:\\n" value="" id="instruct_endtag"  title="The sequence to end an instruction prompt"></td>
-									</tr>
-								</table>
-								<div class="settinglabel">
-									<div class="justifyleft settingsmall" title="Switches to a UI style more suitable for RP. Enabling markdown together with this is recommended.">Aesthetic Instruct UI </div>
-									<input type="checkbox" id="enhanced_instruct_ui" style="margin:0px 5.5px;">
-								</div>
-								<div class="justifyleft settingsmall">Enable Markdown <span class="helpicon">?<span
-									class="helptext">Allows the UI to use markdown formatting such as quotes and code blocks.</span></span> </div>
-								<input type="checkbox" id="instruct_has_markdown" style="margin:0px 0 0;">
-							</div>
-							<div id="idlesection" class="settinglabel hidden">
-								<div class="justifyleft settingsmall" title="Allow the AI to send more responses if you are idle.">Idle Responses&nbsp;</div>
-								<select style="padding:1px; height:auto; width: 27px; appearance: none; font-size: 7pt;" class="form-control" id="idle_responses">
-									<option value="0">Off</option>
-									<option value="1">1x</option>
-									<option value="2">2x</option>
-									<option value="3">3x</option>
-									<option value="5">5x</option>
-									<option value="8">8x</option>
-								</select>
-								<select style="padding:1px; height:auto; width: 27px; appearance: none; font-size: 7pt;" class="form-control" id="idle_duration">
-									<option value="15">15s</option>
-									<option value="30">30s</option>
-									<option value="60">60s</option>
-									<option value="120">2m</option>
-									<option value="300">5m</option>
-									<option value="600">10m</option>
-								</select>
-							</div>
+							<select style="padding:1px; height:auto; width: 27px; appearance: none; font-size: 7pt;" class="form-control" id="idle_duration">
+								<option value="15">15s</option>
+								<option value="30">30s</option>
+								<option value="60">60s</option>
+								<option value="120">2m</option>
+								<option value="300">5m</option>
+								<option value="600">10m</option>
+							</select>
 						</div>
-					</div>
 
-					<div class="settingitem">
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Automatically scrolls the text window down when new text is generated">Autoscroll </div>
-						   <input type="checkbox" id="autoscroll" style="margin:0px 0 0;">
-						</div>
+
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" title="Trims incomplete sentences in AI output">Trim Sentences </div>
 						   <input type="checkbox" id="trimsentences" style="margin:0px 0 0;">
@@ -9350,15 +9416,23 @@ Current version: 62
 						   <input type="checkbox" id="trimwhitespace" style="margin:0px 0 0;">
 						</div>
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Allow the EOS token and others to be used">Unban Tokens (KAI) </div>
+							<div class="justifyleft settingsmall" title="Allow the EOS token and others to be used">Unban EOS Tokens </div>
 						   <input type="checkbox" id="unban_tokens" style="margin:0px 0 0;">
 						</div>
+					</div>
+
+
+					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Autosaves your current story and settings on exit, reloads when you return">Persist Session </div>
+							<div class="justifyleft settingsmall" title="Automatically scrolls the text window down when new text is generated">Autoscroll </div>
+						   <input type="checkbox" id="autoscroll" style="margin:0px 0 0;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="Autosaves your current story and settings on exit, reloads when you return">Autosave Session</div>
 						   <input type="checkbox" id="persist_session" style="margin:0px 0 0;">
 						</div>
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Includes your current settings when saving or sharing your story">Export Settings </div>
+							<div class="justifyleft settingsmall" title="Includes your current settings when saving or sharing your story">JSON Includes Settings </div>
 						   <input type="checkbox" id="export_settings" style="margin:0px 0 0;">
 						</div>
 						<div class="settinglabel">
@@ -9367,8 +9441,8 @@ Current version: 62
 						</div>
 					</div>
 
-
 				</div>
+
 			</div>
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" id="btn_settingsaccept"
