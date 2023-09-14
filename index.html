@@ -2841,7 +2841,6 @@ Current version: 62
 	var temp_scenario = null;
 	var last_token_budget = ""; //to display token limits
 	var last_known_filename = "";
-	var localmode = false;
 	var localmodeport = 5000;
 	var localmodehost = "localhost";
 	var kobold_endpoint_version = ""; //used to track problematic versions to avoid sending extra fields
@@ -2901,6 +2900,9 @@ Current version: 62
 		top_a: 0,
 		typ_s: 1,
 		tfs_s: 1,
+		miro_type: 0,
+		miro_tau: 5.0,
+		miro_eta: 0.1,
 		sampler_order: [6, 0, 1, 3, 4, 2, 5],
 	};
 
@@ -2976,7 +2978,6 @@ Current version: 62
 
 		if (localflag)
 		{
-			localmode = true;
 			let inputport = urlParams.get('port');
 			if (window.location.port && window.location.port != 80 && window.location.port != 443) {
 				localmodeport = window.location.port;
@@ -3013,8 +3014,8 @@ Current version: 62
 
 		console.log("Init started");
 		try {
-			let loadedsettingsjson = localStorage.getItem((localmode?"e_":"")+"kaihordewebui_settings");
-			let loadedstorycompressed = localStorage.getItem((localmode?"e_":"")+"kaihordewebui_story");
+			let loadedsettingsjson = localStorage.getItem((localflag?"e_":"")+"kaihordewebui_settings");
+			let loadedstorycompressed = localStorage.getItem((localflag?"e_":"")+"kaihordewebui_story");
 			if (loadedsettingsjson != null && loadedsettingsjson != "" && loadedstorycompressed != null && loadedstorycompressed != "") {
 				let loadedsettings = JSON.parse(loadedsettingsjson);
 				//see if persist is enabled
@@ -3163,7 +3164,7 @@ Current version: 62
 	let initial_fetched_kudos = false;
 	function attempt_connect(popup_aiselect = true)
 	{
-		if (localmode) {
+		if (localflag) {
 			document.getElementById("customapidropdown").value = 0;
 			let protocol = "http://";
 			if(window.location.protocol.includes('https') && !is_using_web_lite())
@@ -3358,16 +3359,20 @@ Current version: 62
 		return (custom_oai_key!=""||custom_kobold_endpoint!=""||custom_scale_key!=""||custom_claude_key!="");
 	}
 
-	function is_using_newer_kcpp()
+	function is_using_kcpp_with_streaming()
 	{
 		return (koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.29") > 0);
+	}
+	function is_using_kcpp_with_mirostat()
+	{
+		return (koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.36") > 0);
 	}
 
 	function should_use_pseudostreaming()
 	{
 		let pseudostreaming = (document.getElementById("pseudostreaming").checked ? true : false);
 		let pstreamamount = urlParams.get('streamamount');
-		if(is_using_newer_kcpp())
+		if(is_using_kcpp_with_streaming())
 		{
 			if(pstreamamount == null || pstreamamount <= 0)
 			{
@@ -3499,12 +3504,12 @@ Current version: 62
 			//fetch the model list
 			fetch_models((mdls) => {
 				//can we find the model that's used? if yes load it, otherwise load the first one
-				if (mdls.length == 0 && !localmode) {
+				if (mdls.length == 0 && !localflag) {
 					msgbox("No models available. Unable to load.");
 				}
 				else
 				{
-					if(!localmode)
+					if(!localflag)
 					{
 						selected_models = [];
 						for (var i = 0; i < mdls.length; ++i) {
@@ -4154,7 +4159,7 @@ Current version: 62
 	}
 	function togglescenarioallownsfw()
 	{
-		if(localmode)
+		if(localflag)
 		{
 			document.getElementById("scenarioautopickbox").classList.add("hidden");
 		}
@@ -4206,7 +4211,7 @@ Current version: 62
 			{
 				scenarioautopickai = true; //no selected model, pick a good one
 			}
-			if (scenarioautopickai && !localmode)
+			if (scenarioautopickai && !localflag)
 			{
 				fetch_models((mdls) =>
 				{
@@ -4342,14 +4347,14 @@ Current version: 62
 	}
 
 	function get_and_show_workers() {
-		if(localmode)
+		if(localflag)
 		{
 			return;
 		}
 		get_workers((wdata) => { show_workers(wdata) });
 	}
 	function get_workers(onDoneCallback) {
-		if(localmode)
+		if(localflag)
 		{
 			onDoneCallback([]);
 			return;
@@ -4969,7 +4974,7 @@ Current version: 62
 
 	function fetch_models(onDoneCallback)
 	{
-		if(localmode)
+		if(localflag)
 		{
 			onDoneCallback(selected_models);
 			return;
@@ -5240,7 +5245,7 @@ Current version: 62
 	let lastValidFoundUserWorkers = [];
 	function fetch_kudo_balance()
 	{
-		if(localmode)
+		if(localflag)
 		{
 			return;
 		}
@@ -5382,6 +5387,9 @@ Current version: 62
 		document.getElementById("top_a").value = localsettings.top_a;
 		document.getElementById("typ_s").value = localsettings.typ_s;
 		document.getElementById("tfs_s").value = localsettings.tfs_s;
+		document.getElementById("miro_type").value = localsettings.miro_type;
+		document.getElementById("miro_tau").value = localsettings.miro_tau;
+		document.getElementById("miro_eta").value = localsettings.miro_eta;
 		document.getElementById("generate_images").value = localsettings.generate_images;
 		document.getElementById("enhanced_chat_ui").checked = localsettings.enhanced_chat_ui;
 		document.getElementById("enhanced_instruct_ui").checked = localsettings.enhanced_instruct_ui;
@@ -5456,6 +5464,7 @@ Current version: 62
 			document.getElementById("top_a").value = found.top_a;
 			document.getElementById("typ_s").value = found.typical;
 			document.getElementById("tfs_s").value = found.tfs;
+			document.getElementById("miro_type").value = 0;
 			document.getElementById("rep_pen").value = document.getElementById("rep_pen_slide").value = found.rep_pen;
 			document.getElementById("rep_pen_range").value = found.rep_pen_range;
 			document.getElementById("rep_pen_slope").value = found.rep_pen_slope;
@@ -5579,6 +5588,10 @@ Current version: 62
 		localsettings.top_a = document.getElementById("top_a").value;
 		localsettings.typ_s = document.getElementById("typ_s").value;
 		localsettings.tfs_s = document.getElementById("tfs_s").value;
+		localsettings.miro_type = document.getElementById("miro_type").value;
+		localsettings.miro_tau = document.getElementById("miro_tau").value;
+		localsettings.miro_eta = document.getElementById("miro_eta").value;
+
 		localsettings.speech_synth = document.getElementById("ttsselect").value;
 		localsettings.beep_on = (document.getElementById("beep_on").checked?true:false);
 		localsettings.auto_ctxlen = (document.getElementById("auto_ctxlen").checked ? true : false);
@@ -5626,6 +5639,9 @@ Current version: 62
 		localsettings.top_a = cleannum(localsettings.top_a, 0, 1);
 		localsettings.typ_s = cleannum(localsettings.typ_s, 0, 1);
 		localsettings.tfs_s = cleannum(localsettings.tfs_s, 0, 1);
+		localsettings.miro_type = cleannum(localsettings.miro_type, 0, 2);
+		localsettings.miro_tau = cleannum(localsettings.miro_tau, 0, 30);
+		localsettings.miro_eta = cleannum(localsettings.miro_eta, 0, 10);
 		toggle_invert_colors();
 
 		autosave(); //need to always autosave, so that we can switch back to non persistent sessions
@@ -5676,7 +5692,7 @@ Current version: 62
 	}
 
 	function confirm_newgame() {
-		if(!localmode && !document.getElementById("keep_ai_selected").checked)
+		if(!localflag && !document.getElementById("keep_ai_selected").checked)
 		{
 			selected_models = [];
 			selected_workers = [];
@@ -5730,6 +5746,16 @@ Current version: 62
 			},
 			"models": selected_models.map((m) => { return m.name }),
 		};
+
+		if((custom_kobold_endpoint != "" && is_using_kcpp_with_mirostat()))
+		{
+			if(localsettings.miro_type>0)
+			{
+				submit_payload.params.mirostat = localsettings.miro_type;
+				submit_payload.params.mirostat_tau = localsettings.miro_tau;
+				submit_payload.params.mirostat_eta = localsettings.miro_eta;
+			}
+		}
 
 		//v2 api specific fields
 		submit_payload.workers = selected_workers.map((m) => { return m.id });
@@ -5980,7 +6006,7 @@ Current version: 62
 				console.error('Error:', error);
 			});
 		}
-		else if(is_using_newer_kcpp())
+		else if(is_using_kcpp_with_streaming())
 		{
 			//we can use abort functions
 			fetch(custom_kobold_endpoint + koboldcpp_abort_endpoint, {
@@ -6408,6 +6434,16 @@ Current version: 62
 				},
 				"models": selected_models.map((m) => { return m.name }),
 			};
+
+			if((custom_kobold_endpoint != "" && is_using_kcpp_with_mirostat()))
+			{
+				if(localsettings.miro_type>0)
+				{
+					submit_payload.params.mirostat = localsettings.miro_type;
+					submit_payload.params.mirostat_tau = localsettings.miro_tau;
+					submit_payload.params.mirostat_eta = localsettings.miro_eta;
+				}
+			}
 
 			//v2 api specific fields
 			submit_payload.workers = selected_workers.map((m)=>{return m.id});
@@ -7779,7 +7815,7 @@ Current version: 62
 
 		if (perfdata == null) {
 			document.getElementById("topbtn_reconnect").classList.remove("hidden");
-			if(localmode)
+			if(localflag)
 			{
 				document.getElementById("topbtn_customendpt").classList.add("hidden");
 			}else{
@@ -7797,7 +7833,7 @@ Current version: 62
 			document.getElementById("topbtn_reconnect").classList.add("hidden");
 			document.getElementById("topbtn_customendpt").classList.add("hidden");
 
-			if(localmode)
+			if(localflag)
 			{
 				document.getElementById("topbtn_ai").classList.add("hidden");
 			}else{
@@ -8100,10 +8136,10 @@ Current version: 62
 
 	function autosave() {
 		//autosave
-		localStorage.setItem((localmode?"e_":"")+"kaihordewebui_settings", JSON.stringify(localsettings));
+		localStorage.setItem((localflag?"e_":"")+"kaihordewebui_settings", JSON.stringify(localsettings));
 		if (localsettings.persist_session) {
 			let compressedstory = generate_compressed_story();
-			localStorage.setItem((localmode?"e_":"")+"kaihordewebui_story", compressedstory);
+			localStorage.setItem((localflag?"e_":"")+"kaihordewebui_story", compressedstory);
 		}
 		console.log("autosave done");
 	}
@@ -8426,13 +8462,13 @@ Current version: 62
 	function initializeInstructUIFunctionality() {
 		// Load the default settings (by default), or the latest chosen ones.
 		if (localsettings.persist_session === true) {
-			const jsonString = localStorage.getItem((localmode?"e_":"")+'koboldLiteUICustomizationOptions');
+			const jsonString = localStorage.getItem((localflag?"e_":"")+'koboldLiteUICustomizationOptions');
 			if (jsonString) {
 				var obj = JSON.parse(jsonString);
 				for (let key in obj) { if (aestheticInstructUISettings.hasOwnProperty(key)) { aestheticInstructUISettings[key] = obj[key]; } }
 			}
 		}	// If persist session isn't toggled, reset to the default settings.
-		else { localStorage.setItem((localmode ? 'e_': '') + 'koboldLiteUICustomizationOptions', JSON.stringify(aestheticInstructUISettings, null, 2)); }
+		else { localStorage.setItem((localflag ? 'e_': '') + 'koboldLiteUICustomizationOptions', JSON.stringify(aestheticInstructUISettings, null, 2)); }
 
 		// Initialize foregroundColorPickers and backgroundColorPickers.
 		document.querySelectorAll('.enhancedTextColorPicker, .enhancedStandardColorPicker').forEach(element => {
@@ -8596,7 +8632,7 @@ Current version: 62
 		aestheticInstructUISettings.background_minHeight = cleannum(aestheticInstructUISettings.background_minHeight, 0, 300);
 
 		// NOTE: Portraits are loaded automatically from the json, and are stored to aestheticInstructUISettings directly.
-		localStorage.setItem((localmode?"e_":"")+'koboldLiteUICustomizationOptions', JSON.stringify(aestheticInstructUISettings, null, 2));
+		localStorage.setItem((localflag?"e_":"")+'koboldLiteUICustomizationOptions', JSON.stringify(aestheticInstructUISettings, null, 2));
 
 		function getTextStyleFromElement(id) {
 			let element = document.getElementById(id);
@@ -9351,6 +9387,28 @@ Current version: 62
 
 					<div class="settingitem">
 						<div class="settinglabel">
+
+							<div class="justifyleft settingsmall">Mirostat (If supported) <span class="helpicon">?<span class="helptext">Replaces your samplers with mirostat, an alternative sampling method. May not be available depending on backend, not supported on Horde.</span></span></div>
+							<table class="settingsmall text-center" style="border-spacing: 4px 2px;
+							border-collapse: separate;">
+								<tr>
+								  <th title="Mirostat Type 0/1/2">Mode</th>
+								  <th title="Mirostat Tau Value">Tau</th>
+								  <th title="Mirostat Eta Value">Eta</th>
+								</tr>
+								<tr>
+								<td><select style="padding:1px; height:auto; width: 27px; appearance: none; font-size: 7pt;" class="form-control" id="miro_type">
+									<option value="0">Off</option>
+									<option value="1">1</option>
+									<option value="2">2</option>
+								</select></td>
+								<td><input class="" type="text" placeholder="0.0" value="0.0"
+								id="miro_tau"></td>
+								<td><input class="" type="text" placeholder="0.0" value="0.0"
+								id="miro_eta"></td>
+								</tr>
+							  </table>
+
 						</div>
 					</div>
 
@@ -9894,7 +9952,7 @@ if ('serviceWorker' in navigator) {
 
 	//for local mode, we do not load any PWA service worker.
 	//this will prevent PWA functionality locally but will avoid the scary 404 errors
-	if(localmode)
+	if(localflag)
 	{
 		console.log("Try to register service worker...");
 		try {
