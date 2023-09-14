@@ -3001,7 +3001,7 @@ Current version: 62
 		const tokenstreaming = urlParams.get('streaming');
 		if(tokenstreaming)
 		{
-			document.getElementById("pseudostreaming").checked = true;
+			document.getElementById("tokenstreaming").checked = true;
 		}
 
 		const fromfile = ( window.location.protocol == 'file:' );
@@ -3362,30 +3362,28 @@ Current version: 62
 
 	function is_using_kcpp_with_streaming()
 	{
-		return (koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.29") > 0);
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.29") > 0);
 	}
 	function is_using_kcpp_with_mirostat()
 	{
-		return (koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.36") > 0);
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.36") > 0);
 	}
 
-	function should_use_pseudostreaming()
+	//0 is none, 1 is pseudostreaming, 2 is true streaming
+	function determine_streaming_type()
 	{
-		let pseudostreaming = (document.getElementById("pseudostreaming").checked ? true : false);
+		let streamtype = (document.getElementById("tokenstreaming").checked ? 1 : 0);
 		let pstreamamount = urlParams.get('streamamount');
-		if(is_using_kcpp_with_streaming())
+		if(streamtype==1 && is_using_kcpp_with_streaming() && (pstreamamount == null || pstreamamount <= 0))
 		{
-			if(pstreamamount == null || pstreamamount <= 0)
-			{
-				pseudostreaming = false;
-			}
+			streamtype = 2; //true streaming
 		}
 
 		if(waiting_for_autosummary)
 		{
-			pseudostreaming = false;
+			streamtype = 0;
 		}
-		return pseudostreaming;
+		return streamtype;
 	}
 
 	function is_using_web_lite()
@@ -4727,7 +4725,7 @@ Current version: 62
 							document.getElementById("connectstatus").innerHTML = "Connected to Custom Endpoint";
 							render_gametext();
 
-							if(localflag)
+							//allow kcpp version check for remote endpoints too
 							{
 								//for local mode, check if we are using koboldcpp, if so we can use streaming if permitted by version
 								fetch(tmpep + koboldcpp_version_endpoint)
@@ -4737,6 +4735,8 @@ Current version: 62
 									{
 										koboldcpp_version = data.version;
 										console.log("KoboldCpp Detected: " + koboldcpp_version);
+									}else{
+										console.log("Unknown KoboldCpp Check Response: " + data);
 									}
 								}).catch((error) => {
 									console.log("Not using KoboldCpp");
@@ -5391,6 +5391,16 @@ Current version: 62
 		document.getElementById("miro_type").value = localsettings.miro_type;
 		document.getElementById("miro_tau").value = localsettings.miro_tau;
 		document.getElementById("miro_eta").value = localsettings.miro_eta;
+		if(is_using_kcpp_with_mirostat())
+		{
+			document.getElementById("mirosupporteddiv").classList.remove("hidden");
+			document.getElementById("mirounsupporteddiv").classList.add("hidden");
+		}
+		else
+		{
+			document.getElementById("mirosupporteddiv").classList.add("hidden");
+			document.getElementById("mirounsupporteddiv").classList.remove("hidden");
+		}
 		document.getElementById("generate_images").value = localsettings.generate_images;
 		document.getElementById("enhanced_chat_ui").checked = localsettings.enhanced_chat_ui;
 		document.getElementById("enhanced_instruct_ui").checked = localsettings.enhanced_instruct_ui;
@@ -6541,16 +6551,16 @@ Current version: 62
 					submit_payload.use_default_badwordsids = (localsettings.unban_tokens?false:true);
 				}
 
-				let pseudostreaming = should_use_pseudostreaming();
-				let pstreamamount = urlParams.get('streamamount');
-				let streamchunk = 8; //8 tokens per stream tick by default
-				if (pstreamamount != null && pstreamamount > 0) {
-					streamchunk = pstreamamount;
+				let pseudostreaming = (determine_streaming_type()==1);
+				let streamchunk = 4096; //use 4096 for everything except pseudostreaming
+				if(pseudostreaming)
+				{
+					let pstreamamount = urlParams.get('streamamount');
+					streamchunk = ((pstreamamount != null && pstreamamount > 0) ? pstreamamount:8); //8 tokens per stream tick by default
 				}
-
 				let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_endpoint);
 
-				kobold_api_stream(sub_endpt, submit_payload, submit_payload.max_length, "", pseudostreaming ? streamchunk : 4096);
+				kobold_api_stream(sub_endpt, submit_payload, submit_payload.max_length, "", streamchunk);
 
 			}
 			else if (custom_oai_key != "")//handle for OAI
@@ -7281,10 +7291,9 @@ Current version: 62
 					if (synchro_polled_response == null) {
 						//still waiting, do nothing until next poll
 						console.log("v1 still awaiting reply");
-						let pseudostreaming = should_use_pseudostreaming();
-						let psflag = (document.getElementById("pseudostreaming").checked ? true : false);
+						let truestreaming = (determine_streaming_type()==2);
 						//only check once every 3 ticks
-						if (psflag && !pseudostreaming && !waiting_for_autosummary && poll_ticks_passed%2==0)
+						if (truestreaming && poll_ticks_passed%2==0)
 						{
 							//get in-progress results
 							fetch(custom_kobold_endpoint + koboldcpp_check_endpoint, {
@@ -9064,8 +9073,6 @@ Current version: 62
 				<span class="color_green" style="font-weight: bold;">Please input URL of the KoboldAI instance.</span><br><br>
 				<input class="form-control" id="customendpoint" placeholder="https://sample-remote-address.trycloudflare.com" value="">
 				<div class="box flex flex-push-right">
-					<input type="checkbox" id="pseudostreaming">
-					<div class="box-label" title="Will simulate token streaming by breaking requests up into smaller ones.">Emulate Token Streaming</div>
 					<input type="checkbox" id="remoteconsolelog">
 					<div class="box-label" title="Will display outputs to the remote endpoint's console logs, useful for debugging.">Show Console Logging</div>
 				</div>
@@ -9391,26 +9398,28 @@ Current version: 62
 						<div class="settinglabel">
 
 							<div class="justifyleft settingsmall">Mirostat (If supported) <span class="helpicon">?<span class="helptext">Replaces your samplers with mirostat, an alternative sampling method. May not be available depending on backend, not supported on Horde.</span></span></div>
-							<table class="settingsmall text-center" style="border-spacing: 4px 2px;
-							border-collapse: separate;">
-								<tr>
-								  <th title="Mirostat Type 0/1/2">Mode</th>
-								  <th title="Mirostat Tau Value">Tau</th>
-								  <th title="Mirostat Eta Value">Eta</th>
-								</tr>
-								<tr>
-								<td><select style="padding:1px; height:auto; width: 27px; appearance: none; font-size: 7pt;" class="form-control" id="miro_type">
-									<option value="0">Off</option>
-									<option value="1">1</option>
-									<option value="2">2</option>
-								</select></td>
-								<td><input class="" type="text" placeholder="0.0" value="0.0"
-								id="miro_tau"></td>
-								<td><input class="" type="text" placeholder="0.0" value="0.0"
-								id="miro_eta"></td>
-								</tr>
-							  </table>
-
+							<div id="mirosupporteddiv">
+								<table class="settingsmall text-center" style="border-spacing: 4px 2px;
+								border-collapse: separate;">
+									<tr>
+									<th title="Mirostat Type 0/1/2">Mode</th>
+									<th title="Mirostat Tau Value">Tau</th>
+									<th title="Mirostat Eta Value">Eta</th>
+									</tr>
+									<tr>
+									<td><select style="padding:1px; height:auto; width: 27px; appearance: none; font-size: 7pt;" class="form-control" id="miro_type">
+										<option value="0">Off</option>
+										<option value="1">1</option>
+										<option value="2">2</option>
+									</select></td>
+									<td><input class="" type="text" placeholder="0.0" value="0.0"
+									id="miro_tau"></td>
+									<td><input class="" type="text" placeholder="0.0" value="0.0"
+									id="miro_eta"></td>
+									</tr>
+								</table>
+							</div>
+							<div id="mirounsupporteddiv" class="color_red" style="font-weight:bold;padding:3px;font-size:12px">Mirostat Not Supported</div>
 						</div>
 					</div>
 
@@ -9481,6 +9490,11 @@ Current version: 62
 					</div>
 
 					<div class="settingitem">
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="Attempts to use token streaming if available.">Token Streaming </div>
+						   <input type="checkbox" id="tokenstreaming" style="margin:0px 0 0;">
+						</div>
+
 						<div id="idlesection" class="settinglabel">
 							<div class="justifyleft settingsmall" title="Allow the AI to send more responses if you are idle.">Idle Responses&nbsp;</div>
 							<select style="padding:1px; height:auto; width: 27px; appearance: none; font-size: 7pt;" class="form-control" id="idle_responses">
