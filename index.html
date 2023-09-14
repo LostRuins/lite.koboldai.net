@@ -2773,6 +2773,7 @@ Current version: 62
 	const koboldcpp_version_endpoint = "/api/extra/version";
 	const koboldcpp_abort_endpoint = "/api/extra/abort";
 	const koboldcpp_check_endpoint = "/api/extra/generate/check";
+	const koboldcpp_truemaxctxlen_endpoint = "/api/extra/true_max_context_length";
 
 	const oai_models_endpoint = "/models";
 	const oai_submit_endpoint = "/completions";
@@ -4710,6 +4711,42 @@ Current version: 62
 								console.log("Failed to get KAI version number: " + error);
 							});
 
+							//also get max ctx supported
+							let urls3 = [
+								apply_proxy_url(tmpep + kobold_custom_maxctxlen_endpoint),
+							];
+							Promise.all(urls3.map(url => fetch(url)
+							.then(response => response.json())))
+							.then(values3 => {
+								console.log(values3);
+								let ep_maxctx = values3[0].value;
+								if(ep_maxctx && ep_maxctx>document.getElementById("max_context_length_slide").max)
+								{
+									document.getElementById("max_context_length_slide").max = ep_maxctx;
+									document.getElementById("max_context_length_slide_label").innerText = ep_maxctx;
+								}
+							}).catch(error => {
+								console.log("Failed to get KAI max ctx: " + error);
+							});
+
+							//also check against kcpp's max true context length
+							let urls4 = [
+								apply_proxy_url(tmpep + koboldcpp_truemaxctxlen_endpoint),
+							];
+							Promise.all(urls4.map(url => fetch(url)
+							.then(response => response.json())))
+							.then(values4 => {
+								console.log(values4);
+								let ep_maxctx = values4[0].value;
+								if(ep_maxctx && ep_maxctx>document.getElementById("max_context_length_slide").max)
+								{
+									document.getElementById("max_context_length_slide").max = ep_maxctx;
+									document.getElementById("max_context_length_slide_label").innerText = ep_maxctx;
+								}
+							}).catch(error => {
+								console.log("Failed to get KAI max ctx: " + error);
+							});
+
 							//good to go
 							custom_kobold_endpoint = tmpep;
 							selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": mdlname, "count": 1 }];
@@ -5677,8 +5714,8 @@ Current version: 62
 				document.getElementById('instruct_endtag').value = defaultsettings.instruct_endtag;
 				break;
 			case "2": //vicuna
-				document.getElementById('instruct_starttag').value = "USER:";
-				document.getElementById('instruct_endtag').value = "ASSISTANT:";
+				document.getElementById('instruct_starttag').value = "\\nUSER: ";
+				document.getElementById('instruct_endtag').value = "\\nASSISTANT: ";
 				break;
 			case "3": //metharme
 				document.getElementById('instruct_starttag').value = `<|user|>`;
@@ -9219,7 +9256,7 @@ Current version: 62
 
 	<div class="popupcontainer flex hidden" id="settingscontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup fixsize highest">
+		<div class="nspopup fixsize evenhigher">
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Settings</div>
 			</div>
@@ -9272,7 +9309,7 @@ Current version: 62
 						   document.getElementById('max_context_length').value = this.value;"></div>
 						<div class="settingminmax">
 							<div class="justifyleft">512</div>
-							<div class="justifyright">2048</div>
+							<div class="justifyright" id="max_context_length_slide_label">2048</div>
 						</div>
 						<div id="auto_ctxlen_panel" class="settinglabel">
 							<div class="justifyleft settingsmall" title="Automatically lowers settings if incompatible with existing workers">Auto-Adjust Limits </div>
@@ -9409,7 +9446,7 @@ Current version: 62
 							<select class="form-control" id="instruct_tag_format" style="font-size:10px;height:18px;padding:0;margin:0px 0 0;" onchange="toggle_instruct_tag_format()">
 								<option value="0" selected>[Custom]</option>
 								<option value="1">Alpaca</option>
-								<option value="2">Vicuna 1.1</option>
+								<option value="2">Vicuna</option>
 								<option value="3">Metharme</option>
 								<option value="4">Llama 2 Chat</option>
 							</select>
