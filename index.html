@@ -1061,8 +1061,8 @@ Current version: 62
 
 		.settingitem {
 			width: 50%;
-			padding-left: 10px;
-			padding-right: 10px;
+			padding-left: 8px;
+			padding-right: 8px;
 			padding-bottom: 5px;
 			padding-top: 5px;
 			display: inline-block;
@@ -2846,7 +2846,7 @@ Current version: 62
 	var filter_enabled = true;
 	var temp_scenario = null;
 	var last_token_budget = ""; //to display token limits
-	var last_known_filename = "";
+	var last_known_filename = "saved_story.json";
 	var localmodeport = 5000;
 	var localmodehost = "localhost";
 	var kobold_endpoint_version = ""; //used to track problematic versions to avoid sending extra fields
@@ -2883,6 +2883,7 @@ Current version: 62
 		img_autogen: false,
 		img_allownsfw: true,
 		save_images: true,
+		prompt_for_savename: false,
 		case_sensitive_wi: false,
 		last_selected_preset: 0,
 		enhanced_chat_ui: true,
@@ -3616,6 +3617,24 @@ Current version: 62
 		a.download = newfilename;
 		setTimeout(function(){a.click()},20);
 	}
+
+	function save_file_button() //for triggering an optional popup
+	{
+		if(localsettings.prompt_for_savename)
+		{
+			let userinput = prompt("Save - Enter a Filename", last_known_filename);
+
+			if (userinput != null && userinput.trim()!="") {
+				last_known_filename = userinput.trim();
+				if(!last_known_filename.toLowerCase().includes(".json"))
+				{
+					last_known_filename += ".json";
+				}
+			}
+		}
+		save_file();
+
+	}
 	function save_file() {
 		//determine if oldui file or newui file format, but we always save to oldui format
 		let is_oldui = (loaded_storyobj.file_version == null);
@@ -3674,7 +3693,7 @@ Current version: 62
 		window.URL = window.URL || window.webkitURL;
 
 		var userAgent = window.navigator.userAgent;
-		newfilename = (last_known_filename==""?"saved_story.json":last_known_filename);
+		newfilename = last_known_filename;
 
 		if (userAgent.match(/AppleWebKit/) && (userAgent.match(/iPad/i) || userAgent.match(/iPhone/i))) {
 			var file = new Blob([JSON.stringify(loaded_storyobj)], { type: 'application/octet-stream' });
@@ -5579,6 +5598,7 @@ Current version: 62
 		document.getElementById("sdmodels").innerHTML = sdmodelshtml;
 		document.getElementById("img_autogen").checked = localsettings.img_autogen;
 		document.getElementById("save_images").checked = localsettings.save_images;
+		document.getElementById("prompt_for_savename").checked = localsettings.prompt_for_savename;
 		document.getElementById("img_allownsfw").checked = localsettings.img_allownsfw;
 
 	}
@@ -5732,6 +5752,7 @@ Current version: 62
 		localsettings.image_styles = pendingstyle;
 		localsettings.img_autogen = (document.getElementById("img_autogen").checked ? true : false);
 		localsettings.save_images = (document.getElementById("save_images").checked ? true : false);
+		localsettings.prompt_for_savename = (document.getElementById("prompt_for_savename").checked ? true : false);
 		localsettings.img_allownsfw = (document.getElementById("img_allownsfw").checked ? true : false);
 		if (localsettings.generate_images) {
 			document.getElementById("btn_genimg").classList.remove("hidden");
@@ -6021,7 +6042,7 @@ Current version: 62
 		localsettings.adventure_is_action = false;
 		prev_hl_chunk = null;
 		last_token_budget = "";
-		last_known_filename = "";
+		last_known_filename = "saved_story.json";
 		render_gametext();
 	}
 
@@ -8998,7 +9019,7 @@ Current version: 62
 
 								<li class="nav-item hidden" id="topbtn_save">
 									<a id="tempfile" href="#" style="display:none;"></a>
-									<a class="nav-link" href="#" onclick="save_file()">Save</a>
+									<a class="nav-link" href="#" onclick="save_file_button()">Save</a>
 								</li>
 
 								<li class="nav-item hidden" id="topbtn_load">
@@ -9710,16 +9731,20 @@ Current version: 62
 
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Automatically scrolls the text window down when new text is generated">Autoscroll </div>
-						   <input type="checkbox" id="autoscroll" style="margin:0px 0 0;">
-						</div>
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Autosaves your current story and settings on exit, reloads when you return">Autosave Session</div>
+							<div class="justifyleft settingsmall" title="Autosaves your current story and settings on exit, reloads when you return">Persist Autosave Session </div>
 						   <input type="checkbox" id="persist_session" style="margin:0px 0 0;">
 						</div>
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Includes your current settings when saving or sharing your story">JSON Includes Settings </div>
+							<div class="justifyleft settingsmall" title="Includes your current settings when saving or sharing your story">JSON Exports Settings </div>
 						   <input type="checkbox" id="export_settings" style="margin:0px 0 0;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall"  title="Prompts to input a different filename when saving file.">Show Rename Save File </div>
+						   <input type="checkbox" id="prompt_for_savename" style="margin:0px 0 0;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="Automatically scrolls the text window down when new text is generated">Autoscroll Text </div>
+						   <input type="checkbox" id="autoscroll" style="margin:0px 0 0;">
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" title="Inverts all colors, simple light mode">Inverted Colors </div>
