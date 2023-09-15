@@ -4042,8 +4042,8 @@ Current version: 62
 							"desc":data.description?data.description:"",
 							"opmode":2,
 							"adventure_context_mod":false,
-							"prefmodel1":["nerys","nerybus","skein","adventure","erebus"],
-							"prefmodel2":[],
+							"prefmodel1":adventuremodels1,
+							"prefmodel2":adventuremodels2,
 							"prompt":data.promptContent?data.promptContent:"",
 							"memory": data.memory?data.memory:"",
 							"authorsnote": data.authorsNote?data.authorsNote:"",
@@ -4071,6 +4071,77 @@ Current version: 62
 			}
 		},false);
 	}
+
+	function get_chubai_scenario()
+	{
+		inputBox("Enter chub.ai prompt URL","Import from chub.ai","","https://chub.ai/characters/Anonymous/example-character", ()=>{
+			let userinput = document.getElementById("inputboxcontainerinput").value.toLowerCase().trim();
+			if(userinput=="")
+			{
+				//pass
+			}
+			else
+			{
+				if (userinput.includes("chub.ai/")) {
+					//is a url, extract the character name
+					userinput = userinput.replace("/characters/","/");
+					userinput = userinput.split("chub.ai/")[1];
+					userinput = userinput.split("#")[0];
+					userinput = userinput.split("?")[0];
+				}
+				userinput = userinput.endsWith('/') ? userinput.slice(0, -1) : userinput;
+				if(userinput!="")
+				{
+					fetch("https://api.chub.ai/api/characters/download", {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify({
+					"format": "cai",
+					"fullPath": userinput,
+					"version": "main"
+					}),
+					referrerPolicy: 'no-referrer',
+					})
+					.then(x => x.json())
+					.then(data => {
+						console.log(data);
+						let botname = data.name?data.name:"Bot";
+						let cdef = data.definition?data.definition.replace("END_OF_DIALOG","").trim():"";
+						let cdesc = data.description?data.description:"";
+						let greeting = data.greeting?data.greeting:"";
+						let previewtxt = replaceAll(cdesc,"{{char}}",botname);
+						previewtxt = replaceAll(previewtxt,"{{user}}","You");
+						temp_scenario =
+						{
+							"title":data.title?data.title:"",
+							"desc": previewtxt,
+							"opmode":3,
+							"chatname": "You",
+							"chatopponent": botname,
+							"enhanced_chat_ui":true,
+							"prefmodel1":chatmodels1,
+							"prefmodel2":chatmodels2,
+							"prompt":("\n{{char}}: "+greeting),
+							"memory": cdesc +"\n"+ cdef,
+							"authorsnote": "",
+							"worldinfo": [],
+						};
+						preview_temp_scenario();
+					}).catch((error) => {
+						temp_scenario = null;
+						document.getElementById("scenariodesc").innerText = "Error: Selected scenario is invalid.";
+						console.log("Error: " + error);
+					});
+				}else{
+					temp_scenario = null;
+					document.getElementById("scenariodesc").innerText = "Error: User input is invalid\n\n Please ensure you have input a valid aetherroom.club URL or ID (e.g. https://aetherroom.club/1234 or just 1234)";
+				}
+			}
+		},false);
+	}
+
 
 	function click_scenario(idx)
 	{
@@ -4302,7 +4373,8 @@ Current version: 62
 		temp_scenario = null;
 		document.getElementById("quickstartcontainer").classList.remove("hidden");
 
-		let scenarios = `<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_aetherroom_scenario()">Import from<br>aetherroom.club</button>`;
+		let scenarios = `<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_aetherroom_scenario()">Import from<br>aetherroom.club</button>`+
+		`<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_chubai_scenario()">Import from<br>chub.ai</button>`;
 		for(let i=0;i<scenario_db.length;++i)
 		{
 			let curr = scenario_db[i];
@@ -9086,7 +9158,7 @@ Current version: 62
 
 					<div class="popupfooter">
 						<button type="button" class="btn btn-primary" id=""
-							onclick="confirm_scenario_verify()">Confirm</button>
+							onclick="confirm_scenario_verify()">Ok</button>
 						<button type="button" class="btn btn-primary" id=""
 							onclick="hide_popups()">Cancel</button>
 					</div>
@@ -9140,7 +9212,7 @@ Current version: 62
 
 				<div class="popupfooter">
 					<button type="button" class="btn btn-primary" id="btn_loadmodelaccept"
-						onclick="confirm_models()">Confirm</button>
+						onclick="confirm_models()">Ok</button>
 					<button type="button" class="btn btn-primary" id="btn_loadmodelclose"
 						onclick="hide_popups()">Cancel</button>
 
@@ -9227,7 +9299,7 @@ Current version: 62
 				<div class="box-label" title="Rename User and Bot tags to work with claude, force inject them otherwise">Claude Compatibility Rename Fix</div>
 			</div>
 			<div class="popupfooter">
-				<button type="button" class="btn btn-primary" onclick="connect_custom_endpoint()">Connect</button>
+				<button type="button" class="btn btn-primary" onclick="connect_custom_endpoint()">Ok</button>
 				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
 			</div>
 		</div>
@@ -9248,7 +9320,7 @@ Current version: 62
 				<br>
 			</div>
 			<div class="popupfooter">
-				<button type="button" class="btn btn-primary" onclick="confirm_newgame()">Accept</button>
+				<button type="button" class="btn btn-primary" onclick="confirm_newgame()">Ok</button>
 				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
 			</div>
 		</div>
@@ -9748,7 +9820,7 @@ Current version: 62
 
 			<div class="popupfooter">
 
-				<button type="button" class="btn btn-primary" onclick="save_wi();autosave();hide_popups()">Save</button>
+				<button type="button" class="btn btn-primary" onclick="save_wi();autosave();hide_popups()">Ok</button>
 				<button type="button" class="btn btn-primary" onclick="revert_wi();hide_popups()">Cancel</button>
 			</div>
 		</div>
