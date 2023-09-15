@@ -7153,9 +7153,8 @@ Current version: 62
 		}
 	}
 
-	function handle_incoming_text(gentxt, genworker, genmdl, genkudos) {
-
-		//handle stopping tokens if they got missed (eg. horde)
+	function trim_extra_stop_seqs(gentxt, includeStopToken)
+	{
 		if(extrastopseq!="")
 		{
 			let rep = replaceAll(extrastopseq,"\\n","\n");
@@ -7167,17 +7166,27 @@ Current version: 62
 						if (foundStop != -1)
 						{
 							//trim the gentxt
-							gentxt = gentxt.substr(0,foundStop) + srep[i];
+							gentxt = gentxt.substr(0,foundStop) + (includeStopToken?srep[i]:"");
 						}
 					}
 				}
 			}
 		}
+		return gentxt;
+	}
+
+	function handle_incoming_text(gentxt, genworker, genmdl, genkudos) {
+
+		//handle stopping tokens if they got missed (eg. horde)
+		gentxt = trim_extra_stop_seqs(gentxt,true);
 
 		//always trim incomplete sentences for adventure and chat (if not multiline)
 		if (localsettings.opmode == 2 || (localsettings.opmode == 3 && !localsettings.allow_continue_chat) || localsettings.trimsentences == true) {
 			gentxt = end_trim_to_sentence(gentxt,true);
 		}
+
+		//do a second pass, this time removing the actual stop token
+		gentxt = trim_extra_stop_seqs(gentxt,false);
 
 		//if we are in adventure mode, truncate to action if it appears
 		if (localsettings.opmode == 2)
