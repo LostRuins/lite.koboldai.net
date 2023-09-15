@@ -2536,7 +2536,8 @@ Current version: 62
 		if (url) {
 			is_local = (url.toLowerCase().includes("localhost") ||
 				url.toLowerCase().includes("127.0.0.1") ||
-				url.toLowerCase().includes("192.168."));
+				url.toLowerCase().includes("192.168.") ||
+				!url.toLowerCase().includes("."));
 		}
 
 		if (uses_cors_proxy && !is_local) {
@@ -4768,57 +4769,6 @@ Current version: 62
 							render_gametext();
 						} else {
 
-							//now we get the version number, however this is optional
-							//if it fails we can still proceed
-							let urls2 = [
-								apply_proxy_url(tmpep + kobold_custom_version_endpoint),
-							];
-							Promise.all(urls2.map(url => fetch(url)
-							.then(response => response.json())))
-							.then(values2 => {
-								console.log(values2);
-								let ep_version = values2[0].result;
-								kobold_endpoint_version = (ep_version?ep_version:"");
-							}).catch(error => {
-								console.log("Failed to get KAI version number: " + error);
-							});
-
-							//also get max ctx supported
-							let urls3 = [
-								apply_proxy_url(tmpep + kobold_custom_maxctxlen_endpoint),
-							];
-							Promise.all(urls3.map(url => fetch(url)
-							.then(response => response.json())))
-							.then(values3 => {
-								console.log(values3);
-								let ep_maxctx = values3[0].value;
-								if(ep_maxctx && ep_maxctx>document.getElementById("max_context_length_slide").max)
-								{
-									document.getElementById("max_context_length_slide").max = ep_maxctx;
-									document.getElementById("max_context_length_slide_label").innerText = ep_maxctx;
-								}
-							}).catch(error => {
-								console.log("Failed to get KAI max ctx: " + error);
-							});
-
-							//also check against kcpp's max true context length
-							let urls4 = [
-								apply_proxy_url(tmpep + koboldcpp_truemaxctxlen_endpoint),
-							];
-							Promise.all(urls4.map(url => fetch(url)
-							.then(response => response.json())))
-							.then(values4 => {
-								console.log(values4);
-								let ep_maxctx = values4[0].value;
-								if(ep_maxctx && ep_maxctx>document.getElementById("max_context_length_slide").max)
-								{
-									document.getElementById("max_context_length_slide").max = ep_maxctx;
-									document.getElementById("max_context_length_slide_label").innerText = ep_maxctx;
-								}
-							}).catch(error => {
-								console.log("Failed to get KAI max ctx: " + error);
-							});
-
 							//good to go
 							custom_kobold_endpoint = tmpep;
 							selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": mdlname, "count": 1 }];
@@ -4838,6 +4788,42 @@ Current version: 62
 							document.getElementById("connectstatus").innerHTML = "Connected to Custom Endpoint";
 							render_gametext();
 
+							{
+								//now we get the version number, however this is optional
+								//if it fails we can still proceed
+								let urls2 = [
+									apply_proxy_url(tmpep + kobold_custom_version_endpoint),
+								];
+								Promise.all(urls2.map(url => fetch(url)
+								.then(response => response.json())))
+								.then(values2 => {
+									console.log(values2);
+									let ep_version = values2[0].result;
+									kobold_endpoint_version = (ep_version?ep_version:"");
+								}).catch(error => {
+									console.log("Failed to get KAI version number: " + error);
+								});
+
+								//also get max ctx supported
+								let urls3 = [
+									apply_proxy_url(tmpep + kobold_custom_maxctxlen_endpoint),
+								];
+								Promise.all(urls3.map(url => fetch(url)
+								.then(response => response.json())))
+								.then(values3 => {
+									console.log(values3);
+									let ep_maxctx = values3[0].value;
+									if(ep_maxctx && ep_maxctx>document.getElementById("max_context_length_slide").max)
+									{
+										document.getElementById("max_context_length_slide").max = ep_maxctx;
+										document.getElementById("max_context_length_slide_label").innerText = ep_maxctx;
+									}
+								}).catch(error => {
+									console.log("Failed to get KAI max ctx: " + error);
+								});
+
+							}
+
 							//allow kcpp version check for remote endpoints too
 							{
 								//for local mode, check if we are using koboldcpp, if so we can use streaming if permitted by version
@@ -4848,6 +4834,25 @@ Current version: 62
 									{
 										koboldcpp_version = data.version;
 										console.log("KoboldCpp Detected: " + koboldcpp_version);
+
+										//also check against kcpp's max true context length
+										let urls4 = [
+											apply_proxy_url(tmpep + koboldcpp_truemaxctxlen_endpoint),
+										];
+										Promise.all(urls4.map(url => fetch(url)
+										.then(response => response.json())))
+										.then(values4 => {
+											console.log(values4);
+											let ep_maxctx = values4[0].value;
+											if(ep_maxctx && ep_maxctx>document.getElementById("max_context_length_slide").max)
+											{
+												document.getElementById("max_context_length_slide").max = ep_maxctx;
+												document.getElementById("max_context_length_slide_label").innerText = ep_maxctx;
+											}
+										}).catch(error => {
+											console.log("Failed to get true max ctx: " + error);
+										});
+
 									}else{
 										console.log("Unknown KoboldCpp Check Response: " + data);
 									}
@@ -4865,7 +4870,8 @@ Current version: 62
 
 						let is_local = (custom_kobold_endpoint.toLowerCase().includes("localhost")
 							|| custom_kobold_endpoint.toLowerCase().includes("127.0.0.1")
-							|| custom_kobold_endpoint.toLowerCase().includes("192.168."));
+							|| custom_kobold_endpoint.toLowerCase().includes("192.168.")
+							|| !custom_kobold_endpoint.toLowerCase().includes(".")); //hostname without dots cannot be wan accessible
 
 						if (uses_cors_proxy || is_local) {
 							msgbox("Failed to connect to Custom Kobold Endpoint!\n\nPlease check if KoboldAI is running at the url: " + tmpep + "");
