@@ -2887,7 +2887,8 @@ Current version: 65
 		prompt_for_savename: false,
 		case_sensitive_wi: false,
 		last_selected_preset: 0,
-		gui_type: 0, //0=standard, 1=messenger, 2=aesthetic
+		gui_type_chat: 1, //0=standard, 1=messenger, 2=aesthetic
+		gui_type_instruct: 0, //0=standard, 1=messenger, 2=aesthetic
 		multiline_replies: false,
 		allow_continue_chat: false,
 		idle_responses: 0,
@@ -3042,7 +3043,6 @@ Current version: 65
 				if (loadedsettings && loadedsettings.persist_session) {
 					import_share_story(loadedstorycompressed); //use the same compressed format as shared stories and import it
 					import_props_into_object(localsettings,loadedsettings);
-					preferred_uistyle = localsettings.gui_type;
 					console.log("Loaded local settings and story");
 				}
 				if(loadedsettings && !loadedsettings.persist_session)
@@ -3586,7 +3586,6 @@ Current version: 65
 				let tmp_claude1 = localsettings.saved_claude_key;
 				let tmp_claude2 = localsettings.saved_claude_addr;
 				import_props_into_object(localsettings, story.savedsettings);
-				preferred_uistyle = localsettings.gui_type;
 				localsettings.my_api_key = tmpapikey1;
 				localsettings.home_cluster = tmphc;
 				localsettings.saved_oai_key = tmp_oai1;
@@ -3884,7 +3883,6 @@ Current version: 65
 					let tmp_claude1 = localsettings.saved_claude_key;
 					let tmp_claude2 = localsettings.saved_claude_addr;
 					import_props_into_object(localsettings, loaded_storyobj.savedsettings);
-					preferred_uistyle = localsettings.gui_type;
 					localsettings.my_api_key = tmpapikey1;
 					localsettings.home_cluster = tmphc;
 					localsettings.saved_oai_key = tmp_oai1;
@@ -4016,6 +4014,7 @@ Current version: 65
 			gametext_arr.push("\n"+chatopponent+": "+greeting);
 			current_memory = combinedmem + "\n<START>";
 			localsettings.opmode = 3;
+			localsettings.gui_type_chat = 2;
 			//handle character book
 			if(obj.character_book && obj.character_book.entries && obj.character_book.entries.length>0)
 			{
@@ -4047,6 +4046,7 @@ Current version: 65
 		gametext_arr.push("\n"+chatopponent+": "+greeting);
 		current_memory = memory + scenario + examplemsg + "\n<START>";
 		localsettings.opmode = 3;
+		localsettings.gui_type_chat = 2;
 		render_gametext();
 	}
 
@@ -4236,17 +4236,9 @@ Current version: 65
 
 		if(temp_scenario.opmode == 1)
 		{
-			if(localsettings.gui_type == 1 || localsettings.gui_type == 2) //switch away from messenger & aesthetic if on
-			{
-				preferred_uistyle = localsettings.gui_type= 0;
-			}
 		}
 		if(temp_scenario.opmode == 2)
 		{
-			if(localsettings.gui_type == 1 || localsettings.gui_type == 2) //switch away from messenger & aesthetic if on
-			{
-				preferred_uistyle = localsettings.gui_type= 0;
-			}
 
 			if (temp_scenario.adventure_context_mod===true) {
 				localsettings.adventure_context_mod = true;
@@ -4266,6 +4258,10 @@ Current version: 65
 			}
 		}
 		if (temp_scenario.opmode == 3) {
+			if (temp_scenario.gui_type===1) { localsettings.gui_type_chat = 1; }
+			else if(temp_scenario.gui_type===2) { localsettings.gui_type_chat = 2; }
+			else if(temp_scenario.gui_type===0) { localsettings.gui_type_chat = 0; }
+
 			if (temp_scenario.multiline_replies===true) { localsettings.multiline_replies = true; }
 			else if(temp_scenario.multiline_replies===false) { localsettings.multiline_replies = false; }
 
@@ -4274,19 +4270,15 @@ Current version: 65
 		}
 		if(temp_scenario.opmode == 4)
 		{
-			if(localsettings.gui_type == 1) //switch away from messenger if on
-			{
-				preferred_uistyle = localsettings.gui_type= 0;
-			}
+			if (temp_scenario.gui_type===1) { localsettings.gui_type_instruct = 1; }
+			else if(temp_scenario.gui_type===2) { localsettings.gui_type_instruct = 2; }
+			else if(temp_scenario.gui_type===0) { localsettings.gui_type_instruct = 0; }
 
-			if (temp_scenario.gui_type) { preferred_uistyle = localsettings.gui_type = temp_scenario.gui_type; }
 			if (temp_scenario.instruct_starttag) { localsettings.instruct_starttag = temp_scenario.instruct_starttag; }
 			if (temp_scenario.instruct_endtag) { localsettings.instruct_endtag = temp_scenario.instruct_endtag; }
 		}
 
-		if (temp_scenario.gui_type===1) { preferred_uistyle = localsettings.gui_type = 1; }
-		else if(temp_scenario.gui_type===2) { preferred_uistyle = localsettings.gui_type = 2; }
-		else if(temp_scenario.gui_type===0) { preferred_uistyle = localsettings.gui_type = 0; }
+
 
 		render_gametext();
 	}
@@ -5626,7 +5618,6 @@ Current version: 65
 			document.getElementById("tokenstreaminglabel").classList.add("color_red");
 		}
 		document.getElementById("generate_images").value = localsettings.generate_images;
-		document.getElementById("gui_type").value = localsettings.gui_type;
 		document.getElementById("multiline_replies").checked = localsettings.multiline_replies;
 		document.getElementById("allow_continue_chat").checked = localsettings.allow_continue_chat;
 		document.getElementById("idle_responses").value = localsettings.idle_responses;
@@ -5798,7 +5789,14 @@ Current version: 65
 		localsettings.trimwhitespace = (document.getElementById("trimwhitespace").checked ? true : false);
 		localsettings.unban_tokens = (document.getElementById("unban_tokens").checked ? true : false);
 		localsettings.persist_session = (document.getElementById("persist_session").checked ? true : false);
-		localsettings.gui_type = document.getElementById("gui_type").value;
+		if(document.getElementById("opmode").value==3)
+		{
+			localsettings.gui_type_chat = document.getElementById("gui_type").value;
+		}
+		else if(document.getElementById("opmode").value==4)
+		{
+			localsettings.gui_type_instruct = document.getElementById("gui_type").value;
+		}
 		localsettings.multiline_replies = (document.getElementById("multiline_replies").checked ? true : false);
 		localsettings.allow_continue_chat = (document.getElementById("allow_continue_chat").checked ? true : false);
 		localsettings.idle_responses = document.getElementById("idle_responses").value;
@@ -5848,7 +5846,7 @@ Current version: 65
 			document.getElementById("btn_genimg2").classList.add("hidden");
 		}
 
-		if(localsettings.gui_type==1 && localsettings.opmode==3)
+		if((localsettings.gui_type_chat!=0 && localsettings.opmode==3)||(localsettings.gui_type_instruct!=0 && localsettings.opmode==4))
 		{
 			//kick out of edit mode
 			if(document.getElementById("allowediting"))
@@ -5915,10 +5913,8 @@ Current version: 65
 		document.getElementById('instruct_tag_format').value = "0";
 	}
 
-	let preferred_uistyle = 1; //default to chat
 	function toggle_uistyle()
 	{
-		preferred_uistyle = document.getElementById('gui_type').value;
 		//show or hide the 'Customize UI' button based on whether the Aesthetic Instruct UI Mode is active or not.
 		if (document.getElementById('gui_type').value==2) { document.getElementById('btn_aesthetics').classList.remove('hidden'); }
 		else { document.getElementById('btn_aesthetics').classList.add('hidden'); }
@@ -5937,25 +5933,29 @@ Current version: 65
 		document.getElementById('uipicker_aesthetic').classList.add('hidden');
 
 		if (document.getElementById('opmode').value == 1) {
+			document.getElementById('gui_type').value = 0;
 		}
 		if (document.getElementById('opmode').value == 2) {
+			document.getElementById('gui_type').value = 0;
 			document.getElementById('adventuresection1').classList.remove('hidden');
 			document.getElementById('adventuresection2').classList.remove('hidden');
 		}
 		if (document.getElementById('opmode').value == 3) {
+			document.getElementById('gui_type').value = localsettings.gui_type_chat;
 			document.getElementById('chatnamesection1').classList.remove('hidden');
 			document.getElementById('chatnamesection2').classList.remove('hidden');
 			document.getElementById('uipicker_messenger').classList.remove('hidden');
 			document.getElementById('uipicker_aesthetic').classList.remove('hidden');
 		}
 		if (document.getElementById('opmode').value == 4) {
+			document.getElementById('gui_type').value = localsettings.gui_type_instruct;
 			document.getElementById('instructsection1').classList.remove('hidden');
 			document.getElementById('instructsection2').classList.remove('hidden');
 			document.getElementById('uipicker_aesthetic').classList.remove('hidden');
 		}
 
 		//deselect invalid
-		document.getElementById('gui_type').value = preferred_uistyle;
+
 		let curropt = document.getElementById('gui_type').options[document.getElementById('gui_type').selectedIndex];
 
 		if (curropt.classList.contains('hidden')) {
@@ -8251,14 +8251,14 @@ Current version: 65
 		}
 
 		// Render onto enhanced chat interface if selected. Currently only applicable to Chat & Instruct modes.
-		let isStyleApplicable = (localsettings.gui_type==1 || localsettings.gui_type==2);
+		let isStyleApplicable = ((localsettings.opmode==3 && localsettings.gui_type_chat!=0) || (localsettings.opmode==4 && localsettings.gui_type_instruct!=0));
 		let inEditMode = (document.getElementById("allowediting").checked ? true : false);
 		if (!inEditMode && isStyleApplicable)
 		{
 			let textToRender = (gametext_arr.length == 0 ? document.getElementById("gametext").innerHTML : concat_gametext(false, "", "", "", true));
 			textToRender = replace_placeholders(textToRender);
 
-			if(localsettings.gui_type==1)
+			if(localsettings.opmode==3 && localsettings.gui_type_chat==1)
 			{
 				render_enhanced_chat(textToRender);
 			}
@@ -9645,7 +9645,7 @@ Current version: 65
 							<div class="settinglabel">
 								<div class="justifyleft settingsmall" title="">UI Style Select <span class="helpicon">?<span class="helptext">Select your preferred UI style, which affects text formatting and display. Some UIs are only available for specific modes.</span></span></div>
 								<select class="form-control" id="gui_type" style="height:24px;padding:0;margin:0px 0 0; width:calc( 100% - 30px );" onchange="toggle_uistyle()">
-									<option id="uipicker_classic" value="0">Classic</option>
+									<option id="uipicker_classic" value="0">Notepad</option>
 									<option id="uipicker_messenger" value="1">Messenger</option>
 									<option id="uipicker_aesthetic" value="2">Aesthetic</option>
 								</select>
