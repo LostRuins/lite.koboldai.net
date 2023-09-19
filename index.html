@@ -5839,10 +5839,6 @@ Current version: 65
 			}
 		}
 
-		//show or hide the 'Customize UI' button based on whether the Aesthetic Instruct UI Mode is active or not.
-		if (localsettings.opmode == 4 && localsettings.gui_type==2) { document.getElementById('btn_aesthetics').classList.remove('hidden'); }
-		else { document.getElementById('btn_aesthetics').classList.add('hidden'); }
-
 		//validate samplers, if fail, reset to default
 		validate_samplers(true);
 		localsettings.last_selected_preset = document.getElementById("presets").value;
@@ -5904,6 +5900,9 @@ Current version: 65
 	function toggle_uistyle()
 	{
 		preferred_uistyle = document.getElementById('gui_type').value;
+		//show or hide the 'Customize UI' button based on whether the Aesthetic Instruct UI Mode is active or not.
+		if (document.getElementById('gui_type').value==2) { document.getElementById('btn_aesthetics').classList.remove('hidden'); }
+		else { document.getElementById('btn_aesthetics').classList.add('hidden'); }
 	}
 	function toggle_opmode() {
 
@@ -5945,6 +5944,8 @@ Current version: 65
 			document.getElementById('gui_type').value = 0;
 		}
 
+		if (document.getElementById('gui_type').value==2) { document.getElementById('btn_aesthetics').classList.remove('hidden'); }
+		else { document.getElementById('btn_aesthetics').classList.add('hidden'); }
 
 	}
 
@@ -9100,8 +9101,16 @@ Current version: 65
 	function updateTextPreview() {
 		let preview = `You are Mikago, a prestigious bot that's a supervillain.\n\nRoleplay in first person, be prestigious, don't be a bot. This is a fantasy world.\n\nCode blocks should be wrapped in triple backticks, like so:\nqqq\n<Some_\n-- multiline\n--- code here$\nqqq\n[AI_REPLY]\n*takes my hat off to greet the squad* "Greetings, I am Mikago, the prestigious!" *bows to the crew*\n*clears my throat* "Now, I'm sure there are many questions, but all will be answered in due time." *deep breath*\n[USER_REPLY]\n*draws my sword* "Yes. You should know the code to calculate the factorial of a number."\nThe crew also draws their weapons and point them at you, not giving you any space.\n[AI_REPLY]\n*backs off* "Woah, easy there.." *makes some steps backwards, but then stops*\n"I would normally take this as an insult to my prestige, but I understand your caution.." *takes a deep breath*\n"Well, if it's to prove myself, here goes the python code to calculate the factorial of a number.."\n\nMikago opens a live-code-portal with his magic and writes the code that was requested.\nqqq\ndef factorial(n):\n  if n == 0:\n    return 1\n  else:\n    return n * factorial(n-1)\nqqq\n*looks at you, getting impatient* "Are we ok now.. or do you want me to write the code of a game next?"\n[USER_REPLY]\n*sheathes my sword and approaches for a hug* "Oh, Mikago, my old friend, it is really you!"`;
 		preview = replaceAll(preview,'qqq', '```');
-		preview = replaceAll(preview,'\n[USER_REPLY]\n', get_instruct_starttag());
-		preview = replaceAll(preview,'\n[AI_REPLY]\n', get_instruct_endtag());
+		if(localsettings.opmode==3)
+		{
+			preview = replaceAll(preview,'\n[USER_REPLY]\n', "{{userplaceholder}}");
+			preview = replaceAll(preview,'\n[AI_REPLY]\n', "{{botplaceholder}}");
+		}
+		else
+		{
+			preview = replaceAll(preview,'\n[USER_REPLY]\n', get_instruct_starttag());
+			preview = replaceAll(preview,'\n[AI_REPLY]\n', get_instruct_endtag());
+		}
 		document.getElementById('aesthetic_text_preview').innerHTML = render_enhanced_chat_instruct(preview);
 	}
 	</script>
@@ -9245,7 +9254,6 @@ Current version: 65
 					<button type="button" class="btn btn-primary" id="btn_actredo2" onpointerdown="btn_redo_longpress_start()" onpointerleave="btn_redo_longpress_end()" onpointerup="btn_redo_longpress_end()" onclick="btn_redo()">Redo</button>
 					<button type="button" class="btn btn-primary" id="btn_actretry2" onclick="btn_retry()">Retry</button>
 					<button type="button" class="btn btn-primary bg_green" id="btn_genimg2" onpointerdown="btn_addimg_longpress_start()" onpointerleave="btn_addimg_longpress_end()" onpointerup="btn_addimg_longpress_end()" onclick="manual_gen_image()">Add Img</button>
-					<button type="button" class="btn btn-primary" id="btn_aesthetics" onclick="openAestheticUISettingsMenu()">Customize UI</button>
 					<button type="button" class="btn btn-primary" id="btn_editmode" onclick="btn_editmode()">Edit</button>
 
 				</div>
@@ -9617,11 +9625,12 @@ Current version: 65
 						<div id="uipicker" class="settinglabel" style="padding-top: 3px;">
 							<div class="settinglabel">
 								<div class="justifyleft settingsmall" title="">UI Style Select <span class="helpicon">?<span class="helptext">Select your preferred UI style. Some UIs are only available for specific modes.</span></span></div>
-								<select class="form-control" id="gui_type" style="height:24px;padding:0;margin:0px 0 0;" onchange="toggle_uistyle()">
+								<select class="form-control" id="gui_type" style="height:24px;padding:0;margin:0px 0 0; width:calc( 100% - 30px );" onchange="toggle_uistyle()">
 									<option id="uipicker_classic" value="0">Classic</option>
 									<option id="uipicker_messenger" value="1">Messenger</option>
 									<option id="uipicker_aesthetic" value="2">Aesthetic</option>
 								</select>
+								<button type="button" class="btn btn-primary" id="btn_aesthetics" onclick="openAestheticUISettingsMenu()" style="height: 24px; padding: 0px 2px; margin: 0px 0px 0px 3px;">⚙️</button>
 							</div>
 						</div>
 
