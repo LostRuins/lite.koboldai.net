@@ -9049,13 +9049,21 @@ Current version: 65
 		if(localsettings.opmode==3)
 		{
 			//replace all possible instances with placeholders
-			var mynameregex = new RegExp("(" + localsettings.chatname + ")\: ", "gi");
-			var mynameregex2 = new RegExp("\n(" + localsettings.chatname + ") ", "gi");
-			var othernamesregex = new RegExp("(?!" + localsettings.chatname + ").+?\: ", "gi");
-			input = input.replace(mynameregex, '{{userplaceholder}}<p><b>'+localsettings.chatname+'</b></p>');
-			input = input.replace(mynameregex2, '{{userplaceholder}}<p><b>'+localsettings.chatname+'</b></p>');
+			var mynameregex = new RegExp("\n(" + localsettings.chatname + ")\: ", "gi");
+			var mynameregex2 = new RegExp("(" + localsettings.chatname + ")\: ", "gi");
+			var mynameregex3 = new RegExp("\n(" + localsettings.chatname + ") ", "gi");
+			var othernamesregex = new RegExp("\n(?!" + localsettings.chatname + ").+?\: ", "gi");
+			var othernamesregex2 = new RegExp("(?!" + localsettings.chatname + ").+?\: ", "gi");
+			input = input.replace(mynameregex, '{{userplaceholder}}');
+			input = input.replace(mynameregex2, '{{userplaceholder}}');
+			input = input.replace(mynameregex3, '{{userplaceholder}}');
+			input = input.replace("{{userplaceholder}}", '{{userplaceholder}}<p><b>'+localsettings.chatname+'</b></p>');
+
 			input = input.replace(othernamesregex, function(match) {
-			return "{{botplaceholder}}<p><b>" + match.substring(0,match.length-2) + "</b></p>";
+				return "{{botplaceholder}}<p><b>" + match.substring(0,match.length-2).trim() + "</b></p>";
+			});
+			input = input.replace(othernamesregex2, function(match) {
+				return "{{botplaceholder}}<p><b>" + match.substring(0,match.length-2).trim() + "</b></p>";
 			});
 
 			you = "{{userplaceholder}}";
@@ -9091,11 +9099,11 @@ Current version: 65
 			internalHTMLparts.forEach((part, index) => { newbodystr = newbodystr.replace(`<internal_html_${index}>`, part); }); // Bring back the embedded HTML parts.
 			newbodystr = applyStylizedCodeBlocks(); 																// Then, apply the code-block styling, if markdown is used.
 		}
-		return portraitsStyling + newbodystr.replaceAll('\r\n','<br>').replaceAll('\n','<br>'); // Finally, convert newlines to HTML format and return the stylized string.
+		return portraitsStyling + newbodystr.replaceAll(/(\r\n|\r|\n)/g,'<br>'); // Finally, convert newlines to HTML format and return the stylized string.
 
 
 		// Helper functions to allow styling the chat log properly. These affect both the background of the chat bubbles and its content.
-		function style(role) { return `${contextDict.closeTag}</p></div></div><div style='display:flex; align-items:stretch; flex-direction: row;'>${image(role)}<div style='flex: 1; color: ${as[`text_color_${as.use_uniform_colors ? 'uniform' : role}`].color}; background-color:${as[`bubbleColor_${role}`]}; padding: ${as.padding()}; margin: ${as.margin()}; min-height:${as.background_minHeight}px; font-size: ${as.font_size}px; display: flex; flex-direction:column; align-items: ${as.centerHorizontally ? 'center' : 'flex-start'}; justify-content: center; border-radius: 15px'><p>${contextDict[`${role}Open`]}`; }
+		function style(role) { return `${contextDict.closeTag}</p></div></div><div style='display:flex; align-items:stretch; flex-direction: row;'>${image(role)}<div style='flex: 1; color: ${as[`text_color_${as.use_uniform_colors ? 'uniform' : role}`].color}; background-color:${as[`bubbleColor_${role}`]}; padding: ${as.padding()}; margin: ${as.margin()}; min-height:${as.background_minHeight}px; font-size: ${as.font_size}px; flex-direction:column; align-items: ${as.centerHorizontally ? 'center' : 'flex-start'}; justify-content: center; border-radius: 15px'><p>${contextDict[`${role}Open`]}`; }
 		function wrapperSpan(role, type) { let textStyle = as[`${type}_color_${role}`]; return `<span style='color: ${textStyle.color}; font-style: ${textStyle.fontStyle}; font-weight: ${textStyle.fontWeight}'>$1</span>`; }
 		function image(role) {
 			if (!as[`${role}_portrait`] || as.border_style == 'None' || role == 'sys') { return ''; }
