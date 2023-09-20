@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please do not remove this line.
-Current version: 65
+Current version: 66
 -Concedo
 -->
 
@@ -3786,12 +3786,19 @@ Current version: 65
 
 				//attempt to parse it as a png file
 				var pngfr = new FileReader();
-				pngfr.onload = function () {
+				pngfr.onload = function (img) {
 					var data = pngfr.result;
 					var arr = new Uint8Array(data);
 					var result = convertTavernPng(arr);
 					if (result != null) {
 						load_tavern_obj(result);
+						//replace portraits
+						compressImage(data, (compressedImageURI, aspectratio)=>{
+							aestheticInstructUISettings.AI_portrait = compressedImageURI;
+							document.getElementById('portrait_height').value = Math.round(document.getElementById('portrait_width').value / aspectratio);
+							refreshPreview(true);
+							render_gametext();
+						}, true);
 					}
 					else {
 						//attempt to read as WEBP
@@ -7536,6 +7543,10 @@ Current version: 65
 			var canvas = document.createElement('canvas');
 			var ctx = canvas.getContext('2d');
 
+			var origW = img.width;
+			var origH = img.height;
+			var aspectratio = origW/origH;
+
 			// We set the dimensions at the wanted size.
 			canvas.width = wantedWidth;
 			canvas.height = wantedHeight;
@@ -7553,11 +7564,19 @@ Current version: 65
 				//png does not support compression by default, not recommended!
 				dataURI = canvas.toDataURL(`image/png`);
 			}
-			onDone(dataURI);
+			onDone(dataURI,aspectratio);
 		};
 
 		// We put the Data URI in the image's src attribute
-		img.src = inputDataUri;
+		if (typeof inputDataUri === 'string' || inputDataUri instanceof String)
+		{
+			img.src = inputDataUri;
+		} else {
+			var blob = new Blob([inputDataUri], {type: 'image/png'});
+			var url = URL.createObjectURL(blob);
+			img.src = url;
+		}
+
 	}
 
 	//runs every second
@@ -8884,7 +8903,7 @@ Current version: 65
 					const reader = new FileReader();
 					reader.onload = function(img) {
 						compressImage(img.target.result, loadCompressedImage, true);
-						function loadCompressedImage(compressedImageURI) {
+						function loadCompressedImage(compressedImageURI, aspectratio) {
 							let isSelfPortrait = (element.id=="you-portrait");
 							if(isSelfPortrait)
 							{
@@ -8893,8 +8912,9 @@ Current version: 65
 							else
 							{
 								aestheticInstructUISettings.AI_portrait = compressedImageURI;
+								document.getElementById('portrait_height').value = Math.round(document.getElementById('portrait_width').value / aspectratio);
 							}
-							updateDataFromUI(); updateTextPreview();
+							refreshPreview(true);
 						}
 					}
 					reader.readAsDataURL(file);
@@ -8908,15 +8928,15 @@ Current version: 65
 		document.getElementById("reset-portrait").addEventListener('click', (e) => {
 			aestheticInstructUISettings.you_portrait = null;
 			aestheticInstructUISettings.AI_portrait = niko_square;
-			updateDataFromUI(); updateTextPreview();
+			document.getElementById('portrait_height').value = document.getElementById('portrait_width').value = 100;
+			refreshPreview(true);
 		});
 
 		document.getElementById("reset-all-aesthetic-instruct").addEventListener('click', (e) => {
 
 			let ns = new AestheticInstructUISettings();
 			aestheticInstructUISettings = deepCopyAestheticSettings(ns);
-			updateUIFromData();
-			updateTextPreview();
+			refreshPreview(false);
 		});
 
 		refreshPreview(false);
@@ -9042,7 +9062,7 @@ Current version: 65
 		}
 	}
 
-	function render_enhanced_chat_instruct(input)
+	function render_enhanced_chat_instruct(input, classSuffixStr="") //class suffix string used to prevent defined styles from leaking into global scope
 	{
 		const contextDict = { sysOpen: '<sys_context_koboldlite_internal>', youOpen: '<user_context_koboldlite_internal>', AIOpen: '<AI_context_koboldlite_internal>', closeTag: '<end_of_context_koboldlite_internal>' }
 		let you = get_instruct_starttag(); let bot = get_instruct_endtag(); // Instruct tags will be used to wrap text in styled bubbles.
@@ -9073,8 +9093,8 @@ Current version: 65
 		let as = aestheticInstructUISettings;								// ..and use this as shortcut to avoid typing it each time.
 		let portraitsStyling = // Also, implement portraits as css classes. Now chat entries can reuse them instead of recreating them.
 		`<style>
-			.you-portrait-image {margin: 10px 6px; background:url(`+ as.you_portrait +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
-			.AI-portrait-image {margin: 10px 6px; background:url(`+ as.AI_portrait +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
+			.you-portrait-image`+classSuffixStr+` {margin: 10px 6px; background:url(`+ as.you_portrait +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
+			.AI-portrait-image`+classSuffixStr+` {margin: 10px 6px; background:url(`+ as.AI_portrait +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
 		</style>
 		`;
 
@@ -9107,7 +9127,7 @@ Current version: 65
 		function wrapperSpan(role, type) { let textStyle = as[`${type}_color_${role}`]; return `<span style='color: ${textStyle.color}; font-style: ${textStyle.fontStyle}; font-weight: ${textStyle.fontWeight}'>$1</span>`; }
 		function image(role) {
 			if (!as[`${role}_portrait`] || as.border_style == 'None' || role == 'sys') { return ''; }
-			return `<div class='${role}-portrait-image' style='width:${as.portraitSize().width}px; height:${as.portraitSize().height}px; border-radius: ${as.portraitRadius()}'></div>`;
+			return `<div class='${role}-portrait-image${classSuffixStr}' style='width:${as.portraitSize().width}px; height:${as.portraitSize().height}px; border-radius: ${as.portraitRadius()}'></div>`;
 		}
 		function applyStylizedCodeBlocks() {
 			let blocks = newbodystr.split(/(```[\s\S]*?\n[\s\S]*?```)/g);
@@ -9138,7 +9158,7 @@ Current version: 65
 			preview = replaceAll(preview,'\n[USER_REPLY]\n', get_instruct_starttag());
 			preview = replaceAll(preview,'\n[AI_REPLY]\n', get_instruct_endtag());
 		}
-		document.getElementById('aesthetic_text_preview').innerHTML = render_enhanced_chat_instruct(preview);
+		document.getElementById('aesthetic_text_preview').innerHTML = render_enhanced_chat_instruct(preview,'prv');
 	}
 	</script>
 
