@@ -3477,6 +3477,11 @@ Current version: 66
 			story.savedsettings.saved_oai_addr = "";
 			story.savedsettings.saved_claude_key = "";
 			story.savedsettings.saved_claude_addr = "";
+
+			if (!strip_images)
+			{
+				story.savedaestheticsettings = JSON.parse(JSON.stringify(aestheticInstructUISettings, null, 2));
+			}
 		}
 		var storyjson = JSON.stringify(story);
 		console.log("Exporting story: " + storyjson);
@@ -3599,6 +3604,10 @@ Current version: 66
 				localsettings.saved_claude_addr = tmp_claude2;
 			}
 
+			if (story.savedaestheticsettings && story.savedaestheticsettings != "") {
+				import_props_into_object(aestheticInstructUISettings,story.savedaestheticsettings);
+			}
+
 
 		} else {
 			msgbox("Could not import from URL. Is it valid?");
@@ -3707,8 +3716,11 @@ Current version: 66
 			loaded_storyobj.savedsettings.saved_oai_addr = "";
 			loaded_storyobj.savedsettings.saved_claude_key = "";
 			loaded_storyobj.savedsettings.saved_claude_addr = "";
+
+			loaded_storyobj.savedaestheticsettings = JSON.parse(JSON.stringify(aestheticInstructUISettings, null, 2));
 		}else{
 			loaded_storyobj.savedsettings = null;
+			loaded_storyobj.savedaestheticsettings = null;
 		}
 
 
@@ -3915,6 +3927,11 @@ Current version: 66
 							localsettings.instruct_endtag = "\\n"+localsettings.instruct_endtag+"\\n";
 						}
 					}
+
+					if (loaded_storyobj.savedaestheticsettings && loaded_storyobj.savedaestheticsettings != "") {
+						import_props_into_object(aestheticInstructUISettings,loaded_storyobj.savedaestheticsettings);
+					}
+
 					hide_popups();
 					render_gametext();
 				}, hide_popups);
@@ -8840,14 +8857,6 @@ Current version: 66
 	let tempAestheticInstructUISettings = null; // These exist to act as backup when customizing, to revert when pressing the 'Cancel' button.
 
 	function initializeInstructUIFunctionality() {
-		// Load the default settings (by default), or the latest chosen ones.
-		if (localsettings.persist_session === true) {
-			const jsonString = localStorage.getItem((localflag?"e_":"")+'koboldLiteUICustomizationOptions');
-			if (jsonString) {
-				var obj = JSON.parse(jsonString);
-				for (let key in obj) { if (aestheticInstructUISettings.hasOwnProperty(key)) { aestheticInstructUISettings[key] = obj[key]; } }
-			}
-		}
 
 		// Initialize foregroundColorPickers and backgroundColorPickers.
 		document.querySelectorAll('.enhancedTextColorPicker, .enhancedStandardColorPicker').forEach(element => {
@@ -9017,9 +9026,6 @@ Current version: 66
 		aestheticInstructUISettings.portrait_width_you = cleannum(aestheticInstructUISettings.portrait_width_you, 10, 250);
 		aestheticInstructUISettings.portrait_ratio_you = cleannum(aestheticInstructUISettings.portrait_ratio_you, 0.01, 3).toFixed(2);
 		aestheticInstructUISettings.background_minHeight = cleannum(aestheticInstructUISettings.background_minHeight, 0, 300);
-
-		// NOTE: Portraits are loaded automatically from the json, and are stored to aestheticInstructUISettings directly.
-		localStorage.setItem((localflag?"e_":"")+'koboldLiteUICustomizationOptions', JSON.stringify(aestheticInstructUISettings, null, 2));
 
 		function getTextStyleFromElement(id) {
 			let element = document.getElementById(id);
@@ -9963,7 +9969,7 @@ Current version: 66
 						   <input type="checkbox" id="persist_session" style="margin:0px 0 0;">
 						</div>
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Includes your current settings when saving or sharing your story">JSON Exports Settings </div>
+							<div class="justifyleft settingsmall" title="Includes your current settings when saving or sharing your story">Save File Incl. Settings </div>
 						   <input type="checkbox" id="export_settings" style="margin:0px 0 0;">
 						</div>
 						<div class="settinglabel">
