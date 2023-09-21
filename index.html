@@ -4326,7 +4326,7 @@ Current version: 66
 			`;
 			inputBox(warntxt,"AI Safety Warning","","Acknowledgement Required",()=>{
 				let userinput = getInputBoxValue().toLowerCase().trim();
-				if(userinput=="i understand")
+				if(userinput.includes("understand"))
 				{
 					confirm_scenario();
 				}
@@ -8791,19 +8791,19 @@ Current version: 66
 			this.bubbleColor_you = '#29343a';
 			this.bubbleColor_AI = 'rgba(20, 20, 40, 1)';
 
-			// this.background_anchor_style_you = 'left';
-			// this.background_anchor_style_AI = 'left';
 			this.background_margin = [10, 10, 5, 0];
 			this.background_padding = [25, 25, 10, 10];
 			this.background_minHeight = 100;
 			this.centerHorizontally = false;
 
-			this.show_portraits = true; // Shows/hides the rest of the fields below on the UI, and is also used on the display part of the code.
 			this.border_style = 'Rounded';
 			this.portrait_width_AI = 100;
 			this.portrait_ratio_AI = 1.0;
 			this.portrait_width_you = 100;
 			this.portrait_ratio_you = 1.0;
+
+			this.show_chat_names = true;
+			this.rounded_bubbles = true;
 
 			this.you_portrait = null;
 			this.AI_portrait = niko_square;
@@ -8847,8 +8847,7 @@ Current version: 66
 				var obj = JSON.parse(jsonString);
 				for (let key in obj) { if (aestheticInstructUISettings.hasOwnProperty(key)) { aestheticInstructUISettings[key] = obj[key]; } }
 			}
-		}	// If persist session isn't toggled, reset to the default settings.
-		else { localStorage.setItem((localflag ? 'e_': '') + 'koboldLiteUICustomizationOptions', JSON.stringify(aestheticInstructUISettings, null, 2)); }
+		}
 
 		// Initialize foregroundColorPickers and backgroundColorPickers.
 		document.querySelectorAll('.enhancedTextColorPicker, .enhancedStandardColorPicker').forEach(element => {
@@ -8996,6 +8995,8 @@ Current version: 66
 			if (role != 'uniform') { aestheticInstructUISettings[`bubbleColor_${role}`] = document.getElementById(`${role}-bubble-colorselector`).style.backgroundColor; }
 		}
 
+		aestheticInstructUISettings.rounded_bubbles = document.getElementById('aui_rounded_bubbles').checked;
+		aestheticInstructUISettings.show_chat_names = document.getElementById('aui_show_chat_names').checked;
 		aestheticInstructUISettings.use_markdown = document.getElementById('instructModeMarkdown').checked;
 		aestheticInstructUISettings.use_uniform_colors = !document.getElementById('instructModeCustomized').checked;
 		aestheticInstructUISettings.code_block_background = document.getElementById('code-block-background-colorselector').style.color;
@@ -9008,9 +9009,6 @@ Current version: 66
 		aestheticInstructUISettings.portrait_ratio_you = document.getElementById('portrait_ratio_you').value;
 		aestheticInstructUISettings.background_minHeight = document.getElementById('instruct-min-backgroundHeight').value;
 		aestheticInstructUISettings.centerHorizontally = document.getElementById('instructModeCenterHorizontally').checked;
-
-		// aestheticInstructUISettings.background_anchor_style_you = document.getElementById('background-anchor-style-you').value;
-		// aestheticInstructUISettings.background_anchor_style_AI = document.getElementById('background-anchor-style-AI').value;
 
 		//basic sanitization
 		aestheticInstructUISettings.font_size = cleannum(aestheticInstructUISettings.font_size, 5, 50);
@@ -9039,6 +9037,8 @@ Current version: 66
 		}
 
 		// Apply the settings from the json file to the UI.
+		document.getElementById('aui_rounded_bubbles').checked = aestheticInstructUISettings.rounded_bubbles;
+		document.getElementById('aui_show_chat_names').checked = aestheticInstructUISettings.show_chat_names;
 		document.getElementById('instructModeMarkdown').checked = aestheticInstructUISettings.use_markdown;
 		document.getElementById('instructModeCustomized').checked = !aestheticInstructUISettings.use_uniform_colors;
 		document.getElementById('code-block-background-colorselector').style.color = aestheticInstructUISettings.code_block_background;
@@ -9051,8 +9051,6 @@ Current version: 66
 		document.getElementById('portrait_ratio_you').value = aestheticInstructUISettings.portrait_ratio_you;
 		document.getElementById('instruct-min-backgroundHeight').value = aestheticInstructUISettings.background_minHeight;
 		document.getElementById('instructModeCenterHorizontally').checked = aestheticInstructUISettings.centerHorizontally;
-		// document.getElementById('background-anchor-style-AI').value = aestheticInstructUISettings.background_anchor_style_AI;
-		// document.getElementById('background-anchor-style-you').value = aestheticInstructUISettings.background_anchor_style_you;
 
 		// Show or hide customization UI elements based on whether they should be visible in the UI or not.
 		showOrHide('.uniform-mode-font', document.getElementById('instructModeCustomized').checked == false);
@@ -9089,6 +9087,8 @@ Current version: 66
 	{
 		const contextDict = { sysOpen: '<sys_context_koboldlite_internal>', youOpen: '<user_context_koboldlite_internal>', AIOpen: '<AI_context_koboldlite_internal>', closeTag: '<end_of_context_koboldlite_internal>' }
 		let you = get_instruct_starttag(); let bot = get_instruct_endtag(); // Instruct tags will be used to wrap text in styled bubbles.
+
+		let as = aestheticInstructUISettings;								// ..and use this as shortcut to avoid typing it each time.
 		if(localsettings.opmode==3)
 		{
 			//replace all possible instances with placeholders
@@ -9100,20 +9100,26 @@ Current version: 66
 			input = input.replaceAll(mynameregex, '{{userplaceholder}}');
 			input = input.replaceAll(mynameregex2, '{{userplaceholder}}');
 			input = input.replaceAll(mynameregex3, '{{userplaceholder}}');
-			input = input.replaceAll("{{userplaceholder}}", `{{userplaceholder}}<p class='aui_nametag'>`+localsettings.chatname+`</p>`);
-
-			input = input.replaceAll(othernamesregex, function(match) {
-				return "{{botplaceholder}}<p class='aui_nametag'>" + match.substring(0,match.length-2).trim() + "</p>";
-			});
-			input = input.replaceAll(othernamesregex2, function(match) {
-				return "{{botplaceholder}}<p class='aui_nametag'>" + match.substring(0,match.length-2).trim() + "</p>";
-			});
+			if(as.show_chat_names)
+			{
+				input = input.replaceAll("{{userplaceholder}}", `{{userplaceholder}}<p class='aui_nametag'>`+localsettings.chatname+`</p>`);
+				input = input.replaceAll(othernamesregex, function(match) {
+					return "{{botplaceholder}}<p class='aui_nametag'>" + match.substring(0,match.length-2).trim() + "</p>";
+				});
+				input = input.replaceAll(othernamesregex2, function(match) {
+					return "{{botplaceholder}}<p class='aui_nametag'>" + match.substring(0,match.length-2).trim() + "</p>";
+				});
+			}
+			else
+			{
+				input = input.replaceAll(othernamesregex, "{{botplaceholder}}");
+				input = input.replaceAll(othernamesregex2, "{{botplaceholder}}");
+			}
 
 			you = "{{userplaceholder}}";
 			bot = "{{botplaceholder}}";
 		}
 
-		let as = aestheticInstructUISettings;								// ..and use this as shortcut to avoid typing it each time.
 		let portraitsStyling = // Also, implement portraits as css classes. Now chat entries can reuse them instead of recreating them.
 		`<style>
 			.you-portrait-image`+classSuffixStr+` {margin: 10px 6px; background:url(`+ as.you_portrait +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
@@ -9146,7 +9152,7 @@ Current version: 66
 
 
 		// Helper functions to allow styling the chat log properly. These affect both the background of the chat bubbles and its content.
-		function style(role) { return `${contextDict.closeTag}</div></div><div style='display:flex; align-items:stretch; flex-direction: row;'>${image(role)}<div style='flex: 1; color: ${as[`text_color_${as.use_uniform_colors ? 'uniform' : role}`].color}; background-color:${as[`bubbleColor_${role}`]}; padding: ${as.padding()}; margin: ${as.margin()}; min-height:${as.background_minHeight}px; font-size: ${as.font_size}px; flex-direction:column; align-items: ${as.centerHorizontally ? 'center' : 'flex-start'}; justify-content: center; border-radius: 15px'>${contextDict[`${role}Open`]}`; }
+		function style(role) { return `${contextDict.closeTag}</div></div><div style='display:flex; align-items:stretch; flex-direction: row;'>${image(role)}<div style='flex: 1; display:flex; color: ${as[`text_color_${as.use_uniform_colors ? 'uniform' : role}`].color}; background-color:${as[`bubbleColor_${role}`]}; padding: ${as.padding()}; margin: ${as.margin()}; min-height:${as.background_minHeight}px; font-size: ${as.font_size}px; flex-direction:column; align-items: ${as.centerHorizontally ? 'center' : 'flex-start'}; justify-content: center; border-radius: ${as.rounded_bubbles ? '15px' : '0px'}'>${contextDict[`${role}Open`]}`; }
 		function wrapperSpan(role, type) { let textStyle = as[`${type}_color_${role}`]; return `<span style='color: ${textStyle.color}; font-style: ${textStyle.fontStyle}; font-weight: ${textStyle.fontWeight}'>$1</span>`; }
 		function image(role) {
 			if (!as[`${role}_portrait`] || as.border_style == 'None' || role == 'sys') { return ''; }
@@ -9174,7 +9180,11 @@ Current version: 66
 		if(localsettings.opmode==3)
 		{
 			preview = replaceAll(preview,'\n[USER_REPLY]\n', "{{userplaceholder}}");
-			preview = replaceAll(preview,'\n[AI_REPLY]\n', "{{botplaceholder}}<p class='aui_nametag'>Bot</p>");
+			if(aestheticInstructUISettings.show_chat_names){
+				preview = replaceAll(preview,'\n[AI_REPLY]\n', "{{botplaceholder}}<p class='aui_nametag'>Bot</p>");
+			}else{
+				preview = replaceAll(preview,'\n[AI_REPLY]\n', "{{botplaceholder}}");
+			}
 		}
 		else
 		{
@@ -10238,21 +10248,12 @@ Current version: 66
 										<div class="enhancedStandardColorPicker" id="you-bubble-colorselector">You 🖌️</div>
 										<div class="enhancedStandardColorPicker" id="AI-bubble-colorselector">AI 🖌️</div>
 									</div>
-									<!-- ANCHOR NOT IMPLEMENTED -->
-									<!-- <div class="ui-settings-inline hidden">
-										<div style="margin-right: 38px">Anchor: </div>
-										<div style="text-align: center; margin: 0px 10px">You:</div>
-										<select class="form-control" id="background-anchor-style-you" style="width:50px;height:16px;padding:0; font-size: 10px;">
-											<option value="0">Left</option>
-											<option value="1">Right</option>
-										</select>
-										<div style="text-align: center; margin: 0px 10px">AI:</div>
-										<select class="form-control" id="background-anchor-style-AI" style="width:50px;height:16px;padding:0; font-size: 10px;">
-											<option value="0">Left</option>
-											<option value="1">Right</option>
-										</select>
-									</div> -->
-									<!-- ^^ TODO: IMPLEMENT ANCHOR ABOVE ^^-->
+
+									<div class="ui-settings-inline" style="font-size: 10px; margin-left: 10px">
+										<div style="padding-top: 2px;">Rounded Bubbles: </div>
+										<input id="aui_rounded_bubbles"  type="checkbox" style="height: 10px">
+									</div>
+
 									<div class="ui-settings-inline">
 										<div style="margin-right:20px;">Min Height: </div>
 										<div class="instruct-settings-input"><input id ="instruct-min-backgroundHeight" type="number"/> px</div>
@@ -10316,6 +10317,10 @@ Current version: 66
 										<div style="align-self: left;">px</div>
 										<div style="margin-left:20px"><span class="rectPortraitMode">A/R: </span><input id="portrait_ratio_AI" type="number" placeholder="1.0" step="0.01" value="1.0" style='width:46px;height:20px;font-size:10px;' class="rectPortraitMode"/></div>
 									</div>
+									<div class="ui-settings-inline" style="font-size: 10px; margin-left: 10px">
+										<div style="padding-top: 2px;">Show Names (Chat Mode): </div>
+										<input id="aui_show_chat_names" type="checkbox" style="height: 10px">
+									</div>
 								</div>
 							</div>
 						</div>
@@ -10339,7 +10344,7 @@ Current version: 66
 											<input id="instructModeCustomized" type="checkbox" style="height: 10px;">
 										</div>
 										<div class="ui-settings-inline" style="font-size: 10px; margin-left: 10px">
-											<div style="padding-top: 2px;">Markdown: </div>
+											<div style="padding-top: 2px;">Style Text: </div>
 											<input id="instructModeMarkdown"  type="checkbox" style="height: 10px">
 										</div>
 									</div>
