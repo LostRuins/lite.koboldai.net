@@ -4551,13 +4551,14 @@ Current version: 69
 		msgbox(last_request_str,"Last Request Context",false);
 	}
 
+	var worker_data_showonly = []; //only for table display, dont mix
 	function get_and_show_workers() {
 		if (localflag) {
 			return;
 		}
 		get_workers((wdata) => {
-			worker_data = wdata;
-			show_workers(wdata)
+			worker_data_showonly = wdata;
+			show_workers();
 		});
 	}
 	function get_workers(onDoneCallback) {
@@ -4606,8 +4607,8 @@ Current version: 69
 		if(document.getElementById("workertable").innerHTML!="")
 		{
 			let searchstr = document.getElementById("workerlistquicksearch").value.toLowerCase();
-			for (var i = 0; i < worker_data.length; ++i) {
-				let elem = worker_data[i];
+			for (var i = 0; i < worker_data_showonly.length; ++i) {
+				let elem = worker_data_showonly[i];
 				let tablerow = document.getElementById("workertablerow_"+i);
 				if(tablerow)
 				{
@@ -4622,12 +4623,12 @@ Current version: 69
 			}
 		}
 	}
-	function show_workers(wdata) {
+	function show_workers() {
 		document.getElementById("workercontainer").classList.remove("hidden");
 
 		let str = "";
-		for (var i = 0; i < wdata.length; ++i) {
-			let elem = wdata[i];
+		for (var i = 0; i < worker_data_showonly.length; ++i) {
+			let elem = worker_data_showonly[i];
 			let tokenspersec = elem.performance.replace(" tokens per second", "");
 			if(tokenspersec.toLowerCase()=="no requests fulfilled yet")
 			{
@@ -4645,7 +4646,7 @@ Current version: 69
 			str += "<tr id='workertablerow_"+i+"'><td>" + workerNameHtml + "</td><td>" + escapeHtml(elem.models[0].substring(0, 32)) + "</td><td>" + elem.max_length + " / " + elem.max_context_length + "<br>(" + tokenspersec + " T/s)</td><td "+brokenstyle+">" + elem.uptime + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "</td><td>"+clustertag+"</td></tr>";
 		}
 		document.getElementById("workertable").innerHTML = str;
-		document.getElementById("worktitlecount").innerText = "Worker List - Total "+wdata.length;
+		document.getElementById("worktitlecount").innerText = "Worker List - Total " + worker_data_showonly.length;
 	}
 
 	function show_my_own_workers()
