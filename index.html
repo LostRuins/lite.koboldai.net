@@ -4552,11 +4552,13 @@ Current version: 69
 	}
 
 	function get_and_show_workers() {
-		if(localflag)
-		{
+		if (localflag) {
 			return;
 		}
-		get_workers((wdata) => { show_workers(wdata) });
+		get_workers((wdata) => {
+			worker_data = wdata;
+			show_workers(wdata)
+		});
 	}
 	function get_workers(onDoneCallback) {
 		if(localflag)
@@ -4599,6 +4601,27 @@ Current version: 69
 
 	}
 
+	function worker_list_quick_search()
+	{
+		if(document.getElementById("workertable").innerHTML!="")
+		{
+			let searchstr = document.getElementById("workerlistquicksearch").value.toLowerCase();
+			for (var i = 0; i < worker_data.length; ++i) {
+				let elem = worker_data[i];
+				let tablerow = document.getElementById("workertablerow_"+i);
+				if(tablerow)
+				{
+					if(searchstr=="" || elem.name.toLowerCase().includes(searchstr) ||
+					elem.models[0].toLowerCase().includes(searchstr))
+					{
+						tablerow.style.display = "";
+					}else{
+						tablerow.style.display = "none";
+					}
+				}
+			}
+		}
+	}
 	function show_workers(wdata) {
 		document.getElementById("workercontainer").classList.remove("hidden");
 
@@ -4619,7 +4642,7 @@ Current version: 69
 			{
 				workerNameHtml = "<a class=\"color_blueurl\" href=\"#\" onclick=\"msgbox(\'"+escapeHtml(replaceAll(elem.info,"\'","\\\'"))+"\','Worker Info',false,false,hide_msgbox)\">"+workerNameHtml+"</a>";
 			}
-			str += "<tr><td>" + workerNameHtml + "</td><td>" + escapeHtml(elem.models[0].substring(0, 32)) + "</td><td>" + elem.max_length + " / " + elem.max_context_length + "<br>(" + tokenspersec + " T/s)</td><td "+brokenstyle+">" + elem.uptime + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "</td><td>"+clustertag+"</td></tr>";
+			str += "<tr id='workertablerow_"+i+"'><td>" + workerNameHtml + "</td><td>" + escapeHtml(elem.models[0].substring(0, 32)) + "</td><td>" + elem.max_length + " / " + elem.max_context_length + "<br>(" + tokenspersec + " T/s)</td><td "+brokenstyle+">" + elem.uptime + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "</td><td>"+clustertag+"</td></tr>";
 		}
 		document.getElementById("workertable").innerHTML = str;
 		document.getElementById("worktitlecount").innerText = "Worker List - Total "+wdata.length;
@@ -10154,6 +10177,9 @@ Current version: 69
 		<div class="popupbg flex"></div>
 		<div class="workerpopup">
 			<div class="popuptitlebar">
+				<div><span style="float:right;">
+					<input class="settinglabel miniinput" style="margin: 3px; width: 100px;" type="text" placeholder="Quick Search" value="" id="workerlistquicksearch" oninput="worker_list_quick_search()">
+				</span></div>
 				<div class="popuptitletext" id="worktitlecount">Worker List</div>
 			</div>
 			<div class="workerTableDiv">
