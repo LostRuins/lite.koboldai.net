@@ -194,6 +194,9 @@ Current version: 70
 			padding: 10px;
 			overflow-y: auto;
 		}
+		.txtchunk, ai_context_koboldlite_internal, #gametext, .chat_received_withd_msg p,.chat_sent_msg p {
+			white-space: pre-wrap;
+		}
 
 		#actionmenu {
 			margin-top: 6px;
@@ -6486,6 +6489,7 @@ Current version: 70
 
 		let newgen = document.getElementById("input_text").value;
 		let doNotGenerate = false;
+		let skiptrimmingwhitespace = false;
 
 		if (newgen.trim() != "" || gametext_arr.length > 0 || current_memory != "" || current_anote != "")
 		{
@@ -6509,6 +6513,7 @@ Current version: 70
 					else {
 						newgen = instructstartplaceholder + newgen + instructendplaceholder;
 					}
+					skiptrimmingwhitespace = true;
 				}
 				else //may be continuting existing instruction OR starting a brand new session. check if first action
 				{
@@ -6518,6 +6523,7 @@ Current version: 70
 						} else {
 							newgen = instructendplaceholder;
 						}
+						skiptrimmingwhitespace = true;
 					}
 				}
 			}
@@ -6533,6 +6539,7 @@ Current version: 70
 			if (localsettings.opmode == 2 && newgen != "" && localsettings.adventure_is_action) {
 				//append action for adventure mode, except for the first turn.
 				newgen = "\n\n\> " + newgen + "\n\n";
+				skiptrimmingwhitespace = true;
 			}
 			//if very first submission is a story in adventure mode, swap to action
 			if(localsettings.opmode == 2 && newgen != "" && gametext_arr.length==0)
@@ -6621,6 +6628,10 @@ Current version: 70
 			if (localsettings.trimwhitespace) {
 				truncated_context = truncated_context.replace(/[\t ]+$/, '');
 				truncated_context = truncated_context.replace(/[\r\n]+/g, '\n');
+				if(!skiptrimmingwhitespace)
+				{
+					truncated_context = truncated_context.trimEnd();
+				}
 			}
 
 
