@@ -2908,6 +2908,7 @@ Current version: 70
 	var kobold_endpoint_version = ""; //used to track problematic versions to avoid sending extra fields
 	var koboldcpp_version = ""; //detect if we are using koboldcpp
 	var last_request_str = "No Requests Available"; //full context of last submitted request
+	var lastcheckgenkey = ""; //for checking polled-streaming unique id when generating in kcpp
 
 	var localsettings = {
 		my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
@@ -6944,6 +6945,12 @@ Current version: 70
 				}
 			}
 
+			if((custom_kobold_endpoint != "" && is_using_kcpp_with_streaming()))
+			{
+				lastcheckgenkey = "KCPP"+(Math.floor(1000 + Math.random() * 9000)).toString();
+				submit_payload.params.genkey = lastcheckgenkey;
+			}
+
 			//v2 api specific fields
 			submit_payload.workers = selected_workers.map((m)=>{return m.id});
 
@@ -7849,6 +7856,9 @@ Current version: 70
 								headers: {
 									'Content-Type': 'application/json',
 								},
+								body: JSON.stringify({
+								"genkey": lastcheckgenkey
+								}),
 								})
 								.then((response) => response.json())
 								.then((data) => {
