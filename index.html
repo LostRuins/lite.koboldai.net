@@ -2840,6 +2840,7 @@ Current version: 70
 
 	const default_oai_base = "https://api.openai.com";
 	const default_claude_base = "https://api.anthropic.com";
+	const default_palm_base = "https://generativelanguage.googleapis.com/v1beta2/models/text-bison-001:generateText?key=";
 
 	//support for quick news updates
 	const news_endpoint = "https://news.concedo.workers.dev"
@@ -2888,6 +2889,7 @@ Current version: 70
 	var custom_oai_key = ""; //if set, uses the OpenAI API to generate
 	var custom_oai_model = "";
 	var custom_scale_key = "";
+	var custom_palm_key = "";
 	var custom_scale_ID = "";
 	var custom_claude_endpoint = default_claude_base;
 	var custom_claude_key = "";
@@ -2915,6 +2917,7 @@ Current version: 70
 		saved_claude_key: "", //do not ever share this in save files!
 		saved_claude_addr: "", //do not ever share this in save files!
 		saved_oai_jailbreak: "", //customized oai system prompt
+		saved_palm_key: "",
 
 		autoscroll: true, //automatically scroll to bottom on render
 		trimsentences: true, //trim to last punctuation
@@ -3432,7 +3435,7 @@ Current version: 70
 
 	function is_using_custom_ep()
 	{
-		return (custom_oai_key!=""||custom_kobold_endpoint!=""||custom_scale_key!=""||custom_claude_key!="");
+		return (custom_oai_key!=""||custom_kobold_endpoint!=""||custom_scale_key!=""||custom_claude_key!=""||custom_palm_key!="");
 	}
 
 	function is_using_kcpp_with_streaming()
@@ -3645,6 +3648,7 @@ Current version: 70
 				let tmp_oai2 = localsettings.saved_oai_addr;
 				let tmp_claude1 = localsettings.saved_claude_key;
 				let tmp_claude2 = localsettings.saved_claude_addr;
+				let tmp_palm1 = localsettings.saved_palm_key;
 				import_props_into_object(localsettings, story.savedsettings);
 				localsettings.my_api_key = tmpapikey1;
 				localsettings.home_cluster = tmphc;
@@ -3652,6 +3656,7 @@ Current version: 70
 				localsettings.saved_oai_addr = tmp_oai2;
 				localsettings.saved_claude_key = tmp_claude1;
 				localsettings.saved_claude_addr = tmp_claude2;
+				localsettings.saved_palm_key = tmp_palm1;
 			}
 
 			if (story.savedaestheticsettings && story.savedaestheticsettings != "") {
@@ -3960,6 +3965,7 @@ Current version: 70
 					let tmp_oai2 = localsettings.saved_oai_addr;
 					let tmp_claude1 = localsettings.saved_claude_key;
 					let tmp_claude2 = localsettings.saved_claude_addr;
+					let tmp_palm1 = localsettings.saved_palm_key;
 					import_props_into_object(localsettings, loaded_storyobj.savedsettings);
 					localsettings.my_api_key = tmpapikey1;
 					localsettings.home_cluster = tmphc;
@@ -3967,6 +3973,7 @@ Current version: 70
 					localsettings.saved_oai_addr = tmp_oai2;
 					localsettings.saved_claude_key = tmp_claude1;
 					localsettings.saved_claude_addr = tmp_claude2;
+					localsettings.saved_palm_key = tmp_palm1;
 
 					//backwards compat support for newlines
 					if(localsettings.instruct_has_newlines==true || (loaded_storyobj.savedsettings != null && loaded_storyobj.savedsettings.instruct_has_newlines==null&&loaded_storyobj.savedsettings.instruct_has_markdown==null))
@@ -4918,6 +4925,14 @@ Current version: 70
 				}
 			}
 		}
+		else if(epchoice==4)
+		{
+			document.getElementById("palmcustom").classList.remove("hidden");
+			if(custom_palm_key=="" && localsettings.saved_palm_key!="")
+			{
+				document.getElementById("custom_palm_key").value = localsettings.saved_palm_key;
+			}
+		}
 	}
 
 
@@ -4927,6 +4942,7 @@ Current version: 70
 		custom_oai_key = "";
 		custom_scale_key = "";
 		custom_claude_key = "";
+		custom_palm_key = "";
 
 		let epchoice = document.getElementById("customapidropdown").value;
 		if(epchoice==0) //connect to kobold endpoint
@@ -5284,6 +5300,37 @@ Current version: 70
 
 			}
 		}
+		else if(epchoice==4) //palm endpoint
+		{
+			let desired_palm_key = document.getElementById("custom_palm_key").value.trim();
+
+			if(desired_palm_key!="")
+			{
+				hide_popups();
+
+				//good to go
+				custom_palm_key = desired_palm_key;
+				localsettings.saved_palm_key = custom_palm_key;
+
+				selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": "text-bison-001", "count": 1 }];
+				selected_workers = [];
+				if (perfdata == null) {
+					//generate some fake perf data if horde is offline and using custom endpoint
+					perfdata = {
+						"queued_requests": 0,
+						"queued_tokens": 0,
+						"past_minute_tokens": 0,
+						"worker_count": 0
+					};
+					document.body.classList.add("connected");
+					document.getElementById("connectstatus").classList.remove("color_orange");
+					document.getElementById("connectstatus").classList.add("color_green");
+				}
+				document.getElementById("connectstatus").innerHTML = "Connected to PaLM Endpoint";
+				render_gametext();
+			}
+		}
+
 	}
 
 	function display_custom_endpoint()
@@ -5441,6 +5488,7 @@ Current version: 70
 			custom_oai_key = "";
 			custom_scale_key = "";
 			custom_claude_key = "";
+			custom_palm_key = "";
 			//remove the Custom Endpoint if it's multi selected together with others.
 			const findex = selected_idx_arr.indexOf("9999");
 			if (findex > -1) {
@@ -7183,6 +7231,45 @@ Current version: 70
 						msgbox("Error while submitting prompt: " + error);
 					});
 			}
+			else if (custom_palm_key != "")//handle for PaLM
+			{
+				let targetep = default_palm_base + custom_palm_key;
+				let payload = {"prompt":{"text":submit_payload.prompt},
+				"temperature":submit_payload.params.temperature,
+				"maxOutputTokens": submit_payload.params.max_length,
+				"topP": submit_payload.params.top_p,
+				"topK": (submit_payload.params.top_k<1?9999:submit_payload.params.top_k),
+				"candidateCount":1};
+
+				fetch(targetep, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify(payload),
+					referrerPolicy: 'no-referrer',
+				})
+					.then((response) => response.json())
+					.then((data) => {
+						console.log("sync finished response: " + JSON.stringify(data));
+						if (custom_palm_key != "" && data.candidates != null && data.candidates.length>0 && data.candidates[0].output != "") {
+							synchro_polled_response = data.candidates[0].output;
+						}
+						else {
+							//error occurred, maybe captcha failed
+							console.error("error occurred in PaLM generation");
+							clear_poll_flags();
+							render_gametext();
+							msgbox("Error occurred during text generation: " + formatError(data));
+						}
+					})
+					.catch((error) => {
+						console.error('Error:', error);
+						clear_poll_flags();
+						render_gametext();
+						msgbox("Error while submitting prompt: " + error);
+					});
+			}
 			else {
 				console.log("Unknown sync endpoint!");
 			}
@@ -8150,6 +8237,10 @@ Current version: 70
 				else if(custom_scale_key!="")
 				{
 					whorun = "<br>You're using the Spellbook by Scale AI API";
+				}
+				else if(custom_palm_key!="")
+				{
+					whorun = "<br>You're using the PaLM API";
 				}
 				else if(custom_claude_key!="")
 				{
@@ -9581,6 +9672,7 @@ Current version: 70
 				<option value="1">OpenAI API</option>
 				<option value="2">Spellbook By Scale API</option>
 				<option value="3">Claude By Anthropic API</option>
+				<option value="4">PaLM By Google API</option>
 			</select>
 			</div>
 			<div id="koboldcustom" class="aidgpopuplistheader anotelabel">
@@ -9646,6 +9738,12 @@ Current version: 70
 				</select>
 				<input type="checkbox" id="clauderenamecompat" onchange="">
 				<div class="box-label" title="Rename User and Bot tags to work with claude, force inject them otherwise">Claude Compatibility Rename Fix</div>
+			</div>
+			<div id="palmcustom" class="aidgpopuplistheader anotelabel hidden">
+				Uses PaLM Text Bison by Google.<br><br>
+				Note that KoboldAI Lite takes no responsibility for your usage or consequences of this feature.<br><br>
+				<span class="color_green" style="font-weight: bold;">Please input PaLM API Key.</span><br><br>
+				<input class="form-control" type="text" id="custom_palm_key" placeholder="PaLM API Key" value=""><br>
 			</div>
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="connect_custom_endpoint()">Ok</button>
