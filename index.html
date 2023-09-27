@@ -2257,9 +2257,21 @@ Current version: 71
 		}
 
 		return str.replace(new RegExp(escapeRegExp(find), (caseInsensitive?'gi':'g')), replace);
-
-
 	}
+
+	function rgbToHex(rgbColor) {
+		rgbColor = rgbColor.split("(")[1];
+		rgbColor = rgbColor.split(")")[0];
+		const components = rgbColor.split(',');
+		const red = parseInt(components[0]);
+		const green = parseInt(components[1]);
+		const blue = parseInt(components[2]);
+		const redHex = red.toString(16).padStart(2, '0');
+		const greenHex = green.toString(16).padStart(2, '0');
+		const blueHex = blue.toString(16).padStart(2, '0');
+		return `#${redHex}${greenHex}${blueHex}`;
+	}
+
 
 	function GetUniqueColor(idx)
 	{
@@ -9001,9 +9013,9 @@ Current version: 71
 
 	class AestheticInstructUISettings {
 		constructor() {
-			this.bubbleColor_sys = 'rgba(20, 40, 40, 0.8)';
-			this.bubbleColor_you = '#29343a';
-			this.bubbleColor_AI = 'rgba(20, 20, 40, 1)';
+			this.bubbleColor_sys = 'rgb(18, 36, 36)';
+			this.bubbleColor_you = 'rgb(41, 52, 58)';
+			this.bubbleColor_AI = 'rgb(20, 20, 40)';
 
 			this.background_margin = [5, 5, 5, 0];
 			this.background_padding = [15, 15, 10, 10];
@@ -9027,13 +9039,13 @@ Current version: 71
 			this.use_uniform_colors = true; // Hides 'you, AI, sys' if set to true via settings UI.
 
 			for (let role of aestheticTextStyleRoles) {
-				this[`text_tcolor_${role}`] = 'rgba(255,255,255,1)';
-				this[`speech_tcolor_${role}`] = 'rgba(150, 150, 200, 1)';
-				this[`action_tcolor_${role}`] = 'rgba(255,255,255, 0.7)';
+				this[`text_tcolor_${role}`] = 'rgb(255, 255, 255)';
+				this[`speech_tcolor_${role}`] = 'rgb(150, 150, 200)';
+				this[`action_tcolor_${role}`] = 'rgb(178, 178, 178)';
 			}
 
-			this.code_block_background = 'black';
-			this.code_block_foreground = 'rgba(180, 35, 40, 1)';
+			this.code_block_background = 'rgb(0, 0, 0)';
+			this.code_block_foreground = 'rgb(180, 35, 40)';
 		}
 
 		padding() { return `${this.background_padding[2]}px ${this.background_padding[1]}px ${this.background_padding[3]}px ${this.background_padding[0]}px`; }
@@ -9066,6 +9078,7 @@ Current version: 71
 			colorPicker.style.position = 'absolute';
 			colorPicker.style.width = '100%';
 			colorPicker.style.height = '100%';
+			colorPicker.classList.add("colorpickerchild");
 			colorPicker.value = element.style[`${useBackground ? 'backgroundColor' : 'color'}`];
 			element.style.position = 'relative';
 			element.appendChild(colorPicker);
@@ -9199,13 +9212,13 @@ Current version: 71
 			}
 			if (role != 'uniform') { aestheticInstructUISettings[`bubbleColor_${role}`] = document.getElementById(`${role}-bubble-colorselector`).style.backgroundColor; }
 		}
+		aestheticInstructUISettings.code_block_background = document.getElementById('code-block-background-colorselector').style.color;
+		aestheticInstructUISettings.code_block_foreground = document.getElementById('code-block-foreground-colorselector').style.color;
 
 		aestheticInstructUISettings.rounded_bubbles = document.getElementById('aui_rounded_bubbles').checked;
 		aestheticInstructUISettings.show_chat_names = document.getElementById('aui_show_chat_names').checked;
 		aestheticInstructUISettings.use_markdown = document.getElementById('instructModeMarkdown').checked;
 		aestheticInstructUISettings.use_uniform_colors = !document.getElementById('instructModeCustomized').checked;
-		aestheticInstructUISettings.code_block_background = document.getElementById('code-block-background-colorselector').style.color;
-		aestheticInstructUISettings.code_block_foreground = document.getElementById('code-block-foreground-colorselector').style.color;
 		aestheticInstructUISettings.font_size = document.getElementById('instruct-font-size').value;
 		aestheticInstructUISettings.border_style = document.getElementById('instructBorderStyle').value;
 		aestheticInstructUISettings.portrait_width_AI = document.getElementById('portrait_width_AI').value;
@@ -9233,18 +9246,24 @@ Current version: 71
 		// Parse color settings and apply to the related parts in the UI.
 		for (let role of aestheticTextStyleRoles) {
 			for (let type of aestheticTextStyleTypes) {
-				setElementColor(`${role}-${type}-colorselector`, aestheticInstructUISettings[`${type}_tcolor_${role}`]);
+				setElementColor(`${role}-${type}-colorselector`, aestheticInstructUISettings[`${type}_tcolor_${role}`], false);
 			}
-			if (role != 'uniform') { document.getElementById(`${role}-bubble-colorselector`).style.backgroundColor = aestheticInstructUISettings[`bubbleColor_${role}`]; }
+			if (role != 'uniform') {
+				setElementColor(`${role}-bubble-colorselector`, aestheticInstructUISettings[`bubbleColor_${role}`], true);
+			}
 		}
+		if(aestheticInstructUISettings.code_block_background=="rgb(0, 0, 0)")
+		{
+			console.log("oof");
+		}
+		setElementColor('code-block-background-colorselector', aestheticInstructUISettings.code_block_background, false);
+		setElementColor('code-block-foreground-colorselector', aestheticInstructUISettings.code_block_foreground, false);
 
 		// Apply the settings from the json file to the UI.
 		document.getElementById('aui_rounded_bubbles').checked = aestheticInstructUISettings.rounded_bubbles;
 		document.getElementById('aui_show_chat_names').checked = aestheticInstructUISettings.show_chat_names;
 		document.getElementById('instructModeMarkdown').checked = aestheticInstructUISettings.use_markdown;
 		document.getElementById('instructModeCustomized').checked = !aestheticInstructUISettings.use_uniform_colors;
-		document.getElementById('code-block-background-colorselector').style.color = aestheticInstructUISettings.code_block_background;
-		document.getElementById('code-block-foreground-colorselector').style.color = aestheticInstructUISettings.code_block_foreground;
 		document.getElementById('instruct-font-size').value = aestheticInstructUISettings.font_size;
 		document.getElementById('instructBorderStyle').value = aestheticInstructUISettings.border_style;
 		document.getElementById('portrait_width_AI').value = aestheticInstructUISettings.portrait_width_AI;
@@ -9270,11 +9289,23 @@ Current version: 71
 		});
 
 
-		function setElementColor(id, newColor) {
+		function setElementColor(id, newColor, isBackground) {
 			let element = document.getElementById(id);
 			if (!element) { console.warn(`Element with ID: ${id} not found.`); return; }
 
-			element.style.color = newColor;
+			if (isBackground) {
+				element.style.backgroundColor = newColor;
+			}
+			else {
+				element.style.color = newColor;
+			}
+
+			var childInput = element.querySelector('.colorpickerchild');
+			if (childInput && newColor.includes("rgb")) {
+				childInput.value = rgbToHex(newColor);
+			} else {
+				childInput.value = newColor;
+			}
 		}
 		function showOrHide(classID, value) {
 			if (value) { document.querySelectorAll(classID).forEach((x) => x.classList.remove('hidden')); }
@@ -10451,19 +10482,6 @@ Current version: 71
 				<!-- Settings panel -->
 				<div style="background-color: #122b40;" onchange="refreshPreview()">
 					<div style="padding: 10px; width:350px; height:100%">
-						<!-- PRESET LOADING //TODO: Make exporting/importing work -->
-						<!-- <div class="hidden">
-							<div class="settinglabel" style="display: flex;flex-direction: column; margin-top:5px; border-top: solid 1px rgba(180, 180, 255, 0.2);">
-								<div class="justifyleft settingsmall" style="font-size: 14px; margin-bottom: 2px;">RAWRRR Presets</div>
-								<div class="ui-settings-inline">
-									<select class="form-control" id="presets" style="width:300px;height:24px;padding:0;" onchange="toggle_UI_preset()">
-										<option value="1" title="Known Working Settings">[Default]</option>
-										<option value="1000" title="Known Working Settings">[Custom]</option>
-									</select>
-									<button class="btn btn-primary" style="height:25px; font-size: 12px;text-align: center; margin-left: 10px;">Save</button>
-								</div>
-							</div>
-						</div> -->
 
 						<!-- BACKGROUND STYLE SETTINGS -->
 						<div>
@@ -10534,7 +10552,7 @@ Current version: 71
 											<option value="Rounded">Rounded</option>
 											<option value="Rect">Rect</option>
 										</select>
-										<div id="reset-portrait" style="margin-left: 10px;"><a href="#" class="color_blueurl">(Reset Image)</a></div>
+										<div style="margin-left: 10px;"><a href="#" id="reset-portrait" class="color_blueurl">(Reset Image)</a></div>
 									</div>
 									<div class="ui-settings-inline">
 										<div style="margin-right:18px;">User Portrait: </div>
@@ -10610,7 +10628,7 @@ Current version: 71
 									</div>
 								</div>
 								<br>
-									<div id="reset-all-aesthetic-instruct" style="margin-left: 10px;"><a href="#" class="color_blueurl">(Reset All Styles)</a></div>
+									<div style="margin-left: 10px;"><a href="#" id="reset-all-aesthetic-instruct" class="color_blueurl">(Reset All Styles)</a></div>
 							</div>
 						</div>
 
