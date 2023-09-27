@@ -2110,7 +2110,7 @@ Current version: 70
 			"prefmodel1":instructmodels1,
 			"prefmodel2":instructmodels2,
 			"prompt":"Welcome to your InteracTV, your interactive TV of the future today!\nPlease enter what you would like to watch:",
-			"memory": instructstartplaceholder+"\nSimulate an interactive TV that will let the user watch anything they want to watch.\n\nFirst, generate a single response prompting the user for input on what they wish to watch using the following response:\n```\nPlease enter your desired content:\n```\n\nAfter the user has entered the desired content generate the following table:\n- TV Show / Movie Name: Name of the show\n- Genre: Genre of the show\n- Program Description: Description of what the program is about, this can be any known or unkown TV or movie format.\n- Episode Name: Name of the episode\n- Episode Description: Description of what the episode is about.\n\nAfter generating this table promp the user if they wish to watch the episode with the following response and then end your generation:\n```\nDo you wish to watch this episode? (Y/N/Menu)\n"+instructstartplaceholder+"```\n\nIf the user chooses not to watch the episode generate a new episode with their requested content.\nIf the user chooses to go to the Menu ask them again what they would like to watch.\n\nIf the user chooses to watch the episode begin generating a long multiple paragraph detailed story based on the episode description, make it exciting and fun.\n\nEnd your response after each question presented to the user so that the user has a chance to respond.\n\nMain menu:\n```\nMenu Options\nA) Input a different content request\nB) Generate a different episode of the same content.\n"+instructstartplaceholder+"```\n"+instructendplaceholder,
+			"memory": instructstartplaceholder+"\nSimulate an interactive TV that will let the user watch anything they want to watch.\n\nFirst, generate a single response prompting the user for input on what they wish to watch using the following response:\n```\nPlease enter your desired content:\n```\n\nAfter the user has entered the desired content generate the following table:\n- TV Show / Movie Name: Name of the show\n- Genre: Genre of the show\n- Program Description: Description of what the program is about, this can be any known or unkown TV or movie format.\n- Episode Name: Name of the episode\n- Episode Description: Description of what the episode is about.\n\nAfter generating this table promp the user if they wish to watch the episode with the following response and then end your generation:\n```\nDo you wish to watch this episode? (Y/N/Menu)\n"+instructstartplaceholder+"```\nIf the user chooses to watch the episode begin generating a long detailed text based on the episode description containing character dialogue, make it exciting and fun written in the style of a book.\nThe text must contain dialogue in a he said she said format and is as lengthy as a book.\n\nIf the user chooses not to watch the episode generate a new episode with their requested content.\nIf the user chooses to go to the Menu ask them again what they would like to watch.\n\nEnd your response after each question presented to the user so that the user has a chance to respond.\n\nMain menu:\n```\nMenu Options\nA) Input a different content request\nB) Generate a different episode of the same content.\n"+instructstartplaceholder+"```\n"+instructendplaceholder,
 			"authorsnote": "",
 			"worldinfo": []
 		},
@@ -6382,9 +6382,9 @@ Current version: 70
 			last = Math.max(last, nl);
 		}
 		if (last > 0) {
-			return input.substring(0, last + 1).trimEnd();
+			return input.substring(0, last + 1).replace(/[\t\r\n ]+$/, '');
 		}
-		return input.trimEnd();
+		return input.replace(/[\t\r\n ]+$/, '');
 	}
 
 	function start_trim_to_sentence(input) {
@@ -6539,7 +6539,6 @@ Current version: 70
 
 		let newgen = document.getElementById("input_text").value;
 		let doNotGenerate = false;
-		let skiptrimmingwhitespace = false;
 
 		if (newgen.trim() != "" || gametext_arr.length > 0 || current_memory != "" || current_anote != "")
 		{
@@ -6563,7 +6562,6 @@ Current version: 70
 					else {
 						newgen = instructstartplaceholder + newgen + instructendplaceholder;
 					}
-					skiptrimmingwhitespace = true;
 				}
 				else //may be continuting existing instruction OR starting a brand new session. check if first action
 				{
@@ -6573,7 +6571,6 @@ Current version: 70
 						} else {
 							newgen = instructendplaceholder;
 						}
-						skiptrimmingwhitespace = true;
 					}
 				}
 			}
@@ -6589,7 +6586,6 @@ Current version: 70
 			if (localsettings.opmode == 2 && newgen != "" && localsettings.adventure_is_action) {
 				//append action for adventure mode, except for the first turn.
 				newgen = "\n\n\> " + newgen + "\n\n";
-				skiptrimmingwhitespace = true;
 			}
 			//if very first submission is a story in adventure mode, swap to action
 			if(localsettings.opmode == 2 && newgen != "" && gametext_arr.length==0)
@@ -6673,17 +6669,6 @@ Current version: 70
 
 			let truncated_context = concat_gametext(true, ""); //no need to truncate if memory is empty
 			truncated_context = truncated_context.replace(/\xA0/g,' '); //replace non breaking space nbsp
-
-			//trim trailing whitespace, and multiple newlines
-			if (localsettings.trimwhitespace) {
-				truncated_context = truncated_context.replace(/[\t ]+$/, '');
-				truncated_context = truncated_context.replace(/[\r\n]+/g, '\n');
-				if(!skiptrimmingwhitespace)
-				{
-					truncated_context = truncated_context.trimEnd();
-				}
-			}
-
 
 			//for adventure mode, inject hidden context, even more if there's nothing in memory
 			if (localsettings.opmode == 2  && localsettings.adventure_context_mod)
@@ -7548,6 +7533,12 @@ Current version: 70
 		//handle stopping tokens if they got missed (eg. horde)
 		gentxt = trim_extra_stop_seqs(gentxt,true);
 
+		//trim trailing whitespace, and multiple newlines
+		if (localsettings.trimwhitespace) {
+			gentxt = gentxt.replace(/[\t\r\n ]+$/, '');
+			gentxt = gentxt.replace(/[\r\n]+/g, '\n');
+		}
+
 		//always trim incomplete sentences for adventure and chat (if not multiline)
 		if (localsettings.opmode == 2 || (localsettings.opmode == 3 && !localsettings.allow_continue_chat) || localsettings.trimsentences == true) {
 			gentxt = end_trim_to_sentence(gentxt,true);
@@ -8262,7 +8253,7 @@ Current version: 70
 				}
 				document.getElementById("gametext").innerHTML = "Welcome to <span class=\"color_cyan\">KoboldAI Lite</span>!<br>You are using the models <span class=\"color_green\">"
 					+ selected_models.reduce((s, a) => s + (s == "" ? "" : ", ") + a.name, "") + "</span>" + (selected_workers.length == 0 ? "" : (" (Pinned to " + selected_workers.length + " worker IDs)"))
-					+ "." + whorun +".<br><br>Enter a prompt below to begin!" + "<br>Or, <a href=\"#\" class=\"color_blueurl\" onclick=\"display_scenarios()\">select a Quick Start Scenario by clicking here.</a><br>";
+					+ "." + whorun +".<br><br>Enter a prompt below to begin!" + "<br>Or, <a href=\"#\" class=\"color_blueurl\" onclick=\"document.getElementById('loadfileinput').click()\">load an existing <b>KoboldAI savefile</b> or a <b>Tavern Character Card</b> by clicking here.</a>" + "<br>Or, <a href=\"#\" class=\"color_blueurl\" onclick=\"display_scenarios()\">select a <b>Quick Start Scenario</b> by clicking here.</a><br>";
 			}
 
 			//kick out of edit mode
