@@ -7902,7 +7902,7 @@ Current version: 72
 		++poll_ticks_passed;
 
 		//for horde requests, slow down by 3 times unless almost done
-		if(!is_using_custom_ep() && poll_ticks_passed%3!=0 && !horde_poll_nearly_completed)
+		if(!is_using_custom_ep() && (horde_poll_nearly_completed?(poll_ticks_passed%2!=0):(poll_ticks_passed%3!=0)))
 		{
 			return;
 		}
@@ -8055,7 +8055,7 @@ Current version: 72
 											mtl.classList.add("redloader");
 										} else if (data.processing == 1 && data.queue_position == 0) {
 											mtl.classList.add("greenloader");
-											if(data.wait_time<=3)
+											if(data.wait_time<5)
 											{
 												horde_poll_nearly_completed = true;
 											}
@@ -8344,8 +8344,18 @@ Current version: 72
 					whorun = "<br>There are <span class=\"color_orange\">" + selected_models.reduce((s, a) => s + a.count, 0) + "</span> <a class=\"color_green\" href=\"#\" onclick=\"get_and_show_workers()\">volunteer(s)</a> running selected models with a total queue length of <span class=\"color_orange\">"+ selected_models.reduce((s, a) => s + a.queued, 0) + "</span> tokens";
 				}
 				let nowmode = (localsettings.opmode==1?"Story Mode":(localsettings.opmode==2?"Adventure Mode":(localsettings.opmode==3?"Chat Mode":"Instruct Mode")));
+				let selmodelstr = "";
+				const maxmodelnames = 7;
+				if(selected_models.length>maxmodelnames)
+				{
+					let shortenedarr = selected_models.slice(0, maxmodelnames-1);
+					selmodelstr = shortenedarr.reduce((s, a) => s + (s == "" ? "" : ", ") + a.name, "") + " and " + (selected_models.length-(maxmodelnames-1)) + " others";
+				}else{
+					selmodelstr = selected_models.reduce((s, a) => s + (s == "" ? "" : ", ") + a.name, "");
+				}
+
 				document.getElementById("gametext").innerHTML = "Welcome to <span class=\"color_cyan\">KoboldAI Lite</span>!<br>You are using the models <span class=\"color_green\">"
-					+ selected_models.reduce((s, a) => s + (s == "" ? "" : ", ") + a.name, "") + "</span>" + (selected_workers.length == 0 ? "" : (" (Pinned to " + selected_workers.length + " worker IDs)"))
+					+ selmodelstr + "</span>" + (selected_workers.length == 0 ? "" : (" (Pinned to " + selected_workers.length + " worker IDs)"))
 					+ "." + whorun +".<br><br><b><span class=\"color_orange\">"+ nowmode +" Selected</span></b> - Enter a prompt below to begin!" + "<br>Or, <a href=\"#\" class=\"color_blueurl\" onclick=\"document.getElementById('loadfileinput').click()\">load a <b>JSON File</b> or a <b>Character Card</b> here.</a>" + "<br>Or, <a href=\"#\" class=\"color_blueurl\" onclick=\"display_scenarios()\">select a <b>Quick Start Scenario</b> here.</a><br>";
 			}
 
