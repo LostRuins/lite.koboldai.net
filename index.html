@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please do not remove this line.
-Current version: 72
+Current version: 73
 -Concedo
 -->
 
@@ -5823,7 +5823,8 @@ Current version: 72
 		document.getElementById("persist_session").checked = localsettings.persist_session;
 		document.getElementById("opmode").value = localsettings.opmode;
 		document.getElementById("chatname").value = localsettings.chatname;
-		document.getElementById("chatopponent").value = localsettings.chatopponent;
+		document.getElementById("chatopponent").value = replaceAll(localsettings.chatopponent,"||$||","\n");
+		handle_bot_name_onchange();
 		document.getElementById("instruct_starttag").value = localsettings.instruct_starttag;
 		document.getElementById("instruct_endtag").value = localsettings.instruct_endtag;
 		document.getElementById("top_k").value = localsettings.top_k;
@@ -6047,7 +6048,7 @@ Current version: 72
 		if (localsettings.chatname == null || localsettings.chatname == "") {
 			localsettings.chatname = "You";
 		}
-		localsettings.chatopponent = document.getElementById("chatopponent").value;
+		localsettings.chatopponent = replaceAll(document.getElementById("chatopponent").value,"\n","||$||");
 		localsettings.instruct_starttag = document.getElementById("instruct_starttag").value;
 		if (localsettings.instruct_starttag == null || localsettings.instruct_starttag == "") {
 			localsettings.instruct_starttag = "\\n### Instruction:\\n";
@@ -6153,6 +6154,24 @@ Current version: 72
 	{
 		document.getElementById('instruct_tag_format').value = "0";
 	}
+
+	function handle_bot_name_input()
+	{
+		let textarea = document.getElementById("chatopponent");
+		textarea.value = replaceAll(textarea.value,"||$||","\n");
+		let numberOfLineBreaks = (textarea.value.match(/\n/g) || []).length;
+		textarea.rows = numberOfLineBreaks+1;
+	}
+	function handle_bot_name_onchange()
+	{
+		let textarea = document.getElementById("chatopponent");
+		textarea.value = replaceAll(textarea.value,"||$||","\n");
+		textarea.value = textarea.value.replace(/[\r\n]+/g, '\n');
+		textarea.value = textarea.value.trim();
+		let numberOfLineBreaks = (textarea.value.match(/\n/g) || []).length;
+		textarea.rows = numberOfLineBreaks+1;
+	}
+
 
 	function toggle_uistyle()
 	{
@@ -10073,11 +10092,11 @@ Current version: 72
 							<table class="settingsmall text-center" style="border-spacing: 4px 2px;	border-collapse: separate;">
 								<tr>
 								<th>Your Name</th>
-								<th>AI Name <span class="helpicon">?<span class="helptext">The name of the person you want to chat with. Multiple opponents can be specified, creating a group chat, separate their names with ||$||</span></span></th>
+								<th>AI Name <span class="helpicon">?<span class="helptext">The name of the person you want to chat with. Multiple opponents can be specified, creating a group chat, separate their names using multiple lines.</span></span></th>
 								</tr>
 								<tr>
-								<td><input class="settinglabel miniinput" type="text" placeholder="(Enter Name)" value="" id="chatname" title="The name that you will be chatting as"></td>
-								<td><input class="settinglabel miniinput" type="text" placeholder="(Auto)" value="" id="chatopponent"  title="The name of the person you want to chat with"></td>
+								<td style="vertical-align: top;"><input class="settinglabel miniinput" type="text" placeholder="(Enter Name)" value="" id="chatname" title="The name that you will be chatting as"></td>
+								<td style="vertical-align: top;"><textarea class="settinglabel miniinput" style="resize: none;overflow:hidden;" id="chatopponent" placeholder="(Auto)" rows="1" wrap="off" title="The name of the person you want to chat with" oninput="handle_bot_name_input()" onchange="handle_bot_name_onchange()"></textarea></td>
 								</tr>
 							  </table>
 
