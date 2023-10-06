@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 76
+Current version: 77
 -Concedo
 -->
 
@@ -4700,6 +4700,22 @@ Current version: 76
 		}
 		get_workers((wdata) => {
 			worker_data_showonly = wdata;
+
+			//preprocess the showonly data for extra fields
+			for (var i = 0; i < worker_data_showonly.length; ++i) {
+				let elem = worker_data_showonly[i];
+				let tokenspersec = elem.performance.replace(" tokens per second", "");
+				if(tokenspersec.toLowerCase()=="no requests fulfilled yet")
+				{
+					tokenspersec = 0;
+				}
+				worker_data_showonly[i].tokenspersec = parseFloat(tokenspersec);
+				if(elem.models.length>0)
+				{
+					worker_data_showonly[i].defaultmodel = elem.models[0];
+				}
+			}
+
 			show_workers();
 		});
 	}
@@ -4772,6 +4788,31 @@ Current version: 76
 		const hours = Math.floor((seconds % (3600 * 24)) / 3600);
 		const minutes = Math.floor((seconds % 3600) / 60);
 		return days+"d "+hours+"h "+minutes+"m";
+	}
+
+	var sortworkersdisplayasc = true;
+	var lastsortworkerkey = "";
+	function sort_display_workers(sortkey)
+	{
+		sortworkersdisplayasc = !sortworkersdisplayasc;
+		if(lastsortworkerkey!=sortkey)
+		{
+			sortworkersdisplayasc = true;
+		}
+		lastsortworkerkey = sortkey;
+		worker_data_showonly.sort(function(a, b) {
+			if(sortworkersdisplayasc)
+			{
+				if(a[sortkey] < b[sortkey]) { return -1; }
+				if(a[sortkey] > b[sortkey]) { return 1; }
+				return 0;
+			}else{
+				if(a[sortkey] < b[sortkey]) { return 1; }
+				if(a[sortkey] > b[sortkey]) { return -1; }
+				return 0;
+			}
+		});
+		show_workers();
 	}
 
 	function show_workers() {
@@ -10569,7 +10610,7 @@ Current version: 76
 			<div class="workerTableDiv">
 			<table class="table text-center workerTable">
 			<thead class="sticky-top bg-white">
-			<tr><th>Name</th><th>Model</th><th>Capabilities</th><th>Uptime</th><th>Kudos</th><th>Cluster</th></tr>
+			<tr><th><a class="color_blueurl" href="#" onclick="sort_display_workers('name')">Name</a></th><th><a class="color_blueurl" href="#" onclick="sort_display_workers('defaultmodel')">Model</a></th><th><a class="color_blueurl" href="#" onclick="sort_display_workers('tokenspersec')">Capabilities</a></th><th><a class="color_blueurl" href="#" onclick="sort_display_workers('uptime')">Uptime</a></th><th><a class="color_blueurl" href="#" onclick="sort_display_workers('kudos_rewards')">Kudos</a></th><th>Cluster</th></tr>
 			</thead>
 			<tbody id="workertable">
 			</tbody>
