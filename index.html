@@ -4323,7 +4323,7 @@ Current version: 77
 	function get_chubai_scenario()
 	{
 		inputBox("Enter chub.ai prompt URL","Import from chub.ai","","https://chub.ai/characters/Anonymous/example-character", ()=>{
-			let userinput = getInputBoxValue().toLowerCase().trim();
+			let userinput = getInputBoxValue().trim();
 			if(userinput=="")
 			{
 				//pass
@@ -4375,6 +4375,8 @@ Current version: 77
 							"memory": cdesc +"\n"+ cdef,
 							"authorsnote": "",
 							"worldinfo": [],
+							// the API returns avatar URLs that are wrong a lot of the time, but they're predictable
+							"image": `https://avatars.charhub.io/avatars/${encodeURI(userinput)}/avatar.webp`,
 						};
 						preview_temp_scenario();
 					}).catch((error) => {
@@ -4399,11 +4401,15 @@ Current version: 77
 	function preview_temp_scenario()
 	{
 		let author = "";
+		let image = "";
 		if(temp_scenario.author && temp_scenario.author!="")
 		{
 			author = "<br><b>Author:</b> "+temp_scenario.author;
 		}
-		document.getElementById("scenariodesc").innerHTML = `<p><b><u>`+escapeHtml(temp_scenario.title)+`</u></b></p>`+
+		if (temp_scenario.image) {
+			image = `<img style="float:right; max-width:200px;" src="${encodeURI(temp_scenario.image)}">`;
+		}
+		document.getElementById("scenariodesc").innerHTML = `<p><b><u>`+escapeHtml(temp_scenario.title)+`</u></b></p>`+image+
 		`<p><b>Mode:</b> `+(temp_scenario.opmode==1?"Story":(temp_scenario.opmode==2?"Adventure":(temp_scenario.opmode==3?"Chat":"Instruct"))) + author+`</p>`
 		+`<p>`+(temp_scenario.desc!=""?escapeHtml(temp_scenario.desc):"[No Description Given]") +`</p>`;
 	}
@@ -4435,6 +4441,9 @@ Current version: 77
 			{
 				current_memory = replace_placeholders_direct(current_memory);
 			}
+		}
+		if (temp_scenario.image && temp_scenario.image > "") {
+			aestheticInstructUISettings.AI_portrait = temp_scenario.image;
 		}
 		if (temp_scenario.worldinfo && temp_scenario.worldinfo.length > 0) {
 			current_wi = [];
@@ -8569,7 +8578,7 @@ Current version: 77
 				}
 
 				fulltxt = replaceAll(fulltxt, `%SpcStg%`, `<hr class="hr_instruct"><span class="color_cyan"><img src="`+human_square+`" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>`);
-				fulltxt = replaceAll(fulltxt, `%SpcEtg%`, `</span><hr class="hr_instruct"><img src="`+niko_square+`" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>`);
+				fulltxt = replaceAll(fulltxt, `%SpcEtg%`, `</span><hr class="hr_instruct"><img src="`+aestheticInstructUISettings.AI_portrait`" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>`);
 
 			}else{
 				fulltxt = replaceAll(fulltxt, get_instruct_starttag(true), `%SclStg%`+escapeHtml(get_instruct_starttag(true))+`%SpnEtg%`);
