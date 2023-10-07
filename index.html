@@ -4362,6 +4362,7 @@ Current version: 78
 				userinput = userinput.endsWith('/') ? userinput.slice(0, -1) : userinput;
 				if(userinput!="")
 				{
+					document.getElementById("scenariodesc").innerText = "Loading scenario from Chub...";
 					fetch("https://api.chub.ai/api/characters/download", {
 					method: 'POST',
 					headers: {
@@ -4374,7 +4375,14 @@ Current version: 78
 					}),
 					referrerPolicy: 'no-referrer',
 					})
-					.then(x => x.json())
+					.then(x => {
+						if(x.ok)
+						{
+							return x.json();
+						}else{
+							throw new Error('Cannot fetch chub scenario');
+						}
+					})
 					.then(data => {
 						console.log(data);
 						let botname = data.name?data.name:"Bot";
@@ -4390,18 +4398,50 @@ Current version: 78
 							"opmode":3,
 							"chatname": "You",
 							"chatopponent": botname,
-							"gui_type":2,
+							"gui_type":1,
 							"prefmodel1":chatmodels1,
 							"prefmodel2":chatmodels2,
 							"prompt":("\n{{char}}: "+greeting),
 							"memory": cdesc +"\n"+ cdef,
 							"authorsnote": "",
 							"worldinfo": [],
-							"image": data.image,
-							// the API returns avatar URLs that are wrong a lot of the time, but they're predictable
-							"image_backup": `https://avatars.charhub.io/avatars/${encodeURI(userinput)}/avatar.webp`,
 						};
-						preview_temp_scenario();
+
+						//try to obtain the full portrait image
+						fetch("https://api.chub.ai/api/characters/download", {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+						},
+						body: JSON.stringify({
+						"format": "tavern",
+						"fullPath": userinput,
+						"version": "main"
+						}),
+						referrerPolicy: 'no-referrer',
+						})
+						.then(rb => {
+							if(rb.ok)
+							{
+								return rb.blob();
+							}else{
+								throw new Error('Cannot fetch tavern image');
+							}
+						})
+						.then(blob => {
+							preview_temp_scenario();
+							const objectURL = URL.createObjectURL(blob);
+							const compressedImg = compressImage(objectURL, (compressedImageURI, aspectratio)=>{
+								temp_scenario.image = compressedImageURI;
+								temp_scenario.image_aspect = aspectratio;
+								preview_temp_scenario();
+							}, true);
+						})
+						.catch(error => {
+							preview_temp_scenario();
+							console.error("Error fetching tavern image:", error);
+						});
+
 					}).catch((error) => {
 						temp_scenario = null;
 						document.getElementById("scenariodesc").innerText = "Error: Selected scenario is invalid.";
@@ -4409,7 +4449,7 @@ Current version: 78
 					});
 				}else{
 					temp_scenario = null;
-					document.getElementById("scenariodesc").innerText = "Error: User input is invalid\n\n Please ensure you have input a valid aetherroom.club URL or ID (e.g. https://aetherroom.club/1234 or just 1234)";
+					document.getElementById("scenariodesc").innerText = "Error: User input is invalid\n\n Please ensure you have input a valid Chub AI URL or ID.";
 				}
 			}
 		},false);
@@ -4430,7 +4470,8 @@ Current version: 78
 			author = "<br><b>Author:</b> "+temp_scenario.author;
 		}
 		if (temp_scenario.image) {
-			image = `<img style="float:right; max-width:100px; padding: 8px;" src="${encodeURI(temp_scenario.image)}" onerror="this.onerror=null;temp_scenario.image=temp_scenario.image_backup;this.src='${encodeURI(temp_scenario.image_backup)}';"></img>`;
+			temp_scenario.gui_type = 2; //upgrade to aesthetic if we have image
+			image = `<img id="tempscenarioimg" style="float:right; width:100px; height:${100/(temp_scenario.image_aspect?temp_scenario.image_aspect:1)}px; padding: 8px;" src="${encodeURI(temp_scenario.image)}"></img>`;
 		}
 		document.getElementById("scenariodesc").innerHTML = image+`<p><b><u>`+escapeHtml(temp_scenario.title)+`</u></b></p>`+
 		`<p><b>Mode:</b> `+(temp_scenario.opmode==1?"Story":(temp_scenario.opmode==2?"Adventure":(temp_scenario.opmode==3?"Chat":"Instruct"))) + author+`</p>`
@@ -4466,12 +4507,9 @@ Current version: 78
 			}
 		}
 		if (temp_scenario.image && temp_scenario.image != "") {
-			compressImage(temp_scenario.image, (compressedImageURI, aspectratio)=>{
-				aestheticInstructUISettings.AI_portrait = compressedImageURI;
-				document.getElementById('portrait_ratio_AI').value = aspectratio.toFixed(2);
-				refreshPreview(true);
-				render_gametext();
-			}, true);
+			aestheticInstructUISettings.AI_portrait = temp_scenario.image;
+			document.getElementById('portrait_ratio_AI').value = (temp_scenario.image_aspect?temp_scenario.image_aspect:1).toFixed(2);
+			refreshPreview(true);
 		}
 		if (temp_scenario.worldinfo && temp_scenario.worldinfo.length > 0) {
 			current_wi = [];
