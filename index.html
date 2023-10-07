@@ -1179,7 +1179,7 @@ Current version: 78
 		}
 		.scenariogrid
 		{
-			height: 330px;
+			height: 260px;
     		overflow-y: auto;
 			margin-top: 4px;
 			padding: 8px;
@@ -1192,7 +1192,7 @@ Current version: 78
 		{
 			padding: 4px 12px;
 			width: 100%;
-			height: 120px;
+			height: 160px;
 			color: #b7e2ff;
 			overflow-y: auto;
 		}
@@ -4346,6 +4346,7 @@ Current version: 78
 	function get_chubai_scenario()
 	{
 		inputBox("Enter chub.ai prompt URL","Import from chub.ai","","https://chub.ai/characters/Anonymous/example-character", ()=>{
+
 			let userinput = getInputBoxValue().trim();
 			if(userinput=="")
 			{
@@ -4353,12 +4354,10 @@ Current version: 78
 			}
 			else
 			{
-				if (userinput.includes("chub.ai/")) {
-					//is a url, extract the character name
-					userinput = userinput.replace("/characters/","/");
-					userinput = userinput.split("chub.ai/")[1];
-					userinput = userinput.split("#")[0];
-					userinput = userinput.split("?")[0];
+				if (userinput.match(/chub\.ai\//i)) {
+					// is a URL, extract the character name
+					userinput = userinput.replace(/\/characters\//i, '/');
+					userinput = userinput.split(/chub\.ai\//i)[1].split("#")[0].split("?")[0];
 				}
 				userinput = userinput.endsWith('/') ? userinput.slice(0, -1) : userinput;
 				if(userinput!="")
@@ -4391,15 +4390,16 @@ Current version: 78
 							"opmode":3,
 							"chatname": "You",
 							"chatopponent": botname,
-							"gui_type":1,
+							"gui_type":2,
 							"prefmodel1":chatmodels1,
 							"prefmodel2":chatmodels2,
 							"prompt":("\n{{char}}: "+greeting),
 							"memory": cdesc +"\n"+ cdef,
 							"authorsnote": "",
 							"worldinfo": [],
+							"image": data.image,
 							// the API returns avatar URLs that are wrong a lot of the time, but they're predictable
-							"image": `https://avatars.charhub.io/avatars/${encodeURI(userinput)}/avatar.webp`,
+							"image_backup": `https://avatars.charhub.io/avatars/${encodeURI(userinput)}/avatar.webp`,
 						};
 						preview_temp_scenario();
 					}).catch((error) => {
@@ -4430,9 +4430,9 @@ Current version: 78
 			author = "<br><b>Author:</b> "+temp_scenario.author;
 		}
 		if (temp_scenario.image) {
-			image = `<img style="float:right; max-width:200px;" src="${encodeURI(temp_scenario.image)}">`;
+			image = `<img style="float:right; max-width:100px; padding: 8px;" src="${encodeURI(temp_scenario.image)}" onerror="this.onerror=null;temp_scenario.image=temp_scenario.image_backup;this.src='${encodeURI(temp_scenario.image_backup)}';"></img>`;
 		}
-		document.getElementById("scenariodesc").innerHTML = `<p><b><u>`+escapeHtml(temp_scenario.title)+`</u></b></p>`+image+
+		document.getElementById("scenariodesc").innerHTML = image+`<p><b><u>`+escapeHtml(temp_scenario.title)+`</u></b></p>`+
 		`<p><b>Mode:</b> `+(temp_scenario.opmode==1?"Story":(temp_scenario.opmode==2?"Adventure":(temp_scenario.opmode==3?"Chat":"Instruct"))) + author+`</p>`
 		+`<p>`+(temp_scenario.desc!=""?escapeHtml(temp_scenario.desc):"[No Description Given]") +`</p>`;
 	}
@@ -4465,8 +4465,13 @@ Current version: 78
 				current_memory = replace_placeholders_direct(current_memory);
 			}
 		}
-		if (temp_scenario.image && temp_scenario.image > "") {
-			aestheticInstructUISettings.AI_portrait = temp_scenario.image;
+		if (temp_scenario.image && temp_scenario.image != "") {
+			compressImage(temp_scenario.image, (compressedImageURI, aspectratio)=>{
+				aestheticInstructUISettings.AI_portrait = compressedImageURI;
+				document.getElementById('portrait_ratio_AI').value = aspectratio.toFixed(2);
+				refreshPreview(true);
+				render_gametext();
+			}, true);
 		}
 		if (temp_scenario.worldinfo && temp_scenario.worldinfo.length > 0) {
 			current_wi = [];
@@ -8652,8 +8657,7 @@ Current version: 78
 				}
 
 				fulltxt = replaceAll(fulltxt, `%SpcStg%`, `<hr class="hr_instruct"><span class="color_cyan"><img src="`+human_square+`" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>`);
-				fulltxt = replaceAll(fulltxt, `%SpcEtg%`, `</span><hr class="hr_instruct"><img src="`+aestheticInstructUISettings.AI_portrait`" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>`);
-
+				fulltxt = replaceAll(fulltxt, `%SpcEtg%`, `</span><hr class="hr_instruct"><img src="`+niko_square+`" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>`);
 			}else{
 				fulltxt = replaceAll(fulltxt, get_instruct_starttag(true), `%SclStg%`+escapeHtml(get_instruct_starttag(true))+`%SpnEtg%`);
 				fulltxt = replaceAll(fulltxt, get_instruct_endtag(true), `%SclStg%`+escapeHtml(get_instruct_endtag(true))+`%SpnEtg%`);
