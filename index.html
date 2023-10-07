@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 77
+Current version: 78
 -Concedo
 -->
 
@@ -3001,7 +3001,8 @@ Current version: 77
 		saved_claude_key: "", //do not ever share this in save files!
 		saved_claude_addr: "", //do not ever share this in save files!
 		saved_oai_jailbreak: "", //customized oai system prompt
-		saved_palm_key: "",
+		saved_palm_key: "", //do not ever share this in save files!
+		saved_kai_addr: "", //do not ever share this in save files!
 
 		autoscroll: true, //automatically scroll to bottom on render
 		trimsentences: true, //trim to last punctuation
@@ -3637,6 +3638,7 @@ Current version: 77
 			story.savedsettings.saved_oai_addr = "";
 			story.savedsettings.saved_claude_key = "";
 			story.savedsettings.saved_claude_addr = "";
+			story.savedsettings.saved_kai_addr = "";
 
 			if (!strip_images)
 			{
@@ -3756,6 +3758,7 @@ Current version: 77
 				let tmp_claude1 = localsettings.saved_claude_key;
 				let tmp_claude2 = localsettings.saved_claude_addr;
 				let tmp_palm1 = localsettings.saved_palm_key;
+				let tmp_kai = localsettings.saved_kai_addr;
 				import_props_into_object(localsettings, story.savedsettings);
 				localsettings.my_api_key = tmpapikey1;
 				localsettings.home_cluster = tmphc;
@@ -3764,6 +3767,7 @@ Current version: 77
 				localsettings.saved_claude_key = tmp_claude1;
 				localsettings.saved_claude_addr = tmp_claude2;
 				localsettings.saved_palm_key = tmp_palm1;
+				localsettings.saved_kai_addr = tmp_kai;
 			}
 
 			if (story.savedaestheticsettings && story.savedaestheticsettings != "") {
@@ -3882,6 +3886,7 @@ Current version: 77
 			loaded_storyobj.savedsettings.saved_oai_addr = "";
 			loaded_storyobj.savedsettings.saved_claude_key = "";
 			loaded_storyobj.savedsettings.saved_claude_addr = "";
+			loaded_storyobj.savedsettings.saved_kai_addr = "";
 
 			loaded_storyobj.savedaestheticsettings = JSON.parse(JSON.stringify(aestheticInstructUISettings, null, 2));
 		}else{
@@ -4073,6 +4078,7 @@ Current version: 77
 					let tmp_claude1 = localsettings.saved_claude_key;
 					let tmp_claude2 = localsettings.saved_claude_addr;
 					let tmp_palm1 = localsettings.saved_palm_key;
+					let tmp_kai = localsettings.saved_kai_addr;
 					import_props_into_object(localsettings, loaded_storyobj.savedsettings);
 					localsettings.my_api_key = tmpapikey1;
 					localsettings.home_cluster = tmphc;
@@ -4081,6 +4087,7 @@ Current version: 77
 					localsettings.saved_claude_key = tmp_claude1;
 					localsettings.saved_claude_addr = tmp_claude2;
 					localsettings.saved_palm_key = tmp_palm1;
+					localsettings.saved_kai_addr = tmp_kai;
 
 					//backwards compat support for newlines
 					if(localsettings.instruct_has_newlines==true || (loaded_storyobj.savedsettings != null && loaded_storyobj.savedsettings.instruct_has_newlines==null&&loaded_storyobj.savedsettings.instruct_has_markdown==null))
@@ -5100,6 +5107,10 @@ Current version: 77
 		if(epchoice==0)
 		{
 			document.getElementById("koboldcustom").classList.remove("hidden");
+			if(!localflag && localsettings.saved_kai_addr!="")
+			{
+				document.getElementById("customendpoint").value = localsettings.saved_kai_addr;
+			}
 		}
 		else if(epchoice==1)
 		{
@@ -5194,6 +5205,7 @@ Current version: 77
 
 							//good to go
 							custom_kobold_endpoint = tmpep;
+							localsettings.saved_kai_addr = custom_kobold_endpoint;
 							selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": mdlname, "count": 1 }];
 							selected_workers = [];
 							if (perfdata == null) {
@@ -5554,6 +5566,7 @@ Current version: 77
 	function display_custom_endpoint()
 	{
 		document.getElementById("customendpointcontainer").classList.remove("hidden");
+		customapi_dropdown();
 	}
 
 	function fetch_models(onDoneCallback)
