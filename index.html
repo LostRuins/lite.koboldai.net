@@ -3130,6 +3130,7 @@ Current version: 77
 			};
 		}
 
+
 		//uncompress compacted scenarios
 		for(let i=0;i<compressed_scenario_db.length;++i)
 		{
@@ -4878,11 +4879,12 @@ Current version: 77
 		if (parentcluster && userData && userData.worker_ids && userData.worker_ids.length > 0)
 		{
 			let urls = userData.worker_ids.map(x=>parentcluster.maintenance_endpoint + "/" + x);
-			Promise.all(urls.map(url => fetch(url)
-				.then(response => response.json())))
+			Promise.all(urls.map(url => fetch(url).then(response => response.json()).catch(error => error)))
 				.then(values => {
+					values = values.filter(n => (n.id && n.id!=""));
 					lastValidFoundUserWorkers = values;
-					console.log(values);
+					console.log(lastValidFoundUserWorkers);
+
 					document.getElementById("myownworkercontainer").classList.remove("hidden");
 
 					let str = "";
@@ -4892,7 +4894,7 @@ Current version: 77
 						let brokenstyle = (elem.maintenance_mode ? "style=\"color:#ee4444;\"" : "");
 						let workerNameHtml = escapeHtml(elem.name.substring(0, 32));
 						let eleminfo = ((elem.info && elem.info!="")?elem.info:"");
-						str += "<tr><td>" + workerNameHtml + "</td><td><input class='' style='color:#000000;' id='mwc_desc_"+i+"' placeholder='Worker Description' value='"+eleminfo+"''></td><td "+brokenstyle+">" + format_uptime(elem.uptime) + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "</td><td>"+(elem.online?"Online":"Offline")+"</td><td><input type='checkbox' id='mwc_maint_"+i+"' "+(elem.maintenance_mode?"checked":"")+"></td></tr>";
+						str += "<tr><td>" + workerNameHtml + "</td><td><input class='' style='color:#000000;' id='mwc_desc_"+i+"' placeholder='Worker Description' value='"+eleminfo+"''></td><td "+brokenstyle+">" + format_uptime(elem.uptime) + "<br>(" + elem.requests_fulfilled + " jobs)</td><td><span "+style+">'" + elem.kudos_rewards.toFixed(0) + "</span><br>"+(elem.online?"Online":"Offline")+"</td><td><input type='checkbox' id='mwc_maint_"+i+"' "+(elem.maintenance_mode?"checked":"")+"></td><td><button type=\"button\" class=\"btn btn-danger widelbtn\" onclick=\"delete_my_worker("+i+");\">X</button></td></tr>";
 					}
 					document.getElementById("myownworkertable").innerHTML = str;
 
@@ -4908,7 +4910,9 @@ Current version: 77
 				.catch(error =>
 				{
 					console.log("Error: " + error);
-					msgbox(error,"Error fetching my workers");
+					msgbox(error,"Error fetching some workers",false,false,()=>{
+						hide_msgbox();
+					});
 				});
 		}
 		else
@@ -5780,6 +5784,36 @@ Current version: 77
 		}
 	}
 
+	function delete_my_worker(index)
+	{
+		if(lastValidFoundUserWorkers && lastValidFoundUserWorkers.length>index)
+		{
+			let elem = lastValidFoundUserWorkers[index];
+			msgboxYesNo(`Are you sure you want to delete the worker <span class='color_orange'>`+elem.name+`</span> with the ID <span class='color_orange'>`+elem.id+`</span>?<br><br><b>This action is irreversible!</b>`,"Confirm Delete Worker",
+			()=>{
+				let newapikey = document.getElementById("apikey").value;
+				let parentcluster = find_text_horde(lastValidFoundCluster);
+				fetch(parentcluster.maintenance_endpoint + "/" + elem.id, {
+						method: 'DELETE',
+						headers: {
+							'Content-Type': 'application/json',
+							'apikey': newapikey,
+						}
+					})
+					.then((response) => response.json())
+					.then((data) => {
+						msgbox(JSON.stringify(data), "Delete My Worker");
+					})
+					.catch((error) => {
+						console.error('Error:', error);
+					});
+				hide_popups();
+			},()=>{
+				document.getElementById("yesnocontainer").classList.add("hidden");
+			},true);
+		}
+	}
+
 	function update_my_workers()
 	{
 		let newapikey = document.getElementById("apikey").value;
@@ -5799,6 +5833,10 @@ Current version: 77
 					if(desc.value.trim()!="" || (desc.value.trim()=="" && lastValidFoundUserWorkers[i].info!=null && lastValidFoundUserWorkers[i].info!=""))
 					{
 						wo.info = desc.value.trim();
+						if(wo.info=="")
+						{
+							wo.info = "  "; //todo: this is a hack to unset names
+						}
 					}
 					fetch(parentcluster.maintenance_endpoint + "/" + lastValidFoundUserWorkers[i].id, {
 						method: 'PUT',
@@ -10668,7 +10706,7 @@ Current version: 77
 			<div class="workerTableDiv">
 			<table class="table text-center workerTable">
 			<thead class="sticky-top bg-white">
-			<tr><th>Name</th><th>Description</th><th>Uptime</th><th>Kudos</th><th>Status</th><th>Maintainence</th></tr>
+			<tr><th>Name</th><th>Description</th><th>Uptime</th><th>Kudos</th><th>Maint.</th><th>Del.</th></tr>
 			</thead>
 			<tbody id="myownworkertable">
 			</tbody>
