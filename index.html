@@ -1308,6 +1308,9 @@ Current version: 79
 			background-image: var(--img_compass),linear-gradient(to right, #a38c4c, #a38c4c);
 		}
 
+		#historyentries .btn {
+			width: 100%;
+		}
 		.widelbtn
 		{
 		font-size: 12px;
@@ -1541,7 +1544,6 @@ Current version: 79
 		{
 			color:#cedaf0;
 		}
-
 	</style>
 	<style>
 		/*---------chat window---------------*/
@@ -3775,7 +3777,7 @@ Current version: 79
 		return pickedcluster;
 	}
 
-	function generate_compressed_story(strip_images=false) {
+	function generate_story_json(strip_images=false, cleaner=null) {
 		//encode the current story into a sharable url
 		//a tiny json format which gets compressed by LZMA then b64url
 
@@ -3809,6 +3811,12 @@ Current version: 79
 		if (current_wi != null && current_wi.length > 0) {
 			story.cwi = current_wi;
 		}
+		if(history_current_scenario_hash!=="") {
+			story.sch = history_current_scenario_hash;
+		}
+		if(history_current_session_hash!=="") {
+			story.seh = history_current_session_hash;
+		}
 
 		//handle exporting settings
 		if (localsettings.export_settings) {
@@ -3827,13 +3835,18 @@ Current version: 79
 				story.savedaestheticsettings = JSON.parse(JSON.stringify(aestheticInstructUISettings, null, 2));
 			}
 		}
-		var storyjson = JSON.stringify(story);
-		console.log("Exporting story: ", story);
+		if (cleaner) {
+			cleaner(story);
+		}
+		return jsonStableStringify(story);
+	}
 
-		//var cstoryjson = LZString.compressToEncodedURIComponent(storyjson);
+	function generate_compressed_story(strip_images=false, cleaner=null) {
+		var storyjson = generate_story_json(strip_images, cleaner);
 		var cstoryjson = buf_to_b64(lz_c.compress(storyjson, 1));
 		return cstoryjson;
 	}
+
 	function export_share_story() {
 		let cstoryjson = generate_compressed_story(true);
 		console.log("Export Len: " + cstoryjson.length);
@@ -3861,23 +3874,25 @@ Current version: 79
 		console.log("Importing shared story...");
 		var fail = false;
 		var story = null;
-		try {
-			//var storyjson = LZString.decompressFromEncodedURIComponent(cstoryjson);
-			var storyjson = lz_d.decompress(b64_to_buf(cstoryjson));
+		if (typeof cstoryjson === "object") {
+			story = cstoryjson;
+		} else {
+			try {
+				//var storyjson = LZString.decompressFromEncodedURIComponent(cstoryjson);
+				var storyjson = lz_d.decompress(b64_to_buf(cstoryjson));
 
-			if (storyjson == null || storyjson == "") {
+				if (storyjson == null || storyjson == "") {
+					fail = true;
+				} else {
+					story = JSON.parse(storyjson);
+				}
+			} catch (e) {
 				fail = true;
-			} else {
-				story = JSON.parse(storyjson);
 			}
-		} catch (e) {
-			fail = true;
 		}
 
 		if (story != null && !fail) {
-
-			console.log("Importing story: " + storyjson);
-
+			storyjson && console.log("Importing story: " + storyjson);
 			//fetch the model list
 			fetch_models((mdls) => {
 				//can we find the model that's used? if yes load it, otherwise load the first one
@@ -3912,7 +3927,7 @@ Current version: 79
 				}
 			});
 
-			restart_new_game();
+			restart_new_game(true);
 
 			gametext_arr = story.ga;
 			migrate_old_images_in_gametext();
@@ -3956,13 +3971,190 @@ Current version: 79
 				import_props_into_object(aestheticInstructUISettings,story.savedaestheticsettings);
 			}
 
-			render_gametext();
-
+			if (story.sch) {
+				history_current_scenario_hash = story.sch;
+			}
+			if (story.seh) {
+				history_current_session_hash = story.seh;
+			} else {
+				history_current_session_hash = '';
+			}
+			render_gametext(false);
 		} else {
 			msgbox("Could not import from URL. Is it valid?");
 		}
-
 	}
+
+	function sha256_b32trunc(data) {
+		return sha256(data, 1).slice(0, 16);
+	}
+
+	function history_meta_mutate(func) {
+		var meta = {};
+		try {
+			meta = JSON.parse(localStorage[STORAGE_PREFIX + "history_metadata"]);
+		} catch {}
+		meta.scenario ||= {};
+		meta.session ||= {};
+		if (func(meta)) {
+			return;
+		}
+		localStorage[STORAGE_PREFIX + "history_metadata"] = jsonStableStringify(meta);
+	}
+
+	function history_meta_scenario_update(scenario, obj) {
+		history_meta_mutate(meta => {
+			meta.scenario[scenario] ||= {};
+			for (const key of Object.keys(obj)) {
+				meta.scenario[scenario][key] = obj[key];
+			}
+		});
+	}
+
+	function history_meta_session_update(session, obj) {
+		history_meta_mutate(meta => {
+			meta.session[session] ||= {};
+			for (const key of Object.keys(obj)) {
+				meta.session[session][key] = obj[key];
+			}
+		});
+	}
+
+	var history_current_scenario_hash = '';
+	var history_current_session_hash = '';
+
+	function history_save_scenario(title) {
+		if (!localsettings.persist_session) return;
+		// hash the basic features of the scenario-- these will be removed from
+		// saved sessions storage (particularly useful for memory/avatars).
+		history_current_scenario_hash = sha256_b32trunc(jsonStableStringify({ga: gametext_arr,mem:current_memory,anote:current_anote,wi:current_wi,av:AestheticInstructUISettings.AI_portrait}));
+		history_current_session_hash = sha256_b32trunc(history_current_scenario_hash + new Date());
+		localStorage[STORAGE_PREFIX + "history_scenario_" + history_current_scenario_hash] = generate_compressed_story(
+			false, story => {
+				delete story.seh;
+			}
+		);
+		history_meta_scenario_update(history_current_scenario_hash, {title: title});
+		console.log(`history: saved scenario "${title}" with hash ${history_current_scenario_hash}`);
+	}
+
+	function history_save_session() {
+		if (!localsettings.persist_session) return;
+		if (history_current_session_hash === "") {
+			// not available for whatever reason
+			history_current_session_hash = sha256_b32trunc(history_current_scenario_hash + new Date());
+		}
+		let scenario = history_load_scenario(history_current_scenario_hash);
+		if (scenario === null) {
+			// can't reference a scenario we don't have loaded
+			history_current_scenario_hash = "";
+		}
+		// check if we're identical to the scenario before saving a new session
+		let scenariolikejson = generate_story_json(false, story => {delete story.seh});
+		if (scenariolikejson === jsonStableStringify(scenario)) {
+			return;
+		}
+		let serialized = generate_compressed_story(false, story => {
+			let scenario = history_load_scenario(story.sch);
+			if (!scenario) return;
+			if (scenario.cm === story.cm) {
+				delete story.cm;
+			}
+			if (scenario?.savedaestheticsettings?.AI_portrait &&
+				story?.savedaestheticsettings?.AI_portrait &&
+				scenario.savedaestheticsettings.AI_portrait === story.savedaestheticsettings.AI_portrait) {
+				delete story.savedaestheticsettings.AI_portrait;
+			}
+		});
+		let key = STORAGE_PREFIX + "history_session_" + history_current_session_hash;
+		if (localStorage[key] !== serialized) {
+			localStorage[key] = serialized;
+			let wc = gametext_arr.join('').trim().split(/\s+/gs).length;
+			history_meta_session_update(history_current_session_hash,
+				{sc: history_current_scenario_hash, ts: +new Date()/1000|0, wc: wc});
+			console.log(`history: saved session ${history_current_session_hash} in ${(serialized.length/1024).toFixed(0)}KiB`);
+			history_clean_storage();
+		}
+	}
+
+	function history_load_session(hash) {
+		try {
+			var story = JSON.parse(lz_d.decompress(b64_to_buf(localStorage[STORAGE_PREFIX + "history_session_" + hash])));
+		} catch {
+			return null;
+		}
+		if (story.sch) {
+			// add in the bits that might be dropped (cm and portrait)
+			var scenario = history_load_scenario(story.sch);
+			story.cm ||= scenario.cm;
+			if (story.savedaestheticsettings && scenario.savedaestheticsettings) {
+				story.savedaestheticsettings.AI_portrait ||= scenario.savedaestheticsettings.AI_portrait;
+			}
+		}
+		return story;
+	}
+
+	function history_clean_storage() {
+		let scenario_size = 0;
+		let session_size = 0;
+		history_meta_mutate(meta => {
+			let scenarios_used = {};
+			for (const s of Object.keys(meta.session)) {
+				let v = meta.session[s];
+				if (!localStorage[STORAGE_PREFIX + "history_session_" + s]) {
+					console.log(`history: removed session metadata with no storage:`, meta.session[s]);
+					delete meta.session[s];
+				} else if (v.sc && !meta.scenario[v.sc]) {
+					console.log(`history: removed session metadata with missing scenario:`, meta.session[s]);
+					delete meta.session[s];
+				} else if (v.sc) {
+					scenarios_used[v.sc] = true;
+				}
+			}
+			for (const s of Object.keys(meta.scenario)) {
+				if (!localStorage[STORAGE_PREFIX + "history_scenario_" + s]) {
+					console.log(`history: removed scenario metadata with no storage:`, meta.scenario[s]);
+					delete meta.scenario[s];
+				}
+				if (!scenarios_used[s] && s != history_current_scenario_hash) {
+					console.log(`history: removed scenario metadata with no sessions:`, meta.scenario[s]);
+					delete meta.scenario[s];
+					delete localStorage[STORAGE_PREFIX + "history_scenario_" + s];
+				}
+			}
+			for (const k of Object.keys(localStorage)) {
+				if (k.startsWith(STORAGE_PREFIX + "history_session_")) {
+					let s = k.split("_").pop();
+					if (!meta.session[s]) {
+						console.log(`history: removed session data with no metadata:`, s, localStorage[k].length);
+						delete localStorage[k];
+					} else {
+						session_size += localStorage[k].length;
+					}
+				}
+				if (k.startsWith(STORAGE_PREFIX + "history_scenario_")) {
+					let s = k.split("_").pop();
+					if (!meta.scenario[s]) {
+						console.log(`history: removed scenario data with no metadata:`, s, localStorage[k].length);
+						delete localStorage[k];
+					} else {
+						scenario_size += localStorage[k].length;
+					}
+				}
+			}
+		});
+		// TODO: delete when too large
+		console.log(`history: storage is taking ${((scenario_size+session_size)/1024).toFixed(2)}KiB (${(scenario_size/1024).toFixed(2)} scenario / ${(session_size/1024).toFixed(2)} session)`);
+	}
+
+	function history_load_scenario(hash) {
+		try {
+			return JSON.parse(lz_d.decompress(b64_to_buf(localStorage[STORAGE_PREFIX + "history_scenario_" + hash])));
+		} catch {
+			return null;
+		}
+	}
+
 
 	function generate_base_storyobj() {
 		//if we have no savefile, this generates a very simple one (old format)
@@ -4677,7 +4869,7 @@ Current version: 79
 	function complete_load_scenario()
 	{
 		console.log("Loading scenario...")
-		restart_new_game();
+		restart_new_game(true);
 
 		//load contexts
 		gametext_arr = [];
@@ -4779,6 +4971,8 @@ Current version: 79
 			if (temp_scenario.instruct_starttag) { localsettings.instruct_starttag = temp_scenario.instruct_starttag; }
 			if (temp_scenario.instruct_endtag) { localsettings.instruct_endtag = temp_scenario.instruct_endtag; }
 		}
+
+		history_save_scenario(temp_scenario.title);
 
 		render_gametext();
 	}
@@ -4966,6 +5160,122 @@ Current version: 79
 				schild.style.display = "none";
 			}
         }
+	}
+
+	var history_temp_story = null;
+
+	function history_display_make_active(key) {
+		for (const el of document.querySelectorAll("#historyentries button")) {
+			el.classList.remove('active');
+		}
+		document.getElementById(key).classList.add('active');
+	}
+
+	function history_display_summary() {
+		let latest = history_temp_story.ga.join("");
+		latest = latest.slice(Math.max(0, latest.length - 2000));
+
+		let el = document.getElementById('historydesc');
+		el.innerHTML = escapeHtml(replaceAll(replaceAll(latest,"{{char}}",history_temp_story?.savedsettings?.chatopponent,true), "{{user}}","You",true)).replace(/\n/g, '<br>');
+		el.scrollTop = el.scrollHeight;
+	}
+
+	function history_click_scenario(scenario) {
+		console.log("history: scenario click", scenario);
+		history_temp_story = history_load_scenario(scenario);
+		history_display_make_active('history-scen-' + scenario);
+		history_display_summary();
+	}
+
+	function history_click_session(session) {
+		console.log("history: session click", session);
+		history_temp_story = history_load_session(session);
+		history_display_make_active('history-sess-' + session);
+		history_display_summary();
+	}
+
+	function confirm_history() {
+		if (history_temp_story) {
+			import_share_story(history_temp_story);
+			render_gametext();
+		}
+		hide_popups();
+	}
+
+	function display_history()
+	{
+		history_temp_story = null;
+
+		document.getElementById("historycontainer").classList.remove("hidden");
+
+		let scenarios = `<table>`;
+
+		let sess = [];
+		let sess_latest = {};
+
+		history_clean_storage();
+		history_meta_mutate(meta => {
+			for (const k of Object.keys(meta.session)) {
+				let v = meta.session[k];
+				sess.push({ts: v.ts * 1000, key: k, sc: v.sc, title: v.sc && meta.scenario[v.sc].title, wc: v.wc});
+				sess_latest[v.sc] = Math.max(sess_latest[v.sc] || 0, v.ts);
+			}
+			return true;
+		});
+
+		// sort by most recently played scenario, then by last session update time
+		sess.sort((a, b) => {
+			return (sess_latest[b.sc] - sess_latest[a.sc]) || (b.ts - a.ts);
+		});
+
+		let nleft = 0;
+		for (let i = 0; i < sess.length; i++) {
+			let r = sess[i];
+			let scen = r.sc && history_load_scenario(r.sc);
+			scenarios += '<tr>';
+			if (nleft == 0) {
+				// show scenario details once for the group, count how many repeated scenarios there are
+				for (let j = i; j < sess.length && sess[j].sc == sess[i].sc; j++, nleft++);
+				scenarios += `<td rowspan=${nleft} onclick="history_click_scenario('${r.sc}')">`;
+				if (scen && scen?.savedaestheticsettings?.AI_portrait) {
+					let rat = +scen.savedaestheticsettings.portrait_ratio_AI;
+					let width = 100, height = 100;
+					if (rat < 1) {
+						width *= rat;
+					} else {
+						height /= rat;
+					}
+					scenarios += `<img src="${scen?.savedaestheticsettings?.AI_portrait}" style="width:${width}px;height:${height}px">`
+				}
+				scenarios += `<td rowspan=${nleft}` + (r.sc ? ` onclick="history_click_scenario('${r.sc}')"><button id="history-scen-${r.sc}" class="btn btn-primary">${escapeHtml(r.title)}</button>` : '>');
+			}
+			// local time
+			let d = new Date(r.ts);
+			d = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+
+			scenarios += `<td onclick="history_click_session('${r.key}')"><button id="history-sess-${r.key}" class="btn btn-primary">${d.toISOString().slice(0, 16).replace('T', ' ')}${r.wc ? ", " + r.wc.toLocaleString() + " words" : ""}</button>\n`;
+			nleft--;
+		}
+
+		scenarios += '</table>';
+
+		document.getElementById("historyentries").innerHTML = scenarios;
+
+		/*
+		let scenarios = `<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_aetherroom_scenario()">Import from<br>aetherroom.club</button>`+
+		`<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_chubai_scenario()">Import from<br>chub.ai</button>`;
+		for(let i=0;i<scenario_db.length;++i)
+		{
+			let curr = scenario_db[i];
+			let bcolor = (curr.opmode==1?"blue":(curr.opmode==2?"green":(curr.opmode==3?"red":"yellow")));
+			let entry = `<button type="button" name="`+i+`" class="scenarioitem `+bcolor+` btn btn-primary" onclick="return click_scenario(`+i+`)">`+curr.title+`</button>`;
+			scenarios += entry;
+		}
+
+		document.getElementById("scenariogrid").innerHTML = scenarios;
+		document.getElementById("scenariodesc").innerText = "No Scenario Selected";
+		togglescenarioallownsfw();
+		*/
 	}
 
 	function show_last_req()
@@ -5198,7 +5508,8 @@ Current version: 79
 			document.getElementById("wicontainer").classList.contains("hidden") &&
 			document.getElementById("customendpointcontainer").classList.contains("hidden") &&
 			document.getElementById("quickstartcontainer").classList.contains("hidden") &&
-			document.getElementById("zoomedimgcontainer").classList.contains("hidden")
+			document.getElementById("zoomedimgcontainer").classList.contains("hidden") &&
+			document.getElementById("historycontainer").classList.contains("hidden")
 		);
 	}
 	function hide_popups() {
@@ -5216,6 +5527,7 @@ Current version: 79
 		document.getElementById("customendpointcontainer").classList.add("hidden");
 		document.getElementById("quickstartcontainer").classList.add("hidden");
 		document.getElementById("zoomedimgcontainer").classList.add("hidden");
+		document.getElementById("historycontainer").classList.add("hidden")
 	}
 
 	function explain_horde()
@@ -5554,7 +5866,7 @@ Current version: 79
 								document.getElementById("connectstatus").classList.add("color_green");
 							}
 							document.getElementById("connectstatus").innerHTML = "Connected to Custom Endpoint";
-							render_gametext();
+							render_gametext(false);
 
 							{
 								//now we get the version number, however this is optional
@@ -6991,7 +7303,7 @@ Current version: 79
 		horde_poll_nearly_completed = false;
 	}
 
-	function restart_new_game() {
+	function restart_new_game(without_saving=false) {
 		idle_timer = 0;
 		gametext_arr = [];
 		redo_arr = [];
@@ -7018,7 +7330,7 @@ Current version: 79
 		prev_hl_chunk = null;
 		last_token_budget = "";
 		last_known_filename = "saved_story.json";
-		render_gametext(true); //necessary to trigger an autosave to wipe out current story in case they exit browser after newgame.
+		render_gametext(false);
 	}
 
 	function btn_editmode()
@@ -7668,7 +7980,7 @@ Current version: 79
 				pending_response_id = "";
 			}
 
-			render_gametext();
+			render_gametext(false);
 		}
 	}
 
@@ -9207,6 +9519,7 @@ Current version: 79
 			document.getElementById("topbtn_ai").classList.add("hidden");
 			document.getElementById("topbtn_newgame").classList.remove("hidden");
 			document.getElementById("topbtn_save_load").classList.remove("hidden");
+			document.getElementById("topbtn_history").classList.remove("hidden");
 			document.getElementById("topbtn_settings").classList.add("hidden");
 			document.getElementById("topbtn_scenarios").classList.add("hidden");
 			document.getElementById("topbtn_quickplay").classList.add("hidden");
@@ -9224,12 +9537,14 @@ Current version: 79
 			if (selected_models.length == 0) {
 				document.getElementById("topbtn_newgame").classList.add("hidden");
 				document.getElementById("topbtn_save_load").classList.add("hidden");
+				document.getElementById("topbtn_history").classList.add("hidden");
 				document.getElementById("topbtn_settings").classList.add("hidden");
 				document.getElementById("topbtn_scenarios").classList.add("hidden");
 				document.getElementById("topbtn_quickplay").classList.remove("hidden");
 			} else {
 				document.getElementById("topbtn_newgame").classList.remove("hidden");
 				document.getElementById("topbtn_save_load").classList.remove("hidden");
+				document.getElementById("topbtn_history").classList.remove("hidden");
 				document.getElementById("topbtn_settings").classList.remove("hidden");
 				document.getElementById("topbtn_scenarios").classList.remove("hidden");
 				document.getElementById("topbtn_quickplay").classList.add("hidden");
@@ -9522,6 +9837,7 @@ Current version: 79
 		if (localsettings.persist_session) {
 			let compressedstory = generate_compressed_story();
 			localStorage.setItem(STORAGE_PREFIX + "story", compressedstory);
+			history_save_session();
 		}
 		console.log("autosave done");
 	}
@@ -10292,6 +10608,10 @@ Current version: 79
 									<a class="nav-link" href="#" onclick="display_saveloadcontainer()">Save / Load</a>
 								</li>
 
+								<li class="nav-item hidden" id="topbtn_history">
+									<a class="nav-link" href="#" id="btn_history" onclick="display_history()">History</a>
+								</li>
+
 								<li class="nav-item hidden" id="topbtn_settings">
 									<a class="nav-link" href="#" id="btn_settings"
 										onclick="display_settings()">Settings</a>
@@ -10457,6 +10777,29 @@ Current version: 79
 				<div class="popupfooter">
 					<button type="button" class="btn btn-primary" id=""
 						onclick="hide_popups()">Back</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="historycontainer">
+		<div class="popupbg flex"></div>
+		<div class="scenariopopup">
+			<div class="popuptitlebar">
+				<div class="popuptitletext">History - Load Past Sessions</div>
+			</div>
+
+			<div style="overflow: auto;">
+				<div id="historyentries" class="justifyleft anotelabel scenariogrid">
+				</div>
+				<div id="historydesc" class="scenariodesc">
+				</div>
+
+				<div class="popupfooter">
+					<button type="button" class="btn btn-primary" id=""
+						onclick="confirm_history()">Ok</button>
+					<button type="button" class="btn btn-primary" id=""
+						onclick="hide_popups()">Cancel</button>
 				</div>
 			</div>
 		</div>
