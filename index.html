@@ -7379,7 +7379,6 @@ Current version: 78
 	function dispatch_submit_generation(submit_payload, input_was_empty) //if input is not empty, always unban eos
 	{
 		console.log(submit_payload);
-		last_request_str = JSON.stringify(submit_payload);
 
 		startTimeTaken(); //timestamp start request
 
@@ -7463,7 +7462,7 @@ Current version: 78
 					streamchunk = ((pstreamamount != null && pstreamamount > 0) ? pstreamamount:8); //8 tokens per stream tick by default
 				}
 				let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_endpoint);
-
+				last_request_str = JSON.stringify(submit_payload);
 				kobold_api_stream(sub_endpt, submit_payload, submit_payload.max_length, "", streamchunk);
 
 			}
@@ -7502,6 +7501,8 @@ Current version: 78
 				else {
 					oai_payload.prompt = submit_payload.prompt;
 				}
+
+				last_request_str = JSON.stringify(oai_payload);
 
 				fetch(targetep, {
 					method: 'POST',
@@ -7551,6 +7552,7 @@ Current version: 78
 				let targetep = cors_proxy + "?" + scale_submit_endpoint + custom_scale_ID;
 				let scale_payload = { "input": { "input": submit_payload.prompt } };
 
+				last_request_str = JSON.stringify(scale_payload);
 				fetch(targetep, {
 					method: 'POST',
 					headers: {
@@ -7614,6 +7616,8 @@ Current version: 78
 					}
 				}
 
+				last_request_str = JSON.stringify(claude_payload);
+
 				fetch(targetep, {
 					method: 'POST',
 					headers: {
@@ -7656,6 +7660,8 @@ Current version: 78
 				"topP": submit_payload.params.top_p,
 				"topK": (submit_payload.params.top_k<1?300:submit_payload.params.top_k),
 				"candidateCount":1};
+
+				last_request_str = JSON.stringify(payload);
 
 				fetch(targetep, {
 					method: 'POST',
@@ -7732,6 +7738,8 @@ Current version: 78
 
 			//horde supports unban tokens
 			submit_payload.use_default_badwordsids = determine_if_ban_eos(input_was_empty);
+
+			last_request_str = JSON.stringify(submit_payload);
 
 			fetch(selectedhorde.submit_endpoint, {
 				method: 'POST', // or 'PUT'
