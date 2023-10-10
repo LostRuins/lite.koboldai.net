@@ -3667,7 +3667,7 @@ Current version: 78
 			}
 		}
 		var storyjson = JSON.stringify(story);
-		console.log("Exporting story: " + storyjson);
+		console.log("Exporting story: ", story);
 
 		//var cstoryjson = LZString.compressToEncodedURIComponent(storyjson);
 		var cstoryjson = buf_to_b64(lz_c.compress(storyjson, 1));
@@ -6718,7 +6718,7 @@ Current version: 78
 		prev_hl_chunk = null;
 		last_token_budget = "";
 		last_known_filename = "saved_story.json";
-		render_gametext();
+		render_gametext(false, true); //necessary to trigger an autosave to wipe out current story in case they exit browser after newgame.
 	}
 
 	function btn_editmode()
@@ -8095,7 +8095,10 @@ Current version: 78
 	function poll_image_db() {
 		//every time this runs, we loop through our image cache for unfinished images and poll for a response
 		//console.log("polling for pending images: " + JSON.stringify(image_db));
-		console.log("polling for pending images " + Object.keys(image_db).length);
+		let imagecount = Object.keys(image_db).length;
+		if (!imagecount) return;
+
+		console.log("polling for pending images " + imagecount);
 		for (let key in image_db) {
 			let img = image_db[key];
 			if (img.done == false) {
@@ -8172,8 +8175,8 @@ Current version: 78
 			//console.log(gametext_arr);
 			render_gametext();
 		}
-
 	}
+
 	function compressImage(inputDataUri, onDone, isJpeg=true) {
 		let img = document.createElement('img');
 		let wantedWidth = 256;
@@ -8293,7 +8296,7 @@ Current version: 78
 									if (data && data.results != null && data.results.length > 0 && data.results[0].text) {
 										if (pending_response_id && pending_response_id != "") {
 											synchro_pending_stream = data.results[0].text;
-											render_gametext();
+											render_gametext(false, false);  // don't autosave while streaming
 										}
 									}
 									poll_in_progress = false;
@@ -8429,9 +8432,6 @@ Current version: 78
 						});
 				}
 			}
-		}
-		else {
-			console.log("Nothing to update: " + pending_response_id);
 		}
 	}
 
@@ -8641,7 +8641,7 @@ Current version: 78
 		}
 	}
 
-	function render_gametext(partialrefresh = false)
+	function render_gametext(partialrefresh = false, save = true)
 	{
 
 		document.getElementById("gametext").contentEditable = (document.getElementById("allowediting").checked && pending_response_id=="");
@@ -8977,7 +8977,7 @@ Current version: 78
 
 		document.getElementById("btnautogenmem").disabled = document.getElementById("btnsend").disabled;
 
-		if (localsettings.persist_session) {
+		if (localsettings.persist_session && save) {
 			autosave();
 		}
 		if (partialrefresh == false) {
