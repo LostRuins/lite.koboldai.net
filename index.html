@@ -2805,6 +2805,59 @@ Current version: 78
 		}
 	}
 
+	function kobold_api_stream_sse(sub_endpt,submit_payload)
+	{
+		synchro_pending_stream = "";
+		fetch(sub_endpt, {method: 'POST', body: JSON.stringify(submit_payload)})
+		.then(resp => {
+			resp.body
+			.pipeThrough(new TextDecoderStream())
+			.pipeThrough(new TransformStream({
+				start(ctrl) {
+					ctrl.buf = '';
+				},
+				transform(chunk, ctrl) {
+					ctrl.buf += chunk;
+
+					let evs = [];
+					let m;
+					while ((m = /^event: (.*)\ndata: (.*)\n\n/.exec(ctrl.buf)) !== null) {
+						evs.push({event: m[1], data: JSON.parse(m[2])});
+						ctrl.buf = ctrl.buf.substring(m.index + m[0].length);
+					}
+
+					if (/\{.*\}/.test(ctrl.buf)) {
+						// minor violation of SSE spec, but it's _fine_
+						// this is the final result message
+						ctrl.enqueue([{event: 'done', data: JSON.parse(ctrl.buf)}]);
+					} else if (evs.length) {
+						ctrl.enqueue(evs);
+					}
+				}
+			}))
+			.pipeTo(new WritableStream({
+				write(chunk) {
+					for (let event of chunk) {
+						if (event.event === 'message') {
+							synchro_pending_stream += event.data.token;
+						} else if (event.event === 'done') {
+							synchro_pending_stream = "";
+							synchro_polled_response = event.data.results[0].text;
+							poll_pending_response();
+						}
+					}
+					render_gametext(false, false);
+				}
+			}));
+		})
+		.catch((error) => {
+			console.error('Error:', error);
+			clear_poll_flags();
+			render_gametext();
+			msgbox("Error while submitting prompt: " + error);
+		})
+	}
+
 	function playbeep() {
     	var sound = new Audio("data:audio/wav;base64,UklGRkwBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YScBAAB8gIN8fICAgIB8gHmAjXVkhptyXYqbcmiKjXKAim5ymIpWcqmKU3Klhl18kXl5jXlkjZ5oVpelZFaUm2trioN1ioZkeaKDU3msgFN8nnxog4Nyg5FrZJubXWGem2FnlIpufIZyfJR8XYOleVaDonlhg5F1eYZ5dZGNYXWbimhrm4Nrg3KDjWt/hm6UkUmDvV1TrINdkXxol4Boinx1nmtWr5RChqVheZdkeZtucop1io1WgLNhWql/XZd/YZSNZH+GeY1yZKKNUIaeZHmYZ3WbeWuGg4B/a4Oba2uXgGuNf2iKjWt5ioB/eXWNg2t/jXJ8inJ5kXxug4N8fHl/hnl1hnx5hn91g4Z1fIN8fHx8f4B5gIB8gH98fIN8fH+AfHx8fH98fIB/AA==");
 		sound.play();
@@ -2916,6 +2969,7 @@ Current version: 78
 	const stablehorde_model_endpoint = stablehorde_url + "/api/v2/status/models";
 
 	const kobold_custom_gen_endpoint = "/api/v1/generate";
+	const kobold_custom_gen_stream_endpoint = "/api/extra/generate/stream";
 	const kobold_custom_mdl_endpoint = "/api/v1/model";
 	const kobold_custom_version_endpoint = "/api/v1/info/version";
 	const kobold_custom_maxctxlen_endpoint = "/api/v1/config/max_context_length";
@@ -7457,10 +7511,14 @@ Current version: 78
 					let pstreamamount = urlParams.get('streamamount');
 					streamchunk = ((pstreamamount != null && pstreamamount > 0) ? pstreamamount:8); //8 tokens per stream tick by default
 				}
-				let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_endpoint);
 				last_request_str = JSON.stringify(submit_payload);
-				kobold_api_stream(sub_endpt, submit_payload, submit_payload.max_length, "", streamchunk);
-
+				if (localsettings.tokenstreaming) {
+					let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_stream_endpoint);
+					kobold_api_stream_sse(sub_endpt, submit_payload);
+				} else {
+					let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_endpoint);
+					kobold_api_stream(sub_endpt, submit_payload, submit_payload.max_length, "", streamchunk);
+				}
 			}
 			else if (custom_oai_key != "")//handle for OAI
 			{
@@ -8269,46 +8327,9 @@ Current version: 78
 				console.log("Polling still in progress for id: " + pending_response_id);
 			}
 			else {
-
 				if (is_using_custom_ep()) {
 					//v1 api only needs to check if data was received and stored into local object
-					poll_in_progress = true;
-					if (synchro_polled_response == null) {
-						//still waiting, do nothing until next poll
-						console.log("v1 still awaiting reply");
-						let truestreaming = (determine_streaming_type()==2);
-						//only check once every 2 ticks if remote
-						if (truestreaming && (localflag?true:(poll_ticks_passed%2==0)))
-						{
-							//get in-progress results
-							fetch(custom_kobold_endpoint + koboldcpp_check_endpoint, {
-								method: 'POST',
-								headers: {
-									'Content-Type': 'application/json',
-								},
-								body: JSON.stringify({
-								"genkey": lastcheckgenkey
-								}),
-								})
-								.then((response) => response.json())
-								.then((data) => {
-									//makes sure a delayed response doesnt arrive late and mess up
-									if (data && data.results != null && data.results.length > 0 && data.results[0].text) {
-										if (pending_response_id && pending_response_id != "") {
-											synchro_pending_stream = data.results[0].text;
-											render_gametext(false, false);  // don't autosave while streaming
-										}
-									}
-									poll_in_progress = false;
-								})
-								.catch((error) => {
-									console.error('Error:', error);
-									poll_in_progress = false;
-							});
-						}else{
-							poll_in_progress = false;
-						}
-					} else {
+					if (synchro_polled_response !== null) {
 						console.log("v1 handle recv reply");
 						pending_response_id = "";
 						poll_in_progress = false;
