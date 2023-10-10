@@ -9851,6 +9851,9 @@ Current version: 78
 	}
 
 	class EnhancedChatInstructRenderer {
+		constructor() {
+			this.lastInput = '';
+		}
 		render(el, input, isPreview) {
 			//class suffix string used to prevent defined styles from leaking into global scope
 			let classSuffixStr = isPreview ? "prv" : "";
@@ -9859,7 +9862,14 @@ Current version: 78
 			let as = aestheticInstructUISettings;								// ..and use this as shortcut to avoid typing it each time.
 
 			let newbodystr;
-			if (true) {
+			if (input !== this.lastInput || synchro_pending_stream === "") {
+				if (synchro_pending_stream != "") {
+					// prep for streaming replacements of the last div
+					this.lastInput = input;
+				} else {
+					this.lastInput = '';
+				}
+
 				if(localsettings.opmode==3)
 				{
 					//replace all possible instances with placeholders
@@ -9913,6 +9923,16 @@ Current version: 78
 				}
 
 				el.innerHTML = portraitsStyling + newbodystr.replaceAll(/(\r\n|\r|\n)/g,'<br>'); // Finally, convert newlines to HTML format and return the stylized string.
+			} else { // input === this.lastInput && synchro_pending_stream !== ""
+				// if the input is unchanged and we have streaming text, only update the last div.
+				newbodystr = getStreamingText();
+				newbodystr = newbodystr.slice(newbodystr.indexOf('<div class'))
+				newbodystr += contextDict.closeTag + '</p></div></div>';
+				if (aestheticInstructUISettings.use_markdown) {
+					replaceMarkdown();
+				}
+				newbodystr = newbodystr.replaceAll(/(\r\n|\r|\n)/g,'<br>');
+				el.querySelector('end_of_context_koboldlite_internal > div:last-child').innerHTML = newbodystr;
 			}
 
 			function replaceMarkdown() {
