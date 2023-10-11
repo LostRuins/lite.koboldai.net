@@ -2822,7 +2822,9 @@ Current version: 78
 	function kobold_api_stream_sse(sub_endpt,submit_payload)
 	{
 		synchro_pending_stream = "";
-		fetch(sub_endpt, {method: 'POST', body: JSON.stringify(submit_payload)})
+		fetch(sub_endpt, {method: 'POST',
+		headers: {'Content-Type': 'application/json'},
+		body: JSON.stringify(submit_payload)})
 		.then(resp => {
 			resp.body
 			.pipeThrough(new TextDecoderStream())
@@ -2832,19 +2834,13 @@ Current version: 78
 				},
 				transform(chunk, ctrl) {
 					ctrl.buf += chunk;
-
 					let evs = [];
 					let m;
 					while ((m = /^event: (.*)\ndata: (.*)\n\n/.exec(ctrl.buf)) !== null) {
 						evs.push({event: m[1], data: JSON.parse(m[2])});
 						ctrl.buf = ctrl.buf.substring(m.index + m[0].length);
 					}
-
-					if (/\{.*\}/.test(ctrl.buf)) {
-						// minor violation of SSE spec, but it's _fine_
-						// this is the final result message
-						ctrl.enqueue([{event: 'done', data: JSON.parse(ctrl.buf)}]);
-					} else if (evs.length) {
+					if (evs.length) {
 						ctrl.enqueue(evs);
 					}
 				}
@@ -2854,14 +2850,21 @@ Current version: 78
 					for (let event of chunk) {
 						if (event.event === 'message') {
 							synchro_pending_stream += event.data.token;
-						} else if (event.event === 'done') {
-							synchro_pending_stream = "";
-							synchro_polled_response = event.data.results[0].text;
-							poll_pending_response();
 						}
 					}
 					render_gametext(false, false);
-				}
+				},
+				close() { //end of stream
+					synchro_polled_response = synchro_pending_stream;
+					synchro_pending_stream = "";
+					poll_pending_response();
+				},
+				abort(e) {
+					console.error('Error:', error);
+					clear_poll_flags();
+					render_gametext();
+					msgbox("Error while submitting prompt: " + error);
+				},
 			}));
 		})
 		.catch((error) => {
@@ -2869,7 +2872,7 @@ Current version: 78
 			clear_poll_flags();
 			render_gametext();
 			msgbox("Error while submitting prompt: " + error);
-		})
+		});
 	}
 
 	function playbeep() {
@@ -3106,7 +3109,7 @@ Current version: 78
 		beep_on: false,
 		image_styles: "",
 		grammar:"",
-		tokenstreaming: (localflag?true:false),
+		tokenstreammode: (localflag?1:0), //0=off,1=pollstream,2=sse
 		generate_images: (localflag?"":"stable_diffusion"), //"" is disabled and "*" is all, anything else is the model name pulled from stable horde
 		img_autogen: false,
 		img_allownsfw: true,
@@ -3180,9 +3183,8 @@ Current version: 78
 		{"preset":"Godlike","description":"Makes AI give a descriptive and sensual output.","temp":0.7,"genamt":80,"top_k":0,"top_p":0.5,"top_a":0.75,"typical":0.19,"tfs":0.97,"rep_pen":1.1,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,5,4,3,2,1,0]},{"preset":"Mayday","description":"Wacky plot, creativity from AI, crazy stories you want AI to weird out.","temp":1.05,"genamt":80,"top_k":0,"top_p":0.95,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.1,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,0,1,2,3,4,5]},{"preset":"Good Winds","description":"Let AI direct the plot, but still stay logical.","temp":0.7,"genamt":80,"top_k":0,"top_p":1,"top_a":0,"typical":1,"tfs":0.9,"rep_pen":1.1,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,0,1,2,3,4,5]},{"preset":"Liminal Drift","description":"Drives coherent dialogue, responses, and behavior, sometimes surreal situations arise based on information already present in the story.","temp":0.66,"genamt":80,"top_k":0,"top_p":1,"top_a":0.96,"typical":0.6,"tfs":1,"rep_pen":1.1,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,4,5,1,0,2,3]},{"preset":"TavernAI","description":"Preset used in TavernAI.","temp":0.79,"genamt":80,"top_k":0,"top_p":0.9,"top_a":0,"typical":1,"tfs":0.95,"rep_pen":1.19,"rep_pen_range":1024,"rep_pen_slope":0.9,"sampler_order":[6,0,1,2,3,4,5]},{"preset":"Storywriter 6B","description":"Optimized settings for relevant output.","genamt":80,"rep_pen":1.1,"rep_pen_range":2048,"rep_pen_slope":0.2,"sampler_order":[6,5,0,2,3,1,4],"temp":0.72,"tfs":1,"top_a":0,"top_k":0,"top_p":0.73,"typical":1},{"preset":"Coherent Creativity 6B","description":"A good balance between coherence, creativity, and quality of prose.","genamt":80,"rep_pen":1.2,"rep_pen_range":2048,"rep_pen_slope":0,"sampler_order":[6,5,0,2,3,1,4],"temp":0.51,"tfs":0.99,"top_a":0,"top_k":0,"top_p":1,"typical":1},{"preset":"Luna Moth 6B","description":"A great degree of creativity without losing coherency.","temp":1.5,"genamt":80,"top_k":85,"top_p":0.24,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.1,"rep_pen_range":2048,"rep_pen_slope":0,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Best Guess 6B","description":"A subtle change with alternative context settings.","temp":0.8,"genamt":80,"top_k":100,"top_p":0.9,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.15,"rep_pen_range":2048,"rep_pen_slope":3.4,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Pleasing Results 6B","description":"Expectable output with alternative context settings.","temp":0.44,"genamt":80,"top_k":0,"top_p":1,"top_a":0,"typical":1,"tfs":0.9,"rep_pen":1.15,"rep_pen_range":2048,"rep_pen_slope":6.8,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Genesis 13B","description":"Stable and logical, but with scattered creativity.","temp":0.63,"genamt":80,"top_k":0,"top_p":0.98,"top_a":0,"typical":1,"tfs":0.98,"rep_pen":1.05,"rep_pen_range":2048,"rep_pen_slope":0.1,"sampler_order":[6,2,0,3,5,1,4]},{"preset":"Basic Coherence 13B","description":"Keep things on track.","temp":0.59,"genamt":80,"top_k":0,"top_p":1,"top_a":0,"typical":1,"tfs":0.87,"rep_pen":1.1,"rep_pen_range":2048,"rep_pen_slope":0.3,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Ouroboros 13B","description":"Versatile, conforms well to poems, lists, chat, etc.","temp":1.07,"genamt":80,"top_k":100,"top_p":1,"top_a":0,"typical":1,"tfs":0.93,"rep_pen":1.05,"rep_pen_range":404,"rep_pen_slope":0.8,"sampler_order":[6,0,5,3,2,1,4]},{"preset":"Ace of Spades 13B","description":"Expressive, while still staying focused.","temp":1.15,"genamt":80,"top_k":0,"top_p":0.95,"top_a":0,"typical":1,"tfs":0.8,"rep_pen":1.05,"rep_pen_range":2048,"rep_pen_slope":7,"sampler_order":[6,3,2,0,5,1,4]},{"preset":"Low Rider 13B","description":"Reliable, aimed at story development.","temp":0.94,"genamt":80,"top_k":12,"top_p":1,"top_a":0,"typical":1,"tfs":0.94,"rep_pen":1.05,"rep_pen_range":2048,"rep_pen_slope":0.2,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Pro Writer 13B","description":"Optimal setting for readability, based on AI-powered mass statistical analysis of Euterpe output.","temp":1.35,"genamt":80,"top_k":0,"top_p":1,"top_a":0,"typical":1,"tfs":0.69,"rep_pen":1.15,"rep_pen_range":2048,"rep_pen_slope":0.1,"sampler_order":[6,3,2,5,0,1,4]},{"preset":"Default 20B","description":"Good starting settings for NeoX 20B.","temp":0.6,"genamt":80,"top_k":0,"top_p":0.9,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.04,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,0,1,2,3,4,5]}
 	];
 
-	//attempt to load settings
-	function init() {
-
+	function polyfills()
+	{
 		//polyfill for forEach
 		if (window.NodeList && !NodeList.prototype.forEach) {
 			NodeList.prototype.forEach = function (callback, thisArg) {
@@ -3215,6 +3217,29 @@ Current version: 78
 			};
 		}
 
+		//polyfill for padstart
+		if (!String.prototype.padStart) {
+			String.prototype.padStart = function padStart(targetLength,padString) {
+				targetLength = targetLength>>0; //truncate if number or convert non-number to 0;
+				padString = String((typeof padString !== 'undefined' ? padString : ' '));
+				if (this.length > targetLength) {
+					return String(this);
+				}
+				else {
+					targetLength = targetLength-this.length;
+					if (targetLength > padString.length) {
+						padString += padString.repeat(targetLength/padString.length); //append to original to ensure we are longer than needed
+					}
+					return padString.slice(0,targetLength) + String(this);
+				}
+			};
+		}
+	}
+
+	//attempt to load settings
+	function init() {
+
+		polyfills();
 
 		//uncompress compacted scenarios
 		for(let i=0;i<compressed_scenario_db.length;++i)
@@ -3284,7 +3309,7 @@ Current version: 78
 		const tokenstreaming = urlParams.get('streaming');
 		if(tokenstreaming)
 		{
-			localsettings.tokenstreaming = true;
+			localsettings.tokenstreammode = 1;
 		}
 
 		//toggle genimg btn
@@ -3634,6 +3659,10 @@ Current version: 78
 	{
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.29") > 0);
 	}
+	function is_using_kcpp_with_sse() //need 1.39 for multibyte fix
+	{
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.39") > 0);
+	}
 	function is_using_kcpp_with_mirostat()
 	{
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.36") > 0);
@@ -3643,10 +3672,14 @@ Current version: 78
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.43") > 0);
 	}
 
-	//0 is none, 1 is pseudostreaming, 2 is true streaming
+	//0 is none, 1 is pseudostreaming, 2 is true poll-streaming, 3 is sse-streaming
 	function determine_streaming_type()
 	{
-		let streamtype = (localsettings.tokenstreaming ? 1 : 0);
+		if(localsettings.tokenstreammode==2 && is_using_kcpp_with_sse())
+		{
+			return 3;
+		}
+		let streamtype = (localsettings.tokenstreammode>0 ? 1 : 0);
 		let pstreamamount = urlParams.get('streamamount');
 		if(streamtype==1 && is_using_kcpp_with_streaming() && (pstreamamount == null || pstreamamount <= 0))
 		{
@@ -6290,7 +6323,7 @@ Current version: 78
 			sdmodelshtml += "<option value=\"" + stablemodels[i].name + " (" + stablemodels[i].count + ")\">";
 		}
 		document.getElementById("sdmodels").innerHTML = sdmodelshtml;
-		document.getElementById("tokenstreaming").checked = localsettings.tokenstreaming;
+		document.getElementById("tokenstreammode").value = localsettings.tokenstreammode;
 		document.getElementById("img_autogen").checked = localsettings.img_autogen;
 		document.getElementById("save_images").checked = localsettings.save_images;
 		document.getElementById("prompt_for_savename").checked = localsettings.prompt_for_savename;
@@ -6452,7 +6485,7 @@ Current version: 78
 
 		localsettings.image_styles = pendingstyle;
 		localsettings.grammar = pendinggrammar;
-		localsettings.tokenstreaming = (document.getElementById("tokenstreaming").checked ? true : false);
+		localsettings.tokenstreammode = document.getElementById("tokenstreammode").value;
 		localsettings.img_autogen = (document.getElementById("img_autogen").checked ? true : false);
 		localsettings.save_images = (document.getElementById("save_images").checked ? true : false);
 		localsettings.prompt_for_savename = (document.getElementById("prompt_for_savename").checked ? true : false);
@@ -7542,7 +7575,7 @@ Current version: 78
 					streamchunk = ((pstreamamount != null && pstreamamount > 0) ? pstreamamount:8); //8 tokens per stream tick by default
 				}
 				last_request_str = JSON.stringify(submit_payload);
-				if (localsettings.tokenstreaming) {
+				if (localsettings.tokenstreammode==2 && is_using_kcpp_with_sse()) {
 					let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_stream_endpoint);
 					kobold_api_stream_sse(sub_endpt, submit_payload);
 				} else {
@@ -8357,9 +8390,49 @@ Current version: 78
 				console.log("Polling still in progress for id: " + pending_response_id);
 			}
 			else {
+
 				if (is_using_custom_ep()) {
 					//v1 api only needs to check if data was received and stored into local object
-					if (synchro_polled_response !== null) {
+					poll_in_progress = true;
+					if (synchro_polled_response == null)
+					{
+						//still waiting, do nothing until next poll
+						console.log("v1 still awaiting reply");
+						let polledstreaming = (determine_streaming_type()==2);
+						//only check once every 2 ticks if remote
+						if (polledstreaming && (localflag?true:(poll_ticks_passed%2==0)))
+						{
+							//get in-progress results
+							fetch(custom_kobold_endpoint + koboldcpp_check_endpoint, {
+								method: 'POST',
+								headers: {
+									'Content-Type': 'application/json',
+								},
+								body: JSON.stringify({
+								"genkey": lastcheckgenkey
+								}),
+								})
+								.then((response) => response.json())
+								.then((data) => {
+									//makes sure a delayed response doesnt arrive late and mess up
+									if (data && data.results != null && data.results.length > 0 && data.results[0].text) {
+										if (pending_response_id && pending_response_id != "") {
+											synchro_pending_stream = data.results[0].text;
+											render_gametext(false, false);  // don't autosave while streaming
+										}
+									}
+									poll_in_progress = false;
+								})
+								.catch((error) => {
+									console.error('Error:', error);
+									poll_in_progress = false;
+							});
+						}else{
+							poll_in_progress = false;
+						}
+					}
+					if (synchro_polled_response != null)
+					{
 						console.log("v1 handle recv reply");
 						pending_response_id = "";
 						poll_in_progress = false;
@@ -10680,7 +10753,11 @@ Current version: 78
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" id="tokenstreaminglabel" title="">Token Streaming <span class="helpicon">?<span
 								class="helptext">Attempts to use token streaming if supported. Not available on Horde.</span></span></div>
-						   <input type="checkbox" id="tokenstreaming" style="margin:0px 0px 0px auto;">
+						   <select style="padding:1px; height:auto; width: 34px; appearance: none; font-size: 7pt; margin:0px 0px 0px auto;" class="form-control" id="tokenstreammode">
+								<option value="0">Off</option>
+								<option value="1">On</option>
+								<option value="2">SSE</option>
+							</select>
 						</div>
 
 						<div id="idlesection" class="settinglabel">
@@ -10733,7 +10810,7 @@ Current version: 78
 
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Autosaves your current story and settings on exit, reloads when you return">Persist Autosave Session </div>
+							<div class="justifyleft settingsmall" title="Autosaves your current story and settings on exit, reloads when you return">Autosave Session </div>
 						   <input type="checkbox" id="persist_session" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="settinglabel">
