@@ -13,6 +13,7 @@ Current version: 79
 <script>
 	const urlParams = new URLSearchParams(window.location.search);
 	const localflag = urlParams.get('local');
+	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
 </script>
 
 <head>
@@ -1157,6 +1158,30 @@ Current version: 79
 		.tablelines
 		{
 			border: 1px solid;
+		}
+
+
+		.saveloadpopup {
+			width: 660px;
+			background-color: #262626;
+			margin-top: 90px;
+		}
+		@media (max-width: 768px) {
+			.saveloadpopup {
+				width: 100%;
+				background-color: #262626;
+				margin-top: 80px;
+			}
+		}
+		.saveloadgrid
+		{
+			height: auto;
+    		overflow-y: auto;
+			margin-top: 4px;
+			padding: 8px;
+			display: grid;
+			gap: 8px;
+			grid-auto-rows: 60px;
 		}
 
 
@@ -3296,8 +3321,8 @@ Current version: 79
 
 		console.log("Init started");
 		try {
-			let loadedsettingsjson = localStorage.getItem((localflag?"e_":"")+"kaihordewebui_settings");
-			let loadedstorycompressed = localStorage.getItem((localflag?"e_":"")+"kaihordewebui_story");
+			let loadedsettingsjson = localStorage.getItem(STORAGE_PREFIX + "settings");
+			let loadedstorycompressed = localStorage.getItem(STORAGE_PREFIX + "story");
 			if (loadedsettingsjson != null && loadedsettingsjson != "" && loadedstorycompressed != null && loadedstorycompressed != "") {
 				let loadedsettings = JSON.parse(loadedsettingsjson);
 				//see if persist is enabled
@@ -3730,7 +3755,7 @@ Current version: 79
 
 	function is_using_web_lite()
 	{
-		return (window.location.hostname.includes("koboldai.net") || window.location.hostname.includes("kaihordewebui.github.io"));
+		return (window.location.hostname.includes("koboldai.net") || window.location.hostname.includes("lostruins.github.io"));
 	}
 
 	function get_most_common_cluster(arr)
@@ -3948,6 +3973,11 @@ Current version: 79
 			"wifolders_l": []
 		};
 		return gs;
+	}
+
+	function load_file_button()
+	{
+		document.getElementById('loadfileinput').click();
 	}
 
 	var tempfileurl = null;
@@ -5149,6 +5179,7 @@ Current version: 79
 	function is_popup_open()
 	{
 		return !(
+			document.getElementById("saveloadcontainer").classList.contains("hidden") &&
 			document.getElementById("loadmodelcontainer").classList.contains("hidden") &&
 			document.getElementById("newgamecontainer").classList.contains("hidden") &&
 			document.getElementById("yesnocontainer").classList.contains("hidden") &&
@@ -5165,6 +5196,7 @@ Current version: 79
 		);
 	}
 	function hide_popups() {
+		document.getElementById("saveloadcontainer").classList.add("hidden");
 		document.getElementById("loadmodelcontainer").classList.add("hidden");
 		document.getElementById("newgamecontainer").classList.add("hidden");
 		document.getElementById("yesnocontainer").classList.add("hidden");
@@ -5806,6 +5838,34 @@ Current version: 79
 	{
 		document.getElementById("customendpointcontainer").classList.remove("hidden");
 		customapi_dropdown();
+	}
+
+	function display_saveloadcontainer()
+	{
+		document.getElementById("saveloadcontainer").classList.remove("hidden");
+
+		let filetable = ``;
+
+		let entry = `<div style="display:flex">
+				<button type="button" style="font-size:16px;margin:3px;width:50%" name="localsave" class="btn btn-primary" onclick="hide_popups();save_file_button()">`+"💾 Save to File"+`</button>
+				<button type="button" style="font-size:16px;margin:3px;width:50%" name="localload" class="btn btn-primary" onclick="hide_popups();load_file_button()">`+"📁 Load from File"+`</button>
+				</div>`;
+		filetable += entry;
+		entry = `<div style="display:flex">
+				<button type="button" style="font-size:16px;margin:3px;width:100%" name="shareurl" class="btn btn-primary" onclick="hide_popups();export_share_story()">`+"🌐 Export Share URL"+`</button>
+				</div>`;
+		filetable += entry;
+		for(let i=0;i<4;++i)
+		{
+			entry = `<div style="display:flex">
+				<div style="font-size:14px; margin:4px; text-align: center; align-self: center; width: calc(100% - 130px);"> [ Browser Storage Slot `+(i+1)+` - Empty ] </div>
+				<div style="text-align: right; align-self: center; width: 130px;">
+				<button type="button" name="`+i+`" class="btn btn-primary" onclick="">`+"Save"+`</button>
+				<button type="button" name="`+i+`" class="btn btn-primary" onclick="" disabled>`+"Load"+`</button>
+				</div></div>`;
+			filetable += entry;
+		}
+		document.getElementById("saveloadentries").innerHTML = filetable;
 	}
 
 	function fetch_models(onDoneCallback)
@@ -9013,10 +9073,8 @@ Current version: 79
 			}
 			document.getElementById("topbtn_ai").classList.add("hidden");
 			document.getElementById("topbtn_newgame").classList.remove("hidden");
-			document.getElementById("topbtn_save").classList.remove("hidden");
-			document.getElementById("topbtn_load").classList.remove("hidden");
+			document.getElementById("topbtn_save_load").classList.remove("hidden");
 			document.getElementById("topbtn_settings").classList.add("hidden");
-			document.getElementById("topbtn_share").classList.add("hidden");
 			document.getElementById("topbtn_scenarios").classList.add("hidden");
 			document.getElementById("topbtn_quickplay").classList.add("hidden");
 		} else {
@@ -9032,18 +9090,14 @@ Current version: 79
 
 			if (selected_models.length == 0) {
 				document.getElementById("topbtn_newgame").classList.add("hidden");
-				document.getElementById("topbtn_save").classList.add("hidden");
-				document.getElementById("topbtn_load").classList.add("hidden");
+				document.getElementById("topbtn_save_load").classList.add("hidden");
 				document.getElementById("topbtn_settings").classList.add("hidden");
-				document.getElementById("topbtn_share").classList.add("hidden");
 				document.getElementById("topbtn_scenarios").classList.add("hidden");
 				document.getElementById("topbtn_quickplay").classList.remove("hidden");
 			} else {
 				document.getElementById("topbtn_newgame").classList.remove("hidden");
-				document.getElementById("topbtn_save").classList.remove("hidden");
-				document.getElementById("topbtn_load").classList.remove("hidden");
+				document.getElementById("topbtn_save_load").classList.remove("hidden");
 				document.getElementById("topbtn_settings").classList.remove("hidden");
-				document.getElementById("topbtn_share").classList.remove("hidden");
 				document.getElementById("topbtn_scenarios").classList.remove("hidden");
 				document.getElementById("topbtn_quickplay").classList.add("hidden");
 			}
@@ -9331,10 +9385,10 @@ Current version: 79
 
 	function autosave() {
 		//autosave
-		localStorage.setItem((localflag?"e_":"")+"kaihordewebui_settings", JSON.stringify(localsettings));
+		localStorage.setItem(STORAGE_PREFIX + "settings", JSON.stringify(localsettings));
 		if (localsettings.persist_session) {
 			let compressedstory = generate_compressed_story();
-			localStorage.setItem((localflag?"e_":"")+"kaihordewebui_story", compressedstory);
+			localStorage.setItem(STORAGE_PREFIX + "story", compressedstory);
 		}
 		console.log("autosave done");
 	}
@@ -10095,16 +10149,10 @@ Current version: 79
 									<a class="nav-link" href="#" onclick="display_scenarios()">Quick Start</a>
 								</li>
 
-								<li class="nav-item hidden" id="topbtn_save">
+								<li class="nav-item hidden" id="topbtn_save_load">
 									<a id="tempfile" href="#" style="display:none;"></a>
-									<a class="nav-link" href="#" onclick="save_file_button()">Save</a>
-								</li>
-
-								<li class="nav-item hidden" id="topbtn_load">
-									<input type="file" id="loadfileinput" accept="text/json,application/json,image/png,image/webp,.kaistory,.webp,.png,.json,.txt,*.*,*" onchange="load_file(event)"
-										style="display:none;">
-									<a class="nav-link" href="#"
-										onclick="document.getElementById('loadfileinput').click()">Load</a>
+									<input type="file" id="loadfileinput" accept="text/json,application/json,image/png,image/webp,.kaistory,.webp,.png,.json,.txt,*.*,*" onchange="load_file(event)" style="display:none;">
+									<a class="nav-link" href="#" onclick="display_saveloadcontainer()">Save / Load</a>
 								</li>
 
 								<li class="nav-item hidden" id="topbtn_settings">
@@ -10112,10 +10160,6 @@ Current version: 79
 										onclick="display_settings()">Settings</a>
 								</li>
 
-								<li class="nav-item hidden" id="topbtn_share">
-									<a class="nav-link" href="#" id="btn_share"
-										onclick="export_share_story()">Share</a>
-								</li>
 							</ul>
 						</div>
 					</nav>
@@ -10257,6 +10301,25 @@ Current version: 79
 						onclick="confirm_scenario_verify()">Ok</button>
 					<button type="button" class="btn btn-primary" id=""
 						onclick="hide_popups()">Cancel</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="saveloadcontainer">
+		<div class="popupbg flex"></div>
+		<div class="saveloadpopup">
+			<div class="popuptitlebar">
+				<div class="popuptitletext">Save File / Load File / Export File</div>
+			</div>
+
+			<div style="overflow: auto;">
+				<div id="saveloadentries" class="justifyleft anotelabel saveloadgrid">
+				</div>
+				<div class="justifyleft anotelabel"><p style="padding:6px;" class="color_red">Caution: Browser Storage Slots may be lost when clearing cache.</p></div>
+				<div class="popupfooter">
+					<button type="button" class="btn btn-primary" id=""
+						onclick="hide_popups()">Back</button>
 				</div>
 			</div>
 		</div>
