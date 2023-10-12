@@ -2848,17 +2848,22 @@ Current version: 78
 			.pipeTo(new WritableStream({
 				write(chunk) {
 					let was_empty = (synchro_pending_stream=="");
-					for (let event of chunk) {
-						if (event.event === 'message') {
-							synchro_pending_stream += event.data.token;
+					//cut stream if aborted
+					if(pending_response_id && pending_response_id != "-1" && pending_response_id != "")
+					{
+						for (let event of chunk) {
+							if (event.event === 'message') {
+								synchro_pending_stream += event.data.token;
+							}
 						}
 					}
 					if(was_empty && synchro_pending_stream!="")
 					{
-						render_gametext(false, false);
+						render_gametext(false);
 					}
 					else
 					{
+						update_pending_stream_displays();
 					}
 				},
 				close() { //end of stream
@@ -5132,7 +5137,7 @@ Current version: 78
 		}
 		else
 		{
-			msgbox("Unable to find my horde workers.","No valid workers found");
+			msgbox("Unable to find any horde workers.","No valid workers found");
 		}
 	}
 
@@ -6844,7 +6849,7 @@ Current version: 78
 		prev_hl_chunk = null;
 		last_token_budget = "";
 		last_known_filename = "saved_story.json";
-		render_gametext(false, true); //necessary to trigger an autosave to wipe out current story in case they exit browser after newgame.
+		render_gametext(true); //necessary to trigger an autosave to wipe out current story in case they exit browser after newgame.
 	}
 
 	function btn_editmode()
@@ -8427,7 +8432,7 @@ Current version: 78
 									if (data && data.results != null && data.results.length > 0 && data.results[0].text) {
 										if (pending_response_id && pending_response_id != "") {
 											synchro_pending_stream = data.results[0].text;
-											render_gametext(false, false);  // don't autosave while streaming
+											render_gametext(false);  // don't autosave while streaming
 										}
 									}
 									poll_in_progress = false;
@@ -8774,7 +8779,17 @@ Current version: 78
 		}
 	}
 
-	function render_gametext(partialrefresh = false, save = true)
+	function update_pending_stream_displays()
+	{
+		//lightweight function to only update pending streamed text
+		var elements = document.querySelectorAll(".pending_text");
+
+		elements.forEach(function(element) {
+			element.innerHTML = escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream);
+		});
+	}
+
+	function render_gametext(save = true)
 	{
 
 		document.getElementById("gametext").contentEditable = (document.getElementById("allowediting").checked && pending_response_id=="");
@@ -8937,7 +8952,7 @@ Current version: 78
 			//streaming display
 			if(synchro_pending_stream!="")
 			{
-				fulltxt += "<span class=\"color_yellow\">" + escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream) + "</span>";
+				fulltxt += "<span class=\"color_yellow pending_text\">" + escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream) + "</span>";
 			}
 
 			//handle images
@@ -9113,12 +9128,11 @@ Current version: 78
 		if (localsettings.persist_session && save) {
 			autosave();
 		}
-		if (partialrefresh == false) {
-			if (localsettings.autoscroll) {
-				document.getElementById("gametext").scrollTop = document.getElementById("gametext").scrollHeight;
-				document.getElementById("chat_msg_body").scrollTop = document.getElementById("chat_msg_body").scrollHeight;
-			}
+		if (localsettings.autoscroll) {
+			document.getElementById("gametext").scrollTop = document.getElementById("gametext").scrollHeight;
+			document.getElementById("chat_msg_body").scrollTop = document.getElementById("chat_msg_body").scrollHeight;
 		}
+
 
 		idle_timer = 0;
 		document.getElementById("token-budget").innerText = last_token_budget;
@@ -9256,7 +9270,7 @@ Current version: 78
 		}
 		if(synchro_pending_stream!="")
 		{
-			newbodystr += `<div class="incoming_msg"><div class="chat_received_msg"><div class="chat_received_withd_msg"><p>`+"<span class=\"color_yellow\">" + escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream) + "</span>"+`</p></div></div></div>`;
+			newbodystr += `<div class="incoming_msg"><div class="chat_received_msg"><div class="chat_received_withd_msg"><p>`+"<span class=\"color_yellow pending_text\">" + escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream) + "</span>"+`</p></div></div></div>`;
 		}
 
 		chatbody.innerHTML = newbodystr;
@@ -9997,7 +10011,7 @@ Current version: 78
 		}
 		function getStreamingText() {
 			let isChatBotReply = (localsettings.opmode==3 && pending_context_preinjection.startsWith("\n") && pending_context_preinjection.endsWith(":"));
-			return `${(input.endsWith(bot) || isChatBotReply) ? style('AI') + `${bot.endsWith('*') ? '*' : ''}` + `${bot.endsWith('"') ? '"' : ''}` : ''}` + escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream);
+			return `${(input.endsWith(bot) || isChatBotReply) ? style('AI') + `${bot.endsWith('*') ? '*' : ''}` + `${bot.endsWith('"') ? '"' : ''}` : ''}` + `<span class='pending_text'>`+ escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream) + `</span`;
 		}
 	}
 
