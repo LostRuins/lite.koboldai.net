@@ -5856,10 +5856,10 @@ Current version: 79
 
 		for(let i=0;i<4;++i)
 		{
-			let testslot = localStorage.getItem(STORAGE_PREFIX + "slot_"+i);
+			let testslot = localStorage.getItem(STORAGE_PREFIX + "slot_"+i+"_meta");
 			entry = `<div style="display:flex">
 				<div style="font-size:14px; margin:4px; text-align: center; align-self: center; width: calc(100% - 180px);">
-				`+(testslot?`[ Used ]`:`[ Browser Storage Slot `+(i+1)+` - Empty ]`)+`
+				`+(testslot?`[ Slot `+(i+1)+` - `+testslot+` ]`:`[ Slot `+(i+1)+` - Empty ]`)+`
 				</div>
 				<div style="text-align: right; align-self: center; width: 180px;">
 				<button type="button" name="slc`+i+`" class="btn btn-primary" onclick="save_to_slot(`+i+`)">Save</button>
@@ -5872,26 +5872,47 @@ Current version: 79
 	}
 	function save_to_slot(slot)
 	{
+		let defaultsavename = (localsettings.opmode==1?"Untitled Story":(localsettings.opmode==2?"Untitled Adventure":(localsettings.opmode==3?"Untitled Chat":"Untitled Instruct")));
+		let savename = defaultsavename + " " + new Date().toLocaleString();
 		let slotnumshown = (slot+1);
-		let testslot = localStorage.getItem(STORAGE_PREFIX + "slot_"+slot);
-		let newcompressedstory = generate_compressed_story();
+		let testslot = localStorage.getItem(STORAGE_PREFIX + "slot_"+slot+"_meta");
 		if(testslot)
 		{
-			msgboxYesNo("Overwrite existing story in Storage Slot "+slotnumshown+"?","Overwrite Storage Slot "+slotnumshown,()=>{
-				localStorage.setItem(STORAGE_PREFIX + "slot_"+slot, newcompressedstory);
-				document.getElementById("yesnocontainer").classList.add("hidden");
+			savename = testslot;
+		}
+		let newcompressedstory = generate_compressed_story();
+
+		const slotwrite = function()
+		{
+			inputBox("Enter a label for this Browser Storage Slot data","Enter a label",savename,defaultsavename,()=>{
+				let userinput = getInputBoxValue();
+				if(userinput.trim()=="")
+				{
+					userinput = defaultsavename;
+				}
+				localStorage.setItem(STORAGE_PREFIX + "slot_"+slot+"_data", newcompressedstory);
+				localStorage.setItem(STORAGE_PREFIX + "slot_"+slot+"_meta", userinput);
 				display_saveloadcontainer();
+			});
+		}
+
+		if(testslot)
+		{
+			msgboxYesNo("Overwrite existing story in Browser Storage Slot "+slotnumshown+"?","Overwrite Storage Slot "+slotnumshown,()=>{
+				document.getElementById("yesnocontainer").classList.add("hidden");
+				slotwrite();
 			},()=>{
 				document.getElementById("yesnocontainer").classList.add("hidden");
 			});
 		}else{
-			localStorage.setItem(STORAGE_PREFIX + "slot_"+slot, newcompressedstory);
-			display_saveloadcontainer();
+			slotwrite();
 		}
+
+
 	}
 	function load_from_slot(slot)
 	{
-		let loadedstorycompressed = localStorage.getItem(STORAGE_PREFIX + "slot_"+slot);
+		let loadedstorycompressed = localStorage.getItem(STORAGE_PREFIX + "slot_"+slot+"_data");
 		if(loadedstorycompressed)
 		{
 			let safe_to_overwrite = (gametext_arr.length == 0 && current_memory == "" && current_anote == "" && current_wi.length == 0 && redo_arr.length == 0);
@@ -5910,8 +5931,9 @@ Current version: 79
 	function delete_from_slot(slot)
 	{
 		let slotnumshown = (slot+1);
-		msgboxYesNo("Delete story in Storage Slot "+slotnumshown+"?","Delete Storage Slot "+slotnumshown,()=>{
-			localStorage.setItem(STORAGE_PREFIX + "slot_"+slot, "");
+		msgboxYesNo("Delete story in Browser Storage Slot "+slotnumshown+"?","Delete Storage Slot "+slotnumshown,()=>{
+			localStorage.setItem(STORAGE_PREFIX + "slot_"+slot+"_data", "");
+			localStorage.setItem(STORAGE_PREFIX + "slot_"+slot+"_meta", "");
 			document.getElementById("yesnocontainer").classList.add("hidden");
 			display_saveloadcontainer();
 		},()=>{
@@ -8260,6 +8282,20 @@ Current version: 79
 			else if (foundOppoNameWithNL > 0) //split by oppo name
 			{
 				splitresponse = gentxt.split("\n" + localsettings.chatopponent + "\: ");
+				//patch for cases where a random extra line from a second chatter is injected between
+				if(!localsettings.multiline_replies)
+				{
+					let ml_check = splitresponse[0];
+					//test for other chatopponents
+					var moreopponents = new RegExp("\n(?!" + localsettings.chatname + ").+?\: ", "gi");
+					var foundmoreopponent = ml_check.match(moreopponents);
+					if(foundmoreopponent != null && foundmoreopponent.length > 0)
+					{
+						//too many chat users. split to first newline and stop.
+						splitresponse = ml_check.split("\n");
+					}
+				}
+
 			}
 			else //if no name found
 			{
@@ -9052,6 +9088,11 @@ Current version: 79
 
 			if(localsettings.opmode==3)
 			{
+				if(!document.getElementById("allowediting").checked && !fulltxt.startsWith("\n"))
+				{
+					fulltxt = "\n"+fulltxt;
+				}
+
 				//for chat mode, highlight our name in blue and opponent in red
 				let m_name = "\n" + localsettings.chatname + ": ";
 
