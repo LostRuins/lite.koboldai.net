@@ -3951,6 +3951,7 @@ Current version: 79
 				import_props_into_object(aestheticInstructUISettings,story.savedaestheticsettings);
 			}
 
+			render_gametext();
 
 		} else {
 			msgbox("Could not import from URL. Is it valid?");
@@ -5847,25 +5848,76 @@ Current version: 79
 		let filetable = ``;
 
 		let entry = `<div style="display:flex">
-				<button type="button" style="font-size:16px;margin:3px;width:50%" name="localsave" class="btn btn-primary" onclick="hide_popups();save_file_button()">`+"💾 Save to File"+`</button>
-				<button type="button" style="font-size:16px;margin:3px;width:50%" name="localload" class="btn btn-primary" onclick="hide_popups();load_file_button()">`+"📁 Load from File"+`</button>
+				<button type="button" style="font-size:15px;margin:2px;width:33%" name="localsave" class="btn btn-primary" onclick="hide_popups();save_file_button()">`+"💾 Save File"+`</button>
+				<button type="button" style="font-size:15px;margin:2px;width:33%" name="localload" class="btn btn-primary" onclick="hide_popups();load_file_button()">`+"📁 Load File"+`</button>
+				<button type="button" style="font-size:15px;margin:2px;width:34%" name="shareurl" class="btn btn-primary" onclick="hide_popups();export_share_story()">`+"🌐 Share"+`</button>
 				</div>`;
 		filetable += entry;
-		entry = `<div style="display:flex">
-				<button type="button" style="font-size:16px;margin:3px;width:100%" name="shareurl" class="btn btn-primary" onclick="hide_popups();export_share_story()">`+"🌐 Export Share URL"+`</button>
-				</div>`;
-		filetable += entry;
+
 		for(let i=0;i<4;++i)
 		{
+			let testslot = localStorage.getItem(STORAGE_PREFIX + "slot_"+i);
 			entry = `<div style="display:flex">
-				<div style="font-size:14px; margin:4px; text-align: center; align-self: center; width: calc(100% - 130px);"> [ Browser Storage Slot `+(i+1)+` - Empty ] </div>
-				<div style="text-align: right; align-self: center; width: 130px;">
-				<button type="button" name="`+i+`" class="btn btn-primary" onclick="">`+"Save"+`</button>
-				<button type="button" name="`+i+`" class="btn btn-primary" onclick="" disabled>`+"Load"+`</button>
+				<div style="font-size:14px; margin:4px; text-align: center; align-self: center; width: calc(100% - 180px);">
+				`+(testslot?`[ Used ]`:`[ Browser Storage Slot `+(i+1)+` - Empty ]`)+`
+				</div>
+				<div style="text-align: right; align-self: center; width: 180px;">
+				<button type="button" name="slc`+i+`" class="btn btn-primary" onclick="save_to_slot(`+i+`)">Save</button>
+				<button type="button" name="slc`+i+`" class="btn btn-primary" onclick="load_from_slot(`+i+`)" `+(testslot?"":"disabled")+`>Load</button>
+				<button type="button" name="slc`+i+`" class="btn btn-primary bg_red" onclick="delete_from_slot(`+i+`)" `+(testslot?"":"disabled")+`>Del</button>
 				</div></div>`;
 			filetable += entry;
 		}
 		document.getElementById("saveloadentries").innerHTML = filetable;
+	}
+	function save_to_slot(slot)
+	{
+		let slotnumshown = (slot+1);
+		let testslot = localStorage.getItem(STORAGE_PREFIX + "slot_"+slot);
+		let newcompressedstory = generate_compressed_story();
+		if(testslot)
+		{
+			msgboxYesNo("Overwrite existing story in Storage Slot "+slotnumshown+"?","Overwrite Storage Slot "+slotnumshown,()=>{
+				localStorage.setItem(STORAGE_PREFIX + "slot_"+slot, newcompressedstory);
+				document.getElementById("yesnocontainer").classList.add("hidden");
+				display_saveloadcontainer();
+			},()=>{
+				document.getElementById("yesnocontainer").classList.add("hidden");
+			});
+		}else{
+			localStorage.setItem(STORAGE_PREFIX + "slot_"+slot, newcompressedstory);
+			display_saveloadcontainer();
+		}
+	}
+	function load_from_slot(slot)
+	{
+		let loadedstorycompressed = localStorage.getItem(STORAGE_PREFIX + "slot_"+slot);
+		if(loadedstorycompressed)
+		{
+			let safe_to_overwrite = (gametext_arr.length == 0 && current_memory == "" && current_anote == "" && current_wi.length == 0 && redo_arr.length == 0);
+			if (!safe_to_overwrite) {
+				pending_found_story = loadedstorycompressed;
+				hide_popups();
+				prompt_overwrite();
+			} else {
+				import_share_story(loadedstorycompressed);
+				hide_popups();
+			}
+		}else{
+			msgbox("Unable to load story from browser storage","Browser Storage Load Failed");
+		}
+	}
+	function delete_from_slot(slot)
+	{
+		let slotnumshown = (slot+1);
+		msgboxYesNo("Delete story in Storage Slot "+slotnumshown+"?","Delete Storage Slot "+slotnumshown,()=>{
+			localStorage.setItem(STORAGE_PREFIX + "slot_"+slot, "");
+			document.getElementById("yesnocontainer").classList.add("hidden");
+			display_saveloadcontainer();
+		},()=>{
+			document.getElementById("yesnocontainer").classList.add("hidden");
+			display_saveloadcontainer();
+		});
 	}
 
 	function fetch_models(onDoneCallback)
@@ -9978,12 +10030,16 @@ Current version: 79
 		let as = aestheticInstructUISettings;								// ..and use this as shortcut to avoid typing it each time.
 		if(localsettings.opmode==3)
 		{
+			if(!input.startsWith("\n"))
+			{
+				input = "\n"+input;
+			}
 			//replace all possible instances with placeholders
 			var mynameregex = new RegExp("\n(" + localsettings.chatname + ")\: ", "gi");
 			var mynameregex2 = new RegExp("(" + localsettings.chatname + ")\: ", "gi");
 			var mynameregex3 = new RegExp("\n(" + localsettings.chatname + ") ", "gi");
 			var othernamesregex = new RegExp("\n(?!" + localsettings.chatname + ").+?\: ", "gi");
-			var othernamesregex2 = new RegExp("(?!" + localsettings.chatname + ").+?\: ", "gi");
+			//var othernamesregex2 = new RegExp("(?!" + localsettings.chatname + ").+?\: ", "gi");
 			input = input.replaceAll(mynameregex, '{{userplaceholder}}');
 			input = input.replaceAll(mynameregex2, '{{userplaceholder}}');
 			input = input.replaceAll(mynameregex3, '{{userplaceholder}}');
@@ -9993,14 +10049,14 @@ Current version: 79
 				input = input.replaceAll(othernamesregex, function(match) {
 					return "{{botplaceholder}}<p class='aui_nametag'>" + match.substring(0,match.length-2).trim() + "</p>";
 				});
-				input = input.replaceAll(othernamesregex2, function(match) {
-					return "{{botplaceholder}}<p class='aui_nametag'>" + match.substring(0,match.length-2).trim() + "</p>";
-				});
+				// input = input.replaceAll(othernamesregex2, function(match) {
+				// 	return "{{botplaceholder}}<p class='aui_nametag'>" + match.substring(0,match.length-2).trim() + "</p>";
+				// });
 			}
 			else
 			{
 				input = input.replaceAll(othernamesregex, "{{botplaceholder}}");
-				input = input.replaceAll(othernamesregex2, "{{botplaceholder}}");
+				//input = input.replaceAll(othernamesregex2, "{{botplaceholder}}");
 			}
 
 			you = "{{userplaceholder}}";
