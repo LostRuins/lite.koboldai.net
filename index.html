@@ -4965,7 +4965,7 @@ Current version: 79
 
 	function show_last_req()
 	{
-		msgbox(last_request_str,"Last Request Context",false);
+		msgbox(last_request_str,"Last Request Sent",false);
 	}
 
 	var worker_data_showonly = []; //only for table display, dont mix
@@ -5342,29 +5342,87 @@ Current version: 79
 		}
 	}
 
-	function custom_oai_model_change()
+	function select_custom_oai_model()
+	{
+		inputBox("Enter custom OpenAI model name","Custom Model Name",localsettings.saved_oai_custommodel,"", ()=>{
+			let coai = getInputBoxValue().trim();
+			let dropdown = document.getElementById("custom_oai_model");
+			if(coai!="")
+			{
+				document.getElementById("custom_oai_model_option").value = coai;
+				document.getElementById("custom_oai_model_option").innerText = coai;
+				document.getElementById("custom_oai_model_option").style.display = "";
+				dropdown.selectedIndex = dropdown.options.length - 1;
+			}
+			oai_model_change();
+		},false);
+	}
+	function oai_model_change()
 	{
 		let dropdown = document.getElementById("custom_oai_model");
+		let non_completions = (dropdown.value.includes("text-davinci-003") || dropdown.value.includes("text-davinci-002")
+		|| dropdown.value.includes("text-davinci-001") || dropdown.value.includes("gpt-3.5-turbo-instruct") || dropdown.value == "davinci");
 		if(dropdown.selectedIndex==dropdown.options.length-1)
 		{
-			inputBox("Enter custom OpenAI model name","Custom Model Name",localsettings.saved_oai_custommodel,"", ()=>{
-				let coai = getInputBoxValue().trim();
-				if(coai!="")
-				{
-					document.getElementById("custom_oai_model_option").value = coai;
-					document.getElementById("custom_oai_model_option").innerText = coai;
-				}else{
-					document.getElementById("custom_oai_model_option").value = "custom";
-					document.getElementById("custom_oai_model_option").innerText = "[Custom]";
-				}
-			},false);
-			document.getElementById("useoaichatcompl").classList.remove("hidden");
-			document.getElementById("useoaichatcompllabel").classList.remove("hidden");
-		}else{
-			document.getElementById("useoaichatcompl").checked = false;
-			document.getElementById("useoaichatcompl").classList.add("hidden");
-			document.getElementById("useoaichatcompllabel").classList.add("hidden");
+			document.getElementById("useoaichatcompl").checked = true;
+		} else {
+			document.getElementById("useoaichatcompl").checked = !non_completions;
 		}
+	}
+	function oai_fetch_models()
+	{
+		let desired_oai_key = document.getElementById("custom_oai_key").value.trim();
+		let desired_oai_ep = document.getElementById("custom_oai_endpoint").value.trim();
+		if (document.getElementById("oaiaddversion").checked)
+		{
+			if(desired_oai_ep!="" && desired_oai_ep.length > 4 && !desired_oai_ep.slice(-4).toLowerCase().includes("/v") && !desired_oai_ep.toLowerCase().includes("/v1/")) {
+				desired_oai_ep = desired_oai_ep + "/v1";
+			}
+		}
+
+		fetch((desired_oai_ep + oai_models_endpoint), {
+			method: 'GET',
+			headers: {
+				'Authorization': 'Bearer '+desired_oai_key,
+				'x-api-key': desired_oai_key,
+			},
+			referrerPolicy: 'no-referrer',
+		})
+		.then((response) => response.json())
+		.then((data) => {
+			console.log(data);
+			if (!data.error && data.data && data.data.length > 0)
+			{
+				let dropdown = document.getElementById("custom_oai_model");
+				var lastOption = dropdown.lastElementChild;
+				for (var i = dropdown.options.length - 1; i >= 0; i--) {
+					var option = dropdown.options[i];
+					dropdown.remove(option);
+				}
+				for(var i = 0; i < data.data.length; i++) {
+					var opt = data.data[i];
+					var el = document.createElement("option");
+					el.textContent = opt.id;
+					el.value = opt.id;
+					dropdown.appendChild(el);
+				}
+				dropdown.appendChild(lastOption);
+				dropdown.selectedIndex = 0;
+				oai_model_change();
+			}
+			else
+			{
+				msgbox(JSON.stringify(data.error.message),"Error Encountered",false,false,()=>{
+					hide_msgbox();
+				});
+			}
+		})
+		.catch(error => {
+			console.log("Error: " + error);
+			msgbox("Error: " + error,"Error Encountered",false,false,()=>{
+				hide_msgbox();
+			});
+		});
 	}
 
 	function customapi_dropdown()
@@ -5395,7 +5453,7 @@ Current version: 79
 					document.getElementById("custom_oai_endpoint").value = localsettings.saved_oai_addr;
 				}
 			}
-			custom_oai_model_change();
+			oai_model_change();
 			togglejailbreak();
 		}
 		else if(epchoice==2)
@@ -5612,7 +5670,7 @@ Current version: 79
 			}
 			if (document.getElementById("oaiaddversion").checked)
 			{
-				if(desired_oai_ep!="" && desired_oai_ep.length > 4 && !desired_oai_ep.slice(-4).toLowerCase().includes("/v")) {
+				if(desired_oai_ep!="" && desired_oai_ep.length > 4 && !desired_oai_ep.slice(-4).toLowerCase().includes("/v") && !desired_oai_ep.toLowerCase().includes("/v1/")) {
 					desired_oai_ep = desired_oai_ep + "/v1";
 				}
 			}
@@ -5620,61 +5678,34 @@ Current version: 79
 			{
 				hide_popups();
 
-				fetch((desired_oai_ep + oai_models_endpoint), {
-					method: 'GET',
-					headers: {
-						'Authorization': 'Bearer '+desired_oai_key,
-						'x-api-key': desired_oai_key,
-					},
-					referrerPolicy: 'no-referrer',
-				})
-				.then((response) => response.json())
-				.then((data) => {
-					console.log(data);
-					if (!data.error && data.data && data.data.length > 0)
-					{
-						//good to go
-						custom_oai_endpoint = desired_oai_ep;
-						custom_oai_key = desired_oai_key;
-						localsettings.saved_oai_key = custom_oai_key;
-						localsettings.saved_oai_addr = custom_oai_endpoint;
-						localsettings.saved_oai_jailbreak = document.getElementById("jailbreakprompttext").value;
-						if(localsettings.saved_oai_jailbreak=="")
-						{
-							document.getElementById("jailbreakprompttext").value = defaultoaijailbreak;
-						}
-						custom_oai_model = document.getElementById("custom_oai_model").value.trim();
-						localsettings.saved_oai_custommodel = custom_oai_model;
-						selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": custom_oai_model, "count": 1 }];
-						selected_workers = [];
-						if (perfdata == null) {
-							//generate some fake perf data if horde is offline and using custom endpoint
-							perfdata = {
-								"queued_requests": 0,
-								"queued_tokens": 0,
-								"past_minute_tokens": 0,
-								"worker_count": 0
-							};
-							document.body.classList.add("connected");
-							document.getElementById("connectstatus").classList.remove("color_orange");
-							document.getElementById("connectstatus").classList.add("color_green");
-						}
-						document.getElementById("connectstatus").innerHTML = "Connected to OAI Endpoint";
-						render_gametext();
-					}
-					else
-					{
-						custom_oai_endpoint = default_oai_base;
-						custom_oai_key = "";
-						msgbox(JSON.stringify(data.error.message));
-					}
-				})
-				.catch(error => {
-				console.log("Error: " + error);
-				custom_oai_endpoint = default_oai_base;
-				custom_oai_key = "";
-				msgbox("Error: " + error);
-				});
+				//good to go
+				custom_oai_endpoint = desired_oai_ep;
+				custom_oai_key = desired_oai_key;
+				localsettings.saved_oai_key = custom_oai_key;
+				localsettings.saved_oai_addr = custom_oai_endpoint;
+				localsettings.saved_oai_jailbreak = document.getElementById("jailbreakprompttext").value;
+				if(localsettings.saved_oai_jailbreak=="")
+				{
+					document.getElementById("jailbreakprompttext").value = defaultoaijailbreak;
+				}
+				custom_oai_model = document.getElementById("custom_oai_model").value.trim();
+				localsettings.saved_oai_custommodel = custom_oai_model;
+				selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": custom_oai_model, "count": 1 }];
+				selected_workers = [];
+				if (perfdata == null) {
+					//generate some fake perf data if horde is offline and using custom endpoint
+					perfdata = {
+						"queued_requests": 0,
+						"queued_tokens": 0,
+						"past_minute_tokens": 0,
+						"worker_count": 0
+					};
+					document.body.classList.add("connected");
+					document.getElementById("connectstatus").classList.remove("color_orange");
+					document.getElementById("connectstatus").classList.add("color_green");
+				}
+				document.getElementById("connectstatus").innerHTML = "Connected to OAI Endpoint";
+				render_gametext();
 			}
 		}
 		else if(epchoice==2) //connect to Scale Endpoint
@@ -7749,7 +7780,7 @@ Current version: 79
 					"logit_bias": { "50256": -100 },
 				}
 
-				if (document.getElementById("useoaichatcompl").checked || custom_oai_model == "gpt-3.5-turbo" || custom_oai_model == "gpt-3.5-turbo-16k" || custom_oai_model == "gpt-4" || custom_oai_model == "gpt-4-32k") {
+				if (document.getElementById("useoaichatcompl").checked) {
 					targetep = (custom_oai_endpoint + oai_submit_endpoint_turbo);
 					if (document.getElementById("jailbreakprompt") && document.getElementById("jailbreakprompt").checked && document.getElementById("jailbreakprompttext").value!="") {
 						oai_payload.messages = [
@@ -7768,14 +7799,19 @@ Current version: 79
 				}
 
 				last_request_str = JSON.stringify(oai_payload);
-
+				let oaiheaders = {
+					'Content-Type': 'application/json',
+					'Authorization': 'Bearer ' + custom_oai_key
+				};
+				if(targetep.toLowerCase().includes("openrouter.ai"))
+				{
+					oaiheaders["HTTP-Referer"] = "https://lite.koboldai.net";
+				}else{
+					oaiheaders["x-api-key"] = custom_oai_key;
+				}
 				fetch(targetep, {
 					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						'x-api-key': custom_oai_key,
-						'Authorization': 'Bearer ' + custom_oai_key,
-					},
+					headers: oaiheaders,
 					body: JSON.stringify(oai_payload),
 					referrerPolicy: 'no-referrer',
 				})
@@ -10511,18 +10547,20 @@ Current version: 79
 				<input class="form-control" type="text" id="custom_oai_endpoint" placeholder="OpenAI API URL" value="">
 				<input class="form-control" type="password" id="custom_oai_key" placeholder="OpenAI API Key" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
 				Model Choice:<br>
-				<select style="padding:4px;" class="form-control" id="custom_oai_model" onchange="custom_oai_model_change()">
-					<option value="text-davinci-003" selected="selected">text-davinci-003</option>
+				<select style="padding:4px;display:inline;width:calc(100% - 220px)" class="form-control" id="custom_oai_model" onchange="oai_model_change()">
+					<option value="gpt-3.5-turbo-instruct" selected="selected">gpt-3.5-turbo-instruct</option>
+					<option value="text-davinci-003">text-davinci-003</option>
 					<option value="text-davinci-002">text-davinci-002</option>
 					<option value="text-davinci-001">text-davinci-001</option>
-					<option value="gpt-3.5-turbo-instruct">gpt-3.5-turbo-instruct</option>
 					<option value="davinci">davinci</option>
 					<option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
 					<option value="gpt-3.5-turbo-16k">gpt-3.5-turbo-16k</option>
 					<option value="gpt-4">gpt-4</option>
 					<option value="gpt-4-32k">gpt-4-32k</option>
-					<option id="custom_oai_model_option" value="custom">[Custom]</option>
+					<option style="display:none;" id="custom_oai_model_option" value="custom">[Custom]</option>
 				</select>
+				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaifetchlist" onclick="oai_fetch_models()">Fetch List</button>
+				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaiusecustom" onclick="select_custom_oai_model()">Use Custom</button>
 				<input type="checkbox" id="oaiaddversion" onchange="" checked>
 				<div class="box-label" title="Add endpoint version">Add Endpoint Version</div>
 				<input type="checkbox" id="jailbreakprompt" onchange="togglejailbreak()">
