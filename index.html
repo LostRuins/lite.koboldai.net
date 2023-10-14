@@ -1178,10 +1178,10 @@ Current version: 79
 			height: auto;
     		overflow-y: auto;
 			margin-top: 4px;
-			padding: 8px;
+			padding: 6px;
 			display: grid;
-			gap: 8px;
-			grid-auto-rows: 56px;
+			gap: 6px;
+			/* grid-auto-rows: 56px; */
 		}
 
 
@@ -3042,6 +3042,7 @@ Current version: 79
 
 	const claude_submit_endpoint = "/complete";
 
+	const default_openrouter_base = "https://openrouter.ai/api/v1";
 	const default_oai_base = "https://api.openai.com";
 	const default_claude_base = "https://api.anthropic.com";
 	const default_palm_base = "https://generativelanguage.googleapis.com/v1beta2/models/text-bison-001:generateText?key=";
@@ -5440,10 +5441,16 @@ Current version: 79
 				document.getElementById("customendpoint").value = localsettings.saved_kai_addr;
 			}
 		}
-		else if(epchoice==1)
+		else if(epchoice==1 || epchoice==5)
 		{
 			document.getElementById("oaicustom").classList.remove("hidden");
 			document.getElementById("custom_oai_endpoint").value = custom_oai_endpoint;
+			if(epchoice==5)
+			{
+				document.getElementById("custom_oai_endpoint").classList.add("hidden");
+			}else{
+				document.getElementById("custom_oai_endpoint").classList.remove("hidden");
+			}
 			if(custom_oai_key=="" && localsettings.saved_oai_key!="")
 			{
 				document.getElementById("custom_oai_key").value = localsettings.saved_oai_key;
@@ -5652,7 +5659,7 @@ Current version: 79
 					});
 			}
 		}
-		else if(epchoice==1) //connect to OAI Endpoint
+		else if(epchoice==1 || epchoice==5) //connect to OAI / OpenRouter Endpoint
 		{
 			let desired_oai_key = document.getElementById("custom_oai_key").value.trim();
 			let desired_oai_ep = document.getElementById("custom_oai_endpoint").value.trim();
@@ -5877,23 +5884,26 @@ Current version: 79
 		let filetable = ``;
 
 		let entry = `<div style="display:flex">
-				<button type="button" style="font-size:15px;margin:2px;width:33%" name="localsave" class="btn btn-primary" onclick="hide_popups();save_file_button()">`+"💾 Save File"+`</button>
-				<button type="button" style="font-size:15px;margin:2px;width:33%" name="localload" class="btn btn-primary" onclick="hide_popups();load_file_button()">`+"📁 Load File"+`</button>
-				<button type="button" style="font-size:15px;margin:2px;width:34%" name="shareurl" class="btn btn-primary" onclick="hide_popups();export_share_story()">`+"🌐 Share"+`</button>
+				<button type="button" style="font-size:13px;margin:2px;width:33%" name="localsave" class="btn btn-primary" onclick="hide_popups();save_file_button()">`+"💾<br>Download File"+`</button>
+				<button type="button" style="font-size:13px;margin:2px;width:33%" name="localload" class="btn btn-primary" onclick="hide_popups();load_file_button()">`+"📁<br>Upload File"+`</button>
+				<button type="button" style="font-size:13px;margin:2px;width:34%" name="shareurl" class="btn btn-primary" onclick="hide_popups();export_share_story()">`+"🌐<br>Share"+`</button>
+				</div>
+				<div style="font-size:12px; margin-top:3px; text-align: center; align-self: center; width: calc(100% - 180px);">
+				<span style="font-weight:bold;text-decoration: underline;">Temporary Browser Storage</span>
 				</div>`;
 		filetable += entry;
 
 		for(let i=0;i<4;++i)
 		{
 			let testslot = localStorage.getItem(STORAGE_PREFIX + "slot_"+i+"_meta");
-			entry = `<div style="display:flex">
-				<div style="font-size:14px; margin:4px; text-align: center; align-self: center; width: calc(100% - 180px);">
+			entry = `<div style="display:flex; height:46px;">
+				<div style="font-size:12px; margin:3px; text-align: center; align-self: center; width: calc(100% - 180px);">
 				`+(testslot?`[ Slot `+(i+1)+` - `+testslot+` ]`:`[ Slot `+(i+1)+` - Empty ]`)+`
 				</div>
 				<div style="text-align: right; align-self: center; width: 180px;">
-				<button type="button" name="slc`+i+`" class="btn btn-primary" onclick="save_to_slot(`+i+`)">Save</button>
-				<button type="button" name="slc`+i+`" class="btn btn-primary" onclick="load_from_slot(`+i+`)" `+(testslot?"":"disabled")+`>Load</button>
-				<button type="button" name="slc`+i+`" class="btn btn-primary bg_red" onclick="delete_from_slot(`+i+`)" `+(testslot?"":"disabled")+`>Del</button>
+				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary" onclick="save_to_slot(`+i+`)">Save</button>
+				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary" onclick="load_from_slot(`+i+`)" `+(testslot?"":"disabled")+`>Load</button>
+				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary bg_red" onclick="delete_from_slot(`+i+`)" `+(testslot?"":"disabled")+`>Del</button>
 				</div></div>`;
 			filetable += entry;
 		}
@@ -10447,7 +10457,7 @@ Current version: 79
 			<div style="overflow: auto;">
 				<div id="saveloadentries" class="justifyleft anotelabel saveloadgrid">
 				</div>
-				<div class="justifyleft anotelabel"><p style="padding:6px;" class="color_red">Caution: Browser Storage Slots may be lost when clearing cache.</p></div>
+				<div class="justifyleft anotelabel"><p style="padding:6px;font-size: 10px;" class="color_red">Caution: Storage Slots are saved to a tempoary cache and can be deleted by your browser. To avoid losing data, use the download file button.</p></div>
 				<div class="popupfooter">
 					<button type="button" class="btn btn-primary" id=""
 						onclick="hide_popups()">Back</button>
@@ -10524,6 +10534,7 @@ Current version: 79
 				<option value="2">Spellbook By Scale API</option>
 				<option value="3">Claude By Anthropic API</option>
 				<option value="4">PaLM By Google API</option>
+				<option value="5">OpenRouter API</option>
 			</select>
 			</div>
 			<div id="koboldcustom" class="aidgpopuplistheader anotelabel">
