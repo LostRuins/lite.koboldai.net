@@ -4100,12 +4100,19 @@ Current version: 80
 		newfilename = last_known_filename;
 
 		if (userAgent.match(/AppleWebKit/) && (userAgent.match(/iPad/i) || userAgent.match(/iPhone/i))) {
-			var file = new Blob([JSON.stringify(loaded_storyobj)], { type: 'application/octet-stream' });
+			let ststr = JSON.stringify(loaded_storyobj);
+			var file = new Blob([ststr], { type: 'application/octet-stream' });
+			var file2 = new Blob([ststr], { type: 'application/json' });
 			console.log("Special save handling for iphones")
 			// iPad or iPhone needs an extra download
 			var reader = new FileReader();
+			var reader2 = new FileReader();
 			reader.onload = function (e) {
-				msgbox(`<button type="button" class="btn btn-primary" id="ios_save" onclick="savenowfn()">Click to Save</button><br><h4>If that does not work, right-click or long press <a href=` + reader.result + ` target='_blank' download="`+newfilename+`">this link</a>, and select (Save As)</h4>`, "Save Story", true)
+				reader2.readAsDataURL(file2);
+				reader2.onload = function (e) {
+					msgbox(`<button type="button" class="btn btn-primary" id="ios_save" onclick="savenowfn()">Click to Save</button>
+					<br><h5>Apple devices are known to have issues saving. If the above button does not work, try opening or right-click / long press one of the below links, and select (Save As)</h5><h4><li><a href=` + reader.result + ` class='color_blueurl' target='_blank' download="`+newfilename+`">Raw File Data</a></li><li><a href=` + reader2.result + ` class='color_blueurl' target='_blank' download="`+newfilename+`">JSON File Data</a></li></h4>`, "Save Story", true)
+				}
 			}
 			reader.readAsDataURL(file);
 		}
