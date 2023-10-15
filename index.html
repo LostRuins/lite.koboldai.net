@@ -3106,6 +3106,7 @@ Current version: 79
 	var waiting_for_autosummary = false;
 	var pending_found_story = null;
 	var filter_enabled = true;
+	var italics_regex = new RegExp(/\*(\S[^*]+\S)\*/g); //the fallback regex
 	var temp_scenario = null;
 	var last_token_budget = ""; //to display token limits
 	var last_known_filename = "saved_story.json";
@@ -3121,6 +3122,7 @@ Current version: 79
 		home_cluster: text_hordes[0].baseurl, //which horde does this api key belongs to
 		saved_oai_key: "", //do not ever share this in save files!
 		saved_oai_addr: "", //do not ever share this in save files!
+		saved_openrouter_key: "",
 		saved_claude_key: "", //do not ever share this in save files!
 		saved_claude_addr: "", //do not ever share this in save files!
 		saved_palm_key: "", //do not ever share this in save files!
@@ -3270,6 +3272,14 @@ Current version: 79
 					return padString.slice(0,targetLength) + String(this);
 				}
 			};
+		}
+
+		try {
+			// Test if lookahead is supported, enhance italics regex if so
+			let improved_italics = new RegExp("\\*(?!\\s)(.+?)(?<!\\s)\\*","g");
+			italics_regex = improved_italics;
+		} catch (e) {
+			console.log('Lookaheads are not supported in this environment.');
 		}
 
 	}
@@ -3812,6 +3822,7 @@ Current version: 79
 			story.savedsettings.my_api_key = "0000000000";
 			story.savedsettings.home_cluster = text_hordes[0].baseurl;
 			story.savedsettings.saved_oai_key = "";
+			story.savedsettings.saved_openrouter_key = "";
 			story.savedsettings.saved_oai_addr = "";
 			story.savedsettings.saved_claude_key = "";
 			story.savedsettings.saved_claude_addr = "";
@@ -3932,6 +3943,7 @@ Current version: 79
 				let tmphc = localsettings.home_cluster;
 				let tmp_oai1 = localsettings.saved_oai_key;
 				let tmp_oai2 = localsettings.saved_oai_addr;
+				let tmp_or1 = localsettings.saved_openrouter_key;
 				let tmp_claude1 = localsettings.saved_claude_key;
 				let tmp_claude2 = localsettings.saved_claude_addr;
 				let tmp_palm1 = localsettings.saved_palm_key;
@@ -3941,6 +3953,7 @@ Current version: 79
 				localsettings.home_cluster = tmphc;
 				localsettings.saved_oai_key = tmp_oai1;
 				localsettings.saved_oai_addr = tmp_oai2;
+				localsettings.saved_openrouter_key = tmp_or1;
 				localsettings.saved_claude_key = tmp_claude1;
 				localsettings.saved_claude_addr = tmp_claude2;
 				localsettings.saved_palm_key = tmp_palm1;
@@ -4070,6 +4083,7 @@ Current version: 79
 			loaded_storyobj.savedsettings.saved_claude_key = "";
 			loaded_storyobj.savedsettings.saved_claude_addr = "";
 			loaded_storyobj.savedsettings.saved_kai_addr = "";
+			loaded_storyobj.savedsettings.saved_openrouter_key = "";
 
 			loaded_storyobj.savedaestheticsettings = JSON.parse(JSON.stringify(aestheticInstructUISettings, null, 2));
 		}else{
@@ -4258,6 +4272,7 @@ Current version: 79
 					let tmphc = localsettings.home_cluster;
 					let tmp_oai1 = localsettings.saved_oai_key;
 					let tmp_oai2 = localsettings.saved_oai_addr;
+					let tmp_or1 = localsettings.saved_openrouter_key;
 					let tmp_claude1 = localsettings.saved_claude_key;
 					let tmp_claude2 = localsettings.saved_claude_addr;
 					let tmp_palm1 = localsettings.saved_palm_key;
@@ -4267,6 +4282,7 @@ Current version: 79
 					localsettings.home_cluster = tmphc;
 					localsettings.saved_oai_key = tmp_oai1;
 					localsettings.saved_oai_addr = tmp_oai2;
+					localsettings.saved_openrouter_key = tmp_or1;
 					localsettings.saved_claude_key = tmp_claude1;
 					localsettings.saved_claude_addr = tmp_claude2;
 					localsettings.saved_palm_key = tmp_palm1;
@@ -4396,6 +4412,7 @@ Current version: 79
 		let scenario = obj.scenario?obj.scenario:"";
 		let examplemsg = obj.mes_example?obj.mes_example:"";
 		let greeting = obj.first_mes?obj.first_mes:"";
+		let sysprompt = obj.system_prompt?obj.system_prompt:"";
 
 		//post process
 		if(scenario!="")
@@ -4406,7 +4423,11 @@ Current version: 79
 		{
 			examplemsg = "\n"+examplemsg;
 		}
-		let combinedmem = memory + scenario + examplemsg;
+		if(sysprompt!="")
+		{
+			sysprompt = sysprompt+"\n";
+		}
+		let combinedmem = sysprompt + memory + scenario + examplemsg;
 		let agnaidatafieldsempty = scenario + examplemsg + (obj.personality?obj.personality:"") + greeting;
 		//check if it's a world info only card, if so, do not restart game
 		if(combinedmem.trim()=="" && greeting=="" && obj.entries)
@@ -4423,7 +4444,7 @@ Current version: 79
 			localsettings.chatname = myname;
 			localsettings.chatopponent = chatopponent;
 			gametext_arr.push("\n"+chatopponent+": "+greeting);
-			current_memory = combinedmem + "\n<START>";
+			current_memory = combinedmem + "\n***";
 			localsettings.opmode = 3;
 			localsettings.gui_type_chat = 2;
 			//handle character book
@@ -4459,7 +4480,7 @@ Current version: 79
 		localsettings.chatname = myname;
 		localsettings.chatopponent = chatopponent;
 		gametext_arr.push("\n"+chatopponent+": "+greeting);
-		current_memory = memory + scenario + examplemsg + "\n<START>";
+		current_memory = memory + scenario + examplemsg + "\n***";
 		localsettings.opmode = 3;
 		localsettings.gui_type_chat = 2;
 		render_gametext();
@@ -5444,21 +5465,33 @@ Current version: 79
 		else if(epchoice==1 || epchoice==5)
 		{
 			document.getElementById("oaicustom").classList.remove("hidden");
-			document.getElementById("custom_oai_endpoint").value = custom_oai_endpoint;
 			if(epchoice==5)
 			{
+				document.getElementById("oaidesc").classList.add("hidden");
+				document.getElementById("openrouterdesc").classList.remove("hidden");
+				document.getElementById("custom_oai_endpoint").value = default_openrouter_base;
 				document.getElementById("custom_oai_endpoint").classList.add("hidden");
-			}else{
-				document.getElementById("custom_oai_endpoint").classList.remove("hidden");
-			}
-			if(custom_oai_key=="" && localsettings.saved_oai_key!="")
-			{
-				document.getElementById("custom_oai_key").value = localsettings.saved_oai_key;
-				if(localsettings.saved_oai_addr!="")
+				if(localsettings.saved_openrouter_key!="")
 				{
-					document.getElementById("custom_oai_endpoint").value = localsettings.saved_oai_addr;
+					document.getElementById("custom_oai_key").value = localsettings.saved_openrouter_key;
 				}
 			}
+			else
+			{
+				document.getElementById("oaidesc").classList.remove("hidden");
+				document.getElementById("openrouterdesc").classList.add("hidden");
+				document.getElementById("custom_oai_endpoint").value = custom_oai_endpoint;
+				document.getElementById("custom_oai_endpoint").classList.remove("hidden");
+				if(localsettings.saved_oai_key!="")
+				{
+					document.getElementById("custom_oai_key").value = localsettings.saved_oai_key;
+					if(localsettings.saved_oai_addr!="")
+					{
+						document.getElementById("custom_oai_endpoint").value = localsettings.saved_oai_addr;
+					}
+				}
+			}
+
 			togglejailbreak();
 		}
 		else if(epchoice==2)
@@ -5469,7 +5502,7 @@ Current version: 79
 		{
 			document.getElementById("claudecustom").classList.remove("hidden");
 			document.getElementById("custom_claude_endpoint").value = custom_claude_endpoint;
-			if(custom_claude_key=="" && localsettings.saved_claude_key!="")
+			if(localsettings.saved_claude_key!="")
 			{
 				document.getElementById("custom_claude_key").value = localsettings.saved_claude_key;
 				if(localsettings.saved_claude_addr!="")
@@ -5481,7 +5514,7 @@ Current version: 79
 		else if(epchoice==4)
 		{
 			document.getElementById("palmcustom").classList.remove("hidden");
-			if(custom_palm_key=="" && localsettings.saved_palm_key!="")
+			if(localsettings.saved_palm_key!="")
 			{
 				document.getElementById("custom_palm_key").value = localsettings.saved_palm_key;
 			}
@@ -5686,8 +5719,13 @@ Current version: 79
 				//good to go
 				custom_oai_endpoint = desired_oai_ep;
 				custom_oai_key = desired_oai_key;
-				localsettings.saved_oai_key = custom_oai_key;
-				localsettings.saved_oai_addr = custom_oai_endpoint;
+				if(epchoice==1)
+				{
+					localsettings.saved_oai_key = custom_oai_key;
+					localsettings.saved_oai_addr = custom_oai_endpoint;
+				}else{
+					localsettings.saved_openrouter_key = custom_oai_key;
+				}
 				localsettings.saved_oai_jailbreak = document.getElementById("jailbreakprompttext").value;
 				if(localsettings.saved_oai_jailbreak=="")
 				{
@@ -5885,7 +5923,7 @@ Current version: 79
 
 		let entry = `<div style="display:flex">
 				<button type="button" style="font-size:13px;margin:2px;width:33%" name="localsave" class="btn btn-primary" onclick="hide_popups();save_file_button()">`+"💾<br>Download File"+`</button>
-				<button type="button" style="font-size:13px;margin:2px;width:33%" name="localload" class="btn btn-primary" onclick="hide_popups();load_file_button()">`+"📁<br>Upload File"+`</button>
+				<button type="button" style="font-size:13px;margin:2px;width:33%" name="localload" class="btn btn-primary" onclick="hide_popups();load_file_button()">`+"📁<br>Open File"+`</button>
 				<button type="button" style="font-size:13px;margin:2px;width:34%" name="shareurl" class="btn btn-primary" onclick="hide_popups();export_share_story()">`+"🌐<br>Share"+`</button>
 				</div>
 				<div style="font-size:12px; margin-top:3px; text-align: center; align-self: center; width: calc(100% - 180px);">
@@ -9455,9 +9493,8 @@ Current version: 79
 					return inner;
 				});
 				curr.msg = curr.msg.replace(/\[<\|.+?\|>\]/g, ""); //remove normal comments too
+				curr.msg = curr.msg.replace(italics_regex,"<em style='opacity:0.7'>$1</em>");
 
-				//italics matching for messages
-				curr.msg = curr.msg.replace(/\*(?!\s)(.+?)(?<!\s)\*/g,"<em style='opacity:0.7'>$1</em>");
 			}
 
 			if(curr.myturn)
@@ -10170,7 +10207,7 @@ Current version: 79
 				let styleRole = aestheticInstructUISettings.use_uniform_colors ? 'uniform' : role;					// Uniform role is preferred if it's active on the settings.
 				newbodystr = newbodystr.replace(new RegExp(`${contextDict[`${role}Open`]}([^]*?)${contextDict.closeTag}`, 'g'), (match, p) => {
 					let replacedText = match.replace(/<[^>]*>/g, (htmlPart) => { internalHTMLparts.push(htmlPart); return `<internal_html_${internalHTMLparts.length - 1}>`; });
-					replacedText = replacedText.replace(/\*(?!\s)(.+?)(?<!\s)\*/g, wrapperSpan(styleRole, 'action')); 		// Apply the actions style to *actions*.
+					replacedText = replacedText.replace(italics_regex, wrapperSpan(styleRole, 'action')); 		// Apply the actions style to *actions*.
 					replacedText = replacedText.replace(/“(.*?)”/g, wrapperSpan(styleRole, 'speech')); 	// Apply the speech style to "speech".
 					replacedText = replacedText.replace(/&quot;(.*?)&quot;/g, wrapperSpan(styleRole, 'speech')); 	// Apply the speech style to "speech".
 					return replacedText;
@@ -10549,10 +10586,17 @@ Current version: 79
 
 			</div>
 			<div id="oaicustom" class="aidgpopuplistheader anotelabel hidden">
+				<span id="oaidesc">
 				Entering your OpenAI API key will allow you to use KoboldAI Lite with their API.<br><br>
 				Note that KoboldAI Lite takes no responsibility for your usage or consequences of this feature. Your API key is used directly with the OpenAI API and is not transmitted to us.<br>Only Temperature, Top-P and Repetition Penalty samplers are used.<br><br>
-
 				<span class="color_green" style="font-weight: bold;">Please input OpenAI API URL and Key.</span><br><br>
+				</span>
+				<span id="openrouterdesc" class="hidden">
+				Entering your OpenRouter API key will allow you to use KoboldAI Lite with their API.<br><br>
+				Note that KoboldAI Lite takes no responsibility for your usage or consequences of this feature. Your API key is used directly with the OpenRouter API and is not transmitted to us.<br>Only Temperature, Top-P and Repetition Penalty samplers are used.<br><br>
+				<span class="color_green" style="font-weight: bold;">Please input OpenRouter Key.</span><br><br>
+				</span>
+
 				<input class="form-control" type="text" id="custom_oai_endpoint" placeholder="OpenAI API URL" value="">
 				<input class="form-control" type="password" id="custom_oai_key" placeholder="OpenAI API Key" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
 				Model Choice:<br>
