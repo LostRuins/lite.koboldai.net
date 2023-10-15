@@ -3337,7 +3337,7 @@ Current version: 80
 				let loadedsettings = JSON.parse(loadedsettingsjson);
 				//see if persist is enabled
 				if (loadedsettings && loadedsettings.persist_session) {
-					import_share_story(loadedstorycompressed); //use the same compressed format as shared stories and import it
+					import_share_story(loadedstorycompressed,true); //use the same compressed format as shared stories and import it
 					import_props_into_object(localsettings,loadedsettings);
 					console.log("Loaded local settings and story");
 				}
@@ -3564,7 +3564,7 @@ Current version: 80
 							pending_found_story = foundStory;
 							prompt_overwrite();
 						} else {
-							import_share_story(foundStory);
+							import_share_story(foundStory,false);
 						}
 						//purge url params
 						window.history.replaceState(null, null, window.location.pathname);
@@ -3817,7 +3817,7 @@ Current version: 80
 		// Copy the text inside the text field
 		navigator.clipboard.writeText(copyText.innerText);
 	}
-	function import_share_story(cstoryjson) {
+	function import_share_story(cstoryjson,force_load_settngs) {
 		console.log("Importing shared story...");
 		var fail = false;
 		var story = null;
@@ -3875,7 +3875,7 @@ Current version: 80
 				}
 			});
 
-			kai_json_load(story,true);
+			kai_json_load(story,force_load_settngs);
 			render_gametext();
 
 		} else {
@@ -4152,7 +4152,7 @@ Current version: 80
 		restart_new_game();
 
 		let is_oldui = (storyobj.file_version == null);
-		let is_sharefile = (storyobj.ga || storyobj.cm || storyobj.cwi || storyobj.ess);
+		let is_sharefile = (!storyobj.actions && (storyobj.ga != "" || storyobj.cm != "" || (storyobj.cwi && storyobj.cwi.length > 0) || storyobj.ess != ""));
 		console.log("Is oldui: " + is_oldui + ", is sharefile: " + is_sharefile);
 
 		if (is_sharefile) {
@@ -5938,7 +5938,7 @@ Current version: 80
 				hide_popups();
 				prompt_overwrite();
 			} else {
-				import_share_story(loadedstorycompressed);
+				import_share_story(loadedstorycompressed,false);
 				hide_popups();
 			}
 		}else{
@@ -6818,11 +6818,12 @@ Current version: 80
 		msgboxYesNo("You already have an existing persistent story. Do you want to overwrite it?","Overwrite Warning",confirm_overwrite,hide_popups);
 	}
 	function confirm_overwrite() {
+		hide_popups();
 		if (pending_found_story && pending_found_story != "") {
-			import_share_story(pending_found_story);
+			import_share_story(pending_found_story,false);
 			pending_found_story = null;
 		}
-		hide_popups();
+
 	}
 
 	function display_newgame() {
@@ -10021,10 +10022,7 @@ Current version: 80
 				setElementColor(`${role}-bubble-colorselector`, aestheticInstructUISettings[`bubbleColor_${role}`], true);
 			}
 		}
-		if(aestheticInstructUISettings.code_block_background=="rgb(0, 0, 0)")
-		{
-			console.log("oof");
-		}
+
 		setElementColor('code-block-background-colorselector', aestheticInstructUISettings.code_block_background, false);
 		setElementColor('code-block-foreground-colorselector', aestheticInstructUISettings.code_block_foreground, false);
 
