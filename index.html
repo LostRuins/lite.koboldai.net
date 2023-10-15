@@ -3083,7 +3083,6 @@ Current version: 80
 	var anote_strength = 320; //distance from end
 	var newlineaftermemory = true;
 	var current_wi = []; //each item stores a wi object.
-	var loaded_storyobj = generate_base_storyobj(); //for loading json story files from disk
 	var generateimagesinterval = 600; //if generated images is enabled, it will trigger after every 600 new characters in context.
 	var nextgeneratedimagemilestone = generateimagesinterval; //used to keep track of when to generate the next image
 	var image_db = {}; //stores a dictionary of pending images
@@ -3997,11 +3996,12 @@ Current version: 80
 	}
 
 	var tempfileurl = null;
-	let newfilename = "";
+	var tempfileobj = generate_base_storyobj();
+	var newfilename = "";
 	function savenowfn()
 	{
 		var a = document.getElementById("tempfile");
-		var file = new Blob([JSON.stringify(loaded_storyobj)], { type: 'application/json' });
+		var file = new Blob([JSON.stringify(tempfileobj)], { type: 'application/json' });
 		console.log("Normal save handling")
 		if (tempfileurl) {
 			window.URL.revokeObjectURL(tempfileurl);
@@ -4015,6 +4015,38 @@ Current version: 80
 
 	function save_file_button() //for triggering an optional popup
 	{
+		const save_file = function()
+		{
+			tempfileobj = generate_savefile();
+			newfilename = last_known_filename;
+
+			window.URL = window.URL || window.webkitURL;
+			var userAgent = window.navigator.userAgent;
+
+			if (userAgent.match(/AppleWebKit/) && (userAgent.match(/iPad/i) || userAgent.match(/iPhone/i))) {
+				let ststr = JSON.stringify(tempfileobj);
+				var file = new Blob([ststr], { type: 'application/octet-stream' });
+				var file2 = new Blob([ststr], { type: 'application/json' });
+				console.log("Special save handling for iphones")
+				// iPad or iPhone needs an extra download
+				var reader = new FileReader();
+				var reader2 = new FileReader();
+				let datblob = window.URL.createObjectURL(file2);
+				reader.onload = function (e) {
+					reader2.readAsDataURL(file2);
+					reader2.onload = function (e) {
+						msgbox(`<button type="button" class="btn btn-primary" id="ios_save" onclick="savenowfn()">Click to Save</button>
+						<br><h5>Apple devices are known to have issues saving. If the above button does not work, try opening or right-click / long press one of the below links, and select (Save As)</h5><h4><li><a href=` + reader.result + ` class='color_blueurl' target='_blank' download="`+newfilename+`">Raw File Data</a></li><li><a href=` + reader2.result + ` class='color_blueurl' target='_blank' download="`+newfilename+`">JSON File Data</a></li><li><a href=` + datblob + ` class='color_blueurl' download="`+newfilename+`">JSON URL Blob</a></li></h4>`, "Save Story", true)
+					}
+				}
+				reader.readAsDataURL(file);
+			}
+			else
+			{
+				savenowfn();
+			}
+		}
+
 		if(localsettings.prompt_for_savename)
 		{
 			inputBox("Enter a Filename","Save File",last_known_filename,"Input Filename", ()=>{
@@ -4034,14 +4066,10 @@ Current version: 80
 			save_file();
 		}
 	}
-	function save_file() {
-		//determine if oldui file or newui file format, but we always save to oldui format
-		let is_oldui = (loaded_storyobj.file_version == null);
 
-		if (!is_oldui) {
-			// was formerly saved in newui format, regenerate a basic oldui file
-			loaded_storyobj = generate_base_storyobj();
-		}
+	function generate_savefile() //takes the current loaded story and generates a new savefile json object
+	{
+		let new_save_storyobj = generate_base_storyobj();
 
 		let export_arr = gametext_arr;
 		if(!localsettings.save_images)
@@ -4052,77 +4080,44 @@ Current version: 80
 			}
 		}
 
-
-		loaded_storyobj.prompt = "";
-		loaded_storyobj.actions = [];
-		loaded_storyobj.actions_metadata = {};
 		if (export_arr.length > 0) {
-			loaded_storyobj.prompt = export_arr[0];
+			new_save_storyobj.prompt = export_arr[0];
 		}
 		for (var i = 1; i < export_arr.length; ++i) {
-			loaded_storyobj.actions.push(export_arr[i]);
+			new_save_storyobj.actions.push(export_arr[i]);
 			let key = (i - 1).toString();
-			loaded_storyobj.actions_metadata[key] = {
+			new_save_storyobj.actions_metadata[key] = {
 				"Selected Text": export_arr[i],
 				"Alternative Text": []
 			};
 		}
-		loaded_storyobj.anotetemplate = current_anotetemplate;
-		loaded_storyobj.authorsnote = current_anote;
-		loaded_storyobj.memory = current_memory;
-		loaded_storyobj.worldinfo = current_wi;
+		new_save_storyobj.anotetemplate = current_anotetemplate;
+		new_save_storyobj.authorsnote = current_anote;
+		new_save_storyobj.memory = current_memory;
+		new_save_storyobj.worldinfo = current_wi;
 
 		//extra unofficial fields
-		loaded_storyobj.extrastopseq = extrastopseq;
+		new_save_storyobj.extrastopseq = extrastopseq;
 
 		if (localsettings.export_settings) {
-			loaded_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
+			new_save_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
 			//redact some values
-			loaded_storyobj.savedsettings.my_api_key = "0000000000";
-			loaded_storyobj.savedsettings.home_cluster = text_hordes[0].baseurl;
-			loaded_storyobj.savedsettings.saved_oai_key = "";
-			loaded_storyobj.savedsettings.saved_oai_addr = "";
-			loaded_storyobj.savedsettings.saved_claude_key = "";
-			loaded_storyobj.savedsettings.saved_claude_addr = "";
-			loaded_storyobj.savedsettings.saved_kai_addr = "";
-			loaded_storyobj.savedsettings.saved_openrouter_key = "";
+			new_save_storyobj.savedsettings.my_api_key = "0000000000";
+			new_save_storyobj.savedsettings.home_cluster = text_hordes[0].baseurl;
+			new_save_storyobj.savedsettings.saved_oai_key = "";
+			new_save_storyobj.savedsettings.saved_oai_addr = "";
+			new_save_storyobj.savedsettings.saved_claude_key = "";
+			new_save_storyobj.savedsettings.saved_claude_addr = "";
+			new_save_storyobj.savedsettings.saved_kai_addr = "";
+			new_save_storyobj.savedsettings.saved_openrouter_key = "";
 
-			loaded_storyobj.savedaestheticsettings = JSON.parse(JSON.stringify(aestheticInstructUISettings, null, 2));
+			new_save_storyobj.savedaestheticsettings = JSON.parse(JSON.stringify(aestheticInstructUISettings, null, 2));
 		}else{
-			loaded_storyobj.savedsettings = null;
-			loaded_storyobj.savedaestheticsettings = null;
+			new_save_storyobj.savedsettings = null;
+			new_save_storyobj.savedaestheticsettings = null;
 		}
 
-
-		window.URL = window.URL || window.webkitURL;
-
-		var userAgent = window.navigator.userAgent;
-		newfilename = last_known_filename;
-
-		if (userAgent.match(/AppleWebKit/) && (userAgent.match(/iPad/i) || userAgent.match(/iPhone/i))) {
-			let ststr = JSON.stringify(loaded_storyobj);
-			var file = new Blob([ststr], { type: 'application/octet-stream' });
-			var file2 = new Blob([ststr], { type: 'application/json' });
-			console.log("Special save handling for iphones")
-			// iPad or iPhone needs an extra download
-			var reader = new FileReader();
-			var reader2 = new FileReader();
-			let datblob = window.URL.createObjectURL(file2);
-			reader.onload = function (e) {
-				reader2.readAsDataURL(file2);
-				reader2.onload = function (e) {
-					msgbox(`<button type="button" class="btn btn-primary" id="ios_save" onclick="savenowfn()">Click to Save</button>
-					<br><h5>Apple devices are known to have issues saving. If the above button does not work, try opening or right-click / long press one of the below links, and select (Save As)</h5><h4><li><a href=` + reader.result + ` class='color_blueurl' target='_blank' download="`+newfilename+`">Raw File Data</a></li><li><a href=` + reader2.result + ` class='color_blueurl' target='_blank' download="`+newfilename+`">JSON File Data</a></li><li><a href=` + datblob + ` class='color_blueurl' download="`+newfilename+`">JSON URL Blob</a></li></h4>`, "Save Story", true)
-				}
-			}
-			reader.readAsDataURL(file);
-		}
-		else
-		{
-			savenowfn();
-		}
-
-
+		return new_save_storyobj;
 	}
 
 	function load_file(event) {
@@ -4244,38 +4239,37 @@ Current version: 80
 	{
 		//determine if oldui file or newui file format
 		restart_new_game();
-		loaded_storyobj = new_loaded_storyobj;
-		let is_oldui = (loaded_storyobj.file_version == null);
+		let is_oldui = (new_loaded_storyobj.file_version == null);
 		console.log("Is oldui: " + is_oldui);
 		if (is_oldui) {
 			//v1 load
-			if(loaded_storyobj.prompt!="")
+			if(new_loaded_storyobj.prompt!="")
 			{
-				gametext_arr.push(loaded_storyobj.prompt);
+				gametext_arr.push(new_loaded_storyobj.prompt);
 			}
-			for (var i = 0; i < loaded_storyobj.actions.length; ++i) {
-				gametext_arr.push(loaded_storyobj.actions[i]);
+			for (var i = 0; i < new_loaded_storyobj.actions.length; ++i) {
+				gametext_arr.push(new_loaded_storyobj.actions[i]);
 			}
 
 			//port over old images to the new format
 			migrate_old_images_in_gametext();
 
-			if (loaded_storyobj.anotetemplate) {
-				current_anotetemplate = loaded_storyobj.anotetemplate;
+			if (new_loaded_storyobj.anotetemplate) {
+				current_anotetemplate = new_loaded_storyobj.anotetemplate;
 			}
-			if (loaded_storyobj.authorsnote) {
-				current_anote = loaded_storyobj.authorsnote;
+			if (new_loaded_storyobj.authorsnote) {
+				current_anote = new_loaded_storyobj.authorsnote;
 			}
-			if (loaded_storyobj.memory) {
-				current_memory = loaded_storyobj.memory;
+			if (new_loaded_storyobj.memory) {
+				current_memory = new_loaded_storyobj.memory;
 			}
-			if (loaded_storyobj.worldinfo) {
-				current_wi = loaded_storyobj.worldinfo;
+			if (new_loaded_storyobj.worldinfo) {
+				current_wi = new_loaded_storyobj.worldinfo;
 			}
-			if (loaded_storyobj.extrastopseq) {
-				extrastopseq = loaded_storyobj.extrastopseq;
+			if (new_loaded_storyobj.extrastopseq) {
+				extrastopseq = new_loaded_storyobj.extrastopseq;
 			}
-			if (loaded_storyobj.savedsettings && loaded_storyobj.savedsettings != "") {
+			if (new_loaded_storyobj.savedsettings && new_loaded_storyobj.savedsettings != "") {
 				//prompt to import settings
 				msgboxYesNo("This story includes custom settings. Do you want to import them?", "Import Story Settings", () => {
 					let tmpapikey1 = localsettings.my_api_key;
@@ -4287,7 +4281,7 @@ Current version: 80
 					let tmp_claude2 = localsettings.saved_claude_addr;
 					let tmp_palm1 = localsettings.saved_palm_key;
 					let tmp_kai = localsettings.saved_kai_addr;
-					import_props_into_object(localsettings, loaded_storyobj.savedsettings);
+					import_props_into_object(localsettings, new_loaded_storyobj.savedsettings);
 					localsettings.my_api_key = tmpapikey1;
 					localsettings.home_cluster = tmphc;
 					localsettings.saved_oai_key = tmp_oai1;
@@ -4299,7 +4293,7 @@ Current version: 80
 					localsettings.saved_kai_addr = tmp_kai;
 
 					//backwards compat support for newlines
-					if(localsettings.instruct_has_newlines==true || (loaded_storyobj.savedsettings != null && loaded_storyobj.savedsettings.instruct_has_newlines==null&&loaded_storyobj.savedsettings.instruct_has_markdown==null))
+					if(localsettings.instruct_has_newlines==true || (new_loaded_storyobj.savedsettings != null && new_loaded_storyobj.savedsettings.instruct_has_newlines==null&&new_loaded_storyobj.savedsettings.instruct_has_markdown==null))
 					{
 						localsettings.instruct_has_newlines = false;
 						if(!localsettings.instruct_starttag.includes("\\n"))
@@ -4312,8 +4306,8 @@ Current version: 80
 						}
 					}
 
-					if (loaded_storyobj.savedaestheticsettings && loaded_storyobj.savedaestheticsettings != "") {
-						import_props_into_object(aestheticInstructUISettings,loaded_storyobj.savedaestheticsettings);
+					if (new_loaded_storyobj.savedaestheticsettings && new_loaded_storyobj.savedaestheticsettings != "") {
+						import_props_into_object(aestheticInstructUISettings,new_loaded_storyobj.savedaestheticsettings);
 					}
 
 					hide_popups();
@@ -4322,26 +4316,26 @@ Current version: 80
 			}
 		} else {
 			//v2 load
-			if(loaded_storyobj.prompt!="")
+			if(new_loaded_storyobj.prompt!="")
 			{
-				gametext_arr.push(loaded_storyobj.prompt);
+				gametext_arr.push(new_loaded_storyobj.prompt);
 			}
-			for (var key in loaded_storyobj.actions.actions) {
-				var itm = loaded_storyobj.actions.actions[key];
+			for (var key in new_loaded_storyobj.actions.actions) {
+				var itm = new_loaded_storyobj.actions.actions[key];
 				gametext_arr.push(itm["Selected Text"]);
 			}
-			if (loaded_storyobj.authornotetemplate) {
-				current_anotetemplate = loaded_storyobj.authornotetemplate;
+			if (new_loaded_storyobj.authornotetemplate) {
+				current_anotetemplate = new_loaded_storyobj.authornotetemplate;
 			}
-			if (loaded_storyobj.authornote) {
-				current_anote = loaded_storyobj.authornote;
+			if (new_loaded_storyobj.authornote) {
+				current_anote = new_loaded_storyobj.authornote;
 			}
-			if (loaded_storyobj.memory) {
-				current_memory = loaded_storyobj.memory;
+			if (new_loaded_storyobj.memory) {
+				current_memory = new_loaded_storyobj.memory;
 			}
-			if (loaded_storyobj.worldinfo_v2 != null && loaded_storyobj.worldinfo_v2.entries != null) {
-				for (var key in loaded_storyobj.worldinfo_v2.entries) {
-					var itm = loaded_storyobj.worldinfo_v2.entries[key];
+			if (new_loaded_storyobj.worldinfo_v2 != null && new_loaded_storyobj.worldinfo_v2.entries != null) {
+				for (var key in new_loaded_storyobj.worldinfo_v2.entries) {
+					var itm = new_loaded_storyobj.worldinfo_v2.entries[key];
 					if (itm.key.length > 0 && itm.content != null) {
 						let nwi = {
 							"key": itm.key[0],
@@ -7061,7 +7055,6 @@ Current version: 80
 		current_wi = [];
 		pending_context_preinjection = "";
 		current_anotetemplate = "[Author's note: <|>]";
-		loaded_storyobj = generate_base_storyobj();
 		document.getElementById("input_text").value = "";
 		document.getElementById("cht_inp").value = "";
 		image_db = {};
