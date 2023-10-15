@@ -1801,6 +1801,7 @@ Current version: 80
 		const chatmodels2 = ["pygmalion","janeway","nerys","erebus","nerybus","opt","vicuna","manticore","alpaca","mistral"];
 		const instructmodels1 = ["gpt4all","supercot","hermes","airoboros","chrono","wizard","mantis","vicuna","manticore","alpaca","myth","xwin","spicyboros","mlewd","mxlewd"];
 		const instructmodels2 = ["erebus","nerys","nerybus","janeway","opt","llama","mistral"];
+		const defaultmodels = ["gpt4all","supercot","hermes","airoboros","chrono","wizard","mantis","vicuna","manticore","alpaca","myth","xwin","spicyboros","mlewd","mxlewd","llama","mistral"];
 
 		const instructstartplaceholder = "\n{{[INPUT]}}\n";
 		const instructendplaceholder = "\n{{[OUTPUT]}}\n";
@@ -3781,60 +3782,12 @@ Current version: 80
 		return pickedcluster;
 	}
 
-	function generate_compressed_story(strip_images=false) {
+	function generate_compressed_story(save_images,export_settings) {
 		//encode the current story into a sharable url
 		//a tiny json format which gets compressed by LZMA then b64url
 
-		let export_arr = gametext_arr;
-		if(strip_images)
-		{
-			export_arr = [];
-			for (let i = 0; i < gametext_arr.length; ++i) {
-				export_arr.push(gametext_arr[i].replace(/\[<\|p\|.+?\|p\|>\]/g, "").replace(/\[<\|d\|.+?\|d\|>\]/g, ""));
-			}
-		}
-
-		var story = {
-			ga: export_arr,
-			md: [],
-		}
-		for (var i = 0; i < selected_models.length; ++i) {
-			story.md.push(cyrb_hash(selected_models[i].name));
-		}
-		if (current_memory != "") {
-			story.cm = current_memory
-		}
-		if (current_anote != "") {
-			story.ca = current_anote;
-			story.ct = current_anotetemplate;
-		}
-		if(extrastopseq!="")
-		{
-			story.ess = extrastopseq;
-		}
-		if (current_wi != null && current_wi.length > 0) {
-			story.cwi = current_wi;
-		}
-
-		//handle exporting settings
-		if (localsettings.export_settings) {
-			story.savedsettings = JSON.parse(JSON.stringify(localsettings));
-			//redact some values
-			story.savedsettings.my_api_key = "0000000000";
-			story.savedsettings.home_cluster = text_hordes[0].baseurl;
-			story.savedsettings.saved_oai_key = "";
-			story.savedsettings.saved_openrouter_key = "";
-			story.savedsettings.saved_oai_addr = "";
-			story.savedsettings.saved_claude_key = "";
-			story.savedsettings.saved_claude_addr = "";
-			story.savedsettings.saved_kai_addr = "";
-
-			if (!strip_images)
-			{
-				story.savedaestheticsettings = JSON.parse(JSON.stringify(aestheticInstructUISettings, null, 2));
-			}
-		}
-		var storyjson = JSON.stringify(story);
+		let story = generate_savefile(save_images,export_settings);
+		let storyjson = JSON.stringify(story);
 		console.log("Exporting story: ", story);
 
 		//var cstoryjson = LZString.compressToEncodedURIComponent(storyjson);
@@ -3842,7 +3795,7 @@ Current version: 80
 		return cstoryjson;
 	}
 	function export_share_story() {
-		let cstoryjson = generate_compressed_story(true);
+		let cstoryjson = generate_compressed_story(false,false);
 		console.log("Export Len: " + cstoryjson.length);
 
 		if (cstoryjson.length >= 4800) {
@@ -3897,8 +3850,11 @@ Current version: 80
 					{
 						selected_models = [];
 						for (var i = 0; i < mdls.length; ++i) {
-							if (story.md.includes(cyrb_hash(mdls[i].name))) {
-								selected_models.push(mdls[i]);
+							for (var j = 0; j < defaultmodels.length; ++j) {
+								if (mdls[i].name.trim().toLowerCase().includes(defaultmodels[j].trim().toLowerCase()) ||
+									defaultmodels[j].trim().toLowerCase().includes(mdls[i].name.trim().toLowerCase())) {
+									selected_models.push(mdls[i]);
+								}
 							}
 						}
 
@@ -3919,52 +3875,7 @@ Current version: 80
 				}
 			});
 
-			restart_new_game();
-
-			gametext_arr = story.ga;
-			migrate_old_images_in_gametext();
-			if (story.ca && story.ca != "") {
-				current_anote = story.ca;
-				current_anotetemplate = story.ct;
-			}
-			if (story.cm && story.cm != "") {
-				current_memory = story.cm;
-			}
-			if (story.cwi && story.cwi.length > 0) {
-				current_wi = story.cwi;
-			}
-			if(story.ess && story.ess!="")
-			{
-				extrastopseq = story.ess;
-			}
-
-			//handle importing settings
-			if (story.savedsettings && story.savedsettings != "") {
-				let tmpapikey1 = localsettings.my_api_key;
-				let tmphc = localsettings.home_cluster;
-				let tmp_oai1 = localsettings.saved_oai_key;
-				let tmp_oai2 = localsettings.saved_oai_addr;
-				let tmp_or1 = localsettings.saved_openrouter_key;
-				let tmp_claude1 = localsettings.saved_claude_key;
-				let tmp_claude2 = localsettings.saved_claude_addr;
-				let tmp_palm1 = localsettings.saved_palm_key;
-				let tmp_kai = localsettings.saved_kai_addr;
-				import_props_into_object(localsettings, story.savedsettings);
-				localsettings.my_api_key = tmpapikey1;
-				localsettings.home_cluster = tmphc;
-				localsettings.saved_oai_key = tmp_oai1;
-				localsettings.saved_oai_addr = tmp_oai2;
-				localsettings.saved_openrouter_key = tmp_or1;
-				localsettings.saved_claude_key = tmp_claude1;
-				localsettings.saved_claude_addr = tmp_claude2;
-				localsettings.saved_palm_key = tmp_palm1;
-				localsettings.saved_kai_addr = tmp_kai;
-			}
-
-			if (story.savedaestheticsettings && story.savedaestheticsettings != "") {
-				import_props_into_object(aestheticInstructUISettings,story.savedaestheticsettings);
-			}
-
+			kai_json_load(story,true);
 			render_gametext();
 
 		} else {
@@ -4017,7 +3928,7 @@ Current version: 80
 	{
 		const save_file = function()
 		{
-			tempfileobj = generate_savefile();
+			tempfileobj = generate_savefile(localsettings.save_images, localsettings.export_settings);
 			newfilename = last_known_filename;
 
 			window.URL = window.URL || window.webkitURL;
@@ -4067,12 +3978,12 @@ Current version: 80
 		}
 	}
 
-	function generate_savefile() //takes the current loaded story and generates a new savefile json object
+	function generate_savefile(save_images,export_settings) //takes the current loaded story and generates a new savefile json object
 	{
 		let new_save_storyobj = generate_base_storyobj();
 
 		let export_arr = gametext_arr;
-		if(!localsettings.save_images)
+		if(!save_images)
 		{
 			export_arr = [];
 			for (let i = 0; i < gametext_arr.length; ++i) {
@@ -4099,7 +4010,7 @@ Current version: 80
 		//extra unofficial fields
 		new_save_storyobj.extrastopseq = extrastopseq;
 
-		if (localsettings.export_settings) {
+		if (export_settings) {
 			new_save_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
 			//redact some values
 			new_save_storyobj.savedsettings.my_api_key = "0000000000";
@@ -4166,7 +4077,7 @@ Current version: 80
 						msgbox("Could not load selected json file. Does not appear to be a KoboldAI story or compatible format.");
 					}
 				} else {
-					kai_json_load(new_loaded_storyobj);
+					kai_json_load(new_loaded_storyobj,false);
 					if (selectedFilename && selectedFilename != "") {
 						last_known_filename = selectedFilename;
 					}
@@ -4206,7 +4117,7 @@ Current version: 80
 							}
 
 							if (result != null) {
-								kai_json_load(result);
+								kai_json_load(result,false);
 							}
 							else {
 								if (selectedFilename.endsWith(".txt")) {
@@ -4235,107 +4146,77 @@ Current version: 80
 		reader.readAsText(selectedFile);
 	}
 
-	function kai_json_load(new_loaded_storyobj)
+	function kai_json_load(storyobj, force_load_settngs)
 	{
 		//determine if oldui file or newui file format
 		restart_new_game();
-		let is_oldui = (new_loaded_storyobj.file_version == null);
-		console.log("Is oldui: " + is_oldui);
-		if (is_oldui) {
+
+		let is_oldui = (storyobj.file_version == null);
+		let is_sharefile = (storyobj.ga || storyobj.cm || storyobj.cwi || storyobj.ess);
+		console.log("Is oldui: " + is_oldui + ", is sharefile: " + is_sharefile);
+
+		if (is_sharefile) {
+			//handle old shareformat
+			gametext_arr = storyobj.ga;
+			if (storyobj.ca && storyobj.ca != "") {
+				current_anote = storyobj.ca;
+				current_anotetemplate = storyobj.ct;
+			}
+			if (storyobj.cm && storyobj.cm != "") {
+				current_memory = storyobj.cm;
+			}
+			if (storyobj.cwi && storyobj.cwi.length > 0) {
+				current_wi = storyobj.cwi;
+			}
+			if (storyobj.ess && storyobj.ess != "") {
+				extrastopseq = storyobj.ess;
+			}
+		} else if (is_oldui) {
 			//v1 load
-			if(new_loaded_storyobj.prompt!="")
-			{
-				gametext_arr.push(new_loaded_storyobj.prompt);
+			if (storyobj.prompt != "") {
+				gametext_arr.push(storyobj.prompt);
 			}
-			for (var i = 0; i < new_loaded_storyobj.actions.length; ++i) {
-				gametext_arr.push(new_loaded_storyobj.actions[i]);
+			for (var i = 0; i < storyobj.actions.length; ++i) {
+				gametext_arr.push(storyobj.actions[i]);
 			}
 
-			//port over old images to the new format
-			migrate_old_images_in_gametext();
-
-			if (new_loaded_storyobj.anotetemplate) {
-				current_anotetemplate = new_loaded_storyobj.anotetemplate;
+			if (storyobj.anotetemplate) {
+				current_anotetemplate = storyobj.anotetemplate;
 			}
-			if (new_loaded_storyobj.authorsnote) {
-				current_anote = new_loaded_storyobj.authorsnote;
+			if (storyobj.authorsnote) {
+				current_anote = storyobj.authorsnote;
 			}
-			if (new_loaded_storyobj.memory) {
-				current_memory = new_loaded_storyobj.memory;
+			if (storyobj.memory) {
+				current_memory = storyobj.memory;
 			}
-			if (new_loaded_storyobj.worldinfo) {
-				current_wi = new_loaded_storyobj.worldinfo;
+			if (storyobj.worldinfo) {
+				current_wi = storyobj.worldinfo;
 			}
-			if (new_loaded_storyobj.extrastopseq) {
-				extrastopseq = new_loaded_storyobj.extrastopseq;
-			}
-			if (new_loaded_storyobj.savedsettings && new_loaded_storyobj.savedsettings != "") {
-				//prompt to import settings
-				msgboxYesNo("This story includes custom settings. Do you want to import them?", "Import Story Settings", () => {
-					let tmpapikey1 = localsettings.my_api_key;
-					let tmphc = localsettings.home_cluster;
-					let tmp_oai1 = localsettings.saved_oai_key;
-					let tmp_oai2 = localsettings.saved_oai_addr;
-					let tmp_or1 = localsettings.saved_openrouter_key;
-					let tmp_claude1 = localsettings.saved_claude_key;
-					let tmp_claude2 = localsettings.saved_claude_addr;
-					let tmp_palm1 = localsettings.saved_palm_key;
-					let tmp_kai = localsettings.saved_kai_addr;
-					import_props_into_object(localsettings, new_loaded_storyobj.savedsettings);
-					localsettings.my_api_key = tmpapikey1;
-					localsettings.home_cluster = tmphc;
-					localsettings.saved_oai_key = tmp_oai1;
-					localsettings.saved_oai_addr = tmp_oai2;
-					localsettings.saved_openrouter_key = tmp_or1;
-					localsettings.saved_claude_key = tmp_claude1;
-					localsettings.saved_claude_addr = tmp_claude2;
-					localsettings.saved_palm_key = tmp_palm1;
-					localsettings.saved_kai_addr = tmp_kai;
-
-					//backwards compat support for newlines
-					if(localsettings.instruct_has_newlines==true || (new_loaded_storyobj.savedsettings != null && new_loaded_storyobj.savedsettings.instruct_has_newlines==null&&new_loaded_storyobj.savedsettings.instruct_has_markdown==null))
-					{
-						localsettings.instruct_has_newlines = false;
-						if(!localsettings.instruct_starttag.includes("\\n"))
-						{
-							localsettings.instruct_starttag = "\\n"+localsettings.instruct_starttag+"\\n";
-						}
-						if(!localsettings.instruct_endtag.includes("\\n"))
-						{
-							localsettings.instruct_endtag = "\\n"+localsettings.instruct_endtag+"\\n";
-						}
-					}
-
-					if (new_loaded_storyobj.savedaestheticsettings && new_loaded_storyobj.savedaestheticsettings != "") {
-						import_props_into_object(aestheticInstructUISettings,new_loaded_storyobj.savedaestheticsettings);
-					}
-
-					hide_popups();
-					render_gametext();
-				}, hide_popups);
+			if (storyobj.extrastopseq) {
+				extrastopseq = storyobj.extrastopseq;
 			}
 		} else {
 			//v2 load
-			if(new_loaded_storyobj.prompt!="")
+			if(storyobj.prompt!="")
 			{
-				gametext_arr.push(new_loaded_storyobj.prompt);
+				gametext_arr.push(storyobj.prompt);
 			}
-			for (var key in new_loaded_storyobj.actions.actions) {
-				var itm = new_loaded_storyobj.actions.actions[key];
+			for (var key in storyobj.actions.actions) {
+				var itm = storyobj.actions.actions[key];
 				gametext_arr.push(itm["Selected Text"]);
 			}
-			if (new_loaded_storyobj.authornotetemplate) {
-				current_anotetemplate = new_loaded_storyobj.authornotetemplate;
+			if (storyobj.authornotetemplate) {
+				current_anotetemplate = storyobj.authornotetemplate;
 			}
-			if (new_loaded_storyobj.authornote) {
-				current_anote = new_loaded_storyobj.authornote;
+			if (storyobj.authornote) {
+				current_anote = storyobj.authornote;
 			}
-			if (new_loaded_storyobj.memory) {
-				current_memory = new_loaded_storyobj.memory;
+			if (storyobj.memory) {
+				current_memory = storyobj.memory;
 			}
-			if (new_loaded_storyobj.worldinfo_v2 != null && new_loaded_storyobj.worldinfo_v2.entries != null) {
-				for (var key in new_loaded_storyobj.worldinfo_v2.entries) {
-					var itm = new_loaded_storyobj.worldinfo_v2.entries[key];
+			if (storyobj.worldinfo_v2 != null && storyobj.worldinfo_v2.entries != null) {
+				for (var key in storyobj.worldinfo_v2.entries) {
+					var itm = storyobj.worldinfo_v2.entries[key];
 					if (itm.key.length > 0 && itm.content != null) {
 						let nwi = {
 							"key": itm.key[0],
@@ -4350,8 +4231,63 @@ Current version: 80
 					}
 				}
 			}
-
 		}
+
+		const import_settings = function()
+		{
+			let tmpapikey1 = localsettings.my_api_key;
+			let tmphc = localsettings.home_cluster;
+			let tmp_oai1 = localsettings.saved_oai_key;
+			let tmp_oai2 = localsettings.saved_oai_addr;
+			let tmp_or1 = localsettings.saved_openrouter_key;
+			let tmp_claude1 = localsettings.saved_claude_key;
+			let tmp_claude2 = localsettings.saved_claude_addr;
+			let tmp_palm1 = localsettings.saved_palm_key;
+			let tmp_kai = localsettings.saved_kai_addr;
+			import_props_into_object(localsettings, storyobj.savedsettings);
+			localsettings.my_api_key = tmpapikey1;
+			localsettings.home_cluster = tmphc;
+			localsettings.saved_oai_key = tmp_oai1;
+			localsettings.saved_oai_addr = tmp_oai2;
+			localsettings.saved_openrouter_key = tmp_or1;
+			localsettings.saved_claude_key = tmp_claude1;
+			localsettings.saved_claude_addr = tmp_claude2;
+			localsettings.saved_palm_key = tmp_palm1;
+			localsettings.saved_kai_addr = tmp_kai;
+
+			//backwards compat support for newlines
+			if (localsettings.instruct_has_newlines == true || (storyobj.savedsettings != null && storyobj.savedsettings.instruct_has_newlines == null && storyobj.savedsettings.instruct_has_markdown == null)) {
+				localsettings.instruct_has_newlines = false;
+				if (!localsettings.instruct_starttag.includes("\\n")) {
+					localsettings.instruct_starttag = "\\n" + localsettings.instruct_starttag + "\\n";
+				}
+				if (!localsettings.instruct_endtag.includes("\\n")) {
+					localsettings.instruct_endtag = "\\n" + localsettings.instruct_endtag + "\\n";
+				}
+			}
+
+			if (storyobj.savedaestheticsettings && storyobj.savedaestheticsettings != "") {
+				import_props_into_object(aestheticInstructUISettings, storyobj.savedaestheticsettings);
+			}
+
+			hide_popups();
+			render_gametext();
+		}
+
+		//prompt to import settings
+		if(force_load_settngs)
+		{
+			import_settings();
+		}
+		else if (storyobj.savedsettings && storyobj.savedsettings != "") {
+			msgboxYesNo("This story includes custom settings. Do you want to import them?", "Import Story Settings", () => {
+				import_settings();
+			}, hide_popups);
+		}
+
+		//port over old images to the new format
+		migrate_old_images_in_gametext();
+
 		render_gametext();
 	}
 
@@ -5961,7 +5897,7 @@ Current version: 80
 		{
 			savename = testslot;
 		}
-		let newcompressedstory = generate_compressed_story();
+		let newcompressedstory = generate_compressed_story(true,true);
 
 		const slotwrite = function()
 		{
@@ -9564,7 +9500,7 @@ Current version: 80
 		//autosave
 		localStorage.setItem(STORAGE_PREFIX + "settings", JSON.stringify(localsettings));
 		if (localsettings.persist_session) {
-			let compressedstory = generate_compressed_story();
+			let compressedstory = generate_compressed_story(true,true);
 			localStorage.setItem(STORAGE_PREFIX + "story", compressedstory);
 		}
 		console.log("autosave done");
