@@ -3091,13 +3091,13 @@ Current version: 80
 	//key is ID, body is {done:false,queue:10,result:""}
 	var stablemodels = []; //stored as {name,count}
 	var custom_kobold_endpoint = ""; //if set, does not use horde. Instead, attempts to use this sync endpoint
-	var custom_oai_endpoint = default_oai_base;
+	var custom_oai_endpoint = "";
 	var custom_oai_key = ""; //if set, uses the OpenAI API to generate
 	var custom_oai_model = "";
 	var custom_scale_key = "";
 	var custom_palm_key = "";
 	var custom_scale_ID = "";
-	var custom_claude_endpoint = default_claude_base;
+	var custom_claude_endpoint = "";
 	var custom_claude_key = "";
 	var custom_claude_model = "";
 	var uses_cors_proxy = false; //we start off attempting a direct connection. switch to proxy if that fails
@@ -3120,10 +3120,10 @@ Current version: 80
 		my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
 		home_cluster: text_hordes[0].baseurl, //which horde does this api key belongs to
 		saved_oai_key: "", //do not ever share this in save files!
-		saved_oai_addr: "", //do not ever share this in save files!
+		saved_oai_addr: default_oai_base, //do not ever share this in save files!
 		saved_openrouter_key: "",
 		saved_claude_key: "", //do not ever share this in save files!
-		saved_claude_addr: "", //do not ever share this in save files!
+		saved_claude_addr: default_claude_base, //do not ever share this in save files!
 		saved_palm_key: "", //do not ever share this in save files!
 		saved_kai_addr: "", //do not ever share this in save files!
 		saved_oai_jailbreak: "", //customized oai system prompt
@@ -3903,7 +3903,7 @@ Current version: 80
 			"actions_metadata": {},
 			"worldinfo": [],
 			"wifolders_d": {},
-			"wifolders_l": []
+			"wifolders_l": [],
 		};
 		return gs;
 	}
@@ -5425,7 +5425,7 @@ Current version: 80
 		if(epchoice==0)
 		{
 			document.getElementById("koboldcustom").classList.remove("hidden");
-			if(!localflag && localsettings.saved_kai_addr!="")
+			if(!localflag)
 			{
 				document.getElementById("customendpoint").value = localsettings.saved_kai_addr;
 			}
@@ -5439,25 +5439,16 @@ Current version: 80
 				document.getElementById("openrouterdesc").classList.remove("hidden");
 				document.getElementById("custom_oai_endpoint").value = default_openrouter_base;
 				document.getElementById("custom_oai_endpoint").classList.add("hidden");
-				if(localsettings.saved_openrouter_key!="")
-				{
-					document.getElementById("custom_oai_key").value = localsettings.saved_openrouter_key;
-				}
+				document.getElementById("custom_oai_key").value = localsettings.saved_openrouter_key;
 			}
 			else
 			{
 				document.getElementById("oaidesc").classList.remove("hidden");
 				document.getElementById("openrouterdesc").classList.add("hidden");
-				document.getElementById("custom_oai_endpoint").value = custom_oai_endpoint;
 				document.getElementById("custom_oai_endpoint").classList.remove("hidden");
-				if(localsettings.saved_oai_key!="")
-				{
-					document.getElementById("custom_oai_key").value = localsettings.saved_oai_key;
-					if(localsettings.saved_oai_addr!="")
-					{
-						document.getElementById("custom_oai_endpoint").value = localsettings.saved_oai_addr;
-					}
-				}
+				document.getElementById("custom_oai_key").value = localsettings.saved_oai_key;
+				document.getElementById("custom_oai_endpoint").value = (localsettings.saved_oai_addr?localsettings.saved_oai_addr:default_oai_base);
+
 			}
 
 			togglejailbreak();
@@ -5469,23 +5460,14 @@ Current version: 80
 		else if(epchoice==3)
 		{
 			document.getElementById("claudecustom").classList.remove("hidden");
-			document.getElementById("custom_claude_endpoint").value = custom_claude_endpoint;
-			if(localsettings.saved_claude_key!="")
-			{
-				document.getElementById("custom_claude_key").value = localsettings.saved_claude_key;
-				if(localsettings.saved_claude_addr!="")
-				{
-					document.getElementById("custom_claude_endpoint").value = localsettings.saved_claude_addr;
-				}
-			}
+			document.getElementById("custom_claude_key").value = localsettings.saved_claude_key;
+			document.getElementById("custom_claude_endpoint").value = (localsettings.saved_claude_addr?localsettings.saved_claude_addr:default_claude_base);
+
 		}
 		else if(epchoice==4)
 		{
 			document.getElementById("palmcustom").classList.remove("hidden");
-			if(localsettings.saved_palm_key!="")
-			{
-				document.getElementById("custom_palm_key").value = localsettings.saved_palm_key;
-			}
+			document.getElementById("custom_palm_key").value = localsettings.saved_palm_key;
 		}
 	}
 
@@ -6999,6 +6981,7 @@ Current version: 80
 		current_anote = "";
 		current_wi = [];
 		pending_context_preinjection = "";
+		extrastopseq = "";
 		current_anotetemplate = "[Author's note: <|>]";
 		document.getElementById("input_text").value = "";
 		document.getElementById("cht_inp").value = "";
