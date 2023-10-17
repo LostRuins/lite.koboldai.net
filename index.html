@@ -2737,12 +2737,15 @@ Current version: 80
 	}
 
 	//instead of a single fetch, optionally break it up into multiple repeated requests which update a local variable
-	function kobold_api_stream(sub_endpt,submit_payload,synchro_streaming_tokens_left,synchro_streaming_response = "",tokens_per_tick = 4096)
+	function kobold_api_stream(sub_endpt,submit_payload,synchro_streaming_tokens_left,trackedgenid,synchro_streaming_response = "",tokens_per_tick = 4096)
 	{
 		//called recursively
 		if(synchro_streaming_tokens_left<=0)
 		{
-			synchro_polled_response = synchro_streaming_response;
+			if(pending_response_id=="" || pending_response_id==trackedgenid) //drop unrelated requests
+			{
+				synchro_polled_response = synchro_streaming_response;
+			}
 			synchro_pending_stream = "";
 		}
 		else
@@ -2826,14 +2829,25 @@ Current version: 80
 						synchro_streaming_tokens_left = 0;
 					}
 
-					kobold_api_stream(sub_endpt,submit_payload,synchro_streaming_tokens_left,synchro_streaming_response,tokens_per_tick);
+					kobold_api_stream(sub_endpt,submit_payload,synchro_streaming_tokens_left,trackedgenid,synchro_streaming_response,tokens_per_tick);
 				}
 				else {
 					//error occurred, maybe captcha failed
 					console.error("error occurred in v1 generation");
 					clear_poll_flags();
 					render_gametext();
-					msgbox("Error occurred during text generation: " + formatError(data));
+
+					msgbox("Error occurred during text generation: " + formatError(data),"Error Encountered",false,false,
+					()=>{
+						if(is_using_kcpp_with_streaming() && data.detail && data.detail.type=="service_unavailable")
+						{
+							//offer to abort
+							msgboxYesNo("Attempt to abort existing request?","Send Abort Command?",()=>{
+								lastcheckgenkey = "";
+								abort_generation();
+							},null);
+						}
+					});
 				}
 			})
 			.catch((error) => {
@@ -3132,6 +3146,7 @@ Current version: 80
 		autoscroll: true, //automatically scroll to bottom on render
 		trimsentences: true, //trim to last punctuation
 		trimwhitespace: false, //trim trailing whitespace
+		compressnewlines: false, //compress multiple newlines
 		eos_ban_mode: 0, //allow the EOS token when using locally 0=auto,1=unban,2=ban
 		opmode: 4, //what mode are we in? 1=story, 2=adventure, 3=chat, 4=instruct
 		adventure_is_action: false, //in adventure mode, determine story or action
@@ -3164,6 +3179,7 @@ Current version: 80
 		export_settings: true, //affects if settings are included with the story and sharelinks
 		invert_colors: false,
 		passed_ai_warning: false, //used to store AI safety panel acknowledgement state
+		entersubmit: true, //enter sends the prompt
 
 		max_context_length: 1024,
 		max_length: 100,
@@ -3840,13 +3856,13 @@ Current version: 80
 							selected_models = [];
 
 							//if ALL of the previously selected models still exist, use them
-							if (story.modelhashes && story.modelhashes.length > 0) {
+							if (story.savedsettings && story.savedsettings.modelhashes && story.savedsettings.modelhashes.length > 0) {
 								for (var i = 0; i < mdls.length; ++i) {
-									if (story.modelhashes.includes(cyrb_hash(mdls[i].name))) {
+									if (story.savedsettings.modelhashes.includes(cyrb_hash(mdls[i].name))) {
 										selected_models.push(mdls[i]);
 									}
 								}
-								if (selected_models.length == 0 || selected_models.length != story.modelhashes.length) {
+								if (selected_models.length == 0 || selected_models.length != story.savedsettings.modelhashes.length) {
 									selected_models = []; //need to reset
 								}
 							}
@@ -4031,9 +4047,9 @@ Current version: 80
 
 			new_save_storyobj.savedaestheticsettings = JSON.parse(JSON.stringify(aestheticInstructUISettings, null, 2));
 
-			new_save_storyobj.modelhashes = [];
+			new_save_storyobj.savedsettings.modelhashes = [];
 			for (var i = 0; i < selected_models.length; ++i) {
-				new_save_storyobj.modelhashes.push(cyrb_hash(selected_models[i].name));
+				new_save_storyobj.savedsettings.modelhashes.push(cyrb_hash(selected_models[i].name));
 			}
 		}else{
 			new_save_storyobj.savedsettings = null;
@@ -4278,6 +4294,12 @@ Current version: 80
 
 			if (storyobj.savedaestheticsettings && storyobj.savedaestheticsettings != "") {
 				import_props_into_object(aestheticInstructUISettings, storyobj.savedaestheticsettings);
+			}
+
+			//old versions dont have this flag
+			if(localsettings.entersubmit===true || localsettings.entersubmit===false)
+			{
+				document.getElementById("entersubmit").checked = localsettings.entersubmit;
 			}
 
 		}
@@ -5131,9 +5153,7 @@ Current version: 80
 				.catch(error =>
 				{
 					console.log("Error: " + error);
-					msgbox(error,"Error fetching some workers",false,false,()=>{
-						hide_msgbox();
-					});
+					msgbox(error,"Error fetching some workers",false,false);
 				});
 		}
 		else
@@ -5208,12 +5228,12 @@ Current version: 80
 		},false,true);
 	}
 
-	var msgboxOnDone = hide_popups;
+	var msgboxOnDone = hide_msgbox;
 	function hide_msgbox() {
 		//hide msgbox ONLY
 		document.getElementById("msgboxcontainer").classList.add("hidden");
 	}
-	function msgbox(text, title="Error Encountered", isHtml=false, noBtn=false, onDoneFn=hide_popups) {
+	function msgbox(text, title="Error Encountered", isHtml=false, noBtn=false, onDoneFn=null) {
 		if (!text) { text = ""; }
 		if(isHtml)
 		{
@@ -5230,7 +5250,7 @@ Current version: 80
 		}else{
 			document.getElementById("msgboxbtnok").classList.remove("hidden");
 		}
-		msgboxOnDone = onDoneFn;
+		msgboxOnDone = ()=>{hide_msgbox(); if(onDoneFn){onDoneFn();}}
 		console.log("Msgbox: " + text);
 	}
 
@@ -5401,9 +5421,7 @@ Current version: 80
 			}
 			else
 			{
-				msgbox(JSON.stringify(data.error.message),"Error Encountered",false,false,()=>{
-					hide_msgbox();
-				});
+				msgbox(JSON.stringify(data.error.message),"Error Encountered",false,false);
 			}
 		})
 		.catch(error => {
@@ -6392,6 +6410,7 @@ Current version: 80
 		document.getElementById("invert_colors").checked = localsettings.invert_colors;
 		document.getElementById("trimsentences").checked = localsettings.trimsentences;
 		document.getElementById("trimwhitespace").checked = localsettings.trimwhitespace;
+		document.getElementById("compressnewlines").checked = localsettings.compressnewlines;
 		document.getElementById("eos_ban_mode").value = localsettings.eos_ban_mode;
 		document.getElementById("persist_session").checked = localsettings.persist_session;
 		document.getElementById("opmode").value = localsettings.opmode;
@@ -6600,6 +6619,7 @@ Current version: 80
 		localsettings.invert_colors = (document.getElementById("invert_colors").checked ? true : false);
 		localsettings.trimsentences = (document.getElementById("trimsentences").checked ? true : false);
 		localsettings.trimwhitespace = (document.getElementById("trimwhitespace").checked ? true : false);
+		localsettings.compressnewlines = (document.getElementById("compressnewlines").checked ? true : false);
 		localsettings.eos_ban_mode = document.getElementById("eos_ban_mode").value;
 		localsettings.persist_session = (document.getElementById("persist_session").checked ? true : false);
 		if(document.getElementById("opmode").value==3)
@@ -7014,6 +7034,11 @@ Current version: 80
 		toggle_editable();
 	}
 
+	function toggle_entersends()
+	{
+		localsettings.entersubmit = (document.getElementById("entersubmit").checked ? true : false);
+		render_gametext();
+	}
 	function toggle_editable() {
 		if (gametext_arr.length == 0)
 		{
@@ -7668,7 +7693,7 @@ Current version: 80
 		if (is_using_custom_ep()) {
 			console.log("submit custom api");
 
-			pending_response_id = "submit-v1-dummy-id"; //dummy id
+			pending_response_id = "submit-v1-dummy-id-"+(Math.floor(1000 + Math.random() * 9000)).toString(); //dummy id, autogenerated
 			poll_ticks_passed = 0;
 			poll_in_progress = false;
 			synchro_polled_response = null;
@@ -7750,7 +7775,8 @@ Current version: 80
 					kobold_api_stream_sse(sub_endpt, submit_payload);
 				} else {
 					let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_endpoint);
-					kobold_api_stream(sub_endpt, submit_payload, submit_payload.max_length, "", streamchunk);
+					let trackedgenid = pending_response_id; //if it changes, stop streaming
+					kobold_api_stream(sub_endpt, submit_payload, submit_payload.max_length, trackedgenid, "", streamchunk);
 				}
 			}
 			else if (custom_oai_key != "")//handle for OAI
@@ -8269,6 +8295,8 @@ Current version: 80
 		//trim trailing whitespace, and multiple newlines
 		if (localsettings.trimwhitespace) {
 			gentxt = gentxt.replace(/[\t\r\n ]+$/, '');
+		}
+		if (localsettings.compressnewlines) {
 			gentxt = gentxt.replace(/[\r\n]+/g, '\n');
 		}
 
@@ -10318,10 +10346,9 @@ Current version: 80
 				<button type="button" class="btn btn-primary bg_green" id="btn_genimg" onpointerdown="btn_addimg_longpress_start()" onpointerleave="btn_addimg_longpress_end()" onpointerup="btn_addimg_longpress_end()" onclick="manual_gen_image()">Add Img</button>
 			</div>
 			<div class="box flex flex-push-right">
-				<input type="checkbox" id="entersubmit" checked>
+				<input type="checkbox" id="entersubmit" onclick="toggle_entersends()" checked>
 				<div class="box-label"><label class="unstyled" for="entersubmit">Enter Sends</label></div>
-				<input type="checkbox" id="allowediting"
-					onclick="toggle_editable()">
+				<input type="checkbox" id="allowediting"  onclick="toggle_editable()">
 				<div class="box-label"><label class="unstyled" for="allowediting">Allow Editing</label></div>
 			</div>
 		</div>
@@ -11021,8 +11048,13 @@ Current version: 80
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" title="">Trim Whitespace <span class="helpicon">?<span
-								class="helptext">Compresses double newlines and removes trailing whitespace in AI output.</span></span></div>
+								class="helptext">Removes trailing whitespace in AI output.</span></span></div>
 						   <input type="checkbox" id="trimwhitespace" style="margin:0px 0px 0px auto;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="">Compress Newlines <span class="helpicon">?<span
+								class="helptext">Compresses multiple newlines into one newline in AI output.</span></span></div>
+						   <input type="checkbox" id="compressnewlines" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" title="">EOS Token Ban <span class="helpicon">?<span
