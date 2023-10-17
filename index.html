@@ -3804,11 +3804,11 @@ Current version: 81
 		return pickedcluster;
 	}
 
-	function generate_compressed_story(save_images,export_settings) {
+	function generate_compressed_story(save_images,export_settings,export_aesthetic_settings) {
 		//encode the current story into a sharable url
 		//a tiny json format which gets compressed by LZMA then b64url
 
-		let story = generate_savefile(save_images,export_settings);
+		let story = generate_savefile(save_images,export_settings,export_aesthetic_settings);
 		let storyjson = JSON.stringify(story);
 		console.log("Exporting story: ", story);
 
@@ -3817,7 +3817,7 @@ Current version: 81
 		return cstoryjson;
 	}
 	function export_share_story() {
-		let cstoryjson = generate_compressed_story(false,false);
+		let cstoryjson = generate_compressed_story(false,localsettings.export_settings,false);
 		console.log("Export Len: " + cstoryjson.length);
 
 		if (cstoryjson.length >= 4800) {
@@ -3975,7 +3975,7 @@ Current version: 81
 		{
 			if(!use_existing_save)
 			{
-				tempfileobj = generate_savefile(localsettings.save_images, localsettings.export_settings);
+				tempfileobj = generate_savefile(localsettings.save_images, localsettings.export_settings, localsettings.export_settings);
 			}
 			newfilename = last_known_filename;
 
@@ -4026,7 +4026,7 @@ Current version: 81
 		}
 	}
 
-	function generate_savefile(save_images,export_settings) //takes the current loaded story and generates a new savefile json object
+	function generate_savefile(save_images,export_settings,export_aesthetic_settings) //takes the current loaded story and generates a new savefile json object
 	{
 		let new_save_storyobj = generate_base_storyobj();
 
@@ -4070,11 +4070,13 @@ Current version: 81
 			new_save_storyobj.savedsettings.saved_kai_addr = "";
 			new_save_storyobj.savedsettings.saved_openrouter_key = "";
 
-			new_save_storyobj.savedaestheticsettings = JSON.parse(JSON.stringify(aestheticInstructUISettings, null, 2));
-
-			new_save_storyobj.savedsettings.modelhashes = [];
-			for (var i = 0; i < selected_models.length; ++i) {
-				new_save_storyobj.savedsettings.modelhashes.push(cyrb_hash(selected_models[i].name));
+			if(export_aesthetic_settings)
+			{
+				new_save_storyobj.savedaestheticsettings = JSON.parse(JSON.stringify(aestheticInstructUISettings, null, 2));
+				new_save_storyobj.savedsettings.modelhashes = [];
+				for (var i = 0; i < selected_models.length; ++i) {
+					new_save_storyobj.savedsettings.modelhashes.push(cyrb_hash(selected_models[i].name));
+				}
 			}
 		}else{
 			new_save_storyobj.savedsettings = null;
@@ -5959,7 +5961,7 @@ Current version: 81
 		{
 			savename = testslot;
 		}
-		let newcompressedstory = generate_compressed_story(true,true);
+		let newcompressedstory = generate_compressed_story(true,true,true);
 
 		const slotwrite = function()
 		{
@@ -9582,7 +9584,7 @@ Current version: 81
 		//autosave
 		localStorage.setItem(STORAGE_PREFIX + "settings", JSON.stringify(localsettings));
 		if (localsettings.persist_session) {
-			let compressedstory = generate_compressed_story(true,true);
+			let compressedstory = generate_compressed_story(true,true,true);
 			localStorage.setItem(STORAGE_PREFIX + "story", compressedstory);
 		}
 		console.log("autosave done");
