@@ -234,6 +234,10 @@ Current version: 81
 		{
 			content:var(--img_paper);
 		}
+		.input_chat
+		{
+			content:var(--img_chat);
+		}
 
 		#inputrowmode {
 			position: relative;
@@ -259,7 +263,7 @@ Current version: 81
 			resize: vertical;
 		}
 
-		#btnmode {
+		#btnmode_chat, #btnmode_adventure {
 			width: 100%;
 			height: 100%;
 			overflow: auto;
@@ -1645,10 +1649,31 @@ Current version: 81
 		padding-left: 10px;
 		padding-right: 10px;
 	}
+	.cht_inp.shorter
+	{
+		width: calc(100% - 114px);
+	}
 
 	.cht_inp_hold_outer {
 		border-top: 1px solid #c4c4c4;
 		position: relative;
+	}
+
+	.chat_btnmode_chat {
+		background: #143574 none repeat scroll 0 0;
+		border:none;
+		border-radius: 50%;
+		color: #fff;
+		cursor: pointer;
+		font-size: 15px;
+		height: 33px;
+		position: relative;
+		top: 11px;
+		width: 33px;
+		background-size: 50% !important;
+		background-repeat: no-repeat !important;
+ 		background-position: center !important;
+		background-image: var(--img_chat) !important;
 	}
 
 	.chat_msg_send_btn {
@@ -4458,6 +4483,7 @@ Current version: 81
 			current_memory = combinedmem + "\n***";
 			localsettings.opmode = 3;
 			localsettings.gui_type_chat = 2;
+			localsettings.multiline_replies = true;
 			//handle character book
 			if(obj.character_book && obj.character_book.entries && obj.character_book.entries.length>0)
 			{
@@ -4613,6 +4639,7 @@ Current version: 81
 							"chatname": "You",
 							"chatopponent": botname,
 							"gui_type":1,
+							"multiline_replies":true,
 							"prefmodel1":chatmodels1,
 							"prefmodel2":chatmodels2,
 							"prompt":("\n{{char}}: "+greeting),
@@ -5241,6 +5268,7 @@ Current version: 81
 		document.getElementById("customendpointcontainer").classList.add("hidden");
 		document.getElementById("quickstartcontainer").classList.add("hidden");
 		document.getElementById("zoomedimgcontainer").classList.add("hidden");
+		document.getElementById("groupselectcontainer").classList.add("hidden");
 	}
 
 	function explain_horde()
@@ -6703,7 +6731,12 @@ Current version: 81
 		if (localsettings.chatname == null || localsettings.chatname == "") {
 			localsettings.chatname = "You";
 		}
-		localsettings.chatopponent = replaceAll(document.getElementById("chatopponent").value,"\n","||$||");
+		let newopps = replaceAll(document.getElementById("chatopponent").value,"\n","||$||");
+		if(localsettings.chatopponent!=newopps)
+		{
+			groupchat_removals = [];
+		}
+		localsettings.chatopponent = newopps;
 		localsettings.instruct_starttag = document.getElementById("instruct_starttag").value;
 		if (localsettings.instruct_starttag == null || localsettings.instruct_starttag == "") {
 			localsettings.instruct_starttag = "\\n### Instruction:\\n";
@@ -7069,6 +7102,7 @@ Current version: 81
 		prev_hl_chunk = null;
 		last_token_budget = "";
 		last_known_filename = "saved_story.json";
+		groupchat_removals = [];
 		render_gametext(true); //necessary to trigger an autosave to wipe out current story in case they exit browser after newgame.
 	}
 
@@ -7466,6 +7500,7 @@ Current version: 81
 				{
 					let coarr = co.split("||$||");
 					coarr = coarr.filter(x=>(x&&x!=""));
+					coarr = coarr.filter(x=>(!groupchat_removals.includes(x)));
 					coarr = coarr.map(x=>x.trim());
 					co = coarr[Math.floor(Math.random()*coarr.length)];
 
@@ -8384,31 +8419,39 @@ Current version: 81
 			let foundMyName = gentxt.indexOf(localsettings.chatname + "\:");
 			let foundMyName2 = gentxt.indexOf("\n" + localsettings.chatname + " ");
 			let splitresponse = [];
-			if (foundMyName != -1)
+
+			let prune_multiliners = function(input_arr)
 			{
-				splitresponse = gentxt.split(localsettings.chatname + "\:");
-			}
-			else if (foundMyName2 != -1 && localsettings.chatname!="You") //added by henky request, trigger even without colon
-			{
-				splitresponse = gentxt.split("\n" + localsettings.chatname + " ");
-			}
-			else if (foundOppoNameWithNL > 0) //split by oppo name
-			{
-				splitresponse = gentxt.split("\n" + localsettings.chatopponent + "\: ");
 				//patch for cases where a random extra line from a second chatter is injected between
 				if(!localsettings.multiline_replies)
 				{
-					let ml_check = splitresponse[0];
+					let ml_check = input_arr[0];
 					//test for other chatopponents
 					var moreopponents = new RegExp("\n(?!" + localsettings.chatname + ").+?\: ", "gi");
 					var foundmoreopponent = ml_check.match(moreopponents);
 					if(foundmoreopponent != null && foundmoreopponent.length > 0)
 					{
 						//too many chat users. split to first newline and stop.
-						splitresponse = ml_check.split("\n");
+						return ml_check.split("\n");
 					}
 				}
+				return input_arr;
+			}
 
+			if (foundMyName != -1)
+			{
+				splitresponse = gentxt.split(localsettings.chatname + "\:");
+				splitresponse = prune_multiliners(splitresponse);
+			}
+			else if (foundMyName2 != -1 && localsettings.chatname!="You") //added by henky request, trigger even without colon
+			{
+				splitresponse = gentxt.split("\n" + localsettings.chatname + " ");
+				splitresponse = prune_multiliners(splitresponse);
+			}
+			else if (foundOppoNameWithNL > 0) //split by oppo name
+			{
+				splitresponse = gentxt.split("\n" + localsettings.chatopponent + "\: ");
+				splitresponse = prune_multiliners(splitresponse);
 			}
 			else //if no name found
 			{
@@ -9068,6 +9111,10 @@ Current version: 81
 		let inEditMode = (document.getElementById("allowediting").checked ? true : false);
 
 		//adventure mode has a toggle to choose action mode
+		document.getElementById("adventure_mode_img").classList.remove("input_story");
+		document.getElementById("adventure_mode_img").classList.remove("input_action");
+		document.getElementById("btnmode_chat").classList.add("hidden");
+		document.getElementById("btnmode_adventure").classList.add("hidden");
 		if(localsettings.opmode==2)
 		{
 			document.getElementById("inputrow").classList.add("show_mode");
@@ -9075,16 +9122,20 @@ Current version: 81
 			{
 				document.getElementById("adventure_mode_txt").innerText = "Action";
 				document.getElementById("adventure_mode_img").classList.add("input_action");
-				document.getElementById("adventure_mode_img").classList.remove("input_story");
 			}else{
 				document.getElementById("adventure_mode_txt").innerText = "Story";
-				document.getElementById("adventure_mode_img").classList.remove("input_action");
 				document.getElementById("adventure_mode_img").classList.add("input_story");
 			}
-			document.getElementById("btnmode").classList.remove("hidden");
-		}else{
+			document.getElementById("btnmode_adventure").classList.remove("hidden");
+		}
+		else if(localsettings.opmode==3 && localsettings.chatopponent!="" && localsettings.chatopponent.includes("||$||"))
+		{
+			document.getElementById("inputrow").classList.add("show_mode");
+			document.getElementById("btnmode_chat").classList.remove("hidden");
+		}
+		else
+		{
 			document.getElementById("inputrow").classList.remove("show_mode");
-			document.getElementById("btnmode").classList.add("hidden");
 		}
 
 		if (gametext_arr.length == 0 && synchro_pending_stream=="" && pending_response_id=="") {
@@ -9374,6 +9425,13 @@ Current version: 81
 			if(localsettings.opmode==3 && localsettings.gui_type_chat==1)
 			{
 				render_enhanced_chat(textToRender);
+				if (localsettings.opmode == 3 && localsettings.chatopponent != "" && localsettings.chatopponent.includes("||$||")) {
+					document.getElementById("chat_btnmode_chat").classList.remove("hidden");
+					document.getElementById("cht_inp").classList.add("shorter");
+				} else {
+					document.getElementById("chat_btnmode_chat").classList.add("hidden");
+					document.getElementById("cht_inp").classList.remove("shorter");
+				}
 			}
 			else
 			{
@@ -9842,6 +9900,52 @@ Current version: 81
 			redo_arr = [];
 			document.getElementById("input_text").value = boxtextstash;
 		}
+	}
+
+	var groupchat_removals = []; //list of names removed from groupchat
+	function show_groupchat_select()
+	{
+		document.getElementById("groupselectcontainer").classList.remove("hidden");
+		let gs = `<table style="width:90%; margin:8px auto;">`;
+		if(localsettings.chatopponent!="")
+		{
+			let grouplist = localsettings.chatopponent.split("||$||");
+			for(let i=0;i<grouplist.length;++i)
+			{
+				let show = !groupchat_removals.includes(grouplist[i]);
+				gs += `<tr><td><span style="vertical-align: middle;">`+grouplist[i]+`</span></td><td><input type="checkbox" id="groupselectitem_`+i+`" style=" vertical-align: top;" `+(show?"checked":"")+`></td></tr>`;
+			}
+		}
+		gs += `</table>`;
+		document.getElementById("groupselectitems").innerHTML = gs;
+	}
+	function confirm_groupchat_select()
+	{
+		groupchat_removals = [];
+		if(localsettings.chatopponent!="")
+		{
+			let grouplist = localsettings.chatopponent.split("||$||");
+			for(let i=0;i<grouplist.length;++i)
+			{
+				let sel = document.getElementById("groupselectitem_"+i);
+				if(sel && !sel.checked)
+				{
+					groupchat_removals.push(grouplist[i]);
+				}
+			}
+			hide_popups();
+			if(groupchat_removals.length==grouplist.length)
+			{
+				msgbox("You need to select at least one group chat participant!");
+				groupchat_removals = [];
+			}
+		}
+		else
+		{
+			hide_popups();
+		}
+
+
 	}
 
 	function toggleNavWithoutBootstrapJS() {
@@ -10408,9 +10512,14 @@ Current version: 81
 		<div class="">
 			<div id="inputrow" class="">
 				<div id="inputrowmode" style="padding-right: 4px;">
-					<button type="button" class="btn btn-primary btn-secondary" id="btnmode" onclick="btn_adventure_mode()">
+					<button type="button" class="btn btn-primary btn-secondary" style="line-height: 1.4;" id="btnmode_adventure" onclick="btn_adventure_mode()">
 						<img id="adventure_mode_img" class="input_story">
-						<br><b id="adventure_mode_txt" style="font-size: 10px;">Story</b></button>
+						<br><b id="adventure_mode_txt" style="font-size: 10px;">Story</b>
+					</button>
+					<button type="button" class="btn btn-primary btn-secondary" style="line-height: 1;" id="btnmode_chat" onclick="show_groupchat_select()">
+						<img class="input_chat">
+						<br><b style="font-size: 10px;">Group<br>Chat</b>
+					</button>
 				</div>
 				<div id="inputrowleft" class="tokens-in-box">
 					<textarea class="form-control" id="input_text" onkeypress="return handle_typing(event)" placeholder="Enter text here"></textarea>
@@ -10446,6 +10555,7 @@ Current version: 81
 
 			<div class="cht_inp_hold_outer">
 			  <div class="cht_inp_hold">
+				<button onclick="show_groupchat_select()" id="chat_btnmode_chat" class="chat_btnmode_chat hidden" type="button"></button>
 				<input id="cht_inp" type="text" name="chtchtinp" class="cht_inp" role="presentation" autocomplete="noppynop" spellcheck="true" placeholder="Type a message" value="" onkeypress="return chat_handle_typing(event)"/>
 
 				<button onclick="chat_submit_generation()" id="chat_msg_send_btn" class="chat_msg_send_btn" type="button"></button>
@@ -10839,10 +10949,10 @@ Current version: 81
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Format <span class="helpicon">?<span class="helptext">Story Mode is best for novel style writing. Adventure Mode is best for Interactive Fiction RPGs. Chat Mode is best for chat conversations with the AI. Instruct mode is for giving the AI ChatGPT styled tasks.</span></span></div>
 							<select class="form-control" id="opmode" style="height:24px;padding:0;margin:0px 0 0;" onchange="toggle_opmode()">
+								<option value="4">Instruct Mode</option>
 								<option value="1">Story Mode</option>
 								<option value="2">Adventure Mode</option>
 								<option value="3">Chat Mode</option>
-								<option value="4">Instruct Mode</option>
 							</select>
 
 						<div id="uipicker" class="settinglabel" style="padding-top: 3px;">
@@ -11332,52 +11442,21 @@ Current version: 81
 		</div>
 	</div>
 
-	<div class="popupcontainer flex hidden" id="yesnocontainer">
+	<div class="popupcontainer flex hidden" id="groupselectcontainer">
 		<div class="popupbg flex"></div>
 		<div class="nspopup fixsize">
 			<div class="popuptitlebar">
-				<div class="popuptitletext" id="yesnocontainertitle"></div>
+				<div class="popuptitletext">Group Chat Selector</div>
 			</div>
-			<div class="aidgpopuplistheader anotelabel" id="yesnocontainertext">
-			</div>
-			<div class="aidgpopuplistheader anotelabel hidden" id="yesnocontainercheckboxdiv"><span style="vertical-align: middle; margin:4px" id="yesnocontainercheckboxtext"></span><input type="checkbox" id="yesnocontainercheckbox" style=" vertical-align: top;" checked></div>
-			<div class="popupfooter">
-				<button type="button" class="btn btn-primary" onclick="onYesFn()">Yes</button>
-				<button type="button" class="btn btn-primary" onclick="onNoFn()">No</button>
-			</div>
-		</div>
-	</div>
-
-	<div class="popupcontainer flex hidden" id="inputboxcontainer">
-		<div class="popupbg flex"></div>
-		<div class="nspopup flexsize">
-			<div class="popuptitlebar">
-				<div class="popuptitletext" id="inputboxcontainertitle"></div>
-			</div>
-			<div class="aidgpopuplistheader anotelabel" id="inputboxcontainertext">
-
-			</div>
-			<input class="form-control" type="text" placeholder="" value=""
-			id="inputboxcontainerinput">
-			<textarea class="form-control hidden" style="line-height:1.1" id="inputboxcontainerinputarea" placeholder="" rows="5"></textarea>
-
-			<div class="popupfooter">
-				<button type="button" class="btn btn-primary" onclick="onInputboxOk()">OK</button>
-			</div>
-		</div>
-	</div>
-
-	<div class="popupcontainer flex hidden" id="msgboxcontainer">
-		<div class="popupbg flex"></div>
-		<div class="nspopup flexsizesmall moderate">
-			<div class="popuptitlebar">
-				<div class="popuptitletext" id="msgboxtitle"></div>
-			</div>
-			<div class="aidgpopuplistheader anotelabel msgboxtxt" id="msgboxtxt">
-
+			<div class="aidgpopuplistheader anotelabel">
+				Selected participants will reply randomly, unless you address them directly by name.<br><br>
+				Unselected participants will not reply in group chats.<br>
+				<div id="groupselectitems">
+				</div>
 			</div>
 			<div class="popupfooter">
-				<button id="msgboxbtnok" type="button" class="btn btn-primary" onclick="msgboxOnDone()">OK</button>
+				<button type="button" class="btn btn-primary" onclick="confirm_groupchat_select()">Ok</button>
+				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
 			</div>
 		</div>
 	</div>
@@ -11556,6 +11635,58 @@ Current version: 81
 			</div>
 		</div>
 	</div>
+
+	<div class="popupcontainer flex hidden" id="yesnocontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup fixsize">
+			<div class="popuptitlebar">
+				<div class="popuptitletext" id="yesnocontainertitle"></div>
+			</div>
+			<div class="aidgpopuplistheader anotelabel" id="yesnocontainertext">
+			</div>
+			<div class="aidgpopuplistheader anotelabel hidden" id="yesnocontainercheckboxdiv"><span style="vertical-align: middle; margin:4px" id="yesnocontainercheckboxtext"></span><input type="checkbox" id="yesnocontainercheckbox" style=" vertical-align: top;" checked></div>
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="onYesFn()">Yes</button>
+				<button type="button" class="btn btn-primary" onclick="onNoFn()">No</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="inputboxcontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup flexsize">
+			<div class="popuptitlebar">
+				<div class="popuptitletext" id="inputboxcontainertitle"></div>
+			</div>
+			<div class="aidgpopuplistheader anotelabel" id="inputboxcontainertext">
+
+			</div>
+			<input class="form-control" type="text" placeholder="" value=""
+			id="inputboxcontainerinput">
+			<textarea class="form-control hidden" style="line-height:1.1" id="inputboxcontainerinputarea" placeholder="" rows="5"></textarea>
+
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="onInputboxOk()">OK</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="msgboxcontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup flexsizesmall moderate">
+			<div class="popuptitlebar">
+				<div class="popuptitletext" id="msgboxtitle"></div>
+			</div>
+			<div class="aidgpopuplistheader anotelabel msgboxtxt" id="msgboxtxt">
+
+			</div>
+			<div class="popupfooter">
+				<button id="msgboxbtnok" type="button" class="btn btn-primary" onclick="msgboxOnDone()">OK</button>
+			</div>
+		</div>
+	</div>
+
+
 </body>
 
 <script>
