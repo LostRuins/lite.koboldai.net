@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 81
+Current version: 82
 -Concedo
 -->
 
@@ -3041,7 +3041,7 @@ Current version: 81
 
 	//here is my shit integration of KAI Horde's API. You're welcome. -Concedo.
 	const default_client_agent = "KoboldAiLite:17";
-	const stablehorde_url = "https://stablehorde.net";
+	const stablehorde_url = "https://aihorde.net";
 	const poll_interval_base_text = 500;
 	const poll_interval_base_img = 3800;
 	const poll_interval_background = 1000;
@@ -3211,7 +3211,8 @@ Current version: 81
 		image_styles: "",
 		grammar:"",
 		tokenstreammode: (localflag?1:0), //0=off,1=pollstream,2=sse
-		generate_images: (localflag?"":"stable_diffusion"), //"" is disabled and "*" is all, anything else is the model name pulled from stable horde
+		generate_images_mode: (localflag?0:1), //0=off, 1=horde, 2=a1111
+		generate_images_model: "stable_diffusion", //"" is disabled and "*" is all, anything else is the model name pulled from stable horde
 		img_autogen: false,
 		img_allownsfw: true,
 		save_images: true,
@@ -3424,12 +3425,12 @@ Current version: 81
 		}
 
 		//toggle genimg btn
-		if (localsettings.generate_images) {
-			document.getElementById("btn_genimg").classList.remove("hidden");
-			document.getElementById("btn_genimg2").classList.remove("hidden");
-		} else {
+		if (localsettings.generate_images_mode==0) {
 			document.getElementById("btn_genimg").classList.add("hidden");
 			document.getElementById("btn_genimg2").classList.add("hidden");
+		} else {
+			document.getElementById("btn_genimg").classList.remove("hidden");
+			document.getElementById("btn_genimg2").classList.remove("hidden");
 		}
 
 		//invert colors
@@ -6536,7 +6537,9 @@ Current version: 81
 		{
 			document.getElementById("tokenstreaminglabel").classList.add("color_red");
 		}
-		document.getElementById("generate_images").value = localsettings.generate_images;
+		document.getElementById("generate_images_mode").value = localsettings.generate_images_mode;
+		document.getElementById("generate_images_model").value = localsettings.generate_images_model;
+		toggle_generate_images_mode();
 		document.getElementById("multiline_replies").checked = localsettings.multiline_replies;
 		document.getElementById("allow_continue_chat").checked = localsettings.allow_continue_chat;
 		document.getElementById("idle_responses").value = localsettings.idle_responses;
@@ -6621,22 +6624,22 @@ Current version: 81
 	}
 
 	function validate_sd_model() {
-		var inputmodel = document.getElementById("generate_images").value;
+		var inputmodel = document.getElementById("generate_images_model").value;
 		let matched = false;
 		for (var i = 0; i < stablemodels.length; ++i) {
 			var matcher = stablemodels[i].name + " (" + stablemodels[i].count + ")";
 			if (inputmodel == matcher || inputmodel == stablemodels[i].name) {
-				document.getElementById("generate_images").value = stablemodels[i].name;
+				document.getElementById("generate_images_model").value = stablemodels[i].name;
 				matched = true;
 				break;
 			}
 		}
 		if (!matched && inputmodel != "*") {
-			document.getElementById("generate_images").value = "";
+			document.getElementById("generate_images_model").value = defaultsettings.generate_images_model;
 		}
 	}
 	function clear_sd_model() {
-		document.getElementById("generate_images").value = "";
+		document.getElementById("generate_images_model").value = "";
 		if(!image_models_fetched)
 		{
 			//doing it this way will be more buggy,
@@ -6725,7 +6728,8 @@ Current version: 81
 		localsettings.adventure_context_mod = (document.getElementById("adventure_context_mod").checked ? true : false);
 		localsettings.instruct_has_markdown = (document.getElementById("instruct_has_markdown").checked ? true : false);
 		localsettings.placeholder_tags = (document.getElementById("placeholder_tags").checked ? true : false);
-		localsettings.generate_images = document.getElementById("generate_images").value;
+		localsettings.generate_images_model = document.getElementById("generate_images_model").value;
+		localsettings.generate_images_mode = document.getElementById("generate_images_mode").value;
 		localsettings.opmode = document.getElementById("opmode").value;
 		localsettings.chatname = document.getElementById("chatname").value;
 		if (localsettings.chatname == null || localsettings.chatname == "") {
@@ -6765,12 +6769,12 @@ Current version: 81
 		localsettings.save_images = (document.getElementById("save_images").checked ? true : false);
 		localsettings.prompt_for_savename = (document.getElementById("prompt_for_savename").checked ? true : false);
 		localsettings.img_allownsfw = (document.getElementById("img_allownsfw").checked ? true : false);
-		if (localsettings.generate_images) {
-			document.getElementById("btn_genimg").classList.remove("hidden");
-			document.getElementById("btn_genimg2").classList.remove("hidden");
-		} else {
+		if (localsettings.generate_images_mode==0) {
 			document.getElementById("btn_genimg").classList.add("hidden");
 			document.getElementById("btn_genimg2").classList.add("hidden");
+		} else {
+			document.getElementById("btn_genimg").classList.remove("hidden");
+			document.getElementById("btn_genimg2").classList.remove("hidden");
 		}
 
 		if((localsettings.gui_type_chat!=0 && localsettings.opmode==3)||(localsettings.gui_type_instruct!=0 && localsettings.opmode==4))
@@ -6865,6 +6869,15 @@ Current version: 81
 		textarea.rows = numberOfLineBreaks+1;
 	}
 
+	function toggle_generate_images_mode()
+	{
+		if(document.getElementById("generate_images_mode").value==0)
+		{
+			document.getElementById("generate_images_model").classList.add("hidden");
+		}else{
+			document.getElementById("generate_images_model").classList.remove("hidden");
+		}
+	}
 
 	function toggle_uistyle()
 	{
@@ -7588,7 +7601,7 @@ Current version: 81
 
 
 			//determine if a new generated image is needed, chatmode is excluded, instruct is excluded
-			if (localsettings.generate_images != "" && localsettings.opmode != 3 && localsettings.opmode != 4 && localsettings.img_autogen) {
+			if (localsettings.generate_images_mode != 0 && localsettings.opmode != 3 && localsettings.opmode != 4 && localsettings.img_autogen) {
 				//if adventure mode, generate every action
 				if (localsettings.opmode == 2) {
 					if (newgen.startsWith("\n\n\> ")) {
@@ -8233,10 +8246,10 @@ Current version: 81
 
 		console.log("Generating image for: " + sentence);
 		let modelused = [];
-		if (localsettings.generate_images == "*") {
+		if (localsettings.generate_images_model == "*") {
 			modelused = [];
 		} else {
-			modelused = [localsettings.generate_images];
+			modelused = [localsettings.generate_images_model];
 		}
 
 
@@ -11130,9 +11143,14 @@ Current version: 81
 				<div id="settingsmenuadvanced2" class="settingsmenu hidden" style="padding-top: 0px;" onchange="">
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Generate Images <span class="helpicon">?<span class="helptext">Use Stable Horde to insert AI generated images into your story.</span></span></div>
+							<div class="justifyleft settingsmall">Generate Images <span class="helpicon">?<span class="helptext">Use the AI Horde or a local A1111 instance to insert AI generated images into your story.</span></span></div>
 						</div>
-							<input list="sdmodels" class="form-control mdlpicker" id="generate_images" style="font-size: 12px;height:24px;padding:2px;margin:0px 0 0;" placeholder="[Disabled]" value="" onblur="validate_sd_model()" onfocus="clear_sd_model()" title="Select a stable diffusion model to generate images with">
+							<select class="form-control" id="generate_images_mode" style="height:20px;padding:0;margin:0px 0 0;" onchange="toggle_generate_images_mode()">
+								<option value="0">[Disabled]</option>
+								<option value="1">AI Horde</option>
+								<option value="2">Local A1111</option>
+							</select>
+							<input list="sdmodels" class="form-control mdlpicker" id="generate_images_model" style="font-size: 12px;height:20px;padding:2px;margin:0px 0 0;" placeholder="[Select Model]" value="" onblur="validate_sd_model()" onfocus="clear_sd_model()" title="Select a stable diffusion model to generate images with">
 							<datalist id="sdmodels">
 								<option value="stable_diffusion">
 							  </datalist>
@@ -11161,7 +11179,7 @@ Current version: 81
 					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">TTS <span class="helpicon">?<span class="helptext">Enable Text-To-Speech to have your story automatically read to you.</span></span></div>
-							<select class="form-control" id="ttsselect" style="height:24px;padding:0;margin:0px 0 0;">
+							<select class="form-control" id="ttsselect" style="height:20px;padding:0;margin:0px 0 0;">
 							</select>
 						</div>
 						<div class="settinglabel">
