@@ -7148,8 +7148,18 @@ Current version: 82
 			waiting_for_autosummary = true;
 			let max_allowed_characters = Math.floor(localsettings.max_context_length * 3.35)-100;
 			let truncated_context = concat_gametext(true, "");
+
+			let max_mem_anote_len = Math.floor(max_allowed_characters*0.9);
+			let truncated_memory = current_memory.substring(current_memory.length - max_mem_anote_len);
+			if (truncated_memory != null && truncated_memory != "") {
+				truncated_memory += "\n";
+			}
+
 			truncated_context = end_trim_to_sentence(truncated_context,true);
 			truncated_context = truncated_context.substring(truncated_context.length - max_allowed_characters);
+			let augmented_len = truncated_memory.length + truncated_context.length;
+			let excess_len = augmented_len - max_allowed_characters; //if > 0, then we exceeded context window
+			truncated_context = truncated_memory + truncated_context.substring(excess_len);
 
 			let long_story = (truncated_context.length>1800?true:false);
 			truncated_context += "\n### Instruction:Summarize the above text in a single paragraph of up to "+(long_story?"ten":"five")+" detailed sentences.\n### Response:";
