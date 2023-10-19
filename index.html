@@ -2078,7 +2078,6 @@ Current version: 82
 			"chatname": "You",
 			"chatopponent": "Bob||$||Alice||$||Mike||$||Lisa",
 			"gui_type":1,
-			"multiline_replies":false,
 			"prefmodel1":chatmodels1,
 			"prefmodel2":chatmodels2,
 			"prompt":"\nBob: So, did anyone want to order a pizza?\nMike: Yeah, I'm starving.",
@@ -3134,6 +3133,10 @@ Current version: 82
 	const default_claude_base = "https://api.anthropic.com";
 	const default_palm_base = "https://generativelanguage.googleapis.com/v1beta2/models/text-bison-001:generateText?key=";
 
+	const a1111_models_endpoint = "/sdapi/v1/sd-models";
+    const a1111_options_endpoint = "/sdapi/v1/options";
+    const a1111_txt2img_endpoint = "/sdapi/v1/txt2img";
+
 	//support for quick news updates
 	const horde_news_endpoint = "https://hordenews.concedo.workers.dev"
 
@@ -3186,6 +3189,7 @@ Current version: 82
 	var custom_claude_endpoint = "";
 	var custom_claude_key = "";
 	var custom_claude_model = "";
+	var a1111_base_url = "http://localhost:7860";
 	var uses_cors_proxy = false; //we start off attempting a direct connection. switch to proxy if that fails
 	var synchro_polled_response = null;
 	var synchro_pending_stream = ""; //used for token pseduo streaming for kobold api only
@@ -3718,25 +3722,156 @@ Current version: 82
 		}
 	}
 
-	function get_cursor_position() {
-			let editor = document.getElementById("gametext");
+	var a1111_is_connected = false;
+	function connect_to_a1111(silent=false)
+    {
+		console.log("Attempt A1111 Connection...");
+		//establish initial connection to a1111 api
+		fetch(a1111_base_url + a1111_models_endpoint)
+		.then(x => x.json())
+		.then(modelsdata => {
 
-			let position = 0;
-			const isSupported = typeof window.getSelection !== "undefined";
-			if (isSupported) {
-				const selection = window.getSelection();
-				if (selection.rangeCount !== 0) {
-					const range = window.getSelection().getRangeAt(0);
-					const preCaretRange = range.cloneRange();
-					preCaretRange.selectNodeContents(editor);
-					//preCaretRange.setStart(range.startContainer, 0);
-					preCaretRange.setEnd(range.endContainer, range.endOffset);
-					position = preCaretRange.toString().length;
+		console.log("Reading Settings...");
+		fetch(a1111_base_url + a1111_options_endpoint)
+		.then(y => y.json())
+		.then(optionsdata => {
+			console.log(optionsdata);
+			if (optionsdata.samples_format == null || modelsdata.length == 0) {
+				msgbox("Invalid data received or no models found. Is A1111 running at the url " + a1111_base_url + " ?");
+			} else {
+				let a1111_current_loaded_model = optionsdata.sd_model_checkpoint;
+				console.log("Current model loaded: " + a1111_current_loaded_model);
+
+				//repopulate our model list
+				let dropdown = document.getElementById("generate_images_local_model");
+				let selectionhtml = ``;
+				for (var i = 0; i < modelsdata.length; ++i) {
+					selectionhtml += `<option value="` + modelsdata[i].title + `" `+(a1111_current_loaded_model==modelsdata[i].title?"selected":"")+`>`+modelsdata[i].title+`</option>`;
 				}
+				dropdown.innerHTML = selectionhtml;
+				a1111_is_connected = true;
 			}
-			return position;
+		}).catch((error) => {
+			if(!silent)
+			{
+				msgbox("A1111 Connect Error: " + error+"\nPlease make sure A1111 is running and properly configured!\nIn your local install of Automatic1111 WebUi, modify webui-user.bat and add these flags to enable API access:\n\nset COMMANDLINE_ARGS= --api --cors-allow-origins=*\n");
+			}
+			a1111_is_connected = false;
+		});
+		}).catch((error) => {
+			if(!silent)
+			{
+				msgbox("A1111 Connect Error: " + error+"\nPlease make sure A1111 is running and properly configured!\nIn your local install of Automatic1111 WebUi, modify webui-user.bat and add these flags to enable API access:\n\nset COMMANDLINE_ARGS= --api --cors-allow-origins=*\n");
+			}
+			a1111_is_connected = false;
+		});
+	}
 
+	function generate_a1111_image(req_payload, onImagesDone)
+	{
+		//split the prompt
+		let splits = req_payload.prompt.split("###");
+		let prompt = splits[0];
+		let negprompt = (splits.length > 1 ? splits[1] : "");
+		let parsedseed = Math.floor(Math.random() * 99999999);
+		let sampler = req_payload.params.sampler_name;
+		let tiling = false;
+
+		//first, if we're using the wrong model, switch the model
+		//now we added override settings, but still want switch model to prevent weights from constantly reloading
+		let desired_model = req_payload.models[0];
+		let a1111_t2i_payload = {
+			"prompt": prompt,
+			"seed": parsedseed,
+			"sampler_name": "Euler a",
+			"batch_size": 1,
+			"n_iter": 1,
+			"steps": req_payload.params.steps,
+			"cfg_scale": req_payload.params.cfg_scale,
+			"width": req_payload.params.width,
+			"height": req_payload.params.height,
+			"negative_prompt": negprompt,
+			"do_not_save_samples": true, //no idea if these work, but just try
+			"do_not_save_grid": true,
+			"enable_hr": false,
+			"eta": 0,
+			"s_churn": 0,
+			"s_tmax": 0,
+			"s_tmin": 0,
+			"s_noise": 1,
+			"override_settings": {
+				"sd_model_checkpoint": desired_model,
+				"eta_noise_seed_delta": 0.0,
+				"CLIP_stop_at_last_layers": 1.0,
+				"eta_ddim": 0.0,
+				"eta_ancestral": 1.0,
+				"ddim_discretize": "uniform",
+				"img2img_fix_steps": false,
+				"enable_emphasis": true,
+				"use_old_emphasis_implementation": false,
+				"sd_hypernetwork": "None",
+				"inpainting_mask_weight": 1.0,
+				"initial_noise_multiplier": 1.0,
+				"comma_padding_backtrack": 20.0
+			}
 		}
+
+		//remove all null fields
+		a1111_t2i_payload = Object.fromEntries(Object.entries(a1111_t2i_payload).filter(([_, v]) => v != null));
+
+		let gen_endpoint = a1111_base_url + a1111_txt2img_endpoint;
+		console.log(a1111_t2i_payload);
+		fetch(gen_endpoint, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify(a1111_t2i_payload),
+		})
+		.then(x => x.json())
+		.then(resp => {
+			console.log(resp);
+			if(resp.images && resp.images.length>0)
+			{
+				onImagesDone(resp.images[0]);
+			}
+
+		}).catch((error) => {
+			console.log("Generation Error: " + error);
+			onImagesDone(null);
+		});
+
+	}
+
+	function set_a1111_endpoint()
+	{
+		inputBox("Enter Automatic1111 API endpoint","A1111 Endpoint Selection",a1111_base_url,"Input A1111 API URL", ()=>{
+			let userinput = getInputBoxValue();
+			if (userinput != null && userinput.trim()!="") {
+				a1111_base_url = userinput.trim();
+				connect_to_a1111(false);
+			}
+		},false);
+	}
+
+	function get_cursor_position() {
+		let editor = document.getElementById("gametext");
+
+		let position = 0;
+		const isSupported = typeof window.getSelection !== "undefined";
+		if (isSupported) {
+			const selection = window.getSelection();
+			if (selection.rangeCount !== 0) {
+				const range = window.getSelection().getRangeAt(0);
+				const preCaretRange = range.cloneRange();
+				preCaretRange.selectNodeContents(editor);
+				//preCaretRange.setStart(range.startContainer, 0);
+				preCaretRange.setEnd(range.endContainer, range.endOffset);
+				position = preCaretRange.toString().length;
+			}
+		}
+		return position;
+	}
 
 	function selectElementContents(el) {
 		var range = document.createRange();
@@ -4664,7 +4799,6 @@ Current version: 82
 							"chatname": "You",
 							"chatopponent": botname,
 							"gui_type":1,
-							"multiline_replies":true,
 							"prefmodel1":chatmodels1,
 							"prefmodel2":chatmodels2,
 							"prompt":("\n{{char}}: "+greeting),
@@ -5987,7 +6121,7 @@ Current version: 82
 				<button type="button" style="font-size:13px;margin:2px;width:33%" name="localload" class="btn btn-primary" onclick="hide_popups();load_file_button()">`+"📁<br>Open File"+`</button>
 				<button type="button" style="font-size:13px;margin:2px;width:34%" name="shareurl" class="btn btn-primary" onclick="hide_popups();export_share_story()">`+"🌐<br>Share"+`</button>
 				</div>
-				<div style="font-size:12px; margin-top:3px; text-align: center; align-self: center; width: calc(100% - 180px);">
+				<div style="font-size:12px; margin-top:3px; text-align: center; align-self: center; width: calc(100% - 184px);">
 				<span style="font-weight:bold;text-decoration: underline;">Temporary Browser Storage</span>
 				</div>`;
 		filetable += entry;
@@ -5996,10 +6130,10 @@ Current version: 82
 		{
 			let testslot = localStorage.getItem(STORAGE_PREFIX + "slot_"+i+"_meta");
 			entry = `<div style="display:flex; height:46px;">
-				<div style="font-size:12px; margin:3px; text-align: center; align-self: center; width: calc(100% - 180px);">
+				<div style="font-size:12px; margin:3px; text-align: center; align-self: center; width: calc(100% - 184px);">
 				`+(testslot?`[ Slot `+(i+1)+` - `+testslot+` ]`:`[ Slot `+(i+1)+` - Empty ]`)+`
 				</div>
-				<div style="text-align: right; align-self: center; width: 180px;">
+				<div style="text-align: right; align-self: center; width: 184px;">
 				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary" onclick="save_to_slot(`+i+`)"><img class="btnicon-save"/></button>
 				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary" onclick="load_from_slot(`+i+`)" `+(testslot?"":"disabled")+`><img class="btnicon-load"/></button>
 				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary bg_green" onclick="download_from_slot(`+i+`)" `+(testslot?"":"disabled")+`><img class="btnicon-download"/></button>
@@ -6565,9 +6699,11 @@ Current version: 82
 		{
 			document.getElementById("tokenstreaminglabel").classList.add("color_red");
 		}
-		document.getElementById("generate_images_mode").value = localsettings.generate_images_mode;
 		document.getElementById("generate_images_model").value = localsettings.generate_images_model;
-		toggle_generate_images_mode();
+		if(document.getElementById("generate_images_mode").value == 0 || document.getElementById("generate_images_mode").value != localsettings.generate_images_mode) {
+			document.getElementById("generate_images_mode").value = localsettings.generate_images_mode;
+			toggle_generate_images_mode(true);
+		}
 		document.getElementById("multiline_replies").checked = localsettings.multiline_replies;
 		document.getElementById("allow_continue_chat").checked = localsettings.allow_continue_chat;
 		document.getElementById("idle_responses").value = localsettings.idle_responses;
@@ -6897,13 +7033,19 @@ Current version: 82
 		textarea.rows = numberOfLineBreaks+1;
 	}
 
-	function toggle_generate_images_mode()
+	function toggle_generate_images_mode(silent=false)
 	{
 		if(document.getElementById("generate_images_mode").value==0)
 		{
 			document.getElementById("generate_images_model").classList.add("hidden");
-		}else{
+			document.getElementById("generate_images_local_model_container").classList.add("hidden");
+		}else if(document.getElementById("generate_images_mode").value==1){
 			document.getElementById("generate_images_model").classList.remove("hidden");
+			document.getElementById("generate_images_local_model_container").classList.add("hidden");
+		}else{
+			document.getElementById("generate_images_model").classList.add("hidden");
+			document.getElementById("generate_images_local_model_container").classList.remove("hidden");
+			connect_to_a1111(silent);
 		}
 	}
 
@@ -7191,7 +7333,7 @@ Current version: 82
 				gametext_arr.pop();
 			}
 		}
-		render_gametext();
+		render_gametext(false);
 	}
 
 	function replace_placeholders_direct(inputtxt)
@@ -8268,7 +8410,7 @@ Current version: 82
 			sentence = localsettings.image_styles + " " + sentence;
 		}
 
-		if (filter_enabled) {
+		if (filter_enabled && localsettings.generate_images_mode==1) {
 			sentence = sanitize_horde_image_prompt(sentence);
 		}
 
@@ -8279,7 +8421,6 @@ Current version: 82
 		} else {
 			modelused = [localsettings.generate_images_model];
 		}
-
 
 		let genimg_payload = {
 			"prompt": (sentence + " ### disfigured, ugly, deformed, poorly, censor, censored, blurry, lowres, fused, malformed, watermark, misshapen, duplicated, grainy, distorted, signature"),
@@ -8302,15 +8443,17 @@ Current version: 82
 			"r2": false
 		}
 
-		fetch(stablehorde_submit_endpoint, {
-			method: 'POST', // or 'PUT'
-			headers: {
-				'Content-Type': 'application/json',
-				'Client-Agent': default_client_agent,
-				'apikey': localsettings.my_api_key,
-			},
-			body: JSON.stringify(genimg_payload),
-		})
+		if(localsettings.generate_images_mode==1)
+		{
+			fetch(stablehorde_submit_endpoint, {
+				method: 'POST', // or 'PUT'
+				headers: {
+					'Content-Type': 'application/json',
+					'Client-Agent': default_client_agent,
+					'apikey': localsettings.my_api_key,
+				},
+				body: JSON.stringify(genimg_payload),
+			})
 			.then((response) => response.json())
 			.then((data) => {
 				console.log('genimg result:', data);
@@ -8330,6 +8473,24 @@ Current version: 82
 				console.error('Error:', error);
 				msgbox("Image generation error: " + error);
 			});
+		} else {
+			let desired_model = document.getElementById("generate_images_local_model").value;
+			genimg_payload.models = [desired_model];
+			generate_a1111_image(genimg_payload,(outputimg)=>{
+				if(outputimg)
+				{
+					//console.log(outputimg);
+					let origImg = "data:image/jpeg;base64," + outputimg;
+					compressImage(origImg, (newDataUri) => {
+						let nimgtag = "[<|d|"+ newDataUri + "|d|>]";
+						gametext_arr.push(nimgtag);
+						render_gametext();
+					}, true);
+				}else{
+					msgbox("Image Generation Failed!\n\nPlease make sure A1111 is running and properly configured!\nIn your local install of Automatic1111 WebUi, modify webui-user.bat and add these flags to enable API access:\n\nset COMMANDLINE_ARGS= --api --cors-allow-origins=*\n");
+				}
+			});
+		}
 	}
 
 	function click_image(target)
@@ -11211,10 +11372,17 @@ Current version: 82
 								<option value="1">AI Horde</option>
 								<option value="2">Local A1111</option>
 							</select>
-							<input list="sdmodels" class="form-control mdlpicker" id="generate_images_model" style="font-size: 12px;height:20px;padding:2px;margin:0px 0 0;" placeholder="[Select Model]" value="" onblur="validate_sd_model()" onfocus="clear_sd_model()" title="Select a stable diffusion model to generate images with">
+							<input list="sdmodels" class="form-control mdlpicker hidden" id="generate_images_model" style="font-size: 12px;height:20px;padding:2px;margin:0px 0 0;" placeholder="[Select Model]" value="" onblur="validate_sd_model()" onfocus="clear_sd_model()" title="Select a stable diffusion model to generate images with">
 							<datalist id="sdmodels">
 								<option value="stable_diffusion">
-							  </datalist>
+							</datalist>
+							<div id="generate_images_local_model_container" class="settinglabel hidden">
+							<select class="form-control" id="generate_images_local_model" style="height:20px;padding:0;margin:0px 0 0; width:calc(100% - 30px)">
+								<option value="">[None]</option>
+							</select>
+							<button type="button" class="btn btn-primary" onclick="set_a1111_endpoint()" style="height: 20px; padding: 0px 2px; margin: 0px 0px 0px 3px;">⚙️</button>
+							</div>
+
 							<div id="genimgopt" class="">
 								<table>
 								<tr><td>
