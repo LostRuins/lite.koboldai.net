@@ -216,7 +216,7 @@ Current version: 82
 		}
 
 		#inputrow.show_mode {
-			grid-template-columns: 50px auto 64px;
+			grid-template-columns: 50px auto 74px;
 		}
 
 		#inputrow {
@@ -224,7 +224,7 @@ Current version: 82
 			padding: 0px;
 			width: 100%;
 			display: grid;
-			grid-template-columns: 0% auto 62px;
+			grid-template-columns: 0% auto 72px;
 		}
 		.input_action
 		{
@@ -6398,7 +6398,9 @@ Current version: 82
 		}
 		desired_new_home_cluster = null;
 		let newapikey = document.getElementById("apikey").value;
+
 		if (newapikey != null && newapikey.trim() != "") {
+			document.getElementById("showownworkerslink").classList.add("hidden");
 			document.getElementById("kudos_bal").innerHTML = "Checking...<br>&nbsp;";
 
 			let fupayload = {
@@ -6408,7 +6410,6 @@ Current version: 82
 				},
 			};
 			let fu_zip = finduser_endpoints.map(a => [a, fupayload]);
-
 			multifetch(fu_zip, (resArr, errArr) => {
 				if (resArr && resArr.length > 0) {
 					lastValidFoundUserData = null;
@@ -6439,9 +6440,12 @@ Current version: 82
 							{
 								document.getElementById("kudos_bal").innerHTML = clustertag + uname + "<br>"+
 								"<a class='color_blueurl' href='https://horde.koboldai.net/register'>(Register New User)</a>";
+							}else{
+								document.getElementById("showownworkerslink").classList.remove("hidden");
 							}
 						} else {
 							document.getElementById("kudos_bal").innerHTML = clustertag + unameurl + "<br>Kudos Balance: " + kuds;
+							document.getElementById("showownworkerslink").classList.remove("hidden");
 						}
 
 					}
@@ -7850,7 +7854,7 @@ Current version: 82
 						submit_payload.stop_sequence = [localsettings.chatname + "\:",("\n" + localsettings.chatname + " ")];
 
 						//for multichat, everyone else becomes a stopper token
-						if (localsettings.chatopponent.includes("||$||")) {
+						if (localsettings.chatopponent!="" && localsettings.chatopponent.includes("||$||")) {
 							let coarr = localsettings.chatopponent.split("||$||");
 							coarr = coarr.filter(x => (x && x != ""));
 							coarr = coarr.map(x => x.trim());
@@ -8449,6 +8453,7 @@ Current version: 82
 			let oppomatchwithNL = "\n" + localsettings.chatopponent + "\: ";
 			let foundOppoName = gentxt.indexOf(oppomatch);
 			let foundOppoNameWithNL = gentxt.indexOf(oppomatchwithNL);
+			let is_groupchat = (localsettings.chatopponent!=""&&localsettings.chatopponent.includes("||$||"));
 			if(localsettings.chatopponent!="" && foundOppoName==0)
 			{
 				gentxt = gentxt.substring(oppomatch.length);
@@ -8460,7 +8465,7 @@ Current version: 82
 			let prune_multiliners = function(input_arr)
 			{
 				//patch for cases where a random extra line from a second chatter is injected between
-				if(!localsettings.multiline_replies)
+				if(!localsettings.multiline_replies || is_groupchat)
 				{
 					let ml_check = input_arr[0];
 					//test for other chatopponents
@@ -8492,7 +8497,7 @@ Current version: 82
 			}
 			else //if no name found
 			{
-				if(localsettings.multiline_replies)
+				if(localsettings.multiline_replies && !is_groupchat)
 				{
 					//already force trimmed to sentence, so just include whole thing
 					splitresponse.push(gentxt);
@@ -9141,6 +9146,56 @@ Current version: 82
 		}
 	}
 
+	function update_submit_button(full_update)
+	{
+		if (perfdata == null) {
+			if(full_update)
+			{
+				document.getElementById("btnsend").disabled = true;
+				document.getElementById("btnsend").classList.add("wait");
+				document.getElementById("btnsend").classList.remove("btn-primary");
+				document.getElementById("btnsend").innerHTML = "Offline";
+			}
+		}
+		else if (selected_models.length == 0 && selected_workers.length == 0) {
+			if(full_update)
+			{
+				document.getElementById("btnsend").disabled = true;
+				document.getElementById("btnsend").classList.add("wait");
+				document.getElementById("btnsend").classList.remove("btn-primary");
+				document.getElementById("btnsend").innerHTML = "No AI<br>Loaded";
+			}
+		}
+		else if (pending_response_id == "") {
+			if(full_update)
+			{
+				document.getElementById("btnsend").disabled = false;
+				document.getElementById("btnsend").classList.remove("wait");
+				document.getElementById("btnsend").classList.add("btn-primary");
+			}
+			if (gametext_arr.length > 0 && document.getElementById("input_text").value == "" && document.getElementById("cht_inp").value == "") {
+				document.getElementById("btnsend").innerHTML = "Generate<br>More";
+			}
+			else {
+				document.getElementById("btnsend").innerHTML = "Submit";
+			}
+		}
+		else {
+			if(full_update)
+			{
+				document.getElementById("btnsend").disabled = true;
+				document.getElementById("btnsend").classList.add("wait");
+				document.getElementById("btnsend").classList.remove("btn-primary");
+				let oldspinnerhtml = document.getElementById("btnsend").innerHTML;
+				let newspinnerhtml = "<div class=\"outerloader\"><div id=\"outerloadernum\" class=\"outerloadernum\"></div><div id=\"maintxtloader\" class=\"innerloader\"></div></div>";
+				if (oldspinnerhtml != newspinnerhtml) {
+					//prevent resetting animation
+					document.getElementById("btnsend").innerHTML = newspinnerhtml;
+				}
+			}
+		}
+	}
+
 	function render_gametext(save = true)
 	{
 
@@ -9413,43 +9468,20 @@ Current version: 82
 		}
 
 		if (perfdata == null) {
-			document.getElementById("btnsend").disabled = true;
-			document.getElementById("btnsend").classList.add("wait");
-			document.getElementById("btnsend").classList.remove("btn-primary");
-			document.getElementById("btnsend").innerHTML = "Offline";
 			document.getElementById("fvico").href = favivon_normal;
 		}
 		else if (selected_models.length == 0 && selected_workers.length == 0) {
-			document.getElementById("btnsend").disabled = true;
-			document.getElementById("btnsend").classList.add("wait");
-			document.getElementById("btnsend").classList.remove("btn-primary");
-			document.getElementById("btnsend").innerHTML = "No AI<br>Loaded";
-
 			let perfinfo = "There are <span class=\"color_orange\">" + perfdata.worker_count + "</span> total <a class=\"color_green\" href=\"#\" onclick=\"get_and_show_workers()\">volunteer(s)</a> in the KoboldAI Horde, and <span class=\"color_orange\">" + perfdata.queued_requests + "</span> request(s) in queues.<br>A total of <span class=\"color_orange\">" + perfdata.past_minute_tokens + "</span> tokens were generated in the last minute.<br><br>";
-
 			document.getElementById("gametext").innerHTML = "Welcome to <span class=\"color_cyan\">KoboldAI Lite</span>!<br><br>" + perfinfo + "<a href=\"#\" class=\"color_blueurl\" onclick=\"display_models()\">Please select an AI model to use!</a><br>";
 			document.getElementById("fvico").href = favivon_normal;
 		}
 		else if (pending_response_id == "") {
-			document.getElementById("btnsend").disabled = false;
-			document.getElementById("btnsend").classList.remove("wait");
-			document.getElementById("btnsend").classList.add("btn-primary");
-			document.getElementById("btnsend").innerHTML = "Submit";
 			document.getElementById("fvico").href = favivon_normal;
 		}
 		else {
-			document.getElementById("btnsend").disabled = true;
-			document.getElementById("btnsend").classList.add("wait");
-			document.getElementById("btnsend").classList.remove("btn-primary");
-			let oldspinnerhtml = document.getElementById("btnsend").innerHTML;
-			let newspinnerhtml = "<div class=\"outerloader\"><div id=\"outerloadernum\" class=\"outerloadernum\"></div><div id=\"maintxtloader\" class=\"innerloader\"></div></div>";
-			if(oldspinnerhtml!=newspinnerhtml)
-			{
-				//prevent resetting animation
-				document.getElementById("btnsend").innerHTML = newspinnerhtml;
-			}
 			document.getElementById("fvico").href = favicon_busy;
 		}
+		update_submit_button(true); //full update for submit button, otherwise just text when not generating
 
 		// Render onto enhanced chat interface if selected. Currently only applicable to Chat & Instruct modes.
 		let isStyleApplicable = ((localsettings.opmode==3 && localsettings.gui_type_chat!=0) || (localsettings.opmode==4 && localsettings.gui_type_instruct!=0));
@@ -10559,13 +10591,13 @@ Current version: 82
 					</button>
 				</div>
 				<div id="inputrowleft" class="tokens-in-box">
-					<textarea class="form-control" id="input_text" onkeypress="return handle_typing(event)" placeholder="Enter text here"></textarea>
+					<textarea class="form-control" id="input_text" oninput="update_submit_button()" onkeypress="return handle_typing(event)" placeholder="Enter text here"></textarea>
 					<span id="token-budget" class="token-budget"></span>
 				</div>
 				<div id="inputrowright" style="padding-right: 2px;">
 					<button type="button" class="btn btn-secondary wait" id="btnsend" disabled
 						onclick="submit_generation()">Not<br>Conn.</button>
-						<a href="#" id="abortgen" class="hidden bg_black" style="text-align: center;color: #ffaaaa;" onclick="abort_generation()"><b>[ABORT]</b></a>
+						<a href="#" id="abortgen" class="hidden bg_black" style="text-align: center;color: #ffaaaa;" onclick="abort_generation()"><b style="display: block;">[ABORT]</b></a>
 				</div>
 			</div>
 		</div>
@@ -10593,7 +10625,7 @@ Current version: 82
 			<div class="cht_inp_hold_outer">
 			  <div class="cht_inp_hold">
 				<button onclick="show_groupchat_select()" id="chat_btnmode_chat" class="chat_btnmode_chat hidden" type="button"></button>
-				<input id="cht_inp" type="text" name="chtchtinp" class="cht_inp" role="presentation" autocomplete="noppynop" spellcheck="true" placeholder="Type a message" value="" onkeypress="return chat_handle_typing(event)"/>
+				<input id="cht_inp" type="text" name="chtchtinp" class="cht_inp" role="presentation" autocomplete="noppynop" spellcheck="true" placeholder="Type a message" value="" oninput="update_submit_button()" onkeypress="return chat_handle_typing(event)"/>
 
 				<button onclick="chat_submit_generation()" id="chat_msg_send_btn" class="chat_msg_send_btn" type="button"></button>
 				<button onclick="abort_generation()" id="chat_msg_send_btn_abort" class="hidden chat_msg_send_btn_abort" type="button"></button>
@@ -10681,10 +10713,12 @@ Current version: 82
 
 			<div id="loadmodellistcontent" style="overflow: auto;">
 				<div class="justifyleft anotelabel">
-					Your Kobold Horde API Key <span class="helpicon">?
+					<span style="float:left; text-align: left;">
+					Your AI Horde API Key <span class="helpicon">?
 						<span class="helptext">You need an API key to use KoboldAI Horde to generate text. Get one at
 							https://horde.koboldai.net/register or use the anonymous key 0000000000.</span>
 					</span>
+					<br><a href="#" id="showownworkerslink" class="color_blueurl hidden" onclick="show_my_own_workers()">[Manager My Workers]</a></span>
 					<span class="color_green" style="float:right; text-align: right;" id="kudos_bal">
 						Need a Key?<br><a class='color_blueurl' href='https://horde.koboldai.net/register'>(Register New User)</a>
 					</span>
@@ -10695,9 +10729,8 @@ Current version: 82
 
 
 				<div class="justifyleft anotelabel">
-					Select Kobold Horde AI Model <span class="helpicon">?
-						<span class="helptext">These are the models currently provided by KoboldAI Horde
-							volunteers.</span>
+					Select AI Horde Model <span class="helpicon">?
+						<span class="helptext">These are the models currently provided by AI Horde volunteers.</span>
 					</span>
 					<span style="float:right;">
 					<a href="#" class="color_green" onclick="get_and_show_workers()">[See Current Volunteers] </a>
@@ -10706,16 +10739,16 @@ Current version: 82
 				</div>
 
 				<div class="justifyleft anotelabel">
-					Manually Select Worker <span class="helpicon">?
+					Select By Worker <span class="helpicon">?
 						<span class="helptext">This option explicitly assigns worker IDs, fixed based on the current workers available at model selection time.</span>
 					</span>
 					<input type="checkbox" id="manualworker" onclick="display_models()">
 
 					<span style="float:right;">
-						<input class="settinglabel miniinput" style="margin: 3px; width: 100px;" type="text" placeholder="Quick Search" value="" id="modelquicksearch" oninput="model_quick_search()">
+						<input class="settinglabel miniinput" style="margin: 3px; width: 90px;" type="text" placeholder="Quick Search" value="" id="modelquicksearch" oninput="model_quick_search()">
 					</span>
 					<span style="float:right;">
-						<button type="button" style="padding:2px 3px;margin:2px;font-size:11px;" class="bg_orange btn btn-primary" id="btn_cust_endpoint" onclick="display_custom_endpoint()">Connect Custom Endpoint</button>
+						<button type="button" style="padding:2px 3px;margin:2px;font-size:11px;" class="bg_orange btn btn-primary" id="btn_cust_endpoint" onclick="display_custom_endpoint()">Use Custom Endpoint</button>
 					</span>
 				</div>
 
@@ -11390,7 +11423,7 @@ Current version: 82
 
 			</div>
 			<div style="float:right;">
-				<input class="settinglabel miniinput" style="margin: 3px; width: 100px;" type="text" placeholder="Quick Search" value="" id="wiquicksearch" oninput="wi_quick_search()">
+				<input class="settinglabel miniinput" style="margin: 3px; width: 90px;" type="text" placeholder="Quick Search" value="" id="wiquicksearch" oninput="wi_quick_search()">
 			</div>
 			<div class="settinglabel" style="padding: 4px;">
 				<div class="justifyleft settingsmall" title="Controls whether the world info keys are matched in a case-sensitive way.">Case Sensitive Keys </div>
@@ -11410,7 +11443,7 @@ Current version: 82
 		<div class="workerpopup">
 			<div class="popuptitlebar">
 				<div><span style="float:right;">
-					<input class="settinglabel miniinput" style="margin: 3px; width: 100px;" type="text" placeholder="Quick Search" value="" id="workerlistquicksearch" oninput="worker_list_quick_search()">
+					<input class="settinglabel miniinput" style="margin: 3px; width: 90px;" type="text" placeholder="Quick Search" value="" id="workerlistquicksearch" oninput="worker_list_quick_search()">
 				</span></div>
 				<div class="popuptitletext" id="worktitlecount">Worker List</div>
 			</div>
