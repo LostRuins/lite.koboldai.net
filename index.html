@@ -2902,6 +2902,7 @@ Current version: 83
 				else {
 					//error occurred, maybe captcha failed
 					console.error("error occurred in v1 generation");
+					retry_preserve_last = true;
 					clear_poll_flags();
 					render_gametext();
 
@@ -2919,6 +2920,7 @@ Current version: 83
 				}
 			})
 			.catch((error) => {
+				retry_preserve_last = true;
 				console.error('Error:', error);
 				clear_poll_flags();
 				render_gametext();
@@ -2985,6 +2987,7 @@ Current version: 83
 					}
 				},
 				abort(e) {
+					retry_preserve_last = true;
 					console.error('Error:', error);
 					clear_poll_flags();
 					render_gametext();
@@ -2993,6 +2996,7 @@ Current version: 83
 			}));
 		})
 		.catch((error) => {
+			retry_preserve_last = true;
 			console.error('Error:', error);
 			clear_poll_flags();
 			render_gametext();
@@ -3163,6 +3167,7 @@ Current version: 83
 	var gametext_arr = []; //array of texts currently displayed
 	var redo_arr = []; //array of texts that are in the redo stack
 	var retry_prev_text = "" ; //when we retry, save the last version in case they want to undo
+	var retry_preserve_last = false; //if true, retrying does not delete any old text
 	var redo_prev_text = ""; //if we undo a retry, save a copy here so it can be reverted with redo
 	var pending_response_id = ""; //guid of response pending from horde server
 	var pending_response_horde = text_hordes[0]; //the url to poll for pending response from a v2 submit
@@ -7290,6 +7295,7 @@ Current version: 83
 		redo_arr = [];
 		last_request_str = "No Requests Available";
 		retry_prev_text = "";
+		retry_preserve_last = false;
 		redo_prev_text = "";
 		nextgeneratedimagemilestone = generateimagesinterval;
 		pending_response_id = "";
@@ -7625,6 +7631,7 @@ Current version: 83
 			}
 			redo_arr = [];
 			retry_prev_text = "";
+			retry_preserve_last = false;
 			redo_prev_text = "";
 			document.getElementById("input_text").value = "";
 			pending_response_id = "-1";
@@ -8155,12 +8162,14 @@ Current version: 83
 						else {
 							//error occurred, maybe captcha failed
 							console.error("error occurred in OAI generation");
+							retry_preserve_last = true;
 							clear_poll_flags();
 							render_gametext();
 							msgbox("Error occurred during text generation: " + formatError(data));
 						}
 					})
 					.catch((error) => {
+						retry_preserve_last = true;
 						console.error('Error:', error);
 						clear_poll_flags();
 						render_gametext();
@@ -8191,12 +8200,14 @@ Current version: 83
 						else {
 							//error occurred, maybe captcha failed
 							console.error("error occurred in Scale generation");
+							retry_preserve_last = true;
 							clear_poll_flags();
 							render_gametext();
 							msgbox("Error occurred during text generation: " + formatError(data));
 						}
 					})
 					.catch((error) => {
+						retry_preserve_last = true;
 						console.error('Error:', error);
 						clear_poll_flags();
 						render_gametext();
@@ -8259,12 +8270,14 @@ Current version: 83
 						else {
 							//error occurred, maybe captcha failed
 							console.error("error occurred in Claude generation");
+							retry_preserve_last = true;
 							clear_poll_flags();
 							render_gametext();
 							msgbox("Error occurred during text generation: " + formatError(data));
 						}
 					})
 					.catch((error) => {
+						retry_preserve_last = true;
 						console.error('Error:', error);
 						clear_poll_flags();
 						render_gametext();
@@ -8300,12 +8313,14 @@ Current version: 83
 						else {
 							//error occurred, maybe captcha failed
 							console.error("error occurred in PaLM generation");
+							retry_preserve_last = true;
 							clear_poll_flags();
 							render_gametext();
 							msgbox("Error occurred during text generation: " + formatError(data));
 						}
 					})
 					.catch((error) => {
+						retry_preserve_last = true;
 						console.error('Error:', error);
 						clear_poll_flags();
 						render_gametext();
@@ -8391,6 +8406,7 @@ Current version: 83
 					}
 				})
 				.catch((error) => {
+					retry_preserve_last = true;
 					console.error('Error:', error);
 					clear_poll_flags();
 					render_gametext();
@@ -8753,6 +8769,8 @@ Current version: 83
 		if(gentxt!="")
 		{
 			gametext_arr.push(gentxt);
+		}else{
+			retry_preserve_last = true; //do not delete last message if retry is hit
 		}
 		if(localsettings.beep_on)
 		{
@@ -9011,6 +9029,8 @@ Current version: 83
 							{
 								handle_incoming_text(gentxt, genworker, genmdl, genkudos);
 							}
+						}else{
+							retry_preserve_last = true;
 						}
 						synchro_polled_response = null;
 						synchro_pending_stream = "";
@@ -9031,6 +9051,7 @@ Current version: 83
 								clear_poll_flags();
 								render_gametext();
 								show_abort_button(false);
+								retry_preserve_last = true;
 								let errmsg = "Error encountered during text generation!\n";
 								if (data.message != null) {
 									errmsg += data.message;
@@ -9073,6 +9094,7 @@ Current version: 83
 												show_abort_button(false);
 											}).catch((error) => {
 												console.error('Error:', error);
+												retry_preserve_last = true;
 												clear_poll_flags();
 												render_gametext();
 												show_abort_button(false);
@@ -9108,6 +9130,7 @@ Current version: 83
 								}
 							}
 						}).catch((error) => {
+							retry_preserve_last = true;
 							console.error('Error:', error);
 							clear_poll_flags();
 							render_gametext();
@@ -9152,6 +9175,7 @@ Current version: 83
 				redo_arr = [];
 				last_reply_was_empty = false;
 				retry_prev_text = "";
+				retry_preserve_last = false;
 				redo_prev_text = "";
 
 				//stash images
@@ -10080,6 +10104,7 @@ Current version: 83
 					redo_arr.push(popped);
 				}
 			}
+			retry_preserve_last = false;
 			render_gametext();
 		}
 
@@ -10092,6 +10117,7 @@ Current version: 83
 	function btn_back() {
 		if (pending_response_id == "" && gametext_arr.length > 0) {
 			last_reply_was_empty = false;
+			retry_preserve_last = false;
 			if(retry_prev_text!="")
 			{
 				redo_prev_text = gametext_arr.pop();
@@ -10115,6 +10141,7 @@ Current version: 83
 		console.log("Redo All story");
 		if (pending_response_id == "" && redo_arr.length > 0) {
 			last_reply_was_empty = false;
+			retry_preserve_last = false;
 			while(redo_arr.length > 0)
 			{
 				retry_prev_text = "";
@@ -10136,12 +10163,14 @@ Current version: 83
 			if (redo_arr.length > 0) {
 				last_reply_was_empty = false;
 				retry_prev_text = "";
+				retry_preserve_last = false;
 				let popped = redo_arr.pop();
 				gametext_arr.push(popped);
 				render_gametext();
 			}else if (redo_prev_text != "") {
 				last_reply_was_empty = false;
 				retry_prev_text = gametext_arr.pop();
+				retry_preserve_last = false;
 				gametext_arr.push(redo_prev_text);
 				redo_prev_text = "";
 				render_gametext();
@@ -10158,7 +10187,11 @@ Current version: 83
 			let temp = gametext_arr[gametext_arr.length-1];
 			redo_prev_text = "";
 			retry_prev_text = "";
-			gametext_arr.pop();
+			if(!retry_preserve_last)
+			{
+				gametext_arr.pop();
+			}
+			retry_preserve_last = false;
 			submit_generation();
 			retry_prev_text = temp;
 			redo_arr = [];
