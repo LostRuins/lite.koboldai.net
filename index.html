@@ -5218,6 +5218,23 @@ Current version: 84
 	}
 
 	var worker_data_showonly = []; //only for table display, dont mix
+	//track worker earn rates
+	var first_seen_workers = {};
+	function track_kudos_earnings(wdata)
+	{
+		if(wdata && wdata.length>0)
+		{
+			for (let i = 0; i < wdata.length; ++i) {
+				let elem = wdata[i];
+				if (elem && elem.id && !first_seen_workers.hasOwnProperty(elem.id)) {
+					first_seen_workers[elem.id] = {
+						startkudos: elem.kudos_rewards,
+						timestamp: performance.now()
+					};
+				}
+			}
+		}
+	}
 	function get_and_show_workers() {
 		if (localflag) {
 			return;
@@ -5239,6 +5256,7 @@ Current version: 84
 					worker_data_showonly[i].defaultmodel = elem.models[0];
 				}
 			}
+			track_kudos_earnings(worker_data_showonly);
 
 			show_workers();
 		});
@@ -5343,6 +5361,7 @@ Current version: 84
 		document.getElementById("workercontainer").classList.remove("hidden");
 
 		let str = "";
+		let timenow = performance.now();
 		for (var i = 0; i < worker_data_showonly.length; ++i) {
 			let elem = worker_data_showonly[i];
 			let tokenspersec = elem.performance.replace(" tokens per second", "");
@@ -5364,8 +5383,18 @@ Current version: 84
 				if (n > 0) { allmdls += "<br>"; }
 				allmdls += escapeHtml(elem.models[n].substring(0, 32));
 			}
-
-			str += "<tr id='workertablerow_"+i+"'><td>" + workerNameHtml + "</td><td>" + allmdls + "</td><td>" + elem.max_length + " / " + elem.max_context_length + "<br>(" + tokenspersec + " T/s)</td><td "+brokenstyle+">" + format_uptime(elem.uptime) + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "</td><td>"+clustertag+"</td></tr>";
+			let kudos_per_hr = "";
+			if(first_seen_workers.hasOwnProperty(elem.id))
+			{
+				let firstseen = first_seen_workers[elem.id];
+				let kudosdiff = elem.kudos_rewards - firstseen.startkudos;
+				if(kudosdiff>0)
+				{
+					var hrspassed = ((timenow - firstseen.timestamp) / 1000)/3600.0; //time passed in sec
+					kudos_per_hr = "(" + (kudosdiff/hrspassed).toFixed(0) + "/hr)";
+				}
+			}
+			str += "<tr id='workertablerow_"+i+"'><td>" + workerNameHtml + "</td><td>" + allmdls + "</td><td>" + elem.max_length + " / " + elem.max_context_length + "<br>(" + tokenspersec + " T/s)</td><td "+brokenstyle+">" + format_uptime(elem.uptime) + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "<br><span style='color:gray'>"+kudos_per_hr+"</span></td><td>"+clustertag+"</td></tr>";
 		}
 		document.getElementById("workertable").innerHTML = str;
 		document.getElementById("worktitlecount").innerText = "Worker List - Total " + worker_data_showonly.length;
@@ -6366,6 +6395,9 @@ Current version: 84
 			if(modelsdone && workersdone)
 			{
 				onBothFetchesDone();
+
+				//track earnings if possible
+				track_kudos_earnings(wdata);
 			}
 		});
 
@@ -8790,7 +8822,7 @@ Current version: 84
 		{
 			playbeep();
 		}
-		let lastreq = "<a href=\"#\" onclick=\"show_last_req()\">Last request</a> served by <a href=\"#\" onclick=\"get_and_show_workers()\">" + genworker + "</a> using <span class=\"color_darkgreen\">"+genmdl+ "</span> for " + genkudos + " kudos in " + getTimeTaken() + " seconds.";
+		let lastreq = "<a href=\"#\" onclick=\"show_last_req()\">Last request</a> served by <a href=\"#\" onclick=\"get_and_show_workers()\">" + genworker + "</a> using <span class=\"color_darkgreen\">"+genmdl+ "</span>"+(genkudos>0?(" for " + genkudos + " kudos"):"")+" in " + getTimeTaken() + " seconds.";
 		document.getElementById("lastreq").innerHTML = lastreq;
 		document.getElementById("lastreq2").innerHTML = lastreq;
 	}
