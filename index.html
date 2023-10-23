@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 84
+Current version: 85
 -Concedo
 -->
 
@@ -3280,6 +3280,7 @@ Current version: 84
 		idle_responses: 0,
 		idle_duration: 60,
 		export_settings: true, //affects if settings are included with the story and sharelinks
+		show_advanced_load: false, //if true, every load opens the selector window
 		invert_colors: false,
 		passed_ai_warning: false, //used to store AI safety panel acknowledgement state
 		entersubmit: true, //enter sends the prompt
@@ -4275,8 +4276,10 @@ Current version: 84
 		new_save_storyobj.memory = current_memory;
 		new_save_storyobj.worldinfo = current_wi;
 
-		//extra unofficial fields
+		//extra unofficial fields for the story
 		new_save_storyobj.extrastopseq = extrastopseq;
+		new_save_storyobj.anotestr = anote_strength;
+		new_save_storyobj.wisearchdepth = wi_searchdepth;
 
 		if (export_settings) {
 			new_save_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
@@ -4426,156 +4429,200 @@ Current version: 84
 
 	function kai_json_load(storyobj, force_load_settngs)
 	{
-		//determine if oldui file or newui file format
-		restart_new_game();
+		//either show popup or just proceed to load
+		handle_advload_popup((localsettings.show_advanced_load && !force_load_settngs),()=>
+		{
+			let old_gametext_arr = gametext_arr;
+			let old_current_anote = current_anote;
+			let old_current_anotetemplate = current_anotetemplate;
+			let old_current_memory = current_memory;
+			let old_current_wi = current_wi;
+			let old_extrastopseq = extrastopseq;
 
-		let is_oldui = (storyobj.file_version == null);
-		let is_sharefile = (!storyobj.actions && (storyobj.ga != "" || storyobj.cm != "" || (storyobj.cwi && storyobj.cwi.length > 0) || storyobj.ess != ""));
-		console.log("Is oldui: " + is_oldui + ", is sharefile: " + is_sharefile);
+			//determine if oldui file or newui file format
+			restart_new_game();
 
-		if (is_sharefile) {
-			//handle old shareformat
-			gametext_arr = storyobj.ga;
-			if(gametext_arr==null)
-			{
-				gametext_arr = [];
-			}
-			if (storyobj.ca && storyobj.ca != "") {
-				current_anote = storyobj.ca;
-				current_anotetemplate = storyobj.ct;
-			}
-			if (storyobj.cm && storyobj.cm != "") {
-				current_memory = storyobj.cm;
-			}
-			if (storyobj.cwi && storyobj.cwi.length > 0) {
-				current_wi = storyobj.cwi;
-			}
-			if (storyobj.ess && storyobj.ess != "") {
-				extrastopseq = storyobj.ess;
-			}
-		} else if (is_oldui) {
-			//v1 load
-			if (storyobj.prompt != "") {
-				gametext_arr.push(storyobj.prompt);
-			}
-			for (var i = 0; i < storyobj.actions.length; ++i) {
-				gametext_arr.push(storyobj.actions[i]);
-			}
+			let is_oldui = (storyobj.file_version == null);
+			let is_sharefile = (!storyobj.actions && (storyobj.ga != "" || storyobj.cm != "" || (storyobj.cwi && storyobj.cwi.length > 0) || storyobj.ess != ""));
+			console.log("Is oldui: " + is_oldui + ", is sharefile: " + is_sharefile);
 
-			if (storyobj.anotetemplate) {
-				current_anotetemplate = storyobj.anotetemplate;
-			}
-			if (storyobj.authorsnote) {
-				current_anote = storyobj.authorsnote;
-			}
-			if (storyobj.memory) {
-				current_memory = storyobj.memory;
-			}
-			if (storyobj.worldinfo) {
-				current_wi = storyobj.worldinfo;
-			}
-			if (storyobj.extrastopseq) {
-				extrastopseq = storyobj.extrastopseq;
-			}
-		} else {
-			//v2 load
-			if(storyobj.prompt!="")
-			{
-				gametext_arr.push(storyobj.prompt);
-			}
-			for (var key in storyobj.actions.actions) {
-				var itm = storyobj.actions.actions[key];
-				gametext_arr.push(itm["Selected Text"]);
-			}
-			if (storyobj.authornotetemplate) {
-				current_anotetemplate = storyobj.authornotetemplate;
-			}
-			if (storyobj.authornote) {
-				current_anote = storyobj.authornote;
-			}
-			if (storyobj.memory) {
-				current_memory = storyobj.memory;
-			}
-			if (storyobj.worldinfo_v2 != null && storyobj.worldinfo_v2.entries != null) {
-				for (var key in storyobj.worldinfo_v2.entries) {
-					var itm = storyobj.worldinfo_v2.entries[key];
-					if (itm.key.length > 0 && itm.content != null) {
-						let nwi = {
-							"key": itm.key[0],
-							"keysecondary": (itm.keysecondary.length > 0 ? itm.keysecondary[0] : ""),
-							"content": itm.content,
-							"comment": itm.comment,
-							"folder": null,
-							"selective": itm.selective,
-							"constant": itm.constant
-						};
-						current_wi.push(nwi);
+			if (is_sharefile) {
+				//handle old shareformat
+				gametext_arr = storyobj.ga;
+				if(gametext_arr==null)
+				{
+					gametext_arr = [];
+				}
+				if (storyobj.ca && storyobj.ca != "") {
+					current_anote = storyobj.ca;
+					current_anotetemplate = storyobj.ct;
+				}
+				if (storyobj.cm && storyobj.cm != "") {
+					current_memory = storyobj.cm;
+				}
+				if (storyobj.cwi && storyobj.cwi.length > 0) {
+					current_wi = storyobj.cwi;
+				}
+				if (storyobj.ess && storyobj.ess != "") {
+					extrastopseq = storyobj.ess;
+				}
+			} else if (is_oldui) {
+				//v1 load
+				if (storyobj.prompt != "") {
+					gametext_arr.push(storyobj.prompt);
+				}
+				for (var i = 0; i < storyobj.actions.length; ++i) {
+					gametext_arr.push(storyobj.actions[i]);
+				}
+
+				if (storyobj.anotetemplate) {
+					current_anotetemplate = storyobj.anotetemplate;
+				}
+				if (storyobj.authorsnote) {
+					current_anote = storyobj.authorsnote;
+				}
+				if (storyobj.memory) {
+					current_memory = storyobj.memory;
+				}
+				if (storyobj.worldinfo) {
+					current_wi = storyobj.worldinfo;
+				}
+				if (storyobj.extrastopseq) {
+					extrastopseq = storyobj.extrastopseq;
+				}
+				if (storyobj.anotestr) {
+					anote_strength = storyobj.anotestr;
+				}
+				if (storyobj.wisearchdepth) {
+					wi_searchdepth = storyobj.wisearchdepth;
+				}
+			} else {
+				//v2 load
+				if(storyobj.prompt!="")
+				{
+					gametext_arr.push(storyobj.prompt);
+				}
+				for (var key in storyobj.actions.actions) {
+					var itm = storyobj.actions.actions[key];
+					gametext_arr.push(itm["Selected Text"]);
+				}
+				if (storyobj.authornotetemplate) {
+					current_anotetemplate = storyobj.authornotetemplate;
+				}
+				if (storyobj.authornote) {
+					current_anote = storyobj.authornote;
+				}
+				if (storyobj.memory) {
+					current_memory = storyobj.memory;
+				}
+				if (storyobj.worldinfo_v2 != null && storyobj.worldinfo_v2.entries != null) {
+					for (var key in storyobj.worldinfo_v2.entries) {
+						var itm = storyobj.worldinfo_v2.entries[key];
+						if (itm.key.length > 0 && itm.content != null) {
+							let nwi = {
+								"key": itm.key[0],
+								"keysecondary": (itm.keysecondary.length > 0 ? itm.keysecondary[0] : ""),
+								"content": itm.content,
+								"comment": itm.comment,
+								"folder": null,
+								"selective": itm.selective,
+								"constant": itm.constant
+							};
+							current_wi.push(nwi);
+						}
 					}
 				}
 			}
-		}
 
-		const import_settings = function()
-		{
-			let tmpapikey1 = localsettings.my_api_key;
-			let tmphc = localsettings.home_cluster;
-			let tmp_oai1 = localsettings.saved_oai_key;
-			let tmp_oai2 = localsettings.saved_oai_addr;
-			let tmp_or1 = localsettings.saved_openrouter_key;
-			let tmp_claude1 = localsettings.saved_claude_key;
-			let tmp_claude2 = localsettings.saved_claude_addr;
-			let tmp_palm1 = localsettings.saved_palm_key;
-			let tmp_kai = localsettings.saved_kai_addr;
-			import_props_into_object(localsettings, storyobj.savedsettings);
-			localsettings.my_api_key = tmpapikey1;
-			localsettings.home_cluster = tmphc;
-			localsettings.saved_oai_key = tmp_oai1;
-			localsettings.saved_oai_addr = tmp_oai2;
-			localsettings.saved_openrouter_key = tmp_or1;
-			localsettings.saved_claude_key = tmp_claude1;
-			localsettings.saved_claude_addr = tmp_claude2;
-			localsettings.saved_palm_key = tmp_palm1;
-			localsettings.saved_kai_addr = tmp_kai;
-
-			//backwards compat support for newlines
-			if (localsettings.instruct_has_newlines == true || (storyobj.savedsettings != null && storyobj.savedsettings.instruct_has_newlines == null && storyobj.savedsettings.instruct_has_markdown == null)) {
-				localsettings.instruct_has_newlines = false;
-				if (!localsettings.instruct_starttag.includes("\\n")) {
-					localsettings.instruct_starttag = "\\n" + localsettings.instruct_starttag + "\\n";
-				}
-				if (!localsettings.instruct_endtag.includes("\\n")) {
-					localsettings.instruct_endtag = "\\n" + localsettings.instruct_endtag + "\\n";
-				}
-			}
-
-			if (storyobj.savedaestheticsettings && storyobj.savedaestheticsettings != "") {
-				import_props_into_object(aestheticInstructUISettings, storyobj.savedaestheticsettings);
-			}
-
-			//old versions dont have this flag
-			if(localsettings.entersubmit===true || localsettings.entersubmit===false)
+			const import_settings = function(loadmainstory,loadmemanote,loadworldinfo,loadstopseq,loadgensettings,loadaessettings)
 			{
-				document.getElementById("entersubmit").checked = localsettings.entersubmit;
+				if(!loadmainstory)
+				{
+					gametext_arr = old_gametext_arr;
+				}
+				if(!loadmemanote)
+				{
+					current_anote = old_current_anote;
+					current_anotetemplate = old_current_anotetemplate;
+					current_memory = old_current_memory;
+				}
+				if(!loadworldinfo)
+				{
+					current_wi = old_current_wi;
+				}
+				if(!loadstopseq)
+				{
+					extrastopseq = old_extrastopseq;
+				}
+
+				if (storyobj.savedsettings && storyobj.savedsettings != "")
+				{
+					let tmpapikey1 = localsettings.my_api_key;
+					let tmphc = localsettings.home_cluster;
+					let tmp_oai1 = localsettings.saved_oai_key;
+					let tmp_oai2 = localsettings.saved_oai_addr;
+					let tmp_or1 = localsettings.saved_openrouter_key;
+					let tmp_claude1 = localsettings.saved_claude_key;
+					let tmp_claude2 = localsettings.saved_claude_addr;
+					let tmp_palm1 = localsettings.saved_palm_key;
+					let tmp_kai = localsettings.saved_kai_addr;
+					if(loadgensettings)
+					{
+						import_props_into_object(localsettings, storyobj.savedsettings);
+						//backwards compat support for newlines
+						if (localsettings.instruct_has_newlines == true || (storyobj.savedsettings != null && storyobj.savedsettings.instruct_has_newlines == null && storyobj.savedsettings.instruct_has_markdown == null)) {
+							localsettings.instruct_has_newlines = false;
+							if (!localsettings.instruct_starttag.includes("\\n")) {
+								localsettings.instruct_starttag = "\\n" + localsettings.instruct_starttag + "\\n";
+							}
+							if (!localsettings.instruct_endtag.includes("\\n")) {
+								localsettings.instruct_endtag = "\\n" + localsettings.instruct_endtag + "\\n";
+							}
+						}
+						//old versions dont have this flag
+						if (localsettings.entersubmit === true || localsettings.entersubmit === false) {
+							document.getElementById("entersubmit").checked = localsettings.entersubmit;
+						}
+					}
+					localsettings.my_api_key = tmpapikey1;
+					localsettings.home_cluster = tmphc;
+					localsettings.saved_oai_key = tmp_oai1;
+					localsettings.saved_oai_addr = tmp_oai2;
+					localsettings.saved_openrouter_key = tmp_or1;
+					localsettings.saved_claude_key = tmp_claude1;
+					localsettings.saved_claude_addr = tmp_claude2;
+					localsettings.saved_palm_key = tmp_palm1;
+					localsettings.saved_kai_addr = tmp_kai;
+
+					if(loadaessettings)
+					{
+						if (storyobj.savedaestheticsettings && storyobj.savedaestheticsettings != "") {
+							import_props_into_object(aestheticInstructUISettings, storyobj.savedaestheticsettings);
+						}
+					}
+				}
 			}
 
-		}
+			//port over old images to the new format
+			migrate_old_images_in_gametext();
 
-		//port over old images to the new format
-		migrate_old_images_in_gametext();
-
-		//prompt to import settings
-		if(force_load_settngs)
-		{
-			import_settings();
+			//prompt to import settings
+			if (localsettings.show_advanced_load && !force_load_settngs)
+			{
+				import_settings(
+				document.getElementById("advset_mainstory").checked,
+				document.getElementById("advset_memanote").checked,
+				document.getElementById("advset_worldinfo").checked,
+				document.getElementById("advset_stopseq").checked,
+				document.getElementById("advset_gensettings").checked,
+				document.getElementById("advset_aessettings").checked
+				);
+			} else {
+				//force load everything
+				import_settings(true, true, true, true, true, true);
+			}
 			render_gametext();
-		}
-		else if (storyobj.savedsettings && storyobj.savedsettings != "") {
-			import_settings();
-			render_gametext();
-		} else {
-			render_gametext();
-		}
-
+		});
 	}
 
 	function load_agnai_wi(obj,chatopponent,myname)
@@ -5469,7 +5516,9 @@ Current version: 84
 			document.getElementById("wicontainer").classList.contains("hidden") &&
 			document.getElementById("customendpointcontainer").classList.contains("hidden") &&
 			document.getElementById("quickstartcontainer").classList.contains("hidden") &&
-			document.getElementById("zoomedimgcontainer").classList.contains("hidden")
+			document.getElementById("zoomedimgcontainer").classList.contains("hidden") &&
+			document.getElementById("groupselectcontainer").classList.contains("hidden") &&
+			document.getElementById("advancedloadfile").classList.contains("hidden")
 		);
 	}
 	function hide_popups() {
@@ -5488,6 +5537,7 @@ Current version: 84
 		document.getElementById("quickstartcontainer").classList.add("hidden");
 		document.getElementById("zoomedimgcontainer").classList.add("hidden");
 		document.getElementById("groupselectcontainer").classList.add("hidden");
+		document.getElementById("advancedloadfile").classList.add("hidden");
 	}
 
 	function explain_horde()
@@ -6717,6 +6767,7 @@ Current version: 84
 		document.getElementById("top_p").value = document.getElementById("top_p_slide").value = localsettings.top_p;
 		document.getElementById("autoscroll").checked = localsettings.autoscroll;
 		document.getElementById("export_settings").checked = localsettings.export_settings;
+		document.getElementById("show_advanced_load").checked = localsettings.show_advanced_load;
 		document.getElementById("invert_colors").checked = localsettings.invert_colors;
 		document.getElementById("trimsentences").checked = localsettings.trimsentences;
 		document.getElementById("trimwhitespace").checked = localsettings.trimwhitespace;
@@ -6930,6 +6981,7 @@ Current version: 84
 		localsettings.top_p = document.getElementById("top_p").value;
 		localsettings.autoscroll = (document.getElementById("autoscroll").checked ? true : false);
 		localsettings.export_settings = (document.getElementById("export_settings").checked ? true : false);
+		localsettings.show_advanced_load = (document.getElementById("show_advanced_load").checked ? true : false);
 		localsettings.invert_colors = (document.getElementById("invert_colors").checked ? true : false);
 		localsettings.trimsentences = (document.getElementById("trimsentences").checked ? true : false);
 		localsettings.trimwhitespace = (document.getElementById("trimwhitespace").checked ? true : false);
@@ -7171,6 +7223,30 @@ Current version: 84
 
 	}
 
+	//triggers if advanced load is enabled
+	var advload_callback = null;
+	function handle_advload_popup(need_display,callbackfn)
+	{
+		if(!need_display)
+		{
+			callbackfn();
+		}
+		else
+		{
+			advload_callback = callbackfn;
+			document.getElementById("advancedloadfile").classList.remove("hidden");
+		}
+	}
+	function advload_btnok()
+	{
+		document.getElementById("advancedloadfile").classList.add("hidden");
+		if(advload_callback)
+		{
+			advload_callback();
+		}
+		advload_callback = null;
+	}
+
 	//triggers when loading from slot, or when loading from url share
 	function import_compressed_story_prompt_overwrite(compressed_story) {
 		msgboxYesNo("You already have an existing persistent story. Do you want to overwrite it?","Overwrite Story Warning",()=>{
@@ -7354,6 +7430,8 @@ Current version: 84
 		current_wi = [];
 		pending_context_preinjection = "";
 		extrastopseq = "";
+		anote_strength = 320;
+		wi_searchdepth = 0;
 		current_anotetemplate = "[Author's note: <|>]";
 		document.getElementById("input_text").value = "";
 		document.getElementById("cht_inp").value = "";
@@ -11177,6 +11255,32 @@ Current version: 84
 		</div>
 	</div>
 
+	<div class="popupcontainer flex hidden" id="advancedloadfile">
+		<div class="popupbg flex"></div>
+		<div class="nspopup fixsize">
+			<div class="popuptitlebar">
+				<div class="popuptitletext">Advanced Load File</div>
+			</div>
+			<div class="aidgpopuplistheader anotelabel">
+				Select categories to import from saved file. Selected categories will be overwritten. Unselected categories will retain original values.<br>
+				<br><div>
+				<table style="width:90%; margin:8px auto;">
+				<tr><td><span style="vertical-align: middle;">Main Story</span></td><td><input type="checkbox" id="advset_mainstory" style=" vertical-align: top;" checked></td></tr>
+				<tr><td><span style="vertical-align: middle;">Memory and Author's Note</span></td><td><input type="checkbox" id="advset_memanote" style=" vertical-align: top;" checked></td></tr>
+				<tr><td><span style="vertical-align: middle;">World Info</span></td><td><input type="checkbox" id="advset_worldinfo" style=" vertical-align: top;" checked></td></tr>
+				<tr><td><span style="vertical-align: middle;">Stop Sequences</span></td><td><input type="checkbox" id="advset_stopseq" style=" vertical-align: top;" checked></td></tr>
+				<tr><td><span style="vertical-align: middle;">General Settings</span></td><td><input type="checkbox" id="advset_gensettings" style=" vertical-align: top;" checked></td></tr>
+				<tr><td><span style="vertical-align: middle;">Aesthetic Settings</span></td><td><input type="checkbox" id="advset_aessettings" style=" vertical-align: top;" checked></td></tr>
+				</table>
+				</div>
+			</div>
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="advload_btnok()">Ok</button>
+				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
+			</div>
+		</div>
+	</div>
+
 	<div class="popupcontainer flex hidden" id="settingscontainer">
 		<div class="popupbg flex"></div>
 		<div class="nspopup fixsize evenhigher">
@@ -11623,6 +11727,11 @@ Current version: 84
 							<div class="justifyleft settingsmall">Rename Save File <span class="helpicon">?<span
 								class="helptext">Prompts to input a different filename when saving file.</span></span></div>
 						   <input type="checkbox" id="prompt_for_savename" style="margin:0px 0px 0px auto;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Show Advanced Load <span class="helpicon">?<span
+								class="helptext">If enabled, allows you to selective import only specific categories of a JSON save file</span></span></div>
+						   <input type="checkbox" id="show_advanced_load" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Autoscroll Text <span class="helpicon">?<span
