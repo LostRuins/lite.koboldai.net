@@ -8119,6 +8119,56 @@ Current version: 85
 		}
 	}
 
+	function get_stop_sequences() //the input object may not always be the same!
+	{
+		let seqs = [];
+		if (localsettings.opmode == 2) //stop on new action found
+		{
+			seqs = ["\n\> "];
+		}
+		if (localsettings.opmode == 3) //stop on selfname found
+		{
+			seqs = [localsettings.chatname + "\:",("\n" + localsettings.chatname + " ")];
+
+			//for multichat, everyone else becomes a stopper token
+			if (localsettings.chatopponent!="" && localsettings.chatopponent.includes("||$||")) {
+				let coarr = localsettings.chatopponent.split("||$||");
+				coarr = coarr.filter(x => (x && x != ""));
+				coarr = coarr.map(x => x.trim());
+				for (let n = 0; n < coarr.length; ++n) {
+					seqs.push(coarr[n] + "\:");
+				}
+			}
+			else
+			{
+				if(localsettings.chatopponent!="")
+				{
+					seqs.push("\n"+localsettings.chatopponent + "\: ");
+				}
+			}
+		}
+		if (localsettings.opmode == 4) //stop on selfname found
+		{
+			let st = get_instruct_starttag(true);
+			let et = get_instruct_endtag(true);
+			seqs = [st, et];
+		}
+		if (extrastopseq != "") {
+			let rep = replaceAll(extrastopseq, "\\n", "\n");
+			let srep = rep.split("||$||");
+			if (srep.length > 0 && !seqs) {
+				seqs = [];
+			}
+			for (let i = 0; i < srep.length; ++i) {
+				if (srep[i] && srep[i] != "") {
+					seqs.push(srep[i]);
+				}
+			}
+		}
+
+		return seqs;
+	}
+
 	function dispatch_submit_generation(submit_payload, input_was_empty) //if input is not empty, always unban eos
 	{
 		console.log(submit_payload);
@@ -8146,49 +8196,7 @@ Current version: 85
 
 				//for vesion 1.2.2 and later, send stopper tokens for chat and instruct
 				if (kobold_endpoint_version && kobold_endpoint_version != "" && compare_version_str(kobold_endpoint_version, "1.2.1") > 0) {
-					if (localsettings.opmode == 2) //stop on new action found
-					{
-						submit_payload.stop_sequence = ["\n\> "];
-					}
-					if (localsettings.opmode == 3) //stop on selfname found
-					{
-						submit_payload.stop_sequence = [localsettings.chatname + "\:",("\n" + localsettings.chatname + " ")];
-
-						//for multichat, everyone else becomes a stopper token
-						if (localsettings.chatopponent!="" && localsettings.chatopponent.includes("||$||")) {
-							let coarr = localsettings.chatopponent.split("||$||");
-							coarr = coarr.filter(x => (x && x != ""));
-							coarr = coarr.map(x => x.trim());
-							for (let n = 0; n < coarr.length; ++n) {
-								submit_payload.stop_sequence.push(coarr[n] + "\:");
-							}
-						}
-						else
-						{
-							if(localsettings.chatopponent!="")
-							{
-								submit_payload.stop_sequence.push("\n"+localsettings.chatopponent + "\: ");
-							}
-						}
-					}
-					if (localsettings.opmode == 4) //stop on selfname found
-					{
-						let st = get_instruct_starttag(true);
-						let et = get_instruct_endtag(true);
-						submit_payload.stop_sequence = [st, et];
-					}
-					if (extrastopseq != "") {
-						let rep = replaceAll(extrastopseq, "\\n", "\n");
-						let srep = rep.split("||$||");
-						if (srep.length > 0 && !submit_payload.stop_sequence) {
-							submit_payload.stop_sequence = [];
-						}
-						for (let i = 0; i < srep.length; ++i) {
-							if (srep[i] && srep[i] != "") {
-								submit_payload.stop_sequence.push(srep[i]);
-							}
-						}
-					}
+					submit_payload.stop_sequence = get_stop_sequences();
 				}
 
 				//version 1.2.4 and later supports unban tokens
@@ -8497,10 +8505,13 @@ Current version: 85
 				subpostheaders['Client-Agent'] = clientagenttouse;
 			}
 
-			//horde supports unban tokens
 			if(submit_payload.params)
 			{
+				//horde supports unban tokens
 				submit_payload.params.use_default_badwordsids = determine_if_ban_eos(input_was_empty);
+
+				//horde now supports stopping sequences
+				submit_payload.params.stop_sequence = get_stop_sequences();
 			}
 
 			last_request_str = JSON.stringify(submit_payload);
@@ -10077,7 +10088,7 @@ Current version: 85
 		document.getElementById("anote_strength").value = anote_strength;
 		document.getElementById("extrastopseq").value = extrastopseq;
 		document.getElementById("newlineaftermemory").checked = (newlineaftermemory?true:false);
-		if(custom_kobold_endpoint!="")
+		if(custom_kobold_endpoint!="" || !is_using_custom_ep() )
 		{
 			document.getElementById("noextrastopseq").classList.add("hidden");
 		}
@@ -11810,12 +11821,10 @@ Current version: 85
 					<option value="0">Immediate</option>
 				</select>
 			<br><br>
-			<div class="justifyleft settinglabel">Extra Stopping Sequence (Kobold API Only) <span class="helpicon">?<span
+			<div class="justifyleft settinglabel">Extra Stopping Sequences <span class="helpicon">?<span
 				class="helptext">Triggers the text generator to stop generating early if this sequence appears, in addition to default stop sequences. If you want multiple sequences, separate them with the following delimiter: ||$||</span></span></div>
 				<div class="color_red hidden" id="noextrastopseq">Stop Sequences may be unavailable.</div>
 				<input class="form-control" type="text" placeholder="None" value="" id="extrastopseq">
-
-
 
 			<br>
 			<div class="popupfooter">
