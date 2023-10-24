@@ -3220,7 +3220,6 @@ Current version: 85
 	var synchro_polled_response = null;
 	var synchro_pending_stream = ""; //used for token pseduo streaming for kobold api only
 	var waiting_for_autosummary = false;
-	var filter_enabled = true;
 	var italics_regex = new RegExp(/\*(\S[^*]+\S)\*/g); //the fallback regex
 	var temp_scenario = null;
 	var last_token_budget = ""; //to display token limits
@@ -3623,6 +3622,8 @@ Current version: 85
 			connect_custom_endpoint();
 			document.getElementById("lastreq").innerHTML = document.getElementById("lastreq2").innerHTML =
 			`<span class=color_gray>You're using Kobold Lite Embedded.</span>`;
+
+			read_url_params_data();
 		}
 		else
 		{
@@ -3657,46 +3658,12 @@ Current version: 85
 					document.getElementById("connectstatus").classList.add("color_green");
 					render_gametext(false);
 
-					//read the url params, and autoload a shared story if found
-					const foundStory = urlParams.get('s');
-					const foundScenario = urlParams.get('scenario');
-					const foundChub = urlParams.get('chub');
-					const nofiltermode = urlParams.get('nofilter');
-					if (nofiltermode) {
-						filter_enabled = false;
-						console.log("Safety filter is off. Use at your own risk.");
+					read_url_params_data();
+
+					if (popup_aiselect) {
+						display_models();
 					}
-					if (foundStory && foundStory != "") {
-						let safe_to_overwrite = (gametext_arr.length == 0 && current_memory == "" && current_anote == "" && current_wi.length == 0 && redo_arr.length == 0);
-						if (localsettings.persist_session && !safe_to_overwrite) {
-							import_compressed_story_prompt_overwrite(foundStory);
-						} else {
-							import_compressed_story(foundStory,false);
-						}
-						//purge url params
-						window.history.replaceState(null, null, window.location.pathname);
-					} else if (foundScenario && foundScenario != "") {
-						display_scenarios();
-						document.getElementById("scenariosearch").value = escapeHtml(foundScenario);
-						scenario_search();
-						const found = scenario_db.find(m => m.title.toLowerCase() == foundScenario.trim().toLowerCase());
-						if (found !== undefined) {
-							temp_scenario = found;
-							preview_temp_scenario();
-						}
-						//purge url params
-						window.history.replaceState(null, null, window.location.pathname);
-					} else if (foundChub && foundChub != "") {
-						display_scenarios();
-						get_chubai_scenario(foundChub);
-						//purge url params
-						window.history.replaceState(null, null, window.location.pathname);
-					}
-					else {
-						if (popup_aiselect) {
-							display_models();
-						}
-					}
+
 				}
 				else {
 					msgbox("Failed to connect to KAI Horde!\nPlease check your network connection.");
@@ -3720,6 +3687,41 @@ Current version: 85
 			document.getElementById("apikey").value = localsettings.my_api_key;
 			initial_fetched_kudos = true;
 			fetch_kudo_balance();
+		}
+	}
+
+	function read_url_params_data()
+	{
+		//read the url params, and autoload a shared story if found
+		const foundStory = urlParams.get('s');
+		const foundScenario = urlParams.get('scenario');
+		const foundChub = urlParams.get('chub');
+
+		if (foundStory && foundStory != "") {
+			let safe_to_overwrite = (gametext_arr.length == 0 && current_memory == "" && current_anote == "" && current_wi.length == 0 && redo_arr.length == 0);
+			if (localsettings.persist_session && !safe_to_overwrite) {
+				import_compressed_story_prompt_overwrite(foundStory);
+			} else {
+				import_compressed_story(foundStory, false);
+			}
+			//purge url params
+			window.history.replaceState(null, null, window.location.pathname);
+		} else if (foundScenario && foundScenario != "") {
+			display_scenarios();
+			document.getElementById("scenariosearch").value = escapeHtml(foundScenario);
+			scenario_search();
+			const found = scenario_db.find(m => m.title.toLowerCase() == foundScenario.trim().toLowerCase());
+			if (found !== undefined) {
+				temp_scenario = found;
+				preview_temp_scenario();
+			}
+			//purge url params
+			window.history.replaceState(null, null, window.location.pathname);
+		} else if (foundChub && foundChub != "") {
+			display_scenarios();
+			get_chubai_scenario(foundChub);
+			//purge url params
+			window.history.replaceState(null, null, window.location.pathname);
 		}
 	}
 
@@ -8576,7 +8578,7 @@ Current version: 85
 			sentence = localsettings.image_styles + " " + sentence;
 		}
 
-		if (filter_enabled && localsettings.generate_images_mode==1) {
+		if (localsettings.generate_images_mode==1) {
 			sentence = sanitize_horde_image_prompt(sentence);
 		}
 
@@ -9972,6 +9974,7 @@ Current version: 85
 			let foundimg = "";
 			if(curr.msg && curr.msg!="")
 			{
+				curr.msg = curr.msg.replace(italics_regex,"<em style='opacity:0.7'>$1</em>");
 				//convert the msg into images
 				curr.msg = curr.msg.replace(/\[<\|p\|.+?\|p\|>\]/g, function (m) {
 					// m here means the whole matched string
@@ -9986,7 +9989,7 @@ Current version: 85
 					return inner;
 				});
 				curr.msg = curr.msg.replace(/\[<\|.+?\|>\]/g, ""); //remove normal comments too
-				curr.msg = curr.msg.replace(italics_regex,"<em style='opacity:0.7'>$1</em>");
+
 
 			}
 
