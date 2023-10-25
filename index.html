@@ -9573,7 +9573,7 @@ Current version: 85
 			}
 			document.getElementById("btnmode_adventure").classList.remove("hidden");
 		}
-		else if(localsettings.opmode==3 && localsettings.chatopponent!="" && localsettings.chatopponent.includes("||$||"))
+		else if(localsettings.opmode==3 && localsettings.chatopponent!="")
 		{
 			document.getElementById("inputrow").classList.add("show_mode");
 			document.getElementById("btnmode_chat").classList.remove("hidden");
@@ -9852,7 +9852,7 @@ Current version: 85
 			{
 				document.getElementById("chat_msg_body").innerHTML = render_enhanced_chat_instruct(textToRender,false);
 			}
-			if (localsettings.opmode == 3 && localsettings.chatopponent != "" && localsettings.chatopponent.includes("||$||")) {
+			if (localsettings.opmode == 3 && localsettings.chatopponent != "") {
 				document.getElementById("chat_btnmode_chat").classList.remove("hidden");
 				document.getElementById("cht_inp").classList.add("shorter");
 			} else {
@@ -10341,18 +10341,44 @@ Current version: 85
 	function show_groupchat_select()
 	{
 		document.getElementById("groupselectcontainer").classList.remove("hidden");
-		let gs = `<table style="width:90%; margin:8px auto;">`;
-		if(localsettings.chatopponent!="")
-		{
+		let gs = ``;
+		if (localsettings.chatopponent != "" && localsettings.chatopponent.includes("||$||")) {
+			gs = `Selected participants will reply randomly, unless you address them directly by name.`
+			+`<br><br>Unselected participants will not reply in group chats.<br>`
+			+`<table style="width:90%; margin:8px auto;">`;
 			let grouplist = localsettings.chatopponent.split("||$||");
-			for(let i=0;i<grouplist.length;++i)
-			{
+			for (let i = 0; i < grouplist.length; ++i) {
 				let show = !groupchat_removals.includes(grouplist[i]);
-				gs += `<tr><td><span style="vertical-align: middle;">`+grouplist[i]+`</span></td><td><input type="checkbox" id="groupselectitem_`+i+`" style=" vertical-align: top;" `+(show?"checked":"")+`></td></tr>`;
+				gs += `<tr><td width='184px'><span style="vertical-align: middle;">` + grouplist[i] + `</span></td>`
+					+`<td width='24px'><button type="button" class="btn btn-primary widelbtn" id="widel0" onclick="impersonate_message(`+i+`)">+</button></td>`
+					+`<td width='24px'><input type="checkbox" id="groupselectitem_` + i + `" style=" vertical-align: top;" ` + (show ? "checked" : "") + `></td></tr>`;
 			}
+			gs += `</table>`;
 		}
-		gs += `</table>`;
+		else if(localsettings.chatopponent != "")
+		{
+			gs = `You're having a one-on-one chat with <b>`+localsettings.chatopponent+`</b>.<br><br>`
+			+`<a href='#' class='color_blueurl' onclick='hide_popups();display_settings()'>Turn it into a <b>group chat</b> by <b>adding more AI characters</b> (one per line)</a>.<br><br>`
+			+ `<a href='#' class='color_blueurl' onclick='impersonate_message(0)'>Impersonate `+localsettings.chatopponent+` speaking as them</a>`;
+		}
+
 		document.getElementById("groupselectitems").innerHTML = gs;
+	}
+	function impersonate_message(index)
+	{
+		hide_popups();
+		let grouplist = localsettings.chatopponent.split("||$||");
+		let target = grouplist[index];
+		inputBox("Add a messsage speaking as "+target+":","Impersonate "+target,"",target+" says...", ()=>{
+			let userinput = getInputBoxValue();
+			userinput = userinput.trim();
+			if(userinput!="")
+			{
+				gametext_arr.push("\n"+target+": "+userinput);
+				render_gametext();
+			}
+			hide_popups();
+		},false);
 	}
 	function confirm_groupchat_select()
 	{
@@ -11962,8 +11988,6 @@ Current version: 85
 				<div class="popuptitletext">Group Chat Selector</div>
 			</div>
 			<div class="aidgpopuplistheader anotelabel">
-				Selected participants will reply randomly, unless you address them directly by name.<br><br>
-				Unselected participants will not reply in group chats.<br>
 				<div id="groupselectitems">
 				</div>
 			</div>
