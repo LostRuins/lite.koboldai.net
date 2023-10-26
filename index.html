@@ -7517,7 +7517,7 @@ Current version: 85
 
 	function end_trim_to_sentence(input,include_newline=false) {
 		let last = -1;
-		let enders = ['.', '!', '?', '`', '*', '"', ')', '}', '`', ']', ';'];
+		let enders = ['.', '!', '?', '*', '"', ')', '}', '`', ']', ';'];
 		for (let i = 0; i < enders.length; ++i)
 		{
 			last = Math.max(last, input.lastIndexOf(enders[i]));
@@ -7552,6 +7552,36 @@ Current version: 85
 			}
 		}
 		return input;
+	}
+
+	//if the string is longer than len, trim it to the last part, but always trim to a word or sentence boundary.
+	function substring_to_boundary(input_string, maxlen)
+	{
+		if(input_string.length <= maxlen)
+		{
+			return input_string;
+		}
+		else
+		{
+			let cutoff = input_string.length - maxlen;
+			let trim = input_string.substring(cutoff);
+			let idx = -1;
+			let enders = ['.', '!', '?', '*', '"', ')', '}', '`', ']', ';', ' ', '\n'];
+			for (let i = 0; i < enders.length; ++i)
+			{
+				let f = trim.indexOf(enders[i]);
+				if (idx == -1) {
+					idx = f;
+				} else if (f>=0){
+					idx = Math.min(idx,f);
+				}
+			}
+			if(idx>=0)
+			{
+				trim = trim.substring(idx); //no +1, include leading token!
+			}
+			return trim;
+		}
 	}
 
 	function handle_typing(event) {
@@ -7817,7 +7847,7 @@ Current version: 85
 			if (current_memory == null || current_memory.trim() == "")
 			{
 				//if there is no memory, then we can be a lot of lenient with the character counts since the backend will truncate excess anyway
-				max_allowed_characters = Math.floor(maxctxlen * 4.6);
+				max_allowed_characters = Math.floor(maxctxlen * 4.8);
 			}
 
 			let truncated_context = concat_gametext(true, ""); //no need to truncate if memory is empty
@@ -8017,7 +8047,7 @@ Current version: 85
 
 			//we clip the authors note if its too long
 			let truncated_anote = current_anotetemplate.replace("<|>", current_anote);
-			truncated_anote = truncated_anote.substring(truncated_anote.length - max_mem_anote_len);
+			truncated_anote = substring_to_boundary(truncated_anote, max_mem_anote_len);
 
 			if (current_anote.length == 0) {
 				//if there's no authors note at all, don't include the template
@@ -8028,15 +8058,17 @@ Current version: 85
 			//only do this processing if memory or anote is not blank
 			if (truncated_memory.length > 0 || current_anote.length > 0) {
 				//now we resize the context such that the memory and authors note can fit inside
-				truncated_context = truncated_context.substring(truncated_context.length - max_allowed_characters);
+				truncated_context = substring_to_boundary(truncated_context, max_allowed_characters);
 				let augmented_len = truncated_memory.length + truncated_context.length + truncated_anote.length;
 				let excess_len = augmented_len - max_allowed_characters; //if > 0, then we exceeded context window
-				truncated_context = truncated_context.substring(excess_len);
+				excess_len = excess_len < 0 ? 0 : excess_len;
+				let newlimit = (max_allowed_characters-excess_len) < 32 ? 32 : (max_allowed_characters-excess_len);
+				truncated_context = substring_to_boundary(truncated_context, newlimit); //must always have at least 32 chars from main context
 				//insert authors note 80 tokens before the ending (320 characters).
 				let anote_dist = anote_strength;
 				let anote_insert_idx = truncated_context.length - anote_dist;
 				//try to align anote with a word boundary
-				for(let i=0;i<10;++i)
+				for(let i=0;i<12;++i)
 				{
 					if(anote_insert_idx>=0 && anote_insert_idx<truncated_context.length
 					&& truncated_context[anote_insert_idx]!=" " && truncated_context[anote_insert_idx]!="."
