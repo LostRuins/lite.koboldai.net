@@ -2835,13 +2835,17 @@ Current version: 85
 			let new_submit_payload = JSON.parse(JSON.stringify(submit_payload));
 			new_submit_payload.prompt += synchro_streaming_response;
 			new_submit_payload.max_length = Math.min(tokens_per_tick,synchro_streaming_tokens_left);
-			fetch(sub_endpt, {
+
+			let reqOpt = {
 			method: 'POST', // or 'PUT'
-			headers: {
-				'Content-Type': 'application/json',
-			},
+			headers: {'Content-Type': 'application/json',},
 			body: JSON.stringify(new_submit_payload),
-			})
+			};
+			if(globalabortcontroller)
+			{
+				reqOpt.signal = globalabortcontroller.signal;
+			}
+			fetch(sub_endpt, reqOpt)
 			.then((response) => response.json())
 			.then((data) => {
 				console.log("sync kobold_api_stream response: " + JSON.stringify(data));
@@ -2946,9 +2950,15 @@ Current version: 85
 	function kobold_api_stream_sse(sub_endpt,submit_payload)
 	{
 		synchro_pending_stream = "";
-		fetch(sub_endpt, {method: 'POST',
+		let reqOpt =
+		{method: 'POST',
 		headers: {'Content-Type': 'application/json'},
-		body: JSON.stringify(submit_payload)})
+		body: JSON.stringify(submit_payload)};
+		if(globalabortcontroller)
+		{
+			reqOpt.signal = globalabortcontroller.signal;
+		}
+		fetch(sub_endpt, reqOpt)
 		.then(resp => {
 			resp.body
 			.pipeThrough(new TextDecoderStream())
@@ -3230,6 +3240,8 @@ Current version: 85
 	var koboldcpp_version = ""; //detect if we are using koboldcpp
 	var last_request_str = "No Requests Available"; //full context of last submitted request
 	var lastcheckgenkey = ""; //for checking polled-streaming unique id when generating in kcpp
+	var globalabortcontroller = null;
+	var passed_ai_warning_local = false;
 
 	var localsettings = {
 		my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
@@ -3402,10 +3414,23 @@ Current version: 85
 
 	}
 
+	function prepare_abort_controller()
+	{
+		try { //setup global abort controller
+			const controller = new AbortController();
+			const signal = controller.signal;
+			globalabortcontroller = controller;
+		} catch (e) {
+			console.log("AbortController Not Supported: " + e);
+		}
+	}
+
 	//attempt to load settings
 	function init() {
 
 		polyfills();
+
+		prepare_abort_controller();
 
 		//uncompress compacted scenarios
 		for(let i=0;i<compressed_scenario_db.length;++i)
@@ -5096,7 +5121,7 @@ Current version: 85
 	}
 	function confirm_scenario_verify()
 	{
-		if(temp_scenario.show_warning==true && localsettings.passed_ai_warning==false)
+		if(temp_scenario.show_warning==true && localsettings.passed_ai_warning==false && passed_ai_warning_local==false)
 		{
 			let warntxt = `<p><b><u>Disclaimer: The AI is not suitable to be used as an actual therapist, counselor or advisor of any kind.</u></b></p>
 			<p>While some find it comforting to talk about their issues with an AI, the responses are unpredictable.</p>
@@ -5111,6 +5136,7 @@ Current version: 85
 				{
 					confirm_scenario();
 					localsettings.passed_ai_warning = true; //remember flag for session
+					passed_ai_warning_local = true;
 				}
 			},true);
 		} else {
@@ -7662,7 +7688,14 @@ Current version: 85
 			}),
 			})
 			.then((response) => response.json())
-			.then((data) => {})
+			.then((data) => {
+				if(globalabortcontroller)
+				{
+					globalabortcontroller.abort();
+					console.log("Abort Signal");
+					prepare_abort_controller();
+				}
+			})
 			.catch((error) => {
 				console.error('Error:', error);
 			});
