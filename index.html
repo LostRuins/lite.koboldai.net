@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 91
+Current version: 92
 -Concedo
 -->
 
@@ -6282,20 +6282,25 @@ Current version: 91
 				</div>`;
 		filetable += entry;
 
-		for(let i=0;i<4;++i)
+		try
 		{
-			let testslot = localStorage.getItem(STORAGE_PREFIX + "slot_"+i+"_meta");
-			entry = `<div style="display:flex; height:46px;">
-				<div style="font-size:12px; margin:3px; text-align: center; align-self: center; width: calc(100% - 184px);">
-				`+(testslot?`[ Slot `+(i+1)+` - `+testslot+` ]`:`[ Slot `+(i+1)+` - Empty ]`)+`
-				</div>
-				<div style="text-align: right; align-self: center; width: 184px;">
-				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary" onclick="save_to_slot(`+i+`)"><img class="btnicon-save"/></button>
-				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary" onclick="load_from_slot(`+i+`)" `+(testslot?"":"disabled")+`><img class="btnicon-load"/></button>
-				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary bg_green" onclick="download_from_slot(`+i+`)" `+(testslot?"":"disabled")+`><img class="btnicon-download"/></button>
-				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary bg_red" onclick="delete_from_slot(`+i+`)" `+(testslot?"":"disabled")+`><img class="btnicon-delete"/></button>
-				</div></div>`;
-			filetable += entry;
+			for(let i=0;i<4;++i)
+			{
+				let testslot = localStorage.getItem(STORAGE_PREFIX + "slot_"+i+"_meta");
+				entry = `<div style="display:flex; height:46px;">
+					<div style="font-size:12px; margin:3px; text-align: center; align-self: center; width: calc(100% - 184px);">
+					`+(testslot?`[ Slot `+(i+1)+` - `+testslot+` ]`:`[ Slot `+(i+1)+` - Empty ]`)+`
+					</div>
+					<div style="text-align: right; align-self: center; width: 184px;">
+					<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary" onclick="save_to_slot(`+i+`)"><img class="btnicon-save"/></button>
+					<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary" onclick="load_from_slot(`+i+`)" `+(testslot?"":"disabled")+`><img class="btnicon-load"/></button>
+					<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary bg_green" onclick="download_from_slot(`+i+`)" `+(testslot?"":"disabled")+`><img class="btnicon-download"/></button>
+					<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary bg_red" onclick="delete_from_slot(`+i+`)" `+(testslot?"":"disabled")+`><img class="btnicon-delete"/></button>
+					</div></div>`;
+				filetable += entry;
+			}
+		} catch (e) {
+			console.log("get slots failed: " + e);
 		}
 		document.getElementById("saveloadentries").innerHTML = filetable;
 	}
@@ -10187,12 +10192,17 @@ Current version: 91
 
 	function autosave() {
 		//autosave
-		localStorage.setItem(STORAGE_PREFIX + "settings", JSON.stringify(localsettings));
-		if (localsettings.persist_session) {
-			let compressedstory = generate_compressed_story(true,true,true);
-			localStorage.setItem(STORAGE_PREFIX + "story", compressedstory);
+		try {
+			localStorage.setItem(STORAGE_PREFIX + "settings", JSON.stringify(localsettings));
+			if (localsettings.persist_session) {
+				let compressedstory = generate_compressed_story(true, true, true);
+				localStorage.setItem(STORAGE_PREFIX + "story", compressedstory);
+			}
+			console.log("autosave done");
+		} catch (e) {
+			console.log("autosave failed: " + e);
 		}
-		console.log("autosave done");
+
 	}
 
 	function btn_adventure_mode()
