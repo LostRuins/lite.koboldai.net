@@ -5788,14 +5788,16 @@ Current version: 93
 
 	function select_custom_oai_model()
 	{
-		inputBox("Enter custom OpenAI model name","Custom Model Name",localsettings.saved_oai_custommodel,"", ()=>{
+		let isOpenrouter = (document.getElementById("customapidropdown").value==5);
+		inputBox("Enter custom "+(isOpenrouter?"OpenAI":"OpenRouter")+" model name","Custom Model Name",localsettings.saved_oai_custommodel,"", ()=>{
 			let coai = getInputBoxValue().trim();
-			let dropdown = document.getElementById("custom_oai_model");
+			let dropdown = (isOpenrouter?document.getElementById("custom_openrouter_model"):document.getElementById("custom_oai_model"));
+			let mdlopt = (isOpenrouter?"custom_openrouter_model_option":"custom_oai_model_option");
 			if(coai!="")
 			{
-				document.getElementById("custom_oai_model_option").value = coai;
-				document.getElementById("custom_oai_model_option").innerText = coai;
-				document.getElementById("custom_oai_model_option").style.display = "";
+				document.getElementById(mdlopt).value = coai;
+				document.getElementById(mdlopt).innerText = coai;
+				document.getElementById(mdlopt).style.display = "";
 				dropdown.selectedIndex = dropdown.options.length - 1;
 			}
 			oai_model_change();
@@ -5803,7 +5805,8 @@ Current version: 93
 	}
 	function oai_model_change()
 	{
-		let dropdown = document.getElementById("custom_oai_model");
+		let isOpenrouter = (document.getElementById("customapidropdown").value==5);
+		let dropdown = (isOpenrouter?document.getElementById("custom_openrouter_model"):document.getElementById("custom_oai_model"));
 		let non_completions = (dropdown.value.includes("text-davinci-003") || dropdown.value.includes("text-davinci-002")
 		|| dropdown.value.includes("text-davinci-001") || dropdown.value.includes("gpt-3.5-turbo-instruct") || dropdown.value == "davinci");
 		if(dropdown.selectedIndex==dropdown.options.length-1)
@@ -5837,7 +5840,8 @@ Current version: 93
 			console.log(data);
 			if (!data.error && data.data && data.data.length > 0)
 			{
-				let dropdown = document.getElementById("custom_oai_model");
+				let isOpenrouter = (document.getElementById("customapidropdown").value==5);
+				let dropdown = (isOpenrouter?document.getElementById("custom_openrouter_model"):document.getElementById("custom_oai_model"));
 				var lastOption = dropdown.lastElementChild;
 				for (var i = dropdown.options.length - 1; i >= 0; i--) {
 					var option = dropdown.options[i];
@@ -5875,6 +5879,8 @@ Current version: 93
 		document.getElementById("scalecustom").classList.add("hidden");
 		document.getElementById("claudecustom").classList.add("hidden");
 		document.getElementById("palmcustom").classList.add("hidden");
+		document.getElementById("custom_oai_model").classList.add("hidden");
+		document.getElementById("custom_openrouter_model").classList.add("hidden");
 		if(epchoice==0)
 		{
 			document.getElementById("koboldcustom").classList.remove("hidden");
@@ -5890,6 +5896,7 @@ Current version: 93
 			{
 				document.getElementById("oaidesc").classList.add("hidden");
 				document.getElementById("openrouterdesc").classList.remove("hidden");
+				document.getElementById("custom_openrouter_model").classList.remove("hidden");
 				document.getElementById("custom_oai_endpoint").value = default_openrouter_base;
 				document.getElementById("custom_oai_endpoint").classList.add("hidden");
 				document.getElementById("custom_oai_key").value = localsettings.saved_openrouter_key;
@@ -5897,6 +5904,7 @@ Current version: 93
 			else
 			{
 				document.getElementById("oaidesc").classList.remove("hidden");
+				document.getElementById("custom_oai_model").classList.remove("hidden");
 				document.getElementById("openrouterdesc").classList.add("hidden");
 				document.getElementById("custom_oai_endpoint").classList.remove("hidden");
 				document.getElementById("custom_oai_key").value = localsettings.saved_oai_key;
@@ -6134,7 +6142,9 @@ Current version: 93
 				{
 					document.getElementById("jailbreakprompttext").value = defaultoaijailbreak;
 				}
-				custom_oai_model = document.getElementById("custom_oai_model").value.trim();
+				let isOpenrouter = (document.getElementById("customapidropdown").value==5);
+				let dropdown = (isOpenrouter?document.getElementById("custom_openrouter_model"):document.getElementById("custom_oai_model"));
+				custom_oai_model = dropdown.value.trim();
 				localsettings.saved_oai_custommodel = custom_oai_model;
 				selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": custom_oai_model, "count": 1 }];
 				selected_workers = [];
@@ -11455,6 +11465,49 @@ Current version: 93
 					<option value="gpt-4">gpt-4</option>
 					<option value="gpt-4-32k">gpt-4-32k</option>
 					<option style="display:none;" id="custom_oai_model_option" value="custom">[Custom]</option>
+				</select>
+				<select style="padding:4px;display:inline;width:calc(100% - 220px)" class="form-control hidden" id="custom_openrouter_model" onchange="oai_model_change()">
+					<option value="openai/gpt-3.5-turbo">openai/gpt-3.5-turbo</option>
+					<option value="openai/gpt-3.5-turbo-1106">openai/gpt-3.5-turbo-1106</option>
+					<option value="openai/gpt-3.5-turbo-0301">openai/gpt-3.5-turbo-0301</option>
+					<option value="openai/gpt-3.5-turbo-16k">openai/gpt-3.5-turbo-16k</option>
+					<option value="openai/gpt-4-1106-preview">openai/gpt-4-1106-preview</option>
+					<option value="openai/gpt-4">openai/gpt-4</option>
+					<option value="openai/gpt-4-0314">openai/gpt-4-0314</option>
+					<option value="openai/gpt-4-32k">openai/gpt-4-32k</option>
+					<option value="openai/gpt-4-32k-0314">openai/gpt-4-32k-0314</option>
+					<option value="openai/text-davinci-002">openai/text-davinci-002</option>
+					<option value="openai/gpt-3.5-turbo-instruct">openai/gpt-3.5-turbo-instruct</option>
+					<option value="google/palm-2-chat-bison">google/palm-2-chat-bison</option>
+					<option value="google/palm-2-codechat-bison">google/palm-2-codechat-bison</option>
+					<option value="google/palm-2-chat-bison-32k">google/palm-2-chat-bison-32k</option>
+					<option value="google/palm-2-codechat-bison-32k">google/palm-2-codechat-bison-32k</option>
+					<option value="meta-llama/llama-2-13b-chat">meta-llama/llama-2-13b-chat</option>
+					<option value="meta-llama/llama-2-70b-chat">meta-llama/llama-2-70b-chat</option>
+					<option value="nousresearch/nous-hermes-llama2-13b">nousresearch/nous-hermes-llama2-13b</option>
+					<option value="nousresearch/nous-hermes-llama2-70b">nousresearch/nous-hermes-llama2-70b</option>
+					<option value="meta-llama/codellama-34b-instruct">meta-llama/codellama-34b-instruct</option>
+					<option value="phind/phind-codellama-34b">phind/phind-codellama-34b</option>
+					<option value="jondurbin/airoboros-l2-70b">jondurbin/airoboros-l2-70b</option>
+					<option value="migtissera/synthia-70b">migtissera/synthia-70b</option>
+					<option value="mistralai/mistral-7b-instruct" selected="selected">mistralai/mistral-7b-instruct</option>
+					<option value="open-orca/mistral-7b-openorca">open-orca/mistral-7b-openorca</option>
+					<option value="teknium/openhermes-2-mistral-7b">teknium/openhermes-2-mistral-7b</option>
+					<option value="pygmalionai/mythalion-13b">pygmalionai/mythalion-13b</option>
+					<option value="undi95/remm-slerp-l2-13b">undi95/remm-slerp-l2-13b</option>
+					<option value="gryphe/mythomax-l2-13b">gryphe/mythomax-l2-13b</option>
+					<option value="xwin-lm/xwin-lm-70b">xwin-lm/xwin-lm-70b</option>
+					<option value="gryphe/mythomax-l2-13b-8k">gryphe/mythomax-l2-13b-8k</option>
+					<option value="huggingfaceh4/zephyr-7b-beta">huggingfaceh4/zephyr-7b-beta</option>
+					<option value="anthropic/claude-2">anthropic/claude-2</option>
+					<option value="anthropic/claude-instant-v1">anthropic/claude-instant-v1</option>
+					<option value="anthropic/claude-v1">anthropic/claude-v1</option>
+					<option value="anthropic/claude-1.2">anthropic/claude-1.2</option>
+					<option value="anthropic/claude-instant-v1-100k">anthropic/claude-instant-v1-100k</option>
+					<option value="anthropic/claude-v1-100k">anthropic/claude-v1-100k</option>
+					<option value="anthropic/claude-instant-1.0">anthropic/claude-instant-1.0</option>
+					<option value="mancer/weaver">mancer/weaver</option>
+					<option style="display:none;" id="custom_openrouter_model_option" value="custom">[Custom]</option>
 				</select>
 				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaifetchlist" onclick="oai_fetch_models()">Fetch List</button>
 				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaiusecustom" onclick="select_custom_oai_model()">Use Custom</button>
