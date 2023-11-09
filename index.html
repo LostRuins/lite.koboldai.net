@@ -3292,6 +3292,7 @@ Current version: 93
 		persist_session: true,
 		speech_synth: 0, //0 is disabled
 		beep_on: false,
+		narrate_both_sides: false,
 		image_styles: "",
 		grammar:"",
 		tokenstreammode: (localflag?1:0), //0=off,1=pollstream,2=sse
@@ -7002,6 +7003,7 @@ Current version: 93
 		document.getElementById("ttsselect").innerHTML = ttshtml;
 		document.getElementById("ttsselect").value = localsettings.speech_synth;
 		document.getElementById("beep_on").checked = localsettings.beep_on;
+		document.getElementById("narrate_both_sides").checked = localsettings.narrate_both_sides;
 		toggle_opmode();
 
 		//sd models display
@@ -7178,6 +7180,7 @@ Current version: 93
 
 		localsettings.speech_synth = document.getElementById("ttsselect").value;
 		localsettings.beep_on = (document.getElementById("beep_on").checked?true:false);
+		localsettings.narrate_both_sides = (document.getElementById("narrate_both_sides").checked?true:false);
 		localsettings.auto_ctxlen = (document.getElementById("auto_ctxlen").checked ? true : false);
 		localsettings.auto_genamt = (document.getElementById("auto_genamt").checked ? true : false);
 
@@ -7901,9 +7904,12 @@ Current version: 93
 			idle_timer = 0;
 			idle_triggered_counter = 0;
 			if (localsettings.speech_synth > 0 && 'speechSynthesis' in window) {
-				let utterance = new window.SpeechSynthesisUtterance(newgen);
-				utterance.voice = window.speechSynthesis.getVoices()[localsettings.speech_synth - 1];
-				window.speechSynthesis.speak(utterance);
+				if(localsettings.narrate_both_sides)
+				{
+					let utterance = new window.SpeechSynthesisUtterance(newgen);
+					utterance.voice = window.speechSynthesis.getVoices()[localsettings.speech_synth - 1];
+					window.speechSynthesis.speak(utterance);
+				}
 			}
 
 			if (localsettings.opmode == 4)
@@ -9181,6 +9187,7 @@ Current version: 93
 			}
 		}
 
+		let gentxtspeak = gentxt;
 		if (pending_context_preinjection != "") {
 			if(gentxt!="" && gentxt[0]!=" " && localsettings.opmode==3)
 			{
@@ -9191,8 +9198,13 @@ Current version: 93
 			pending_context_preinjection = "";
 		}
 
-		if (localsettings.speech_synth > 0 && 'speechSynthesis' in window) {
-			let utterance = new window.SpeechSynthesisUtterance(gentxt);
+		if (localsettings.speech_synth > 0 && 'speechSynthesis' in window)
+		{
+			if(localsettings.narrate_both_sides)
+			{
+				gentxtspeak = gentxt;
+			}
+			let utterance = new window.SpeechSynthesisUtterance(gentxtspeak);
 			utterance.voice = window.speechSynthesis.getVoices()[localsettings.speech_synth - 1];
 			window.speechSynthesis.speak(utterance);
 		}
@@ -12040,6 +12052,10 @@ Current version: 93
 							<div class="justifyleft settingsmall">TTS <span class="helpicon">?<span class="helptext">Enable Text-To-Speech to have your story automatically read to you.</span></span></div>
 							<select class="form-control" id="ttsselect" style="height:20px;padding:0;margin:0px 0 0;">
 							</select>
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall"  title="If unchecked, only speak AI replies, not other text.">Narrate Both Sides </div>
+						   <input type="checkbox" id="narrate_both_sides" style="margin:0px 0 0;">
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall"  title="Play a sound when generation is complete">Beep on Done </div>
