@@ -3225,6 +3225,7 @@ Current version: 93
 	var anote_strength = 320; //distance from end
 	var newlineaftermemory = true;
 	var current_wi = []; //each item stores a wi object.
+	var wi_insertlocation = 0; //after memory
 	var wi_searchdepth = 0; //search everything
 	var generateimagesinterval = 650; //if generated images is enabled, it will trigger after every 600 new characters in context.
 	var nextgeneratedimagemilestone = generateimagesinterval; //used to keep track of when to generate the next image
@@ -4055,24 +4056,24 @@ Current version: 93
 
 	function is_using_kcpp_with_streaming()
 	{
-		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.29") > 0);
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.30") >= 0);
 	}
 	function is_using_kcpp_with_sse() //need 1.39 for multibyte fix
 	{
 		let browsersupported = (self.TransformStream!=null && self.TextDecoderStream!=null && self.WritableStream!=null);
-		return (browsersupported && custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.39") > 0);
+		return (browsersupported && custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.40") >= 0);
 	}
 	function is_using_kcpp_with_mirostat()
 	{
-		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.36") > 0);
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.37") >= 0);
 	}
 	function is_using_kcpp_with_grammar()
 	{
-		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.43") > 0);
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.44") >= 0);
 	}
 	function is_using_kcpp_with_added_memory()
 	{
-		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.48.2") > 0);
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.49") >= 0);
 	}
 
 	//0 is none, 1 is pseudostreaming, 2 is true poll-streaming, 3 is sse-streaming
@@ -4389,6 +4390,7 @@ Current version: 93
 		new_save_storyobj.extrastopseq = extrastopseq;
 		new_save_storyobj.anotestr = anote_strength;
 		new_save_storyobj.wisearchdepth = wi_searchdepth;
+		new_save_storyobj.wiinsertlocation = wi_insertlocation;
 
 		if (export_settings) {
 			new_save_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
@@ -4605,6 +4607,9 @@ Current version: 93
 				}
 				if (storyobj.wisearchdepth) {
 					wi_searchdepth = storyobj.wisearchdepth;
+				}
+				if (storyobj.wiinsertlocation) {
+					wi_insertlocation = storyobj.wiinsertlocation;
 				}
 			} else {
 				//v2 load
@@ -7588,6 +7593,7 @@ Current version: 93
 		extrastopseq = "";
 		anote_strength = 320;
 		wi_searchdepth = 0;
+		wi_insertlocation = 0;
 		current_anotetemplate = "[Author's note: <|>]";
 		document.getElementById("input_text").value = "";
 		document.getElementById("cht_inp").value = "";
@@ -8180,6 +8186,7 @@ Current version: 93
 				wimatch_context = wimatch_context.toLowerCase();
 			}
 
+			let wistr = "";
 			if (current_wi.length > 0) {
 				for (var x = 0; x < current_wi.length; ++x) {
 					let wi = current_wi[x];
@@ -8219,10 +8226,11 @@ Current version: 93
 					}
 
 					if (shoulduse) {
-						truncated_memory += wi.content + "\n";
+						wistr += wi.content + "\n";
 					}
 				}
 			}
+
 
 			//we clip the authors note if its too long
 			let truncated_anote = current_anotetemplate.replace("<|>", current_anote);
@@ -8231,6 +8239,15 @@ Current version: 93
 			if (current_anote.length == 0) {
 				//if there's no authors note at all, don't include the template
 				truncated_anote = "";
+			}
+
+			if(wi_insertlocation>0)
+			{
+				truncated_anote = wistr + truncated_anote;
+			}
+			else
+			{
+				truncated_memory += wistr;
 			}
 
 			//now we resize the context such that the memory and authors note can fit inside
@@ -8438,12 +8455,12 @@ Current version: 93
 				submit_payload.quiet = !showlog;
 
 				//for vesion 1.2.2 and later, send stopper tokens for chat and instruct
-				if (kobold_endpoint_version && kobold_endpoint_version != "" && compare_version_str(kobold_endpoint_version, "1.2.1") > 0) {
+				if (kobold_endpoint_version && kobold_endpoint_version != "" && compare_version_str(kobold_endpoint_version, "1.2.2") >= 0) {
 					submit_payload.stop_sequence = get_stop_sequences();
 				}
 
 				//version 1.2.4 and later supports unban tokens
-				if (kobold_endpoint_version && kobold_endpoint_version != "" && compare_version_str(kobold_endpoint_version, "1.2.3") > 0)
+				if (kobold_endpoint_version && kobold_endpoint_version != "" && compare_version_str(kobold_endpoint_version, "1.2.4") >= 0)
 				{
 					submit_payload.use_default_badwordsids = determine_if_ban_eos(input_was_empty);
 				}
@@ -10439,6 +10456,7 @@ Current version: 93
 		}
 		localsettings.case_sensitive_wi = (document.getElementById("case_sensitive_wi").checked?true:false);
 		wi_searchdepth = document.getElementById("wi_searchdepth").value;
+		wi_insertlocation = document.getElementById("wi_insertlocation").value;
 	}
 
 	let backup_wi_obj = [];
@@ -10499,7 +10517,7 @@ Current version: 93
 		selectionhtml += "</table>"
 		wilist.innerHTML = selectionhtml;
 		document.getElementById("wi_searchdepth").value = wi_searchdepth;
-
+		document.getElementById("wi_insertlocation").value = wi_insertlocation;
 	}
 
 	var backLongPressTimer = null;
@@ -12214,10 +12232,18 @@ Current version: 93
 			<div class="wilist" id="wilist">
 
 			</div>
+
+			<div class="settinglabel" style="padding: 4px;">
+				<div class="justifyleft settingsmall">WI Insert Location <span class="helpicon">?<span
+					class="helptext">Controls where the world info should be inserted</span></span></div>
+			<select style="height:16px;padding:0px;margin:0px 4px 0; width:90px;font-size:10px;" class="form-control" id="wi_insertlocation">
+				<option value="0">After Memory</option>
+				<option value="1">Before A/N</option>
+			</select></div>
 			<div class="settinglabel" style="padding: 4px;">
 				<div class="justifyleft settingsmall">WI Search Depth <span class="helpicon">?<span
 					class="helptext">Controls how far back in the text to search for World Info Keys</span></span></div>
-			<select style="height:16px;padding:0px;margin:0px 4px 0; width:80px;font-size:10px;" class="form-control" id="wi_searchdepth">
+			<select style="height:16px;padding:0px;margin:0px 4px 0; width:90px;font-size:10px;" class="form-control" id="wi_searchdepth">
 				<option value="0">Full Context</option>
 				<option value="1024">Last 1024</option>
 				<option value="512">Last 512</option>
