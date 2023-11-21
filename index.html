@@ -3599,11 +3599,18 @@ Current version: 96
 			.setAttribute("content","width=device-width, initial-scale=1, maximum-scale=1");
 		}
 
-		//fix for copy paste text in firefox
+		//fix for copy paste text in firefox, and also to prevent pasting rich text
 		{
 			document.getElementById("gametext").addEventListener("paste", function(e) {
 				e.preventDefault();
-				var text = (e.originalEvent || e).clipboardData.getData('text/plain');
+
+				let text = e.clipboardData
+				? (e.originalEvent || e).clipboardData.getData('text/plain')
+				: // For IE
+				window.clipboardData
+				? window.clipboardData.getData('Text')
+				: '';
+				text = escapeHtml(text);
 				text = text.replace(/\r?\n/g, '<br>');
 				document.execCommand("insertHTML", false, text);
 			});
@@ -7851,7 +7858,7 @@ Current version: 96
 		let id_to_cancel = pending_response_id;
 
 		//flush any streaming text first
-		if(is_using_custom_ep() && pending_response_id!="" && synchro_pending_stream!="")
+		if(is_using_custom_ep() && pending_response_id != "" && (synchro_pending_stream != "" || synchro_polled_response != ""))
 		{
 			//apply a short delay of 1s before button reenables
 			allow_reenable_submitbtn_timestamp = performance.now() + 500;
@@ -7859,7 +7866,10 @@ Current version: 96
 				update_submit_button(true);
 			}, 1000);
 
-			synchro_polled_response = synchro_pending_stream;
+			if(synchro_pending_stream!="")
+			{
+				synchro_polled_response = synchro_pending_stream;
+			}
 			poll_in_progress = false;
 			horde_poll_nearly_completed = false;
 			poll_pending_response();
