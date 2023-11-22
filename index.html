@@ -1654,18 +1654,9 @@ Current version: 97
 		margin: 8px 0 8px;
 	}
 
-	.cht_inp_hold input {
-
-		border: medium none;
-		color: #bebebe;
-		font-size: 15px;
-		min-height: 36px;
-		/* width: 100%; */
-		outline:none;
-	}
-
-	.cht_inp
+	.cht_inp_bg
 	{
+		display: inline-block;
 		width: calc(100% - 84px);
 		background: #86868638 none repeat scroll 0 0;
 		margin-top: 8px;
@@ -1673,8 +1664,23 @@ Current version: 97
 		border-radius: 16px;
 		padding-left: 10px;
 		padding-right: 10px;
+		padding-top: 7px;
 	}
-	.cht_inp.shorter
+	.cht_inp_bg_inner
+	{
+		width: 100%;
+		resize: none;
+		overflow-y:scroll;
+		overflow-x:hidden;
+		background: #00000000 none repeat scroll 0 0;
+		border: medium none;
+		color: #bebebe;
+		font-size: 15px;
+		/* min-height: 36px; */
+		/* width: 100%; */
+		outline:none;
+	}
+	.cht_inp_bg.shorter
 	{
 		width: calc(100% - 114px);
 	}
@@ -7669,6 +7675,7 @@ Current version: 97
 		current_anotetemplate = "[Author's note: <|>]";
 		document.getElementById("input_text").value = "";
 		document.getElementById("cht_inp").value = "";
+		chat_resize_input();
 		image_db = {};
 		completed_imgs_meta = {};
 		localsettings.adventure_is_action = false;
@@ -10226,10 +10233,10 @@ Current version: 97
 			}
 			if (localsettings.opmode == 3 && localsettings.chatopponent != "") {
 				document.getElementById("chat_btnmode_chat").classList.remove("hidden");
-				document.getElementById("cht_inp").classList.add("shorter");
+				document.getElementById("cht_inp_bg").classList.add("shorter");
 			} else {
 				document.getElementById("chat_btnmode_chat").classList.add("hidden");
-				document.getElementById("cht_inp").classList.remove("shorter");
+				document.getElementById("cht_inp_bg").classList.remove("shorter");
 			}
 
 			// Show the 'AI is typing' message if an answer is pending, and prevent the 'send button' from being clicked again.
@@ -10419,12 +10426,21 @@ Current version: 97
 			}
 		}
 	}
+	function chat_resize_input()
+	{
+		//resize chat inp
+		let textarea = document.getElementById("cht_inp");
+		let numberOfLineBreaks = (textarea.value.match(/\n/g) || []).length;
+		numberOfLineBreaks = numberOfLineBreaks>4?4:numberOfLineBreaks;
+		textarea.rows = numberOfLineBreaks+1;
+	}
 	function chat_submit_generation()
 	{
 		//easy solution is to just pump the text into the main box and submit it
 		document.getElementById("input_text").value = document.getElementById("cht_inp").value;
 		submit_generation();
 		document.getElementById("cht_inp").value = "";
+		chat_resize_input();
 	}
 	function chat_toggle_actionmenu()
 	{
@@ -11437,15 +11453,16 @@ Current version: 97
 			<div class="cht_inp_hold_outer">
 			  <div class="cht_inp_hold">
 				<button onclick="show_groupchat_select()" id="chat_btnmode_chat" class="chat_btnmode_chat hidden" type="button"></button>
-				<input id="cht_inp" type="text" name="chtchtinp" class="cht_inp" role="presentation" autocomplete="noppynop" spellcheck="true" placeholder="Type a message" value="" oninput="update_submit_button()" onkeypress="return chat_handle_typing(event)"/>
-
+				<div id="cht_inp_bg" class="cht_inp_bg">
+				<textarea class="cht_inp_bg_inner" id="cht_inp" type="text" name="chtchtinp"  role="presentation" autocomplete="noppynop" spellcheck="true" rows="1" wrap="off" placeholder="Type a message" value="" oninput="update_submit_button();chat_resize_input();" onkeypress="return chat_handle_typing(event)"/></textarea>
+				</div>
 				<button onclick="chat_submit_generation()" id="chat_msg_send_btn" class="chat_msg_send_btn" type="button"></button>
 				<button onclick="abort_generation()" id="chat_msg_send_btn_abort" class="hidden chat_msg_send_btn_abort" type="button"></button>
 				<button type="button" class="chat_msg_cust_btn" id="btn_chat_cust" onclick="chat_toggle_actionmenu()"></button>
 				</div>
 			</div>
 
-			<div class="lastreq" id="lastreq2" style="padding-top: 4px; color:#999999"><span class="color_gray">Avoid sending privacy sensitive information. <a href="#" onclick="explain_horde()">Click here for more info</a>.</span></div>
+			<div class="lastreq" id="lastreq2" style="padding-top: 2px; color:#999999"><span class="color_gray">Avoid sending privacy sensitive information. <a href="#" onclick="explain_horde()">Click here for more info</a>.</span></div>
 		  </div>
 	</div>
 
