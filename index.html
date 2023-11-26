@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 97
+Current version: 98
 -Concedo
 -->
 
@@ -8711,22 +8711,26 @@ Current version: 97
 				}
 				if(document.getElementById("clauderenamecompat").checked)
 				{
+					let assistant_correct_case = "Assistant:";
 					if(!claude_payload.prompt.toLowerCase().trim().startsWith('human:'))
 					{
 						claude_payload.prompt = "Human: "+claude_payload.prompt;
 					}
-					if(!claude_payload.prompt.toLowerCase().trim().endsWith('assistant:'))
+					if(!claude_payload.prompt.toLowerCase().trim().endsWith(assistant_correct_case.toLowerCase()))
 					{
 						if(localsettings.opmode==1)
 						{
-							claude_payload.prompt = claude_payload.prompt + " \nAssistant: Here is a continuation of the story: \nAssistant:";
+							claude_payload.prompt = claude_payload.prompt + " \n"+assistant_correct_case+" Here is a continuation of the story: \n"+assistant_correct_case;
 						}
 						else
 						{
-							claude_payload.prompt = claude_payload.prompt + " Assistant:";
+							claude_payload.prompt = claude_payload.prompt + " "+assistant_correct_case;
 						}
-
 					}
+					//trim end
+					claude_payload.prompt = claude_payload.prompt.replace(/[\t\r\n ]+$/, '');
+					//replace final assistant with fixed case
+					claude_payload.prompt = claude_payload.prompt.slice(0, -(assistant_correct_case.length))+assistant_correct_case;
 				}
 
 				last_request_str = JSON.stringify(claude_payload);
@@ -11730,7 +11734,7 @@ Current version: 97
 				</select>
 				<input type="checkbox" id="claudeaddversion" onchange="" checked>
 				<div class="box-label" title="Add endpoint version">Add Endpoint Version</div>
-				<input type="checkbox" id="clauderenamecompat" onchange="">
+				<input type="checkbox" id="clauderenamecompat" onchange="" checked>
 				<div class="box-label" title="Rename User and Bot tags to work with claude, force inject them otherwise">Claude Compatibility Rename Fix</div>
 			</div>
 			<div id="palmcustom" class="aidgpopuplistheader anotelabel hidden">
