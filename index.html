@@ -4816,7 +4816,7 @@ Current version: 99
 	function load_agnai_wi(obj,chatopponent,myname)
 	{
 		console.log("Append Agnai WI");
-		current_wi = [];
+		let loadedwi = [];
 		for (let key in obj.entries) {
 			var itm = obj.entries[key];
 			var karr = itm.keywords;
@@ -4829,13 +4829,14 @@ Current version: 99
 				"selective": false,
 				"constant": false
 			};
-			current_wi.push(nwi);
+			loadedwi.push(nwi);
 		}
+		return loadedwi;
 	}
 	function load_tavern_wi(obj,chatopponent,myname)
 	{
 		console.log("Append Tavern WI");
-		current_wi = [];
+		let loadedwi = [];
 		for (let key in obj.entries) {
 			var itm = obj.entries[key];
 			var karr = itm.key;
@@ -4857,8 +4858,9 @@ Current version: 99
 				"selective": itm.selective,
 				"constant": itm.constant
 			};
-			current_wi.push(nwi);
+			loadedwi.push(nwi);
 		}
+		return loadedwi;
 	}
 	function load_tavern_obj(obj)
 	{
@@ -4894,11 +4896,11 @@ Current version: 99
 		//check if it's a world info only card, if so, do not restart game
 		if(combinedmem.trim()=="" && greeting=="" && obj.entries)
 		{
-			load_tavern_wi(obj,chatopponent,myname);
+			current_wi = load_tavern_wi(obj,chatopponent,myname);
 		}
 		else if(agnaidatafieldsempty.trim()=="" && obj.entries && obj.kind=="memory")
 		{
-			load_agnai_wi(obj,chatopponent,myname);
+			current_wi = load_agnai_wi(obj,chatopponent,myname);
 		}
 		else
 		{
@@ -4913,11 +4915,11 @@ Current version: 99
 			//handle character book
 			if(obj.character_book && obj.character_book.entries && obj.character_book.entries.length>0)
 			{
-				load_tavern_wi(obj.character_book,chatopponent,myname);
+				current_wi = load_tavern_wi(obj.character_book,chatopponent,myname);
 			}
 			else if(obj.entries && obj.entries.length>0)
 			{
-				load_agnai_wi(obj,chatopponent,myname);
+				current_wi = load_agnai_wi(obj,chatopponent,myname);
 			}
 		}
 		render_gametext();
@@ -4993,7 +4995,16 @@ Current version: 99
 								let keys = data.worldInfos[w].keys;
 								let entry = data.worldInfos[w].entry;
 
-								temp_scenario.worldinfo.push({"key":(keys?keys:""),"content":(entry?entry:"")})
+								let nwi = {
+									"key": (keys ? keys : ""),
+									"keysecondary": "",
+									"content": (entry ? entry : ""),
+									"comment": "",
+									"folder": null,
+									"selective": false,
+									"constant": false
+								};
+								temp_scenario.worldinfo.push(nwi);
 							}
 						}
 						preview_temp_scenario();
@@ -5136,6 +5147,11 @@ Current version: 99
 										temp_scenario.chatopponent = chatopponent;
 										temp_scenario.prompt = ("\n{{char}}: "+ greeting);
 										temp_scenario.memory = combinedmem;
+										if(obj.character_book && obj.character_book.entries && obj.character_book.entries.length>0)
+										{
+											let myname = ((localsettings.chatname && localsettings.chatname!="")?localsettings.chatname:"You");
+											temp_scenario.worldinfo = load_tavern_wi(obj.character_book,chatopponent,myname);
+										}
 										preview_temp_scenario();
 									}
 
@@ -5233,21 +5249,7 @@ Current version: 99
 			refreshPreview(true);
 		}
 		if (temp_scenario.worldinfo && temp_scenario.worldinfo.length > 0) {
-			current_wi = [];
-			for (let x = 0; x < temp_scenario.worldinfo.length; ++x) {
-				let key = temp_scenario.worldinfo[x].key;
-				let content = temp_scenario.worldinfo[x].content;
-				let nwi = {
-					"key": (key ? key : ""),
-					"keysecondary": "",
-					"content": (content ? content : ""),
-					"comment": "",
-					"folder": null,
-					"selective": false,
-					"constant": false
-				};
-				current_wi.push(nwi);
-			}
+			current_wi = temp_scenario.worldinfo;
 		}
 
 		localsettings.opmode = temp_scenario.opmode;
