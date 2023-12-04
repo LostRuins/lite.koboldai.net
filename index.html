@@ -5109,16 +5109,17 @@ Current version: 99
 						.then(blob => {
 							preview_temp_scenario();
 
-							if(card_is_defective)
-							{
-								readTavernPngFromBlob(blob,(obj)=>{
-									if(obj!=null)
+							readTavernPngFromBlob(blob,(obj)=>{
+								if(obj!=null)
+								{
+									//a lightweight tavern card loader, not fully compliant
+									if(obj.spec=="chara_card_v2" && obj.data!=null)
 									{
-										//a lightweight tavern card loader, not fully compliant
-										if(obj.spec=="chara_card_v2" && obj.data!=null)
-										{
-											obj = obj.data;
-										}
+										obj = obj.data;
+									}
+
+									if(card_is_defective)
+									{
 										let chatopponent = obj.name?obj.name:"Bot";
 										let memory = obj.description?("Persona: "+obj.description):"";
 										memory += obj.personality?("\nPersonality: "+obj.personality):"";
@@ -5147,16 +5148,19 @@ Current version: 99
 										temp_scenario.chatopponent = chatopponent;
 										temp_scenario.prompt = ("\n{{char}}: "+ greeting);
 										temp_scenario.memory = combinedmem;
-										if(obj.character_book && obj.character_book.entries && obj.character_book.entries.length>0)
-										{
-											let myname = ((localsettings.chatname && localsettings.chatname!="")?localsettings.chatname:"You");
-											temp_scenario.worldinfo = load_tavern_wi(obj.character_book,chatopponent,myname);
-										}
-										preview_temp_scenario();
 									}
 
-								});
-							}
+									//since cai format has no wi, try to grab it from tavern format
+									if(obj.character_book && obj.character_book.entries && obj.character_book.entries.length>0)
+									{
+										let myname = ((localsettings.chatname && localsettings.chatname!="")?localsettings.chatname:"You");
+										temp_scenario.worldinfo = load_tavern_wi(obj.character_book,chatopponent,myname);
+									}
+									preview_temp_scenario();
+								}
+
+							});
+
 							const objectURL = URL.createObjectURL(blob);
 							const compressedImg = compressImage(objectURL, (compressedImageURI, aspectratio)=>{
 								temp_scenario.image = compressedImageURI;
