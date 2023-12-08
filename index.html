@@ -3532,6 +3532,7 @@ Current version: 99
 		}
 
 		console.log("Init started");
+		let loadok = false;
 		try {
 			let loadedsettingsjson = localStorage.getItem(STORAGE_PREFIX + "settings");
 			let loadedstorycompressed = localStorage.getItem(STORAGE_PREFIX + "story");
@@ -3558,12 +3559,41 @@ Current version: 99
 					//toggle persistence off to prevent it from turning on again
 					localsettings.persist_session = false;
 				}
+				loadok = true;
 			} else {
 				console.log("Skipped missing local save");
+				loadok = false;
 			}
 
 		} catch (e) {
 			console.log("Discarded invalid local save: " + e);
+			loadok = false;
+		}
+
+
+		if(!loadok && !localflag && selected_models.length==0 && !is_using_custom_ep()) //nothing was loaded. this is a brand new state, in web lite
+		{
+			console.log("Autopick some good default models...");
+			//attempt to autopick some good default models
+			fetch_models((mdls) => {
+			//can we find the model that's used? if yes load it, otherwise load the first one
+				if (mdls.length > 0)
+				{
+					for (var i = 0; i < mdls.length; ++i) {
+						for (var j = 0; j < defaultmodels.length; ++j) {
+							if (mdls[i].name.trim().toLowerCase().includes(defaultmodels[j].trim().toLowerCase()) ||
+								defaultmodels[j].trim().toLowerCase().includes(mdls[i].name.trim().toLowerCase())) {
+								selected_models.push(mdls[i]);
+							}
+						}
+					}
+					if (selected_models.length == 0) //no matching models, just assign one
+					{
+						selected_models.push(mdls[0]);
+					}
+					render_gametext();
+				}
+			});
 		}
 
 		const tokenstreaming = urlParams.get('streaming');
