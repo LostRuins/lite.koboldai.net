@@ -4253,6 +4253,27 @@ Current version: 99
 		var cstoryjson = buf_to_b64(lz_c.compress(storyjson, 1));
 		return cstoryjson;
 	}
+
+	//runs async, complete autosave only if latest to be called
+	var autosave_compressed_story_async_counter = 0;
+	function autosave_compressed_story_async(save_images,export_settings,export_aesthetic_settings) {
+
+		let story = generate_savefile(save_images,export_settings,export_aesthetic_settings);
+		let storyjson = JSON.stringify(story);
+		console.log("Autosave Start: ", story);
+		let current_async = ++autosave_compressed_story_async_counter;
+		lz_c.compress(storyjson, 1, function(res){
+			if(current_async==autosave_compressed_story_async_counter)
+			{
+				console.log("Autosave Done: " + current_async);
+				var compressedstory = buf_to_b64(res);
+				localStorage.setItem(STORAGE_PREFIX + "story", compressedstory);
+			}else{
+				console.log("Autosave Rejected: " + current_async);
+			}
+		});
+	}
+
 	function export_share_story() {
 		let cstoryjson = generate_compressed_story(false,localsettings.export_settings,false);
 		console.log("Export Len: " + cstoryjson.length);
@@ -10622,12 +10643,10 @@ Current version: 99
 			update_prev_custom_endpoint_type();
 			localStorage.setItem(STORAGE_PREFIX + "settings", JSON.stringify(localsettings));
 			if (localsettings.persist_session) {
-				let compressedstory = generate_compressed_story(true, true, true);
-				localStorage.setItem(STORAGE_PREFIX + "story", compressedstory);
+				autosave_compressed_story_async(true,true,true);
 			}
-			console.log("autosave done");
 		} catch (e) {
-			console.log("autosave failed: " + e);
+			console.log("Autosave Failed: " + e);
 		}
 
 	}
