@@ -4255,23 +4255,39 @@ Current version: 99
 	}
 
 	//runs async, complete autosave only if latest to be called
-	var autosave_compressed_story_async_counter = 0;
-	function autosave_compressed_story_async(save_images,export_settings,export_aesthetic_settings) {
-
+	var pending_storyjson_autosave = null;
+	function autosave_compressed_story(async_save,save_images,export_settings,export_aesthetic_settings) {
 		let story = generate_savefile(save_images,export_settings,export_aesthetic_settings);
 		let storyjson = JSON.stringify(story);
+
+		if(!async_save)
+		{
+			var cstoryjson = buf_to_b64(lz_c.compress(storyjson, 1));
+			pending_storyjson_autosave = null;
+			localStorage.setItem(STORAGE_PREFIX + "story", cstoryjson);
+			return;
+		}
+
+		let ongoing = pending_storyjson_autosave;
+		pending_storyjson_autosave = storyjson;
+		if(ongoing){
+			console.log("Delay Autosave: ",story);
+			return;
+		}
 		console.log("Autosave Start: ", story);
-		let current_async = ++autosave_compressed_story_async_counter;
-		lz_c.compress(storyjson, 1, function(res){
-			if(current_async==autosave_compressed_story_async_counter)
-			{
-				console.log("Autosave Done: " + current_async);
-				var compressedstory = buf_to_b64(res);
+		(function retry_autosave(json) {
+			lz_c.compress(json, 1, function(res) {
+				console.log("Autosave Done");
+				let compressedstory = buf_to_b64(res);
 				localStorage.setItem(STORAGE_PREFIX + "story", compressedstory);
-			}else{
-				console.log("Autosave Rejected: " + current_async);
-			}
-		});
+				let newer = pending_storyjson_autosave;
+				pending_storyjson_autosave = null;
+				if (newer && newer !== json) {
+					console.log("Updating Autosave");
+					retry_autosave(newer);
+				}
+			});
+		})(storyjson);
 	}
 
 	function export_share_story() {
@@ -4648,9 +4664,9 @@ Current version: 99
 									msgboxYesNo("Could not load selected file!<br><span class=\"color_red\">It appears to be invalid or corrupted!</span><br><br>Do you still want to import it as plaintext?", "Loading Failed",
 										() => {
 											//raw text import
-											restart_new_game();
+											restart_new_game(false);
 											gametext_arr.push(text);
-											render_gametext();
+											render_gametext(true,false);
 										}, null, true)
 								} else {
 									msgbox("Could not load selected file. Is it valid?");
@@ -4680,7 +4696,7 @@ Current version: 99
 			let old_extrastopseq = extrastopseq;
 
 			//determine if oldui file or newui file format
-			restart_new_game();
+			restart_new_game(false);
 
 			let is_oldui = (storyobj.file_version == null);
 			let is_sharefile = (!storyobj.actions && (storyobj.ga != "" || storyobj.cm != "" || (storyobj.cwi && storyobj.cwi.length > 0) || storyobj.ess != ""));
@@ -4871,7 +4887,7 @@ Current version: 99
 				//force load everything
 				import_settings(true, true, true, true, true, true);
 			}
-			render_gametext();
+			render_gametext(true,false);
 		});
 	}
 
@@ -4966,7 +4982,7 @@ Current version: 99
 		}
 		else
 		{
-			restart_new_game();
+			restart_new_game(false);
 			localsettings.chatname = myname;
 			localsettings.chatopponent = chatopponent;
 			gametext_arr.push("\n"+chatopponent+": "+greeting);
@@ -4984,7 +5000,7 @@ Current version: 99
 				current_wi = load_agnai_wi(obj,chatopponent,myname);
 			}
 		}
-		render_gametext();
+		render_gametext(true,false);
 	}
 	function load_ooba_obj(obj)
 	{
@@ -5003,14 +5019,14 @@ Current version: 99
 		{
 			examplemsg = "\n"+examplemsg;
 		}
-		restart_new_game();
+		restart_new_game(false);
 		localsettings.chatname = myname;
 		localsettings.chatopponent = chatopponent;
 		gametext_arr.push("\n"+chatopponent+": "+greeting);
 		current_memory = memory + scenario + examplemsg + "\n***";
 		localsettings.opmode = 3;
 		localsettings.gui_type_chat = 2;
-		render_gametext();
+		render_gametext(true,false);
 	}
 
 	function get_aetherroom_scenario()
@@ -5283,7 +5299,7 @@ Current version: 99
 	function complete_load_scenario()
 	{
 		console.log("Loading scenario...")
-		restart_new_game();
+		restart_new_game(false);
 
 		//load contexts
 		gametext_arr = [];
@@ -5372,7 +5388,7 @@ Current version: 99
 			if (temp_scenario.instruct_endtag) { localsettings.instruct_endtag = temp_scenario.instruct_endtag; }
 		}
 
-		render_gametext();
+		render_gametext(true,false);
 	}
 	function togglescenarioallownsfw()
 	{
@@ -5787,7 +5803,7 @@ Current version: 99
 					{
 						localsettings.my_api_key = defaultsettings.my_api_key;
 					}
-					autosave();
+					autosave(false);
 
 				})
 				.catch(error =>
@@ -7436,7 +7452,7 @@ Current version: 99
 		toggle_invert_colors();
 
 		hide_popups();
-		autosave();//need to always autosave, so that we can switch back to non persistent sessions
+		autosave(false);//need to always autosave, so that we can switch back to non persistent sessions
 		render_gametext(false);
 	}
 
@@ -7783,7 +7799,7 @@ Current version: 99
 		horde_poll_nearly_completed = false;
 	}
 
-	function restart_new_game() {
+	function restart_new_game(save = true) {
 		idle_timer = 0;
 		gametext_arr = [];
 		redo_arr = [];
@@ -7817,7 +7833,7 @@ Current version: 99
 		last_known_filename = "saved_story.json";
 		groupchat_removals = [];
 		welcome = "";
-		render_gametext(true); //necessary to trigger an autosave to wipe out current story in case they exit browser after newgame.
+		render_gametext(save); //necessary to trigger an autosave to wipe out current story in case they exit browser after newgame.
 	}
 
 	function reset_all_settings()
@@ -10068,7 +10084,7 @@ Current version: 99
 		}
 	}
 
-	function render_gametext(save = true)
+	function render_gametext(save = true, is_async_save = true)
 	{
 
 		document.getElementById("gametext").contentEditable = (document.getElementById("allowediting").checked && pending_response_id=="");
@@ -10399,7 +10415,7 @@ Current version: 99
 		document.getElementById("btnautogenmem").disabled = document.getElementById("btnsend").disabled;
 
 		if (localsettings.persist_session && save) {
-			autosave();
+			autosave(is_async_save);
 		}
 		if (localsettings.autoscroll) {
 			document.getElementById("gametext").scrollTop = document.getElementById("gametext").scrollHeight;
@@ -10637,13 +10653,13 @@ Current version: 99
 
 	}
 
-	function autosave() {
+	function autosave(async_save = true) {
 		//autosave
 		try {
 			update_prev_custom_endpoint_type();
 			localStorage.setItem(STORAGE_PREFIX + "settings", JSON.stringify(localsettings));
 			if (localsettings.persist_session) {
-				autosave_compressed_story_async(true,true,true);
+				autosave_compressed_story(async_save,true,true,true);
 			}
 		} catch (e) {
 			console.log("Autosave Failed: " + e);
