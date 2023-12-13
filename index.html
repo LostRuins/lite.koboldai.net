@@ -4262,6 +4262,7 @@ Current version: 100
 
 		if(!async_save)
 		{
+			console.log("Delay Sync: ", story);
 			var cstoryjson = buf_to_b64(lz_c.compress(storyjson, 1));
 			pending_storyjson_autosave = null;
 			localStorage.setItem(STORAGE_PREFIX + "story", cstoryjson);
@@ -4271,7 +4272,7 @@ Current version: 100
 		let ongoing = pending_storyjson_autosave;
 		pending_storyjson_autosave = storyjson;
 		if(ongoing){
-			console.log("Delay Autosave: ",story);
+			console.log("Delay Autosave: ", story);
 			return;
 		}
 		console.log("Autosave Start: ", story);
@@ -4281,10 +4282,11 @@ Current version: 100
 				let compressedstory = buf_to_b64(res);
 				localStorage.setItem(STORAGE_PREFIX + "story", compressedstory);
 				let newer = pending_storyjson_autosave;
-				pending_storyjson_autosave = null;
 				if (newer && newer !== json) {
 					console.log("Updating Autosave");
 					retry_autosave(newer);
+				}else{
+					pending_storyjson_autosave = null;
 				}
 			});
 		})(storyjson);
