@@ -4256,18 +4256,9 @@ Current version: 100
 
 	//runs async, complete autosave only if latest to be called
 	var pending_storyjson_autosave = null;
-	function autosave_compressed_story(async_save,save_images,export_settings,export_aesthetic_settings) {
+	function autosave_compressed_story(save_images,export_settings,export_aesthetic_settings) {
 		let story = generate_savefile(save_images,export_settings,export_aesthetic_settings);
 		let storyjson = JSON.stringify(story);
-
-		if(!async_save)
-		{
-			console.log("Delay Sync: ", story);
-			var cstoryjson = buf_to_b64(lz_c.compress(storyjson, 1));
-			pending_storyjson_autosave = null;
-			localStorage.setItem(STORAGE_PREFIX + "story", cstoryjson);
-			return;
-		}
 
 		let ongoing = pending_storyjson_autosave;
 		pending_storyjson_autosave = storyjson;
@@ -4668,7 +4659,7 @@ Current version: 100
 											//raw text import
 											restart_new_game(false);
 											gametext_arr.push(text);
-											render_gametext(true,false);
+											render_gametext(true);
 										}, null, true)
 								} else {
 									msgbox("Could not load selected file. Is it valid?");
@@ -4889,7 +4880,7 @@ Current version: 100
 				//force load everything
 				import_settings(true, true, true, true, true, true);
 			}
-			render_gametext(true,false);
+			render_gametext(true);
 		});
 	}
 
@@ -5002,7 +4993,7 @@ Current version: 100
 				current_wi = load_agnai_wi(obj,chatopponent,myname);
 			}
 		}
-		render_gametext(true,false);
+		render_gametext(true);
 	}
 	function load_ooba_obj(obj)
 	{
@@ -5028,7 +5019,7 @@ Current version: 100
 		current_memory = memory + scenario + examplemsg + "\n***";
 		localsettings.opmode = 3;
 		localsettings.gui_type_chat = 2;
-		render_gametext(true,false);
+		render_gametext(true);
 	}
 
 	function get_aetherroom_scenario()
@@ -5390,7 +5381,7 @@ Current version: 100
 			if (temp_scenario.instruct_endtag) { localsettings.instruct_endtag = temp_scenario.instruct_endtag; }
 		}
 
-		render_gametext(true,false);
+		render_gametext(true);
 	}
 	function togglescenarioallownsfw()
 	{
@@ -5805,7 +5796,7 @@ Current version: 100
 					{
 						localsettings.my_api_key = defaultsettings.my_api_key;
 					}
-					autosave(false);
+					autosave();
 
 				})
 				.catch(error =>
@@ -7454,7 +7445,7 @@ Current version: 100
 		toggle_invert_colors();
 
 		hide_popups();
-		autosave(false);//need to always autosave, so that we can switch back to non persistent sessions
+		autosave();//need to always autosave, so that we can switch back to non persistent sessions
 		render_gametext(false);
 	}
 
@@ -10086,7 +10077,7 @@ Current version: 100
 		}
 	}
 
-	function render_gametext(save = true, is_async_save = true)
+	function render_gametext(save = true)
 	{
 
 		document.getElementById("gametext").contentEditable = (document.getElementById("allowediting").checked && pending_response_id=="");
@@ -10417,7 +10408,7 @@ Current version: 100
 		document.getElementById("btnautogenmem").disabled = document.getElementById("btnsend").disabled;
 
 		if (localsettings.persist_session && save) {
-			autosave(is_async_save);
+			autosave();
 		}
 		if (localsettings.autoscroll) {
 			document.getElementById("gametext").scrollTop = document.getElementById("gametext").scrollHeight;
@@ -10655,13 +10646,13 @@ Current version: 100
 
 	}
 
-	function autosave(async_save = true) {
+	function autosave() {
 		//autosave
 		try {
 			update_prev_custom_endpoint_type();
 			localStorage.setItem(STORAGE_PREFIX + "settings", JSON.stringify(localsettings));
 			if (localsettings.persist_session) {
-				autosave_compressed_story(async_save,true,true,true);
+				autosave_compressed_story(true,true,true);
 			}
 		} catch (e) {
 			console.log("Autosave Failed: " + e);
