@@ -2563,6 +2563,79 @@ Current version: 107
 		}
 	}
 
+	function slashcommand_help() {
+		padto = slashcommands.reduce( (result, entry) => entry.command.length > result ? entry.command.length : result, 0 );
+
+		mode = {
+			"0": "Instruct",
+			"1": "Story",
+			"2": "Adventure",
+			"3": "Chat"
+		}[localsettings.opmode.toString()];
+
+		result  = `Slash commands are only active in Chat mode. Mode is currently "${mode}"\n\n`;
+		result += `${"*Command*".padEnd(padto)}  *Description*\n\n`
+		result += slashcommands
+			.map( (entry) => {
+				return `${entry.command.padEnd(padto)}  ${entry.description}`
+			})
+			.join("\n");
+
+		console.log(mode, localsettings.gui_type_chat)
+		// use a code block if we are in aesthetic chat
+		if (mode === "Chat" && localsettings.gui_type_chat == 2) {
+			result = "```\n" + result + "\n```"
+		}
+
+		return result;
+	}
+
+	function slashcommand_notfound() {
+		result = "Unrecognized command. Type '/help' for a list of available slash commands."
+
+		// use a code block if we are in aesthetic chat
+		if (localsettings.opmode == 3 && localsettings.gui_type_chat == 2) {
+			result = "```\n" + result + "\n```"
+		}
+
+		return result;
+	}
+
+	const slashcommands = [
+		{ command: "/help", call: slashcommand_help, args: "", description: "Displays all slash commands and their descriptions." },
+	]
+
+	function process_slashcommand(text, character) {
+		// Process the first slash command in the text.
+		const lines = text.split("\n");
+		const commandIdx = lines.findIndex( (line) => line.trim().startsWith("/"));
+
+		let result = text;
+		// If one exists, we remove any lines of text after it, and then add the output of the
+		// appropriate function as if from 'System:'
+		if (commandIdx !== -1) {
+			commandLine = lines[commandIdx].trim();
+			result =  lines.slice(0, commandIdx + 1).join("\n");
+			console.log(`Processing possible slash command ${commandLine} for ${character}`)
+
+			const match = slashcommands.find((entry) => commandLine.trim().startsWith(entry.command));
+
+			// didn't find a slash command with this name
+			if (!match) {
+				return result + `\n\nSystem: ${slashcommand_notfound()}\n`;
+			}
+
+			// pass in the right arguments into the function for the slash command
+			if (commandLine.indexOf(" ") === -1) {
+				result += `\n\nSystem: ${match.call(character)}\n`;
+			} else {
+				result += `\n\nSystem: ${match.call(character, commandLine.substring(commandLine.indexOf(' ') + 1))}\n`
+			}
+		}
+
+		return result;
+	}
+
 	function readTavernPngFromBlob(blob, onDone)
 	{
 		var fileReader = new FileReader();
@@ -8460,6 +8533,8 @@ Current version: 107
 				}
 			}
 
+			newgen = process_slashcommand(newgen, localsettings.chatname);
+
 			if (localsettings.opmode == 4)
 			{
 				if(newgen != "")
@@ -9838,6 +9913,7 @@ Current version: 107
 				startpart = startpart.substring(0, startpart.length - 1);
 			}
 			gentxt = startpart;
+			gentxt = process_slashcommand(gentxt, localsettings.chatopponent);
 		}
 
 		//if we are in instruct mode, truncate to instruction
