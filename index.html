@@ -173,7 +173,6 @@ Current version: 102
 			height: 66vh;
 			display: flex;
 			vertical-align: bottom;
-			background-color: #262626;
 			color: #ffffff;
 			font-size: 12pt;
 			font-family: "Helvetica";
@@ -1635,6 +1634,20 @@ Current version: 102
 		padding: 12px 20px 12px 20px;
 		width:100%;
 		background: #0b141a;
+	}
+
+	.gamescreenbgnormal
+	{
+		background-color: #262626;
+	}
+
+	.translucentbg
+	{
+		background-color: #0000005f;
+	}
+	.transparentbg
+	{
+		background-color: #00000000;
 	}
 
 	.chat_sent_msg p {
@@ -4428,14 +4441,30 @@ Current version: 102
 		return gs;
 	}
 
+	function load_bgimg_button() {
+		document.getElementById('loadbgimg').click();
+	}
+	function load_bg_img(event) {
+		let input = event.target;
+		var selectedImg = null;
+		document.body.style.backgroundImage = "none";
+		document.getElementById("gamescreen").classList.remove("transparentbg");
+		document.getElementById("enhancedchatinterface").classList.remove("transparentbg");
+		if (input.files.length > 0) {
+			selectedImg = input.files[0];
+			selectedImg = `url('${URL.createObjectURL(selectedImg)}')`;
+			document.body.style.backgroundImage = selectedImg;
+			document.getElementById("gamescreen").classList.add("translucentbg");
+			document.getElementById("enhancedchatinterface").classList.add("transparentbg");
+		} else {
+			console.log("No background image to load");
+		}
+	};
+
 	function load_file_button()
 	{
 		document.getElementById('loadfileinput').click();
 	}
-function load_img_button()
-	{
-        document.getElementById('loadimginput').click();
-    }
 	var tempfileurl = null;
 	var tempfileobj = generate_base_storyobj();
 	var newfilename = "";
@@ -4592,22 +4621,6 @@ function load_img_button()
 			console.log("No file to load")
 		}
 	};
-	function load_img(event) {
-        let input = event.target;
-        var selectedImg = null;
-        document.body.style.backgroundImage = "none" ;
-        document.querySelector(".chat_mesgs").style.backgroundColor = "#0b141a";
-        document.getElementById("gamescreen").style.backgroundColor = "#262626";
-        if (input.files.length > 0) {
-            selectedImg = input.files[0];
-            selectedImg = `url('${URL.createObjectURL(selectedImg)}')`;
-            document.body.style.backgroundImage = selectedImg;
-            document.querySelector(".chat_mesgs").style.backgroundColor = "#0b141a00";
-            document.getElementById("gamescreen").style.backgroundColor = "rgba(0, 0, 0, 0.4)" ;
-    } else {
-        console.log("No IMG to load");
-    }
-};
 
 	//attempt to load a file from disk. could be any format, even images
 	function load_selected_file(selectedFile)
@@ -6636,7 +6649,6 @@ function load_img_button()
 				<button type="button" style="font-size:13px;margin:2px;width:33%" name="localsave" class="btn btn-primary" onclick="hide_popups();save_file_button()">`+"💾<br>Download File"+`</button>
 				<button type="button" style="font-size:13px;margin:2px;width:33%" name="localload" class="btn btn-primary" onclick="hide_popups();load_file_button()">`+"📁<br>Open File"+`</button>
 				<button type="button" style="font-size:13px;margin:2px;width:34%" name="shareurl" class="btn btn-primary" onclick="hide_popups();export_share_story()">`+"🌐<br>Share"+`</button>
-				<button type="button" style="font-size:13px;margin:2px;width:33%" name="imgload" class="btn btn-primary" onclick="hide_popups();load_img_button()">`+"🖼️<br>Background Img"+`</button>
 				</div>
 				<div style="font-size:12px; margin-top:3px; text-align: center; align-self: center; width: calc(100% - 184px);">
 				<span style="font-weight:bold;text-decoration: underline;">Temporary Browser Storage</span>
@@ -11686,11 +11698,6 @@ function load_img_button()
 									<input type="file" id="loadfileinput" accept="text/json,application/json,image/png,image/webp,.kaistory,.webp,.png,.json,.txt,*.*,*" onchange="load_file(event)" style="display:none;">
 									<a class="nav-link" href="#" onclick="display_saveloadcontainer()">Save / Load</a>
 								</li>
-								<li class="nav-item hidden" id="topbtn_save_load2">
-									<a id="tempfile" href="#" style="display:none;"></a>
-									<input type="file" id="loadimginput" accept="image/png,image/webp,.webp,.jpg,.jpeg,.png,*.*,*" onchange="load_img(event)" style="display:none;">
-									<a class="nav-link" href="#" onclick="display_saveloadcontainer()">Save / Load</a>
-                                </li>
 								<li class="nav-item hidden" id="topbtn_settings">
 									<a class="nav-link" href="#" id="btn_settings"
 										onclick="display_settings()">Settings</a>
@@ -11713,7 +11720,7 @@ function load_img_button()
 		</div>
 		<div id="normalinterface">
 		<div id="maineditbody" class="layer-container">
-			<div class="layer-bottom" id="gamescreen">
+			<div class="layer-bottom gamescreenbgnormal" id="gamescreen">
 				<span id="gametext" contenteditable="false" onclick="click_gametext()" onblur="merge_edit_field()">
 					<p id="tempgtloadtxt">Loading...</p>
 					<noscript><style>#tempgtloadtxt { display: none; } #gametext { white-space: normal!important; }</style><p>Sorry, Kobold Lite requires Javascript to function.</p></noscript>
@@ -12633,6 +12640,10 @@ function load_img_button()
 							<div class="justifyleft settingsmall">Inverted Colors <span class="helpicon">?<span
 								class="helptext">Inverts all colors, simple light mode</span></span></div>
 						   <input type="checkbox" id="invert_colors" style="margin:0px 0px 0px auto;">
+						</div>
+						<div class="settinglabel">
+							<input type="file" id="loadbgimg" accept="image/png,image/webp,.webp,.jpg,.jpeg,.png,*.*,*" onchange="load_bg_img(event)" style="display:none;">
+							<button type="button" class="btn btn-primary" style="padding:2px 3px;margin-top:2px;font-size:11px;" onclick="load_bgimg_button()">Set Background Image</button>
 						</div>
 					</div>
 
