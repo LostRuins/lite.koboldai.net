@@ -1164,6 +1164,22 @@ Current version: 102
 			width: 50px;
 		}
 
+		.inlinelabel {
+			color: #ffffff;
+			display: flex;
+			flex-flow: wrap;
+		}
+
+		.inlinelabel input
+		{
+    		border-radius: 4px;
+			background-color: #ffffff;
+			color:#555;
+			border:0px solid #ccc;
+			margin: 4px;
+		}
+
+
 
 		@media only screen and (max-width: 768px) {
 			.SideMenu.open {
@@ -3359,6 +3375,8 @@ Current version: 102
 		generate_images_model: "stable_diffusion", //"" is disabled and "*" is all, anything else is the model name pulled from stable horde
 		img_autogen: false,
 		img_allownsfw: true,
+		img_cfgscale: 7,
+		img_steps: 20,
 		save_images: true,
 		prompt_for_savename: false,
 		case_sensitive_wi: false,
@@ -5899,6 +5917,7 @@ Current version: 102
 			document.getElementById("quickstartcontainer").classList.contains("hidden") &&
 			document.getElementById("zoomedimgcontainer").classList.contains("hidden") &&
 			document.getElementById("groupselectcontainer").classList.contains("hidden") &&
+			document.getElementById("imagestylecontainer").classList.contains("hidden") &&
 			document.getElementById("advancedloadfile").classList.contains("hidden")
 		);
 	}
@@ -5918,6 +5937,7 @@ Current version: 102
 		document.getElementById("quickstartcontainer").classList.add("hidden");
 		document.getElementById("zoomedimgcontainer").classList.add("hidden");
 		document.getElementById("groupselectcontainer").classList.add("hidden");
+		document.getElementById("imagestylecontainer").classList.add("hidden");
 		document.getElementById("advancedloadfile").classList.add("hidden");
 	}
 
@@ -5927,13 +5947,17 @@ Current version: 102
 	}
 
 	var pendingstyle = "";
-	function selectStyle()
+	function selectImgStyle()
 	{
-		inputBox("Style tags to use for generating images:\n(E.g. Sketch, Realistic, Anime, 3D Render, Drawing)\n\n","Extra Image Styles",pendingstyle,"Default Style",()=>{
-			let userinput = getInputBoxValue();
-			pendingstyle = userinput;
-			console.log("Saved styles: " + pendingstyle);
-		},false);
+		document.getElementById("imagestylecontainer").classList.remove("hidden");
+		document.getElementById("imagestyleinput").value = pendingstyle;
+	}
+	function confirmImgStyle()
+	{
+		let userinput = document.getElementById("imagestyleinput").value;
+		pendingstyle = userinput;
+		console.log("Saved styles: " + pendingstyle);
+		document.getElementById("imagestylecontainer").classList.add("hidden");
 	}
 
 	var pendinggrammar = "";
@@ -7316,6 +7340,8 @@ Current version: 102
 		document.getElementById("tokenstreammode").value = localsettings.tokenstreammode;
 		document.getElementById("img_autogen").checked = localsettings.img_autogen;
 		document.getElementById("save_images").checked = localsettings.save_images;
+		document.getElementById("img_cfgscale").value = localsettings.img_cfgscale;
+		document.getElementById("img_steps").value = localsettings.img_steps;
 		document.getElementById("prompt_for_savename").checked = localsettings.prompt_for_savename;
 		document.getElementById("img_allownsfw").checked = localsettings.img_allownsfw;
 
@@ -7502,6 +7528,9 @@ Current version: 102
 			document.getElementById("btn_genimg").classList.remove("hidden");
 			document.getElementById("btn_genimg2").classList.remove("hidden");
 		}
+
+		localsettings.img_cfgscale = document.getElementById("img_cfgscale").value;
+		localsettings.img_steps = document.getElementById("img_steps").value;
 
 		if((localsettings.gui_type_chat!=0 && localsettings.opmode==3)||(localsettings.gui_type_instruct!=0 && localsettings.opmode==4))
 		{
@@ -8869,12 +8898,13 @@ Current version: 102
 					'Content-Type': 'application/json',
 					'Authorization': 'Bearer ' + custom_oai_key
 				};
-				if(targetep.toLowerCase().includes("api.mistral.ai"))
-				{
-					//use cors proxy for mistral ai
-					targetep = cors_proxy + "?" + targetep;
-				}
-				if(targetep.toLowerCase().includes("openrouter.ai"))
+				// if(targetep.toLowerCase().includes("api.mistral.ai"))
+				// {
+				// 	//use cors proxy for mistral ai
+				// 	targetep = cors_proxy + "?" + targetep;
+				// }
+				if(targetep.toLowerCase().includes("openrouter.ai")
+				|| targetep.toLowerCase().includes("api.mistral.ai"))
 				{
 					oaiheaders["HTTP-Referer"] = "https://lite.koboldai.net";
 				}else{
@@ -9284,11 +9314,11 @@ Current version: 102
 		let genimg_payload = {
 			"prompt": (sentence + " ### ugly, deformed, poorly, censor, blurry, lowres, malformed, watermark, duplicated, grainy, distorted, signature"),
 			"params": {
-				"cfg_scale": 7,
+				"cfg_scale": localsettings.img_cfgscale,
 				"sampler_name": "k_euler_a",
 				"height": 512,
 				"width": 512,
-				"steps": 20,
+				"steps": localsettings.img_steps,
 				"karras": false,
 				"n": 1,
 				"seed": "",
@@ -12563,7 +12593,7 @@ Current version: 102
 								   <input type="checkbox" id="save_images" style="margin:0px 0 0;">
 								</div>
 								</td>
-								<td class="settingsmall"><a class="color_blueurl" href="#" onclick="selectStyle()">Style<br>🎨</a></td>
+								<td class="settingsmall"><a class="color_blueurl" href="#" onclick="selectImgStyle()">Style<br>🎨</a></td>
 								</tr>
 								</table>
 							</div>
@@ -12890,6 +12920,30 @@ Current version: 102
 			<div class="popupfooter">
 				<button type="button" class="bg_red btn btn-primary" style="width: 124px;" onclick="delete_curr_image();hide_popups();">Delete Image</button>
 				<button type="button" class="btn btn-primary" onclick="hide_popups()">Close</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="imagestylecontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup fixsize">
+			<div class="popuptitlebar">
+				<div class="popuptitletext">Image Generation Settings</div>
+			</div>
+			<div class="aidgpopuplistheader anotelabel">Style tags to use for generating images:<br>(E.g. Sketch, Realistic, Anime, 3D Render, Drawing)<br><br></div>
+			<input class="form-control" type="text" placeholder="Default Style" value="" id="imagestyleinput">
+
+			<div class="inlinelabel">
+				<div class="justifyleft" style="padding:4px">Number of Steps: </div>
+				<input type="text" inputmode="decimal" id="img_steps" style="width:60px">
+			</div>
+			<div class="inlinelabel">
+				<div class="justifyleft" style="padding:4px">Cfg. Scale: </div>
+				<input type="text" inputmode="decimal" id="img_cfgscale" style="width:60px">
+			</div>
+
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="confirmImgStyle()">Ok</button>
 			</div>
 		</div>
 	</div>
