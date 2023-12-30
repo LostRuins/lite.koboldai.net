@@ -6155,12 +6155,16 @@ Current version: 102
 			}
 		}
 
+		let oaiheaders = {
+			'Authorization': 'Bearer '+desired_oai_key,
+		};
+		if (!desired_oai_ep.toLowerCase().includes("api.mistral.ai")) {
+			oaiheaders["x-api-key"] = desired_oai_key;
+		}
+
 		fetch((desired_oai_ep + oai_models_endpoint), {
 			method: 'GET',
-			headers: {
-				'Authorization': 'Bearer '+desired_oai_key,
-				'x-api-key': desired_oai_key,
-			},
+			headers: oaiheaders,
 			referrerPolicy: 'no-referrer',
 		})
 		.then((response) => response.json())
@@ -8903,13 +8907,17 @@ Current version: 102
 				// 	//use cors proxy for mistral ai
 				// 	targetep = cors_proxy + "?" + targetep;
 				// }
-				if(targetep.toLowerCase().includes("openrouter.ai")
-				|| targetep.toLowerCase().includes("api.mistral.ai"))
+				if(!targetep.toLowerCase().includes("openrouter.ai") &&
+				!targetep.toLowerCase().includes("api.mistral.ai"))
 				{
-					oaiheaders["HTTP-Referer"] = "https://lite.koboldai.net";
-				}else{
 					oaiheaders["x-api-key"] = custom_oai_key;
 				}
+
+				if(targetep.toLowerCase().includes("openrouter.ai"))
+				{
+					oaiheaders["HTTP-Referer"] = "https://lite.koboldai.net";
+				}
+
 				fetch(targetep, {
 					method: 'POST',
 					headers: oaiheaders,
