@@ -3564,6 +3564,7 @@ Current version: 102
 		try {
 			let loadedsettingsjson = localStorage.getItem(STORAGE_PREFIX + "settings");
 			let loadedstorycompressed = localStorage.getItem(STORAGE_PREFIX + "story");
+			let loadedbackgroundimg = localStorage.getItem(STORAGE_PREFIX + "bgimg");
 			if (loadedsettingsjson != null && loadedsettingsjson != "" && loadedstorycompressed != null && loadedstorycompressed != "") {
 				let loadedsettings = JSON.parse(loadedsettingsjson);
 				//see if persist is enabled
@@ -3586,6 +3587,13 @@ Current version: 102
 				{
 					//toggle persistence off to prevent it from turning on again
 					localsettings.persist_session = false;
+				}
+				if(loadedbackgroundimg && loadedbackgroundimg!="")
+				{
+					let selectedImg = `url('${loadedbackgroundimg}')`;
+					document.body.style.backgroundImage = selectedImg;
+					document.getElementById("gamescreen").classList.add("translucentbg");
+					document.getElementById("enhancedchatinterface").classList.add("transparentbg");
 				}
 				loadok = true;
 			} else {
@@ -4446,20 +4454,26 @@ Current version: 102
 	}
 	function load_bg_img(event) {
 		let input = event.target;
-		var selectedImg = null;
+		if (input.files.length > 0) {
+			let selectedImg = null;
+			selectedImg = input.files[0];
+			const objectURL = URL.createObjectURL(selectedImg);
+			compressImage(objectURL, (compressedImageURI, aspectratio)=>{
+				selectedImg = `url('${compressedImageURI}')`;
+				document.body.style.backgroundImage = selectedImg;
+				document.getElementById("gamescreen").classList.add("translucentbg");
+				document.getElementById("enhancedchatinterface").classList.add("transparentbg");
+				localStorage.setItem(STORAGE_PREFIX + "bgimg", compressedImageURI);
+			}, true, false, 1024, 0.5);
+		}
+	};
+	function clear_bg_img()
+	{
 		document.body.style.backgroundImage = "none";
 		document.getElementById("gamescreen").classList.remove("translucentbg");
 		document.getElementById("enhancedchatinterface").classList.remove("transparentbg");
-		if (input.files.length > 0) {
-			selectedImg = input.files[0];
-			selectedImg = `url('${URL.createObjectURL(selectedImg)}')`;
-			document.body.style.backgroundImage = selectedImg;
-			document.getElementById("gamescreen").classList.add("translucentbg");
-			document.getElementById("enhancedchatinterface").classList.add("transparentbg");
-		} else {
-			console.log("No background image to load");
-		}
-	};
+		localStorage.setItem(STORAGE_PREFIX + "bgimg", "");
+	}
 
 	function load_file_button()
 	{
@@ -9714,10 +9728,10 @@ Current version: 102
 		}
 	}
 
-	function compressImage(inputDataUri, onDone, isJpeg=true) {
+	function compressImage(inputDataUri, onDone, isJpeg=true, fixedSize=true, maxSize=256, quality = 0.33) {
 		let img = document.createElement('img');
-		let wantedWidth = 256;
-		let wantedHeight = 256;
+		let wantedWidth = maxSize;
+		let wantedHeight = maxSize;
 
 		// When the event "onload" is triggered we can resize the image.
 		img.onload = function () {
@@ -9729,7 +9743,29 @@ Current version: 102
 			var origH = img.height;
 			var aspectratio = origW/origH;
 
-			// We set the dimensions at the wanted size.
+			// We set the dimensions at the wanted size for fixedsize.
+			if(!fixedSize)
+			{
+				//otherwise, we preserve the original ratio but scale them down to fit
+				let newwidth = maxSize;
+				let newheight = maxSize;
+				let scalef = 1;
+				if(origW>=origH)
+				{
+					newwidth = origW>maxSize?maxSize:origW;
+					scalef = newwidth/origW;
+					newheight = origH*scalef;
+				}
+				else
+				{
+					newheight = origH>maxSize?maxSize:origH;
+					scalef = newheight/origH;
+					newwidth = origW*scalef;
+				}
+				wantedWidth = newwidth;
+				wantedHeight = newheight;
+			}
+
 			canvas.width = wantedWidth;
 			canvas.height = wantedHeight;
 
@@ -9739,7 +9775,7 @@ Current version: 102
 			var dataURI = "";
 			if(isJpeg)
 			{
-				dataURI = canvas.toDataURL(`image/jpeg`, 0.33);
+				dataURI = canvas.toDataURL(`image/jpeg`, quality);
 			}
 			else
 			{
@@ -11219,7 +11255,7 @@ Current version: 102
 			this.rounded_bubbles = true;
 
 			this.you_portrait = null;
-			this.AI_portrait = niko_square;
+			this.AI_portrait = "default";
 
 			this.font_size = 12;
 			this.use_markdown = true;
@@ -11346,7 +11382,7 @@ Current version: 102
 
 		document.getElementById("reset-portrait").addEventListener('click', (e) => {
 			aestheticInstructUISettings.you_portrait = null;
-			aestheticInstructUISettings.AI_portrait = niko_square;
+			aestheticInstructUISettings.AI_portrait = "default";
 			document.getElementById('portrait_ratio_AI').value = 1.0;
 			document.getElementById('portrait_width_AI').value = 100;
 			document.getElementById('portrait_ratio_you').value = 1.0;
@@ -11542,7 +11578,7 @@ Current version: 102
 		let portraitsStyling = // Also, implement portraits as css classes. Now chat entries can reuse them instead of recreating them.
 		`<style>
 			.you-portrait-image`+classSuffixStr+` {margin: 10px 6px; background:url(`+ as.you_portrait +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
-			.AI-portrait-image`+classSuffixStr+` {margin: 10px 6px; background:url(`+ as.AI_portrait +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
+			.AI-portrait-image`+classSuffixStr+` {margin: 10px 6px; background:url(`+ (as.AI_portrait!="default"?as.AI_portrait:niko_square) +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
 		</style>
 		`;
 
@@ -12643,7 +12679,9 @@ Current version: 102
 						</div>
 						<div class="settinglabel">
 							<input type="file" id="loadbgimg" accept="image/png,image/webp,.webp,.jpg,.jpeg,.png,*.*,*" onchange="load_bg_img(event)" style="display:none;">
-							<button type="button" class="btn btn-primary" style="padding:2px 3px;margin-top:2px;font-size:11px;" onclick="load_bgimg_button()">Set Background Image</button>
+							<div class="justifyleft settingsmall">Background Img</div>
+							<button type="button" class="btn btn-primary bg_green" style="padding:2px 2px;margin:1px;font-size:10px;" onclick="load_bgimg_button()">Set</button>
+							<button type="button" class="btn btn-primary bg_red" style="padding:2px 2px;margin:1px;font-size:10px;" onclick="clear_bg_img()">Clear</button>
 						</div>
 					</div>
 
