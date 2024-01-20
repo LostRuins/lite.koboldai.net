@@ -4033,8 +4033,6 @@ Current version: 105
 				"sd_model_checkpoint": desired_model,
 				"eta_noise_seed_delta": 0.0,
 				"CLIP_stop_at_last_layers": 1.0,
-				"eta_ddim": 0.0,
-				"eta_ancestral": 1.0,
 				"ddim_discretize": "uniform",
 				"img2img_fix_steps": false,
 				"sd_hypernetwork": "None",
@@ -7988,6 +7986,7 @@ Current version: 105
 		groupchat_removals = [];
 		welcome = "";
 		last_known_filename = "saved_story.json";
+		is_impersonate_user = false;
 		if (!keep_memory)
 		{
 			current_memory = "";
@@ -8462,7 +8461,12 @@ Current version: 105
 
 				//randomize opponent if there is more than one
 				let hasMulti = false;
-				if(co.includes("||$||"))
+				if(is_impersonate_user)
+				{
+					is_impersonate_user = false;
+					co = localsettings.chatname;
+				}
+				else if(co.includes("||$||"))
 				{
 					let coarr = co.split("||$||");
 					coarr = coarr.filter(x=>(x&&x!=""));
@@ -8774,6 +8778,7 @@ Current version: 105
 
 			render_gametext();
 		}
+		is_impersonate_user = false;
 	}
 
 	function get_stop_sequences() //the input object may not always be the same!
@@ -9442,7 +9447,7 @@ Current version: 105
 				{
 					//console.log(outputimg);
 					let origImg = "data:image/jpeg;base64," + outputimg;
-					let imgres = localsettings.img_allowhd?380:256;
+					let imgres = localsettings.img_allowhd?400:256;
 					compressImage(origImg, (newDataUri) => {
 						image_db[imgid].done = true;
 						image_db[imgid].result = newDataUri;
@@ -11269,7 +11274,23 @@ Current version: 105
 			+ `<a href='#' class='color_blueurl' onclick='impersonate_message(0)'>Impersonate `+localsettings.chatopponent+` speaking as them</a>`;
 		}
 
+		gs += `<br><a href='#' class='color_blueurl' onclick='impersonate_user()'>Make the AI write a response as me (for 1 turn)</a>`;
+
 		document.getElementById("groupselectitems").innerHTML = gs;
+	}
+	var is_impersonate_user = false;
+	function impersonate_user()
+	{
+		hide_popups();
+		let willsubmit = (document.getElementById("entersubmit").checked ? true : false);
+		if (willsubmit) {
+			document.getElementById("input_text").value = "";
+			document.getElementById("cht_inp").value = "";
+			is_impersonate_user = true;
+			submit_generation();
+		}else{
+			msgbox("Backend is generating or busy - try again later");
+		}
 	}
 	function impersonate_message(index)
 	{
