@@ -3261,6 +3261,9 @@ Current version: 106
     const a1111_options_endpoint = "/sdapi/v1/options";
     const a1111_txt2img_endpoint = "/sdapi/v1/txt2img";
 
+	const xtts_gen_endpoint = "/tts_to_audio";
+	const xtts_voices_endpoint = "/speakers_list";
+
 	//support for quick news updates
 	const horde_news_endpoint = "https://hordenews.concedo.workers.dev"
 
@@ -3317,6 +3320,7 @@ Current version: 106
 	var custom_claude_key = "";
 	var custom_claude_model = "";
 	var a1111_base_url = "http://localhost:7860";
+	var xtts_base_url = " http://localhost:8020";
 	var uses_cors_proxy = false; //we start off attempting a direct connection. switch to proxy if that fails
 	var synchro_polled_response = null;
 	var synchro_pending_stream = ""; //used for token pseduo streaming for kobold api only
@@ -3367,7 +3371,7 @@ Current version: 106
 		instruct_has_markdown: true,
 		placeholder_tags: true,
 		persist_session: true,
-		speech_synth: 0, //0 is disabled
+		speech_synth: 0, //0 is disabled, 100 is xtts
 		beep_on: false,
 		narrate_both_sides: false,
 		image_styles: "",
@@ -7386,8 +7390,10 @@ Current version: 106
 		} else {
 			console.log("No speech synth available");
 		}
+		ttshtml += "<option value=\"100\">XTTS API Server</option>";
 		document.getElementById("ttsselect").innerHTML = ttshtml;
 		document.getElementById("ttsselect").value = localsettings.speech_synth;
+		toggle_tts_mode();
 		document.getElementById("beep_on").checked = localsettings.beep_on;
 		document.getElementById("narrate_both_sides").checked = localsettings.narrate_both_sides;
 		toggle_opmode();
@@ -8312,6 +8318,102 @@ Current version: 106
 		}
 	}
 
+	var xtts_is_connected = false;
+	function fetch_xtts_voices(silent)
+	{
+		if(!xtts_is_connected)
+		{
+			fetch(xtts_base_url + xtts_voices_endpoint)
+			.then(x => x.json())
+			.then(data => {
+				console.log(data);
+				//repopulate our voices list
+				let dropdown = document.getElementById("xtts_voices");
+					let selectionhtml = ``;
+					for (var i = 0; i < data.length; ++i) {
+						selectionhtml += `<option value="` + data[i] + `">`+data[i]+`</option>`;
+					}
+					dropdown.innerHTML = selectionhtml;
+					xtts_is_connected = true;
+			}).catch((error) => {
+				xtts_is_connected = false;
+				if(!silent)
+				{
+					msgbox("XTTS Connect Error: " + error+"\nCheck XTTS API Server endpoint URL.\n");
+				}
+			});
+		}
+	}
+
+	function toggle_tts_mode()
+	{
+		if(document.getElementById("ttsselect").value==100)
+		{
+			document.getElementById("xtts_container").classList.remove("hidden");
+		}else{
+			document.getElementById("xtts_container").classList.add("hidden");
+		}
+	}
+	function set_xtts_url()
+	{
+		inputBox("Enter XTTS API Server URL.","XTTS API Server URL",xtts_base_url,"Input XTTS API Server URL", ()=>{
+			let userinput = getInputBoxValue();
+			userinput = userinput.trim();
+			if(userinput!="" && userinput.slice(-1)=="/")
+			{
+				userinput = userinput.slice(0, -1);
+			}
+			if (userinput != null && userinput!="") {
+				xtts_base_url = userinput.trim();
+				xtts_is_connected = false;
+				fetch_xtts_voices(false);
+			}
+		},false);
+	}
+	function tts_speak(text)
+	{
+		if(localsettings.speech_synth==100) //xtts api server
+		{
+			if(xtts_is_connected)
+			{
+				const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+				let xtts_payload = {
+					"text": text,
+					"speaker_wav": document.getElementById("xtts_voices").value,
+					"language": "EN"
+				};
+
+				fetch(xtts_base_url + xtts_gen_endpoint, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify(xtts_payload),
+				})
+				.then(response => response.arrayBuffer())
+				.then(data => {
+					return audioContext.decodeAudioData(data);
+				})
+				.then(decodedData => {
+					const playSound = audioContext.createBufferSource();
+					playSound.buffer = decodedData;
+					playSound.connect(audioContext.destination);
+					playSound.start(audioContext.currentTime);
+				}).catch((error) => {
+					console.log("XTTS Speak Error: " + error);
+				});
+			}
+		}
+		else
+		{
+			if ('speechSynthesis' in window) {
+				let utterance = new window.SpeechSynthesisUtterance(text);
+				utterance.voice = window.speechSynthesis.getVoices()[localsettings.speech_synth - 1];
+				window.speechSynthesis.speak(utterance);
+			}
+		}
+	}
+
 	function submit_generation() {
 
 		let newgen = document.getElementById("input_text").value;
@@ -8323,12 +8425,11 @@ Current version: 106
 			waiting_for_autosummary = false;
 			idle_timer = 0;
 			idle_triggered_counter = 0;
-			if (localsettings.speech_synth > 0 && 'speechSynthesis' in window) {
+			if (localsettings.speech_synth > 0)
+			{
 				if(localsettings.narrate_both_sides)
 				{
-					let utterance = new window.SpeechSynthesisUtterance(newgen);
-					utterance.voice = window.speechSynthesis.getVoices()[localsettings.speech_synth - 1];
-					window.speechSynthesis.speak(utterance);
+					tts_speak(newgen);
 				}
 			}
 
@@ -9745,15 +9846,13 @@ Current version: 106
 			pending_context_preinjection = "";
 		}
 
-		if (localsettings.speech_synth > 0 && 'speechSynthesis' in window)
+		if (localsettings.speech_synth > 0)
 		{
 			if(localsettings.narrate_both_sides)
 			{
 				gentxtspeak = gentxt;
 			}
-			let utterance = new window.SpeechSynthesisUtterance(gentxtspeak);
-			utterance.voice = window.speechSynthesis.getVoices()[localsettings.speech_synth - 1];
-			window.speechSynthesis.speak(utterance);
+			tts_speak(gentxt);
 		}
 
 		if(gentxt!="")
@@ -12716,8 +12815,16 @@ Current version: 106
 					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">TTS <span class="helpicon">?<span class="helptext">Enable Text-To-Speech to have your story automatically read to you.</span></span></div>
-							<select class="form-control" id="ttsselect" style="height:20px;padding:0;margin:0px 0 0;">
+							<select class="form-control" id="ttsselect" style="height:20px;padding:0;margin:0px 0 0;" onchange="toggle_tts_mode()">
 							</select>
+							<div id="xtts_container" class="settinglabel hidden">
+								<table width="100%"><tr>
+								<td><button id="xtts_url" type="button" class="btn btn-primary" style="width:100%; padding:2px 3px;margin-top:2px;font-size:11px;" onclick="set_xtts_url()">Set URL</button></td>
+								<td><select class="form-control" id="xtts_voices" style="font-size:12px;height:20px;padding:0;margin:0px 0 0;">
+								<option value="female_calm" selected>female_calm</option><option value="female">female</option><option value="male">male</option>
+								</select></td>
+								</tr></table>
+							</div>
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall"  title="If unchecked, only speak AI replies, not other text.">Narrate Both Sides </div>
