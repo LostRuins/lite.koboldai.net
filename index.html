@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 106
+Current version: 107
 -Concedo
 -->
 
@@ -3110,6 +3110,30 @@ Current version: 106
 		console.log("beep sound");
 	}
 
+	let notify_allowed = false;
+	function shownotify()
+	{
+		if ("Notification" in window) {
+			// Request permission to show notifications
+			if (Notification.permission === "granted" || notify_allowed) {
+				var notification = new Notification("Kobold Lite", {
+					body: "Text Generation Completed!"
+				});
+			} else {
+				Notification.requestPermission().then(function (permission) {
+					if (permission === "granted") {
+						notify_allowed = true;
+						console.log("Notification permission granted");
+					} else {
+						console.log("Notification permission denied");
+					}
+				});
+			}
+		} else {
+			console.log("Notification API not supported in this browser");
+		}
+	}
+
 	function compare_version_str(a, b) {
 		var i, diff;
 		var regExStrip0 = /(\.0+)+$/;
@@ -3373,6 +3397,7 @@ Current version: 106
 		persist_session: true,
 		speech_synth: 0, //0 is disabled, 100 is xtts
 		beep_on: false,
+		notify_on: false,
 		narrate_both_sides: false,
 		image_styles: "",
 		grammar:"",
@@ -7395,6 +7420,7 @@ Current version: 106
 		document.getElementById("ttsselect").value = localsettings.speech_synth;
 		toggle_tts_mode();
 		document.getElementById("beep_on").checked = localsettings.beep_on;
+		document.getElementById("notify_on").checked = localsettings.notify_on;
 		document.getElementById("narrate_both_sides").checked = localsettings.narrate_both_sides;
 		toggle_opmode();
 
@@ -7579,6 +7605,7 @@ Current version: 106
 
 		localsettings.speech_synth = document.getElementById("ttsselect").value;
 		localsettings.beep_on = (document.getElementById("beep_on").checked?true:false);
+		localsettings.notify_on = (document.getElementById("notify_on").checked?true:false);
 		localsettings.narrate_both_sides = (document.getElementById("narrate_both_sides").checked?true:false);
 		localsettings.auto_ctxlen = (document.getElementById("auto_ctxlen").checked ? true : false);
 		localsettings.auto_genamt = (document.getElementById("auto_genamt").checked ? true : false);
@@ -9868,6 +9895,10 @@ Current version: 106
 		if(localsettings.beep_on)
 		{
 			playbeep();
+		}
+		if(localsettings.notify_on)
+		{
+			shownotify();
 		}
 		let lastreq = "<a href=\"#\" onclick=\"show_last_req()\">Last request</a> served by <a href=\"#\" onclick=\"get_and_show_workers()\">" + genworker + "</a> using <span class=\"color_darkgreen\">"+genmdl+ "</span>"+(genkudos>0?(" for " + genkudos + " kudos"):"")+" in " + getTimeTaken() + " seconds.";
 		document.getElementById("lastreq").innerHTML = lastreq;
@@ -12838,6 +12869,10 @@ Current version: 106
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall"  title="Play a sound when generation is complete">Beep on Done </div>
 						   <input type="checkbox" id="beep_on" style="margin:0px 0 0;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall"  title="Show notification when generation is complete">Notify on Done </div>
+						   <input type="checkbox" id="notify_on" style="margin:0px 0 0;">
 						</div>
 						<button id="resetallsettings" type="button" class="btn btn-primary bg_red" style="padding:2px 3px;margin-top:2px;font-size:11px;" onclick="reset_all_settings()">Reset ALL Settings</button>
 					</div>
