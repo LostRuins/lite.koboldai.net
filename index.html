@@ -3400,6 +3400,7 @@ Current version: 107
 		notify_on: false,
 		narrate_both_sides: false,
 		image_styles: "",
+		image_negprompt: "",
 		grammar:"",
 		tokenstreammode: (localflag?1:0), //0=off,1=pollstream,2=sse
 		generate_images_mode: (localflag?0:1), //0=off, 1=horde, 2=a1111, 3=dalle
@@ -3410,6 +3411,7 @@ Current version: 107
 		img_allowhd: false,
 		img_steps: 20,
 		save_images: true,
+		save_remote_images: false,
 		prompt_for_savename: false,
 		case_sensitive_wi: false,
 		last_selected_preset: 0,
@@ -4053,7 +4055,7 @@ Current version: 107
 			"width": req_payload.params.width,
 			"height": req_payload.params.height,
 			"negative_prompt": negprompt.trim(),
-			"do_not_save_samples": true, //no idea if these work, but just try
+			"do_not_save_samples": (localsettings.save_remote_images?false:true), //no idea if these work, but just try
 			"do_not_save_grid": true,
 			"enable_hr": false,
 			"eta": 0,
@@ -6027,17 +6029,12 @@ Current version: 107
 		msgbox("The AI Horde generates text using crowdsourced GPUs by volunteer workers. By default your inputs are not logged, but as Horde workers are open source, they can be modified to do so. <br><br>In all cases, the sender will *always be anonymous*, however you are still advised to avoid sending privacy sensitive information.<br><br>For any issues, you can find us on discord at <a class=\"color_blueurl\" href=\"https://koboldai.org/discord\">https://koboldai.org/discord</a>","Disclaimer",true);
 	}
 
-	var pendingstyle = "";
 	function selectImgStyle()
 	{
 		document.getElementById("imagestylecontainer").classList.remove("hidden");
-		document.getElementById("imagestyleinput").value = pendingstyle;
 	}
 	function confirmImgStyle()
 	{
-		let userinput = document.getElementById("imagestyleinput").value;
-		pendingstyle = userinput;
-		console.log("Saved styles: " + pendingstyle);
 		document.getElementById("imagestylecontainer").classList.add("hidden");
 	}
 
@@ -7389,7 +7386,8 @@ Current version: 107
 			document.getElementById("auto_genamt_panel").classList.remove("hidden");
 		}
 
-		pendingstyle = localsettings.image_styles;
+		document.getElementById("imagestyleinput").value = localsettings.image_styles;
+		document.getElementById("negpromptinput").value = localsettings.image_negprompt;
 		pendinggrammar = localsettings.grammar;
 
 		//prepare the input for sampler order
@@ -7431,6 +7429,7 @@ Current version: 107
 		document.getElementById("img_allowhd").checked = localsettings.img_allowhd;
 		document.getElementById("img_autogen").checked = localsettings.img_autogen;
 		document.getElementById("save_images").checked = localsettings.save_images;
+		document.getElementById("save_remote_images").checked = localsettings.save_remote_images;
 		document.getElementById("img_cfgscale").value = localsettings.img_cfgscale;
 		document.getElementById("img_steps").value = localsettings.img_steps;
 		document.getElementById("prompt_for_savename").checked = localsettings.prompt_for_savename;
@@ -7610,12 +7609,14 @@ Current version: 107
 		localsettings.auto_ctxlen = (document.getElementById("auto_ctxlen").checked ? true : false);
 		localsettings.auto_genamt = (document.getElementById("auto_genamt").checked ? true : false);
 
-		localsettings.image_styles = pendingstyle;
+		localsettings.image_styles = document.getElementById("imagestyleinput").value;
+		localsettings.image_negprompt = document.getElementById("negpromptinput").value;
 		localsettings.grammar = pendinggrammar;
 		localsettings.tokenstreammode = document.getElementById("tokenstreammode").value;
 		localsettings.img_allowhd = (document.getElementById("img_allowhd").checked ? true : false);
 		localsettings.img_autogen = (document.getElementById("img_autogen").checked ? true : false);
 		localsettings.save_images = (document.getElementById("save_images").checked ? true : false);
+		localsettings.save_remote_images = (document.getElementById("save_remote_images").checked ? true : false);
 		localsettings.prompt_for_savename = (document.getElementById("prompt_for_savename").checked ? true : false);
 		localsettings.img_allownsfw = (document.getElementById("img_allownsfw").checked ? true : false);
 		if (localsettings.generate_images_mode==0) {
@@ -7744,11 +7745,11 @@ Current version: 107
 	{
 		if(document.getElementById("generate_images_mode").value==0)
 		{
-			document.getElementById("generate_images_model").classList.add("hidden");
+			document.getElementById("generate_images_model_container").classList.add("hidden");
 			document.getElementById("generate_images_dalle_container").classList.add("hidden");
 			document.getElementById("generate_images_local_model_container").classList.add("hidden");
 		}else if(document.getElementById("generate_images_mode").value==1){
-			document.getElementById("generate_images_model").classList.remove("hidden");
+			document.getElementById("generate_images_model_container").classList.remove("hidden");
 			document.getElementById("generate_images_dalle_container").classList.add("hidden");
 			document.getElementById("generate_images_local_model_container").classList.add("hidden");
 			if(!image_models_fetched)
@@ -7760,12 +7761,12 @@ Current version: 107
 				});
 			}
 		}else if(document.getElementById("generate_images_mode").value==2){
-			document.getElementById("generate_images_model").classList.add("hidden");
+			document.getElementById("generate_images_model_container").classList.add("hidden");
 			document.getElementById("generate_images_dalle_container").classList.add("hidden");
 			document.getElementById("generate_images_local_model_container").classList.remove("hidden");
 			connect_to_a1111(silent);
 		}else if(document.getElementById("generate_images_mode").value==3){
-			document.getElementById("generate_images_model").classList.add("hidden");
+			document.getElementById("generate_images_model_container").classList.add("hidden");
 			document.getElementById("generate_images_dalle_container").classList.remove("hidden");
 			document.getElementById("generate_images_local_model_container").classList.add("hidden");
 		}
@@ -9530,8 +9531,10 @@ Current version: 107
 			modelused = [localsettings.generate_images_model];
 		}
 
+		let negprompt = localsettings.image_negprompt?(" ### "+localsettings.image_negprompt):" ### ugly, deformed, poorly, censor, blurry, lowres, malformed, watermark, duplicated, grainy, distorted, signature";
+
 		let genimg_payload = {
-			"prompt": (sentence + " ### ugly, deformed, poorly, censor, blurry, lowres, malformed, watermark, duplicated, grainy, distorted, signature"),
+			"prompt": (sentence + negprompt),
 			"params": {
 				"cfg_scale": localsettings.img_cfgscale,
 				"sampler_name": "k_euler_a",
@@ -12810,14 +12813,24 @@ Current version: 107
 								<option value="2">Local A1111</option>
 								<option value="3">OpenAI DALL-E</option>
 							</select>
-							<select class="form-control" id="generate_images_model" style="font-size: 12px;height:20px;padding:2px;margin:0px 0 0;" onblur="validate_sd_model()" title="Select a stable diffusion model to generate images with">
-							</select>
+							<div id="generate_images_model_container" class="hidden">
+								<select class="form-control" id="generate_images_model" style="font-size: 12px;height:20px;padding:2px;margin:0px 0 0;" onblur="validate_sd_model()" title="Select a stable diffusion model to generate images with">
+								</select>
+								<div class="settinglabel">
+									<div class="justifyleft settingsmall"  title="If NSFW is disabled, explicit images will be censored">Allow NSFW </div>
+								<input type="checkbox" id="img_allownsfw" style="margin:0px 0 0;">
+								</div>
+							</div>
 
 							<div id="generate_images_local_model_container" class="settinglabel hidden">
 							<select class="form-control" id="generate_images_local_model" style="height:20px;padding:0;margin:0px 0 0; width:calc(100% - 30px)">
 								<option value="">[None]</option>
 							</select>
 							<button type="button" class="btn btn-primary" onclick="set_a1111_endpoint()" style="height: 20px; padding: 0px 2px; margin: 0px 0px 0px 3px;">⚙️</button>
+							<div class="settinglabel">
+								<div class="justifyleft settingsmall"  title="Save images remotely on A1111 host (caution)">Save In A1111 </div>
+							   <input type="checkbox" id="save_remote_images" style="margin:0px 0 0;">
+							</div>
 							</div>
 							<div id="generate_images_dalle_container" class="settinglabel hidden">
 								<table width="100%"><tr>
@@ -12832,10 +12845,6 @@ Current version: 107
 								<div class="settinglabel">
 									<div class="justifyleft settingsmall"  title="Automatically generates images periodically as you write">Autogenerate </div>
 								   <input type="checkbox" id="img_autogen" style="margin:0px 0 0;">
-								</div>
-								<div class="settinglabel">
-									<div class="justifyleft settingsmall"  title="If NSFW is disabled, explicit images will be censored">Allow NSFW </div>
-								   <input type="checkbox" id="img_allownsfw" style="margin:0px 0 0;">
 								</div>
 								<div class="settinglabel">
 									<div class="justifyleft settingsmall"  title="Includes images when saving to json file">Save Images </div>
@@ -13231,8 +13240,10 @@ Current version: 107
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Image Generation Settings</div>
 			</div>
-			<div class="aidgpopuplistheader anotelabel">Style tags to use for generating images:<br>(E.g. Sketch, Realistic, Anime, 3D Render, Drawing)<br><br></div>
+			<div class="aidgpopuplistheader anotelabel">Style tags to use for generating images:<br>(E.g. Sketch, Realistic, Anime, 3D Render, Drawing)<br></div>
 			<input class="form-control" type="text" placeholder="Default Style" value="" id="imagestyleinput">
+			<div class="aidgpopuplistheader anotelabel">Negative Prompt<br></div>
+			<input class="form-control" type="text" placeholder="Default Negative Prompt" value="" id="negpromptinput">
 
 			<div class="inlinelabel">
 				<div class="justifyleft" style="padding:4px">Number of Steps: </div>
