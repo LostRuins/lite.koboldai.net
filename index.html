@@ -3398,7 +3398,8 @@ Current version: 108
 		instruct_has_markdown: true,
 		placeholder_tags: true,
 		persist_session: true,
-		speech_synth: 0, //0 is disabled, 100 is xtts
+		speech_synth: 0, //0 is disabled, 1000 is xtts
+		xtts_voice: "female",
 		beep_on: false,
 		notify_on: false,
 		narrate_both_sides: false,
@@ -7440,7 +7441,7 @@ Current version: 108
 		} else {
 			console.log("No speech synth available");
 		}
-		ttshtml += "<option value=\"100\">XTTS API Server</option>";
+		ttshtml += "<option value=\"1000\">XTTS API Server</option>";
 		document.getElementById("ttsselect").innerHTML = ttshtml;
 		document.getElementById("ttsselect").value = localsettings.speech_synth;
 		toggle_tts_mode();
@@ -8372,8 +8373,18 @@ Current version: 108
 			popup_manual_image();
 		}
 	}
+		
+	// Check for XTTS in previous session or if set in initial variables
+	if(localsettings.speech_synth==1000)
+	{
+		xtts_is_connected = false;
+		fetch_xtts_voices(true);
+	}
+	else
+	{
+		xtts_is_connected = false;
+	}
 
-	var xtts_is_connected = false;
 	function fetch_xtts_voices(silent)
 	{
 		if(!xtts_is_connected)
@@ -8389,6 +8400,7 @@ Current version: 108
 						selectionhtml += `<option value="` + data[i] + `">`+data[i]+`</option>`;
 					}
 					dropdown.innerHTML = selectionhtml;
+					document.getElementById("xtts_voices").value = localsettings.xtts_voice;
 					xtts_is_connected = true;
 			}).catch((error) => {
 				xtts_is_connected = false;
@@ -8402,7 +8414,7 @@ Current version: 108
 
 	function toggle_tts_mode()
 	{
-		if(document.getElementById("ttsselect").value==100)
+		if(document.getElementById("ttsselect").value==1000)
 		{
 			document.getElementById("xtts_container").classList.remove("hidden");
 			fetch_xtts_voices(true);
@@ -8432,14 +8444,15 @@ Current version: 108
 	}
 	function tts_speak(text)
 	{
-		if(localsettings.speech_synth==100) //xtts api server
+		if(localsettings.speech_synth==1000) //xtts api server
 		{
 			if(xtts_is_connected)
 			{
+				localsettings.xtts_voice = document.getElementById("xtts_voices").value;
 				const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 				let xtts_payload = {
 					"text": text,
-					"speaker_wav": document.getElementById("xtts_voices").value,
+					"speaker_wav": localsettings.xtts_voice, //document.getElementById("xtts_voices").value,
 					"language": "EN"
 				};
 
