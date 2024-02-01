@@ -2563,27 +2563,79 @@ Current version: 107
 		}
 	}
 
+	function get_world_info(wimatch_context) {
+		let result = "";
+		if (current_wi.length > 0) {
+			for (var x = 0; x < current_wi.length; ++x) {
+				let wi = current_wi[x];
+
+				//see if this is a valid wi entry
+				if (wi.key == null || wi.key == "") {
+					continue;
+				}
+
+				//selective, but bad secondary key. treat as only 1 key
+				let invalidseckey = (wi.selective && (wi.keysecondary == "" || wi.keysecondary == null));
+
+				let wiks = wi.key.split(",");
+
+				let shoulduse = false;
+				if (wi.constant) {
+					shoulduse = true;
+				}
+				else if (!wi.selective || invalidseckey) {
+					if (localsettings.case_sensitive_wi) {
+						shoulduse = wiks.some(k => wimatch_context.includes(k.trim()));
+					} else {
+						shoulduse = wiks.some(k => wimatch_context.includes(k.trim().toLowerCase()));
+					}
+				} else {
+					let wiks2 = wi.keysecondary.split(",");
+					if (localsettings.case_sensitive_wi) {
+						let t1 = wiks.some(k => wimatch_context.includes(k.trim()));
+						let t2 = wiks2.some(k => wimatch_context.includes(k.trim()));
+						shoulduse = (t1 && t2);
+					} else {
+						let t1 = wiks.some(k => wimatch_context.includes(k.trim().toLowerCase()));
+						let t2 = wiks2.some(k => wimatch_context.includes(k.trim().toLowerCase()));
+						shoulduse = (t1 && t2);
+					}
+
+				}
+
+				if (shoulduse) {
+					result += wi.content + "\n";
+				}
+			}
+		}
+		return result;
+	}
+
 	function slashcommand_help() {
-		padto = slashcommands.reduce( (result, entry) => entry.command.length > result ? entry.command.length : result, 0 );
+		commandpadto = slashcommands.reduce(
+			(result, entry) => entry.command.length > result ? entry.command.length : result, 0
+		);
+		argspadto = slashcommands.reduce(
+			(result, entry) => entry.args.length > result ? entry.args.length : result, 0
+		);
 
 		mode = {
-			"0": "Instruct",
 			"1": "Story",
 			"2": "Adventure",
-			"3": "Chat"
+			"3": "Chat",
+			"4": "Instruct"
 		}[localsettings.opmode.toString()];
 
 		result  = `Slash commands are only active in Chat mode. Mode is currently "${mode}"\n\n`;
-		result += `${"*Command*".padEnd(padto)}  *Description*\n\n`
+		result += `${"*Command*".padEnd(commandpadto + 2)} ${"*Args*".padEnd(argspadto + 2)} *Description*\n\n`
 		result += slashcommands
 			.map( (entry) => {
-				return `${entry.command.padEnd(padto)}  ${entry.description}`
+				return `${entry.command.padEnd(commandpadto)} ${entry.args.padEnd(argspadto)} ${entry.description}`
 			})
 			.join("\n");
 
-		console.log(mode, localsettings.gui_type_chat)
-		// use a code block if we are in aesthetic chat
-		if (mode === "Chat" && localsettings.gui_type_chat == 2) {
+		// use a markdown code block if we are in aesthetic chat or instruct
+		if (mode === "Instruct" || (mode === "Chat" && localsettings.gui_type_chat == 2)) {
 			result = "```\n" + result + "\n```"
 		}
 
@@ -2601,35 +2653,117 @@ Current version: 107
 		return result;
 	}
 
+	function slashcommand_memorize(character, args) {
+		// parse arguments,
+		//	[user] is who the message to memorize came from,
+		//  [tags] is a comma seperated list of tags to store that message under
+		args = args.trim().split(",");
+		if (args.length === 0) {
+			return `Could not add a memory for ${character}, no <user> or <tags> were given.`;
+		}
+
+		messageUser = args[0];
+		message = "";
+		// search backward through gametext_arr until we find a message from messageUser
+		for (let i = gametext_arr.length - 1; i >= 0; i--) {
+			candidate = gametext_arr[i].trim();
+			if (candidate.startsWith(messageUser + ":")) {
+				message = candidate.replace(messageUser + ":", "").trim()
+				message = `${messageUser} said '${message}'`;
+				break;
+			}
+		}
+
+		// didn't find a message from that messageUser
+		if (!message) {
+			return `Could not find any messages from \`${args[0]}\`. Did you spell their name correctly?`;
+		}
+
+		tags = args.slice(1).map( tag => tag.trim() );
+		if (!current_char_memory.hasOwnProperty(character)) current_char_memory[character] = {};
+		thisCharacterMemories = current_char_memory[character];
+
+		tags.forEach( tag => {
+			if(!thisCharacterMemories.hasOwnProperty(tag.toLowerCase())) thisCharacterMemories[tag.toLowerCase()] = [];
+			thisCharacterMemories[tag.toLowerCase()].push(message);	// TODO: disallow duplicates
+		})
+		return `${character} added a message from \`${args[0]}\` to their memories of ${tags}`
+	}
+
+	function slashcommand_recall(character, args) {
+		tag = args.trim().toLowerCase();
+
+		if (!current_char_memory.hasOwnProperty(character)) current_char_memory[character] = {};
+		thisCharacterMemories = current_char_memory[character];
+
+		// try and return a random memory of the character no tag was given
+		if (tag.length === 0) {
+			possibleTags = Object(thisCharacterMemories).keys;
+			if (possibleTags)
+			{
+				tag = possibleTags[Math.floor(Math.random() * possibleTags.length)];
+			}
+			else {
+				tag = "nothing";
+			}
+		}
+
+		// return one of the character's memories for the tag
+		if (thisCharacterMemories.hasOwnProperty(tag))
+		{
+			memories = thisCharacterMemories[tag];
+			memory = memories[Math.floor(Math.random() * memories.length)];
+			return `${character} remembers ${tag}, "${memory}"\n`
+		}
+		// return that we didn't find anything
+		else
+		{
+			return `${character} tries to remember something about ${tag}, but nothing comes to mind.\n`
+		}
+	}
+
+	function slashcommand_winfo(character, args) {
+		const info = get_world_info(args);
+		if (info) {
+			return `${character} looks for anything relating to '${args}' in the world info, and finds:\n\n"${info}"`
+		} else {
+			return `${character} looks for anything relating to '${args}' in the world info, but doesn't find anything.`
+		}
+	}
+
 	const slashcommands = [
-		{ command: "/help", call: slashcommand_help, args: "", description: "Displays all slash commands and their descriptions." },
+		{ command: "/help",      call: slashcommand_help,     args: "",                       description: "Displays all slash commands and their descriptions." },
+		{ command: "/memorize",  call: slashcommand_memorize, args: "<user>,<tag1..,tag2..>", description: "Add last chat message from <user> to your memories of the passed <tags>."},
+		{ command: "/recall",    call: slashcommand_recall,   args: "<tag>",                  description: "Recall one of your memories of <tag>."},
+		{ command: "/worldinfo", call: slashcommand_winfo,    args: "<text>",                 description: "Lookup any world info relating to <text>."}
 	]
 
 	function process_slashcommand(text, character) {
-		// Process the first slash command in the text.
-		const lines = text.split("\n");
-		const commandIdx = lines.findIndex( (line) => line.trim().startsWith("/"));
+		// only in chat mode for now
+		if (localsettings.opmode.toString() !== "3") return false;
 
-		let result = text;
-		// If one exists, we remove any lines of text after it, and then add the output of the
-		// appropriate function as if from 'System:'
+		// Process the first slash command in the text, exclude common coding comments
+		const lines = text.split("\n");
+		const commandIdx = lines.findIndex( (line) => line.trim().startsWith("/") && !line.trim().startsWith("//") && !line.trim().startsWith("/*"));
+
+		// return a reply from 'Chatserver:' if there was a /slashcommand along with a trimmed version of the request
+		let result = false;
 		if (commandIdx !== -1) {
 			commandLine = lines[commandIdx].trim();
-			result =  lines.slice(0, commandIdx + 1).join("\n");
+			result = { trimmedinput: lines.slice(0, commandIdx + 1).join("\n") }
 			console.log(`Processing possible slash command ${commandLine} for ${character}`)
 
 			const match = slashcommands.find((entry) => commandLine.trim().startsWith(entry.command));
 
 			// didn't find a slash command with this name
 			if (!match) {
-				return result + `\n\nSystem: ${slashcommand_notfound()}\n`;
-			}
-
-			// pass in the right arguments into the function for the slash command
-			if (commandLine.indexOf(" ") === -1) {
-				result += `\n\nSystem: ${match.call(character)}\n`;
+				result["response"] = `\nSystem: ${slashcommand_notfound()}\n`
+			// command with no argument supplied
+			} else if (commandLine.indexOf(" ") === -1) {
+				result["response"] = `\nSystem: ${match.call(character, "")}\n`;
+			// command with one or more arguments supplied
 			} else {
-				result += `\n\nSystem: ${match.call(character, commandLine.substring(commandLine.indexOf(' ') + 1))}\n`
+				result["response"] = `\nSystem: ${match.call(character, commandLine.substring(commandLine.indexOf(' ') + 1))}\n`
 			}
 		}
 
@@ -3400,6 +3534,7 @@ Current version: 107
 	var current_wi = []; //each item stores a wi object.
 	var wi_insertlocation = 0; //after memory
 	var wi_searchdepth = 0; //search everything
+	var current_char_memory = {}; //stores memories added through slash commands
 	var generateimagesinterval = 650; //if generated images is enabled, it will trigger after every 600 new characters in context.
 	var nextgeneratedimagemilestone = generateimagesinterval; //used to keep track of when to generate the next image
 	var image_db = {}; //stores a dictionary of pending images
@@ -4709,6 +4844,7 @@ Current version: 107
 		new_save_storyobj.authorsnote = current_anote;
 		new_save_storyobj.memory = current_memory;
 		new_save_storyobj.worldinfo = current_wi;
+		new_save_storyobj.character_memory = current_char_memory;
 
 		//extra unofficial fields for the story
 		new_save_storyobj.extrastopseq = extrastopseq;
@@ -4874,6 +5010,7 @@ Current version: 107
 			let old_current_anote = current_anote;
 			let old_current_anotetemplate = current_anotetemplate;
 			let old_current_memory = current_memory;
+			let old_current_char_memory = current_char_memory;
 			let old_current_wi = current_wi;
 			let old_extrastopseq = extrastopseq;
 
@@ -4922,6 +5059,9 @@ Current version: 107
 				if (storyobj.memory) {
 					current_memory = storyobj.memory;
 				}
+				if (storyobj.character_memory) {
+					current_char_memory = storyobj.character_memory
+				}
 				if (storyobj.worldinfo) {
 					current_wi = storyobj.worldinfo;
 				}
@@ -4962,6 +5102,9 @@ Current version: 107
 				if (storyobj.memory) {
 					current_memory = storyobj.memory;
 				}
+				if (storyobj.character_memory) {
+					current_char_memory = storyobj.character_memory
+				}
 				if (storyobj.worldinfo_v2 != null && storyobj.worldinfo_v2.entries != null) {
 					for (var key in storyobj.worldinfo_v2.entries) {
 						var itm = storyobj.worldinfo_v2.entries[key];
@@ -4992,6 +5135,7 @@ Current version: 107
 					current_anote = old_current_anote;
 					current_anotetemplate = old_current_anotetemplate;
 					current_memory = old_current_memory;
+					current_char_memory = old_current_char_memory;
 				}
 				if(!loadworldinfo)
 				{
@@ -8115,6 +8259,7 @@ Current version: 107
 			current_memory = "";
 			current_anote = "";
 			current_wi = [];
+			current_char_memory = {};
 			extrastopseq = "";
 			anote_strength = 320;
 			logitbiasdict = {};
@@ -8515,8 +8660,8 @@ Current version: 107
 	}
 
 	function submit_generation() {
-
 		let newgen = document.getElementById("input_text").value;
+
 		const user_input_empty = (newgen.trim()=="");
 		let doNotGenerate = false;
 
@@ -8525,15 +8670,28 @@ Current version: 107
 			waiting_for_autosummary = false;
 			idle_timer = 0;
 			idle_triggered_counter = 0;
+
+			// if there is a slashcommand trim off anything after it
+			commandresult = process_slashcommand(newgen, localsettings.chatname);
+			if(commandresult)
+			{
+				newgen = commandresult.trimmedinput
+			}
+
 			if (localsettings.speech_synth > 0)
 			{
 				if(localsettings.narrate_both_sides)
 				{
-					tts_speak(newgen);
+					if(commandresult)
+					{
+						tts_speak(newgen + commandresult.response)
+					}
+					else
+					{
+						tts_speak(newgen);
+					}
 				}
 			}
-
-			newgen = process_slashcommand(newgen, localsettings.chatname);
 
 			if (localsettings.opmode == 4)
 			{
@@ -8586,6 +8744,9 @@ Current version: 107
 
 			if (newgen != "") {
 				gametext_arr.push(newgen);
+			}
+			if (commandresult != "") {
+				gametext_arr.push(commandresult.response);
 			}
 			redo_arr = [];
 			retry_prev_text = "";
@@ -8819,52 +8980,7 @@ Current version: 107
 			{
 				wimatch_context = wimatch_context.toLowerCase();
 			}
-
-			let wistr = "";
-			if (current_wi.length > 0) {
-				for (var x = 0; x < current_wi.length; ++x) {
-					let wi = current_wi[x];
-
-					//see if this is a valid wi entry
-					if (wi.key == null || wi.key == "") {
-						continue;
-					}
-
-					//selective, but bad secondary key. treat as only 1 key
-					let invalidseckey = (wi.selective && (wi.keysecondary == "" || wi.keysecondary == null));
-
-					let wiks = wi.key.split(",");
-
-					let shoulduse = false;
-					if (wi.constant) {
-						shoulduse = true;
-					}
-					else if (!wi.selective || invalidseckey) {
-						if (localsettings.case_sensitive_wi) {
-							shoulduse = wiks.some(k => wimatch_context.includes(k.trim()));
-						} else {
-							shoulduse = wiks.some(k => wimatch_context.includes(k.trim().toLowerCase()));
-						}
-					} else {
-						let wiks2 = wi.keysecondary.split(",");
-						if (localsettings.case_sensitive_wi) {
-							let t1 = wiks.some(k => wimatch_context.includes(k.trim()));
-							let t2 = wiks2.some(k => wimatch_context.includes(k.trim()));
-							shoulduse = (t1 && t2);
-						} else {
-							let t1 = wiks.some(k => wimatch_context.includes(k.trim().toLowerCase()));
-							let t2 = wiks2.some(k => wimatch_context.includes(k.trim().toLowerCase()));
-							shoulduse = (t1 && t2);
-						}
-
-					}
-
-					if (shoulduse) {
-						wistr += wi.content + "\n";
-					}
-				}
-			}
-
+			const wistr = get_world_info(wimatch_context);
 
 			//we clip the authors note if its too long
 			let truncated_anote = current_anotetemplate.replace("<|>", current_anote);
@@ -9815,6 +9931,13 @@ Current version: 107
 			gentxt = gentxt.replace(/[\r\n]+/g, '\n');
 		}
 
+		// process any slashcommand and start with the gentxt trimmed to that slashcommand
+		// when on is present
+		commandresult = process_slashcommand(gentxt, localsettings.chatopponent);
+		if (commandresult) {
+			gentxt = commandresult.trimmedinput
+		}
+
 		//if we are in adventure mode, truncate to action if it appears
 		if (localsettings.opmode == 2)
 		{
@@ -9913,7 +10036,6 @@ Current version: 107
 				startpart = startpart.substring(0, startpart.length - 1);
 			}
 			gentxt = startpart;
-			gentxt = process_slashcommand(gentxt, localsettings.chatopponent);
 		}
 
 		//if we are in instruct mode, truncate to instruction
@@ -9965,8 +10087,16 @@ Current version: 107
 
 		if(gentxt!="")
 		{
-			gametext_arr.push(gentxt); //delete last message if retry is hit, since response was added
-			retry_preserve_last = false;
+			if (commandresult)
+			{
+				gametext_arr.push(gentxt)
+				gametext_arr.push(commandresult.response)
+			}
+			else
+			{
+				gametext_arr.push(gentxt);
+			}
+			retry_preserve_last = false;	 //delete last message if retry is hit, since response was added
 		}
 		if(localsettings.beep_on)
 		{
