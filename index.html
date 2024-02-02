@@ -3422,6 +3422,8 @@ Current version: 108
 		prompt_for_savename: false,
 		case_sensitive_wi: false,
 		last_selected_preset: 0,
+		gui_type_story: 0, //0=standard, 1=messenger, 2=aesthetic
+		gui_type_adventure: 0, //0=standard, 1=messenger, 2=aesthetic
 		gui_type_chat: 1, //0=standard, 1=messenger, 2=aesthetic
 		gui_type_instruct: 0, //0=standard, 1=messenger, 2=aesthetic
 		multiline_replies: true,
@@ -7594,7 +7596,15 @@ Current version: 108
 		localsettings.compressnewlines = (document.getElementById("compressnewlines").checked ? true : false);
 		localsettings.eos_ban_mode = document.getElementById("eos_ban_mode").value;
 		localsettings.persist_session = (document.getElementById("persist_session").checked ? true : false);
-		if(document.getElementById("opmode").value==3)
+		if(document.getElementById("opmode").value==1)
+		{
+			localsettings.gui_type_story = document.getElementById("gui_type").value;
+		}
+		else if(document.getElementById("opmode").value==2)
+		{
+			localsettings.gui_type_adventure = document.getElementById("gui_type").value;
+		}
+		else if(document.getElementById("opmode").value==3)
 		{
 			localsettings.gui_type_chat = document.getElementById("gui_type").value;
 		}
@@ -7681,7 +7691,10 @@ Current version: 108
 			localsettings.img_cfgscale = defaultsettings.img_cfgscale;
 		}
 
-		if((localsettings.gui_type_chat!=0 && localsettings.opmode==3)||(localsettings.gui_type_instruct!=0 && localsettings.opmode==4))
+		if((localsettings.gui_type_story!=0 && localsettings.opmode==1)
+		||(localsettings.gui_type_adventure!=0 && localsettings.opmode==2)
+		||(localsettings.gui_type_chat!=0 && localsettings.opmode==3)
+		||(localsettings.gui_type_instruct!=0 && localsettings.opmode==4))
 		{
 			//kick out of edit mode
 			if(document.getElementById("allowediting"))
@@ -7835,12 +7848,14 @@ Current version: 108
 		document.getElementById('uipicker_aesthetic').classList.add('hidden');
 
 		if (document.getElementById('opmode').value == 1) {
-			document.getElementById('gui_type').value = 0;
+			document.getElementById('gui_type').value = localsettings.gui_type_story;
+			document.getElementById('uipicker_aesthetic').classList.remove('hidden');
 		}
 		if (document.getElementById('opmode').value == 2) {
-			document.getElementById('gui_type').value = 0;
+			document.getElementById('gui_type').value = localsettings.gui_type_adventure;
 			document.getElementById('adventuresection1').classList.remove('hidden');
 			document.getElementById('adventuresection2').classList.remove('hidden');
+			document.getElementById('uipicker_aesthetic').classList.remove('hidden');
 		}
 		if (document.getElementById('opmode').value == 3) {
 			document.getElementById('gui_type').value = localsettings.gui_type_chat;
@@ -10926,7 +10941,11 @@ Current version: 108
 		update_submit_button(true); //full update for submit button, otherwise just text when not generating
 
 		// Render onto enhanced chat interface if selected. Currently only applicable to Chat & Instruct modes.
-		let isStyleApplicable = ((localsettings.opmode==3 && localsettings.gui_type_chat!=0) || (localsettings.opmode==4 && localsettings.gui_type_instruct!=0));
+		let isStyleApplicable = (
+			(localsettings.opmode==1 && localsettings.gui_type_story!=0) ||
+			(localsettings.opmode==2 && localsettings.gui_type_adventure!=0) ||
+			(localsettings.opmode==3 && localsettings.gui_type_chat!=0) ||
+			(localsettings.opmode==4 && localsettings.gui_type_instruct!=0));
 
 		if (!inEditMode && isStyleApplicable)
 		{
