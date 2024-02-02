@@ -2563,7 +2563,7 @@ Current version: 107
 		}
 	}
 
-	function get_world_info(wimatch_context) {
+	function getWorldInfo(wimatch_context) {
 		let result = "";
 		if (current_wi.length > 0) {
 			for (var x = 0; x < current_wi.length; ++x) {
@@ -2611,7 +2611,7 @@ Current version: 107
 		return result;
 	}
 
-	function slashcommand_help() {
+	function slashcommandHelp() {
 		commandpadto = slashcommands.reduce(
 			(result, entry) => entry.command.length > result ? entry.command.length : result, 0
 		);
@@ -2642,7 +2642,7 @@ Current version: 107
 		return result;
 	}
 
-	function slashcommand_notfound() {
+	function slashcommandNotFound() {
 		result = "Unrecognized command. Type '/help' for a list of available slash commands."
 
 		// use a code block if we are in aesthetic chat
@@ -2653,7 +2653,7 @@ Current version: 107
 		return result;
 	}
 
-	function slashcommand_memorize(character, args) {
+	function slashcommandMemorize(character, args) {
 		// parse arguments,
 		//	[user] is who the message to memorize came from,
 		//  [tags] is a comma seperated list of tags to store that message under
@@ -2690,7 +2690,7 @@ Current version: 107
 		return `${character} added a message from \`${args[0]}\` to their memories of ${tags}`
 	}
 
-	function slashcommand_recall(character, args) {
+	function slashcommandRecall(character, args) {
 		tag = args.trim().toLowerCase();
 
 		if (!current_char_memory.hasOwnProperty(character)) current_char_memory[character] = {};
@@ -2722,8 +2722,8 @@ Current version: 107
 		}
 	}
 
-	function slashcommand_winfo(character, args) {
-		const info = get_world_info(args);
+	function slashcommandWinfo(character, args) {
+		const info = getWorldInfo(args);
 		if (info) {
 			return `${character} looks for anything relating to '${args}' in the world info, and finds:\n\n"${info}"`
 		} else {
@@ -2732,19 +2732,26 @@ Current version: 107
 	}
 
 	const slashcommands = [
-		{ command: "/help",      call: slashcommand_help,     args: "",                       description: "Displays all slash commands and their descriptions." },
-		{ command: "/memorize",  call: slashcommand_memorize, args: "<user>,<tag1..,tag2..>", description: "Add last chat message from <user> to your memories of the passed <tags>."},
-		{ command: "/recall",    call: slashcommand_recall,   args: "<tag>",                  description: "Recall one of your memories of <tag>."},
-		{ command: "/worldinfo", call: slashcommand_winfo,    args: "<text>",                 description: "Lookup any world info relating to <text>."}
+		{ command: "/help",      call: slashcommandHelp,     args: "",                       description: "Displays all slash commands and their descriptions." },
+		{ command: "/memorize",  call: slashcommandMemorize, args: "<user>,<tag1..,tag2..>", description: "Add last chat message from <user> to your memories of the passed <tags>."},
+		{ command: "/recall",    call: slashcommandRecall,   args: "<tag>",                  description: "Recall one of your memories of <tag>."},
+		{ command: "/worldinfo", call: slashcommandWinfo,    args: "<text>",                 description: "Lookup any world info relating to <text>."}
 	]
 
-	function process_slashcommand(text, character) {
-		// only in chat mode for now
+	function processSlashcommand(text, character, fromAI) {
+		// only chatmode for now
 		if (localsettings.opmode.toString() !== "3") return false;
+
+		// respect the enable/disable settings
+		if (fromAI && !localsettings.slashcommands_allow_ai) return false;
+		if (!fromAI && !localsettings.slashcommands_allow_user) return false;
 
 		// Process the first slash command in the text, exclude common coding comments
 		const lines = text.split("\n");
-		const commandIdx = lines.findIndex( (line) => line.trim().startsWith("/") && !line.trim().startsWith("//") && !line.trim().startsWith("/*"));
+		const commandIdx = lines.findIndex( (line) => {
+			lineText = line.trim();
+			return lineText.startsWith("/") && !localsettings.slashcommands_skip.some( entry => lineText.startsWith(entry));
+		});
 
 		// return a reply from 'Chatserver:' if there was a /slashcommand along with a trimmed version of the request
 		let result = false;
@@ -2757,13 +2764,13 @@ Current version: 107
 
 			// didn't find a slash command with this name
 			if (!match) {
-				result["response"] = `\nSystem: ${slashcommand_notfound()}\n`
+				result["response"] = `\n${localsettings.slashcommands_from}: ${slashcommandNotFound()}\n`
 			// command with no argument supplied
 			} else if (commandLine.indexOf(" ") === -1) {
-				result["response"] = `\nSystem: ${match.call(character, "")}\n`;
+				result["response"] = `\n${localsettings.slashcommands_from}: ${match.call(character, "")}\n`;
 			// command with one or more arguments supplied
 			} else {
-				result["response"] = `\nSystem: ${match.call(character, commandLine.substring(commandLine.indexOf(' ') + 1))}\n`
+				result["response"] = `\n${localsettings.slashcommands_from}: ${match.call(character, commandLine.substring(commandLine.indexOf(' ') + 1))}\n`
 			}
 		}
 
@@ -3626,6 +3633,10 @@ Current version: 107
 		multiline_replies: true,
 		multiline_replies_adventure: true,
 		allow_continue_chat: false,
+		slashcommands_allow_ai: false,
+		slashcommands_allow_user: false,
+		slashcommands_skip: ["//", "/*"],
+		slashcommands_from: "System",
 		idle_responses: 0,
 		idle_duration: 60,
 		export_settings: true, //affects if settings are included with the story and sharelinks
@@ -7590,6 +7601,8 @@ Current version: 107
 		document.getElementById("multiline_replies").checked = localsettings.multiline_replies;
 		document.getElementById("multiline_replies_adventure").checked = localsettings.multiline_replies_adventure;
 		document.getElementById("allow_continue_chat").checked = localsettings.allow_continue_chat;
+		document.getElementById("slashcommands_allow_ai").checked = localsettings.slashcommands_allow_ai;
+		document.getElementById("slashcommands_allow_user").checked = localsettings.slashcommands_allow_user;
 		document.getElementById("idle_responses").value = localsettings.idle_responses;
 		document.getElementById("idle_duration").value = localsettings.idle_duration;
 		document.getElementById("adventure_context_mod").checked = localsettings.adventure_context_mod;
@@ -7781,6 +7794,8 @@ Current version: 107
 		localsettings.multiline_replies = (document.getElementById("multiline_replies").checked ? true : false);
 		localsettings.multiline_replies_adventure = (document.getElementById("multiline_replies_adventure").checked ? true : false);
 		localsettings.allow_continue_chat = (document.getElementById("allow_continue_chat").checked ? true : false);
+		localsettings.slashcommands_allow_ai = (document.getElementById("slashcommands_allow_ai").checked ? true : false);
+		localsettings.slashcommands_allow_user = (document.getElementById("slashcommands_allow_user").checked ? true : false);
 		localsettings.idle_responses = document.getElementById("idle_responses").value;
 		localsettings.idle_duration = document.getElementById("idle_duration").value;
 		localsettings.adventure_context_mod = (document.getElementById("adventure_context_mod").checked ? true : false);
@@ -8672,7 +8687,7 @@ Current version: 107
 			idle_triggered_counter = 0;
 
 			// if there is a slashcommand trim off anything after it
-			commandresult = process_slashcommand(newgen, localsettings.chatname);
+			commandresult = processSlashcommand(newgen, localsettings.chatname, false);
 			if(commandresult)
 			{
 				newgen = commandresult.trimmedinput
@@ -8980,7 +8995,7 @@ Current version: 107
 			{
 				wimatch_context = wimatch_context.toLowerCase();
 			}
-			const wistr = get_world_info(wimatch_context);
+			const wistr = getWorldInfo(wimatch_context);
 
 			//we clip the authors note if its too long
 			let truncated_anote = current_anotetemplate.replace("<|>", current_anote);
@@ -9933,7 +9948,7 @@ Current version: 107
 
 		// process any slashcommand and start with the gentxt trimmed to that slashcommand
 		// when on is present
-		commandresult = process_slashcommand(gentxt, localsettings.chatopponent);
+		commandresult = processSlashcommand(gentxt, localsettings.chatopponent, true);
 		if (commandresult) {
 			gentxt = commandresult.trimmedinput
 		}
@@ -12837,7 +12852,7 @@ Current version: 107
 					</div>
 
 					<div class="settingitem">
-					<div class="settinglabel">
+						<div class="settinglabel">
 						<div id="chatnamesection2" class="settinglabel hidden" style="padding-top: 3px;">
 							<table class="settingsmall text-center" style="border-spacing: 4px 2px;	border-collapse: separate;">
 								<tr>
@@ -12848,15 +12863,20 @@ Current version: 107
 								<td style="vertical-align: top;"><input class="settinglabel miniinput" type="text" placeholder="(Enter Name)" value="" id="chatname" title="The name that you will be chatting as"></td>
 								<td style="vertical-align: top;"><textarea class="settinglabel miniinput" style="resize: none;overflow:hidden;" id="chatopponent" placeholder="(Auto)" rows="1" wrap="off" title="The name of the person you want to chat with" oninput="handle_bot_name_input()" onchange="handle_bot_name_onchange()"></textarea></td>
 								</tr>
-							  </table>
+							</table>
 
 							<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Whether to allow multiple lines in AI responses.">Multiline Replies </div>
-							<input type="checkbox" id="multiline_replies" style="margin:0px 0 0;">
-							</div>
-							<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Allow incomplete AI chat replies, which can be continued by pressing submit again. Not recommended.">Continue Bot Replies</div>
-							<input type="checkbox" id="allow_continue_chat" style="margin:0px 0 0;">
+								<div class="justifyleft settingsmall">Multiline Replies <span class="helpicon">?<span class="helptext">Whether to allow multiple lines in AI responses.</span></span></div>
+								<input type="checkbox" id="multiline_replies" style="margin:0px 0px 0px auto;">
+
+								<div class="justifyleft settingsmall">Continue Bot Replies <span class="helpicon">?<span class="helptext">Allow incomplete AI chat replies, which can be continued by pressing submit again. Not recommended.</span></span></div>
+								<input type="checkbox" id="allow_continue_chat" style="margin:0px 0px 0px auto;">
+
+								<div class="justifyleft settingsmall">Allow Bot /commands <span class="helpicon">?<span class="helptext">Enables the built in /commands to be used from the AI's side of the Chat.</span></span></div>
+								<input type="checkbox" id="slashcommands_allow_ai" style="margin:0px 0px 0px auto;">
+
+								<div class="justifyleft settingsmall">Allow User /commands <span class="helpicon">?<span class="helptext">Enables the built in /commands to be used from the User's side of the Chat. /help lists the available commands when this is enabled.</span></span></div>
+								<input type="checkbox" id="slashcommands_allow_user" style="margin:0px 0px 0px auto;">
 							</div>
 						</div>
 						<div id="adventuresection2" class="settinglabel hidden" style="padding-top: 3px;">
