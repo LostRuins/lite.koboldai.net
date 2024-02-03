@@ -3431,6 +3431,7 @@ Current version: 108
 		beep_on: false,
 		notify_on: false,
 		narrate_both_sides: false,
+		narrate_only_dialog: true,		
 		image_styles: "",
 		image_negprompt: "",
 		grammar:"",
@@ -7489,6 +7490,7 @@ Current version: 108
 		document.getElementById("beep_on").checked = localsettings.beep_on;
 		document.getElementById("notify_on").checked = localsettings.notify_on;
 		document.getElementById("narrate_both_sides").checked = localsettings.narrate_both_sides;
+		document.getElementById("narrate_only_dialog").checked = localsettings.narrate_only_dialog;		
 		toggle_opmode();
 
 		//sd models display
@@ -7684,6 +7686,7 @@ Current version: 108
 		localsettings.beep_on = (document.getElementById("beep_on").checked?true:false);
 		localsettings.notify_on = (document.getElementById("notify_on").checked?true:false);
 		localsettings.narrate_both_sides = (document.getElementById("narrate_both_sides").checked?true:false);
+		localsettings.narrate_only_dialog = (document.getElementById("narrate_only_dialog").checked?true:false);		
 		localsettings.auto_ctxlen = (document.getElementById("auto_ctxlen").checked ? true : false);
 		localsettings.auto_genamt = (document.getElementById("auto_genamt").checked ? true : false);
 
@@ -10004,6 +10007,19 @@ Current version: 108
 			if(localsettings.narrate_both_sides)
 			{
 				gentxtspeak = gentxt;
+			}
+			
+			if(localsettings.narrate_only_dialog)
+			{
+				// Remove text within asterisks and the asterisks, then trim
+				let textWithoutAsterisks = gentxtspeak.replace(/\*.*?\*/g, "").trim();
+
+				// Use regular expression to extract content within quoted text
+				let quotedText = textWithoutAsterisks.match(/"([^"\\]*(\\.[^"\\]*)*)"/g);
+
+				// Check if quotedText is not null (i.e., if there are quoted dialogues)
+				let editedParagraph = quotedText ? quotedText.map(match => match.replace(/"/g, '')) : [textWithoutAsterisks];
+				gentxtspeak=editedParagraph.join(' ');
 			}
 			tts_speak(gentxtspeak);
 		}
@@ -13076,6 +13092,10 @@ Current version: 108
 							<div class="justifyleft settingsmall"  title="If unchecked, only speak AI replies, not other text.">Narrate Both Sides </div>
 						   <input type="checkbox" id="narrate_both_sides" style="margin:0px 0 0;">
 						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall"  title="If unchecked, only speak AI replies, not other text.">Narrate Only Dialog </div>
+						   <input type="checkbox" id="narrate_only_dialog" style="margin:0px 0 0;">
+						</div>						
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall"  title="Play a sound when generation is complete">Beep on Done </div>
 						   <input type="checkbox" id="beep_on" style="margin:0px 0 0;">
