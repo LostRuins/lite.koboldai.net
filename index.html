@@ -1748,6 +1748,31 @@ Current version: 108
 		background-image: var(--img_chat) !important;
 	}
 
+	.chat_btnmode_adventure{
+		background: #3263be none repeat scroll 0 0;
+		border:none;
+		border-radius: 50%;
+		color: #fff;
+		cursor: pointer;
+		font-size: 15px;
+		height: 33px;
+		position: relative;
+		vertical-align: top;
+		top: 11px;
+		width: 33px;
+		background-size: 50% !important;
+		background-repeat: no-repeat !important;
+ 		background-position: center !important;
+	}
+	.chat_btnmode_adventure.actionmode
+	{
+		background-image: var(--img_sword) !important;
+	}
+	.chat_btnmode_adventure.storymode
+	{
+		background-image: var(--img_paper) !important;
+	}
+
 	.chat_msg_send_btn {
 		background: #337ab7 none repeat scroll 0 0;
 		border:none;
@@ -10960,11 +10985,30 @@ Current version: 108
 			{
 				document.getElementById("chat_msg_body").innerHTML = render_enhanced_chat_instruct(textToRender,false);
 			}
-			if ((localsettings.opmode == 3 && localsettings.chatopponent != "")||localsettings.opmode == 4) {
-				document.getElementById("chat_btnmode_chat").classList.remove("hidden");
+			if ((localsettings.opmode == 3 && localsettings.chatopponent != "")||localsettings.opmode == 4||localsettings.opmode==2) {
 				document.getElementById("cht_inp_bg").classList.add("shorter");
+				if(localsettings.opmode==2)
+				{
+					document.getElementById("chat_btnmode_chat").classList.add("hidden");
+					document.getElementById("chat_btnmode_adventure").classList.remove("hidden");
+					if(localsettings.adventure_is_action)
+					{
+						document.getElementById("chat_btnmode_adventure").classList.add("actionmode");
+						document.getElementById("chat_btnmode_adventure").classList.remove("storymode");
+					}else{
+						document.getElementById("chat_btnmode_adventure").classList.remove("actionmode");
+						document.getElementById("chat_btnmode_adventure").classList.add("storymode");
+					}
+				}
+				else
+				{
+					document.getElementById("chat_btnmode_chat").classList.remove("hidden");
+					document.getElementById("chat_btnmode_adventure").classList.add("hidden");
+				}
+
 			} else {
 				document.getElementById("chat_btnmode_chat").classList.add("hidden");
+				document.getElementById("chat_btnmode_adventure").classList.add("hidden");
 				document.getElementById("cht_inp_bg").classList.remove("shorter");
 			}
 
@@ -11950,7 +11994,12 @@ Current version: 108
 	{
 		let classSuffixStr = isPreview ? "prv" : "";
 		const contextDict = { sysOpen: '<sys_context_koboldlite_internal>', youOpen: '<user_context_koboldlite_internal>', AIOpen: '<AI_context_koboldlite_internal>', closeTag: '<end_of_context_koboldlite_internal>' }
-		let you = get_instruct_starttag(); let bot = get_instruct_endtag(); // Instruct tags will be used to wrap text in styled bubbles.
+		let you = "$UnusedTagMatch$"; let bot = "$UnusedTagMatch$"; // Instruct tags will be used to wrap text in styled bubbles.
+		if(localsettings.opmode==3||localsettings.opmode==4)
+		{
+			you = get_instruct_starttag();
+			bot = get_instruct_endtag();
+		}
 
 		let as = aestheticInstructUISettings;								// ..and use this as shortcut to avoid typing it each time.
 		if(localsettings.opmode==3)
@@ -12036,7 +12085,13 @@ Current version: 108
 
 		// Helper functions to allow styling the chat log properly. These affect both the background of the chat bubbles and its content.
 		function style(role) {
-			return `${contextDict.closeTag}</div></div><div style='display:flex; align-items:stretch; flex-direction: row;'>${image(role)}<div style='flex: 1; display:flex; color: ${as[`text_tcolor_${as.use_uniform_colors ? 'uniform' : role}`]}; background-color:${as[`bubbleColor_${role}`]}; padding: ${as.padding()}; margin: ${as.margin()}; min-height:${as.background_minHeight}px; font-size: ${as.font_size}px; flex-direction:column; align-items: ${as.centerHorizontally ? 'center' : 'flex-start'}; justify-content: center; border-radius: ${as.rounded_bubbles ? '15px' : '0px'}'>${contextDict[`${role}Open`]}`;
+			let showavatar = false;
+			if(localsettings.opmode==3 || localsettings.opmode==4)
+			{
+				showavatar = true;
+			}
+			return `${contextDict.closeTag}</div></div><div style='display:flex; align-items:stretch; flex-direction: row;'>${(showavatar?image(role):"")}<div style='flex: 1; display:flex; color: ${as[`text_tcolor_${as.use_uniform_colors ? 'uniform' : role}`]}; background-color:${as[`bubbleColor_${role}`]}; padding: ${as.padding()}; margin: ${as.margin()}; min-height:${as.background_minHeight}px; font-size: ${as.font_size}px; flex-direction:column; align-items: ${as.centerHorizontally ? 'center' : 'flex-start'}; justify-content: center; border-radius: ${as.rounded_bubbles ? '15px' : '0px'}'>${contextDict[`${role}Open`]}`;
+
 		}
 		function wrapperSpan(role, type) {
 			let fontStyle = type=='action'?'italic':'normal';
@@ -12066,6 +12121,15 @@ Current version: 108
 		function transformInputToAestheticStyle(bodyStr, isPreview) { // Trim unnecessary empty space and new lines, and append * or " to each bubble if start/end sequence ends with * or ", to preserve styling.
 			bodyStr = bodyStr.replaceAll(you + '\n', you).replaceAll(you + ' ', you).replaceAll(you, style('you') + `${you.endsWith('*') ? '*' : ''}` + `${you.endsWith('"') ? '"' : ''}`);
 			bodyStr = bodyStr.replaceAll(bot + '\n', bot).replaceAll(bot + ' ', bot).replaceAll(bot, style('AI') + `${bot.endsWith('*') ? '*' : ''}` + `${bot.endsWith('"') ? '"' : ''}`);
+
+			//for adventure mode, highlight our actions with blockquotes
+			if (localsettings.opmode == 2) {
+				bodyStr = bodyStr.replace(/\n\n\> .+?\n/g, function (m) {
+					let inner = m.substring(3);
+					return `\n\n<blockquote>` + inner + `</blockquote>`;
+				});
+			}
+
 			if(gametext_arr.length==0 && !isPreview)
 			{
 				return bodyStr; //to allow html in the welcome text
@@ -12074,6 +12138,7 @@ Current version: 108
 			{
 				return bodyStr.replaceAll('"', '&quot;');
 			}
+
 		}
 		function getStreamingText() {
 			let isChatBotReply = (localsettings.opmode==3 && pending_context_preinjection.startsWith("\n") && pending_context_preinjection.endsWith(":"));
@@ -12093,10 +12158,15 @@ Current version: 108
 				preview = replaceAll(preview,'\n[AI_REPLY]\n', "{{botplaceholder}}");
 			}
 		}
-		else
+		else if(localsettings.opmode==4)
 		{
 			preview = replaceAll(preview,'\n[USER_REPLY]\n', get_instruct_starttag());
 			preview = replaceAll(preview,'\n[AI_REPLY]\n', get_instruct_endtag());
+		}
+		else
+		{
+			preview = replaceAll(preview,'\n[USER_REPLY]\n', "");
+			preview = replaceAll(preview,'\n[AI_REPLY]\n', "");
 		}
 		document.getElementById('aesthetic_text_preview').innerHTML = render_enhanced_chat_instruct(preview,true);
 	}
@@ -12244,6 +12314,7 @@ Current version: 108
 			<div class="cht_inp_hold_outer">
 			  <div class="cht_inp_hold">
 				<button onclick="show_groupchat_select()" id="chat_btnmode_chat" class="chat_btnmode_chat hidden" type="button"></button>
+				<button onclick="btn_adventure_mode()" id="chat_btnmode_adventure" class="chat_btnmode_adventure actionmode hidden" type="button"></button>
 				<div id="cht_inp_bg" class="cht_inp_bg">
 				<div class="cht_inp_bg_inner" id="cht_inp_lengthtester" style="white-space: nowrap; visibility: hidden; height: 0px; position:absolute; width: auto;"></div>
 				<textarea class="cht_inp_bg_inner" id="cht_inp" type="text" name="chtchtinp"  role="presentation" autocomplete="noppynop" spellcheck="true" rows="1" wrap="on" placeholder="Type a message" value="" oninput="update_submit_button();chat_resize_input();" onkeypress="return chat_handle_typing(event)"/></textarea>
@@ -13418,7 +13489,7 @@ Current version: 108
 		<div class="popupbg flex"></div>
 		<div class="nspopup evenhigher" style="margin-left: 20px; margin-right: 20px;">
 			<div class="popuptitlebar" id="aesthetic_customization_panel">
-				<div class="popuptitletext">Aesthetic Instruct UI customization panel</div>
+				<div class="popuptitletext">Aesthetic UI customization panel</div>
 			</div>
 			<div class="aidgpopuplistheader" style="display: flex; flex-direction: row; height:max(70vh, 480px);">
 				<!-- Settings panel -->
