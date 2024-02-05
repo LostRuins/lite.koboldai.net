@@ -5284,6 +5284,107 @@ Current version: 109
 		},false);
 	}
 
+	function get_chubai_portrait(userinput, card_is_defective, original_no_exist)
+	{
+		//try to obtain the full portrait image
+		fetch("https://api.chub.ai/api/characters/download", {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+			"format": "tavern",
+			"fullPath": userinput,
+			"version": "main"
+			}),
+			referrerPolicy: 'no-referrer',
+			})
+			.then(rb => {
+				if(rb.ok)
+				{
+					return rb.blob();
+				}else{
+					throw new Error('Cannot fetch tavern image');
+				}
+			})
+			.then(blob => {
+				preview_temp_scenario();
+
+				readTavernPngFromBlob(blob,(obj)=>{
+					if(obj!=null)
+					{
+						//a lightweight tavern card loader, not fully compliant
+						if(obj.spec=="chara_card_v2" && obj.data!=null)
+						{
+							obj = obj.data;
+						}
+
+						if(card_is_defective)
+						{
+							let chatopponent = obj.name?obj.name:"Bot";
+							let memory = obj.description?("Persona: "+obj.description):"";
+							memory += obj.personality?("\nPersonality: "+obj.personality):"";
+							let scenario = obj.scenario?obj.scenario:"";
+							let examplemsg = obj.mes_example?obj.mes_example:"";
+							let greeting = obj.first_mes?obj.first_mes:"";
+							let sysprompt = obj.system_prompt?obj.system_prompt:"";
+
+							if(scenario!="")
+							{
+								scenario = "\n[Scenario: "+scenario+"]";
+							}
+							if(examplemsg!="")
+							{
+								examplemsg = "\n"+examplemsg;
+							}
+							if(sysprompt!="")
+							{
+								sysprompt = sysprompt+"\n";
+							}
+							let combinedmem = sysprompt + memory + scenario + examplemsg;
+							temp_scenario.title = chatopponent;
+							let prev2 = replaceAll(obj.description,"{{char}}",chatopponent,true);
+							prev2 = replaceAll(prev2,"{{user}}","You",true);
+							temp_scenario.desc = prev2;
+							temp_scenario.chatopponent = chatopponent;
+							temp_scenario.prompt = ("\n{{char}}: "+ greeting);
+							temp_scenario.memory = combinedmem;
+						}
+
+						//since cai format has no wi, try to grab it from tavern format
+						if(obj.character_book && obj.character_book.entries && obj.character_book.entries.length>0)
+						{
+							let myname = ((localsettings.chatname && localsettings.chatname!="")?localsettings.chatname:"You");
+							temp_scenario.worldinfo = load_tavern_wi(obj.character_book,chatopponent,myname);
+						}
+						preview_temp_scenario();
+					}
+
+				});
+
+				const objectURL = URL.createObjectURL(blob);
+				const compressedImg = compressImage(objectURL, (compressedImageURI, aspectratio)=>{
+					temp_scenario.image = compressedImageURI;
+					temp_scenario.image_aspect = aspectratio;
+					preview_temp_scenario();
+				}, true);
+			})
+			.catch(error => {
+				if(original_no_exist)
+				{
+					temp_scenario = null;
+					document.getElementById("scenariodesc").innerText = "Error: Selected scenario is invalid.";
+					console.log("Error: " + error);
+				}
+				else
+				{
+					preview_temp_scenario();
+					console.error("Error fetching tavern image:", error);
+				}
+
+		});
+	}
+
 	function get_chubai_scenario(chubstr="")
 	{
 		const loadchub = function(userinput)
@@ -5302,6 +5403,21 @@ Current version: 109
 				userinput = userinput.endsWith('/') ? userinput.slice(0, -1) : userinput;
 				if(userinput!="")
 				{
+					temp_scenario = {
+						"title":"",
+						"desc": "",
+						"opmode":3,
+						"chatname": "You",
+						"chatopponent": "",
+						"gui_type":1,
+						"prefmodel1":chatmodels1,
+						"prefmodel2":chatmodels2,
+						"prompt":"",
+						"memory": "",
+						"authorsnote": "",
+						"worldinfo": [],
+					};
+
 					document.getElementById("scenariodesc").innerText = "Loading scenario from Chub...";
 					fetch("https://api.chub.ai/api/characters/download", {
 					method: 'POST',
@@ -5320,121 +5436,33 @@ Current version: 109
 						{
 							return x.json();
 						}else{
-							throw new Error('Cannot fetch chub scenario');
+							console.log('Cannot fetch chub scenario: try fallback to tavern image');
+							//cai format failed, try fallback to portrait only
+							get_chubai_portrait(userinput, true, true);
+							return null;
 						}
 					})
 					.then(data => {
-						console.log(data);
-						let botname = data.name?data.name:"Bot";
-						let cdef = data.definition?data.definition.replace("END_OF_DIALOG","").trim():"";
-						let cdesc = data.description?data.description:"";
-						let greeting = data.greeting?data.greeting:"";
-						let previewtxt = (data.title ? data.title + '\n\n' : '') + replaceAll(cdesc,"{{char}}",botname,true);
-						previewtxt = replaceAll(previewtxt,"{{user}}","You",true);
-						temp_scenario =
+						if(data) //if cai fetch was successul
 						{
-							"title":data.name?data.name:"",
-							"desc": previewtxt,
-							"opmode":3,
-							"chatname": "You",
-							"chatopponent": botname,
-							"gui_type":1,
-							"prefmodel1":chatmodels1,
-							"prefmodel2":chatmodels2,
-							"prompt":("\n{{char}}: "+greeting),
-							"memory": cdesc +"\n"+ cdef,
-							"authorsnote": "",
-							"worldinfo": [],
-						};
-						let card_is_defective = (data.name==""&&previewtxt==""&&greeting==""&&cdesc==""&&cdef=="");
+							console.log(data);
+							let botname = data.name?data.name:"Bot";
+							let cdef = data.definition?data.definition.replace("END_OF_DIALOG","").trim():"";
+							let cdesc = data.description?data.description:"";
+							let greeting = data.greeting?data.greeting:"";
+							let previewtxt = (data.title ? data.title + '\n\n' : '') + replaceAll(cdesc,"{{char}}",botname,true);
+							previewtxt = replaceAll(previewtxt,"{{user}}","You",true);
 
-						//try to obtain the full portrait image
-						fetch("https://api.chub.ai/api/characters/download", {
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-						},
-						body: JSON.stringify({
-						"format": "tavern",
-						"fullPath": userinput,
-						"version": "main"
-						}),
-						referrerPolicy: 'no-referrer',
-						})
-						.then(rb => {
-							if(rb.ok)
-							{
-								return rb.blob();
-							}else{
-								throw new Error('Cannot fetch tavern image');
-							}
-						})
-						.then(blob => {
-							preview_temp_scenario();
+							temp_scenario.title = data.name?data.name:"";
+							temp_scenario.desc = previewtxt;
+							temp_scenario.chatopponent = botname;
+							temp_scenario.prompt = ("\n{{char}}: "+greeting);
+							temp_scenario.memory = cdesc +"\n"+ cdef;
 
-							readTavernPngFromBlob(blob,(obj)=>{
-								if(obj!=null)
-								{
-									//a lightweight tavern card loader, not fully compliant
-									if(obj.spec=="chara_card_v2" && obj.data!=null)
-									{
-										obj = obj.data;
-									}
+							let card_is_defective = (data.name==""&&previewtxt==""&&greeting==""&&cdesc==""&&cdef=="");
 
-									if(card_is_defective)
-									{
-										let chatopponent = obj.name?obj.name:"Bot";
-										let memory = obj.description?("Persona: "+obj.description):"";
-										memory += obj.personality?("\nPersonality: "+obj.personality):"";
-										let scenario = obj.scenario?obj.scenario:"";
-										let examplemsg = obj.mes_example?obj.mes_example:"";
-										let greeting = obj.first_mes?obj.first_mes:"";
-										let sysprompt = obj.system_prompt?obj.system_prompt:"";
-
-										if(scenario!="")
-										{
-											scenario = "\n[Scenario: "+scenario+"]";
-										}
-										if(examplemsg!="")
-										{
-											examplemsg = "\n"+examplemsg;
-										}
-										if(sysprompt!="")
-										{
-											sysprompt = sysprompt+"\n";
-										}
-										let combinedmem = sysprompt + memory + scenario + examplemsg;
-										temp_scenario.title = chatopponent;
-										let prev2 = replaceAll(obj.description,"{{char}}",chatopponent,true);
-										prev2 = replaceAll(prev2,"{{user}}","You",true);
-										temp_scenario.desc = prev2;
-										temp_scenario.chatopponent = chatopponent;
-										temp_scenario.prompt = ("\n{{char}}: "+ greeting);
-										temp_scenario.memory = combinedmem;
-									}
-
-									//since cai format has no wi, try to grab it from tavern format
-									if(obj.character_book && obj.character_book.entries && obj.character_book.entries.length>0)
-									{
-										let myname = ((localsettings.chatname && localsettings.chatname!="")?localsettings.chatname:"You");
-										temp_scenario.worldinfo = load_tavern_wi(obj.character_book,chatopponent,myname);
-									}
-									preview_temp_scenario();
-								}
-
-							});
-
-							const objectURL = URL.createObjectURL(blob);
-							const compressedImg = compressImage(objectURL, (compressedImageURI, aspectratio)=>{
-								temp_scenario.image = compressedImageURI;
-								temp_scenario.image_aspect = aspectratio;
-								preview_temp_scenario();
-							}, true);
-						})
-						.catch(error => {
-							preview_temp_scenario();
-							console.error("Error fetching tavern image:", error);
-						});
+							get_chubai_portrait(userinput, card_is_defective, false);
+						}
 
 					}).catch((error) => {
 						temp_scenario = null;
