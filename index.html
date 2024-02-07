@@ -3462,6 +3462,8 @@ Current version: 109
 		multiline_replies: true,
 		multiline_replies_adventure: true,
 		allow_continue_chat: false,
+		inject_timestamps_chat: false,
+		inject_timestamps_instruct: false,
 		idle_responses: 0,
 		idle_duration: 60,
 		export_settings: true, //affects if settings are included with the story and sharelinks
@@ -7488,6 +7490,8 @@ Current version: 109
 		document.getElementById("multiline_replies").checked = localsettings.multiline_replies;
 		document.getElementById("multiline_replies_adventure").checked = localsettings.multiline_replies_adventure;
 		document.getElementById("allow_continue_chat").checked = localsettings.allow_continue_chat;
+		document.getElementById("inject_timestamps_chat").checked = localsettings.inject_timestamps_chat;
+		document.getElementById("inject_timestamps_instruct").checked = localsettings.inject_timestamps_instruct;
 		document.getElementById("idle_responses").value = localsettings.idle_responses;
 		document.getElementById("idle_duration").value = localsettings.idle_duration;
 		document.getElementById("adventure_context_mod").checked = localsettings.adventure_context_mod;
@@ -7692,6 +7696,8 @@ Current version: 109
 		localsettings.multiline_replies = (document.getElementById("multiline_replies").checked ? true : false);
 		localsettings.multiline_replies_adventure = (document.getElementById("multiline_replies_adventure").checked ? true : false);
 		localsettings.allow_continue_chat = (document.getElementById("allow_continue_chat").checked ? true : false);
+		localsettings.inject_timestamps_chat = (document.getElementById("inject_timestamps_chat").checked ? true : false);
+		localsettings.inject_timestamps_instruct = (document.getElementById("inject_timestamps_instruct").checked ? true : false);
 		localsettings.idle_responses = document.getElementById("idle_responses").value;
 		localsettings.idle_duration = document.getElementById("idle_duration").value;
 		localsettings.adventure_context_mod = (document.getElementById("adventure_context_mod").checked ? true : false);
@@ -8639,6 +8645,10 @@ Current version: 109
 			{
 				if(newgen != "")
 				{
+					if(localsettings.inject_timestamps_instruct)
+					{
+						newgen = "["+(new Date().toLocaleTimeString([], {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'}))+"] " + newgen;
+					}
 					//append instruction for instruct mode
 					if (!localsettings.placeholder_tags) {
 						newgen = get_instruct_starttag(false) + newgen + get_instruct_endtag(false);
@@ -8672,7 +8682,12 @@ Current version: 109
 			}
 			if (localsettings.opmode == 3 && newgen != "") {
 				//append chatname for chatmode
-				newgen = "\n" + localsettings.chatname + ": " + newgen + "";
+				let injecttime = "";
+				if(localsettings.inject_timestamps_chat)
+				{
+					injecttime = " ["+(new Date().toLocaleTimeString([], {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'}))+"]";
+				}
+				newgen = "\n" + localsettings.chatname + ":"+ injecttime +" "+ newgen + "";
 			}
 			else if(localsettings.opmode==3 && newgen.trim()=="")
 			{
@@ -8860,6 +8875,10 @@ Current version: 109
 				{
 					co = replaceAll(co,"\n","");
 					pending_context_preinjection = "\n"+co + ":";
+					if(localsettings.inject_timestamps_chat)
+					{
+						pending_context_preinjection += " ["+(new Date().toLocaleTimeString([], {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'}))+"]";
+					}
 				}
 				else
 				{
@@ -8889,6 +8908,10 @@ Current version: 109
 			}
 
 			if (localsettings.opmode == 4) {
+				if(localsettings.inject_timestamps_instruct)
+				{
+					pending_context_preinjection += "["+(new Date().toLocaleTimeString([], {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'}))+"] ";
+				}
 				truncated_context += pending_context_preinjection;
 			}
 
@@ -12943,17 +12966,25 @@ Current version: 109
 							  </table>
 
 							<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Whether to allow multiple lines in AI responses.">Multiline Replies </div>
+							<div class="justifyleft settingsmall">Multiline Replies <span class="helpicon">?<span
+								class="helptext">Whether to allow multiple lines in AI responses. Disable this if the AI starts generating rubbish.</span></span> </div>
 							<input type="checkbox" id="multiline_replies" style="margin:0px 0 0;">
 							</div>
 							<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Allow incomplete AI chat replies, which can be continued by pressing submit again. Not recommended.">Continue Bot Replies</div>
+							<div class="justifyleft settingsmall">Continue Bot Replies <span class="helpicon">?<span
+								class="helptext">Allow incomplete AI chat replies, which can be continued by pressing submit again. Not recommended for newbies.</span></span></div>
 							<input type="checkbox" id="allow_continue_chat" style="margin:0px 0 0;">
+							</div>
+							<div class="settinglabel">
+							<div class="justifyleft settingsmall">Inject Timestamps <span class="helpicon">?<span
+								class="helptext">Injects timestamps into context, allowing the AI to have a sense of time.</span></span></div>
+							<input type="checkbox" id="inject_timestamps_chat" style="margin:0px 0 0;">
 							</div>
 						</div>
 						<div id="adventuresection2" class="settinglabel hidden" style="padding-top: 3px;">
 							<div class="settinglabel">
-								<div class="justifyleft settingsmall" title="Whether to allow multiple lines in AI responses.">Multiline Replies </div>
+								<div class="justifyleft settingsmall">Multiline Replies <span class="helpicon">?<span
+									class="helptext">Whether to allow multiple lines in AI responses. Disable this if the AI starts generating rubbish.</span></span></div>
 								<input type="checkbox" id="multiline_replies_adventure" style="margin:0px 0 0;">
 							</div>
 						</div>
@@ -12983,6 +13014,11 @@ Current version: 109
 							<div class="justifyleft settingsmall">Enable Markdown <span class="helpicon">?<span
 								class="helptext">Allows the UI to use markdown formatting such as quotes and code blocks.</span></span> </div>
 							<input type="checkbox" id="instruct_has_markdown" style="margin:0px 0 0;">
+							<div class="settinglabel">
+								<div class="justifyleft settingsmall">Inject Timestamps <span class="helpicon">?<span
+									class="helptext">Injects timestamps into context, allowing the AI to have a sense of time.</span></span></div>
+								<input type="checkbox" id="inject_timestamps_instruct" style="margin:0px 0 0;">
+							</div>
 						</div>
 					</div>
 					</div>
