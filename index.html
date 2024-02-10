@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 110
+Current version: 111
 -Concedo
 -->
 
@@ -10318,9 +10318,20 @@ Current version: 110
 	//runs every second
 	var idle_timer = 0; //used in chat mode to send multi replies
 	var idle_triggered_counter = 0;
+	var idle_backoff_array = [15000,60000,300000,120000];
 	function poll_background_tasks()
 	{
-		let idle_timer_max = localsettings.idle_duration*1000;
+		let idle_timer_max = 0;
+		if(localsettings.idle_duration>0)
+		{
+			idle_timer_max = localsettings.idle_duration*1000;
+		}
+		else
+		{
+			//smart idle timer
+			idle_timer_max = idle_backoff_array[idle_triggered_counter>=idle_backoff_array.length?idle_backoff_array.length-1:idle_triggered_counter];
+		}
+
 		let newgenempty = (document.getElementById("input_text").value == "");
 		let	chatinputempty = (document.getElementById("cht_inp").value == "");
 		if ((localsettings.opmode == 1 || localsettings.opmode == 2 || localsettings.opmode == 3 || localsettings.opmode == 4)
@@ -13274,6 +13285,7 @@ Current version: 110
 								<option value="120">2m</option>
 								<option value="300">5m</option>
 								<option value="600">10m</option>
+								<option value="-1">Auto</option>
 							</select>
 						</div>
 
