@@ -4705,12 +4705,29 @@ Current version: 111
 		let new_save_storyobj = generate_base_storyobj();
 
 		let export_arr = gametext_arr;
+		let export_hashes = {};
 		if(!save_images)
 		{
 			export_arr = [];
 			for (let i = 0; i < gametext_arr.length; ++i) {
 				export_arr.push(gametext_arr[i].replace(/\[<\|p\|.+?\|p\|>\]/g, "").replace(/\[<\|d\|.+?\|d\|>\]/g, ""));
 			}
+		}
+		else
+		{
+			//bake used image metas into savefile
+			for (let i = 0; i < gametext_arr.length; ++i) {
+				let matches = gametext_arr[i].match(/\[<\|d\|.+?\|d\|>\]/g);
+				for(let m in matches)
+				{
+					let inner = matches[m].substring(5, matches[m].length - 5);
+					let imghash = cyrb_hash(inner);
+					if (completed_imgs_meta[imghash] != null) {
+						export_hashes[imghash] = completed_imgs_meta[imghash];
+					}
+				}
+			}
+			new_save_storyobj.completed_imgs_meta = export_hashes;
 		}
 
 		if (export_arr.length > 0) {
@@ -5073,6 +5090,14 @@ Current version: 111
 						if (storyobj.savedaestheticsettings && storyobj.savedaestheticsettings != "") {
 							import_props_into_object(aestheticInstructUISettings, storyobj.savedaestheticsettings);
 						}
+					}
+				}
+
+				if(storyobj.completed_imgs_meta)
+				{
+					for (var key in storyobj.completed_imgs_meta)
+					{
+						completed_imgs_meta[key] = storyobj.completed_imgs_meta[key];
 					}
 				}
 			}
@@ -10637,7 +10662,10 @@ Current version: 111
 				gametext_elem.querySelectorAll('div.storyimg,div.storyimgfloat').forEach(
 					(el) => {
 						let chimg = el.getElementsByTagName("img")[0];
-						el.replaceWith((chimg.alt == null || chimg.alt == "") ? ("[<|d|" + chimg.src + "|d|>]") : ("[<|p|" + chimg.alt + "|p|>]"))
+						if(el && chimg)
+						{
+							el.replaceWith((chimg.alt == null || chimg.alt == "") ? ("[<|d|" + chimg.src + "|d|>]") : ("[<|p|" + chimg.alt + "|p|>]"))
+						}
 					}
 				);
 
