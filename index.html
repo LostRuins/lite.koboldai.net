@@ -3295,6 +3295,8 @@ Current version: 111
 	const stablehorde_poll_endpoint = stablehorde_url + "/api/v2/generate/check";
 	const stablehorde_output_endpoint = stablehorde_url + "/api/v2/generate/status";
 	const stablehorde_model_endpoint = stablehorde_url + "/api/v2/status/models";
+	const stablehorde_submit_interrogate_endpoint = stablehorde_url + "/api/v2/interrogate/async";
+	const stablehorde_output_interrogate_endpoint = stablehorde_url + "/api/v2/interrogate/status";
 
 	const kobold_custom_gen_endpoint = "/api/v1/generate";
 	const kobold_custom_gen_stream_endpoint = "/api/extra/generate/stream";
@@ -3382,6 +3384,7 @@ Current version: 111
 	var generateimagesinterval = 650; //if generated images is enabled, it will trigger after every 600 new characters in context.
 	var nextgeneratedimagemilestone = generateimagesinterval; //used to keep track of when to generate the next image
 	var image_db = {}; //stores a dictionary of pending images
+	var interrogation_db = {};
 	var completed_imgs_meta = {}; //stores temp info on completed images like alt text
 	//key is ID, body is {done:false,queue:10,result:""}
 	var stablemodels = [{"name": "stable_diffusion","count": 1}]; //stored as {name,count}
@@ -8217,6 +8220,7 @@ Current version: 111
 		document.getElementById("cht_inp").value = "";
 		chat_resize_input();
 		image_db = {};
+		interrogation_db = {};
 		completed_imgs_meta = {};
 		localsettings.adventure_is_action = false;
 		prev_hl_chunk = null;
@@ -8843,7 +8847,7 @@ Current version: 111
 				}
 			}
 
-			let truncated_context = concat_gametext(true, ""); //no need to truncate if memory is empty
+			let truncated_context = concat_gametext(true, "","","",false,true); //no need to truncate if memory is empty
 			truncated_context = truncated_context.replace(/\xA0/g,' '); //replace non breaking space nbsp
 
 			//this is a hack since we dont have a proper tokenizer, but we can estimate 1 token per 3 characters
@@ -9933,20 +9937,91 @@ Current version: 111
 		}
 	}
 
+	function interrogate_new_image(base64img, imghash)
+	{
+		let parts = base64img.split(',');
+		if (parts.length === 2 && parts[0].startsWith('data:image')) {
+			base64img = parts[1];
+		}
+
+		let payload = {
+			"forms": [
+				{
+				"name": "caption"
+				}
+			],
+			"source_image": base64img
+		};
+		fetch(stablehorde_submit_interrogate_endpoint, {
+				method: 'POST', // or 'PUT'
+				headers: {
+					'Content-Type': 'application/json',
+					'Client-Agent': default_client_agent,
+					'apikey': localsettings.my_api_key,
+				},
+				body: JSON.stringify(payload),
+			})
+			.then((response) => response.json())
+			.then((data) => {
+				console.log('interrogate img result:', data);
+				if (data.id && data.id != "") {
+					interrogation_db[data.id] = { done: false, result: "", imghash:imghash, local:false };
+					console.log("New interrogate queued: " + data.id);
+				}
+				else {
+					//something went wrong.	do nothing.
+					msgbox("Image interrogation failed: " + data.message);
+				}
+			})
+			.catch((error) => {
+				console.error('Error:', error);
+				msgbox("Image interrogation error: " + error);
+			});
+	}
+
 	function toggle_ai_vision(imghash)
 	{
 		let savedmeta = completed_imgs_meta[imghash];
-		if(savedmeta.desc)
+		if(savedmeta)
 		{
-			savedmeta.desc = "";
-			click_image(document.getElementById("zoomedimg"),imghash);
+			savedmeta.enabled = !savedmeta.enabled;
+			if(!savedmeta.desc && savedmeta.enabled)
+			{
+				//request a new interrogation
+				var alreadysent = Object.values(interrogation_db).some(item => item.imghash === imghash);
+				if(!alreadysent)
+				{
+					let b64 = document.getElementById("zoomedimg").src;
+					interrogate_new_image(b64,imghash);
+				}
+			}
+			update_clicked_image(imghash);
 		}
 		else
 		{
-			savedmeta.desc = "[Attached Image:]";
-			click_image(document.getElementById("zoomedimg"),imghash);
+			console.log("IMG META NOT FOUND!");
 		}
 
+	}
+	function update_clicked_image(imghash)
+	{
+		let savedmeta = completed_imgs_meta[imghash];
+		if(!savedmeta)
+		{
+			document.getElementById("zoomedimgdesc").innerText = "No Saved Data";
+		}
+		else
+		{
+			let origprompt = (savedmeta.prompt?replaceAll(savedmeta.prompt,"\n"," ") : "No Saved Description");
+			origprompt = escapeHtml(origprompt);
+			let visionstatus = (savedmeta.enabled?(savedmeta.desc?`<span class="color_green">Active</span>`:`<span class="color_yellow">Analyzing...</span>`):`<span class="color_red">Inactive</span>`);
+			let togglebtn = (savedmeta.enabled?`<button type="button" class="bg_red btn btn-primary" style="width: 84px; padding: 2px; margin: 3px; font-size:12px;" onclick="toggle_ai_vision(\'`+imghash+`\')">Disable</button>`:`<button type="button" class="bg_green btn btn-primary" style="width: 84px; padding: 2px; margin: 3px; font-size:12px;" onclick="toggle_ai_vision(\'`+imghash+`\')">👁️ Enable 👁️</button>`);
+			document.getElementById("zoomedimgdesc").innerHTML = `
+			AI Vision: `+visionstatus+` <span class="helpicon">?<span class="helptext">This allows the AI to visually recognize this image, to see and react to this image. Uses Horde or Local A1111 for image interrogation if enabled.</span></span>
+			`+togglebtn+`
+			<br><button type="button" class="btn btn-primary" style="width: 140px; padding: 2px; margin: 3px; font-size:12px;" onclick="msgbox('`+origprompt+`','Original Prompt')">View Original Prompt</button>
+			`;
+		}
 	}
 	function click_image(target,imghash)
 	{
@@ -9961,24 +10036,7 @@ Current version: 111
 			document.getElementById("zoomedimgcontainer").classList.remove("hidden");
 			document.getElementById("zoomedimg").src = target.src;
 
-			let savedmeta = completed_imgs_meta[imghash];
-
-			if(!savedmeta)
-			{
-				document.getElementById("zoomedimgdesc").innerText = "No Saved Data";
-			}
-			else
-			{
-				let origprompt = (savedmeta.prompt?replaceAll(savedmeta.prompt,"\n"," ") : "No Saved Description");
-				origprompt = escapeHtml(origprompt);
-				let visionstatus = (savedmeta.desc?`<span class="color_green">Active</span>`:`<span class="color_red">Inactive</span>`);
-				let togglebtn = (savedmeta.desc?`<button type="button" class="bg_red btn btn-primary" style="width: 84px; padding: 2px; margin: 3px; font-size:12px;" onclick="toggle_ai_vision(\'`+imghash+`\')">Disable</button>`:`<button type="button" class="bg_green btn btn-primary" style="width: 84px; padding: 2px; margin: 3px; font-size:12px;" onclick="toggle_ai_vision(\'`+imghash+`\')">👁️ Enable 👁️</button>`);
-				document.getElementById("zoomedimgdesc").innerHTML = `
-				AI Vision: `+visionstatus+` <span class="helpicon">?<span class="helptext">This allows the AI to visually recognize this image, and react to its contents. Uses Horde or Local A1111 for interrogation if enabled.</span></span>
-				`+togglebtn+`
-				<br><button type="button" class="btn btn-primary" style="width: 140px; padding: 2px; margin: 3px; font-size:12px;" onclick="msgbox('`+origprompt+`','Original Prompt')">View Original Prompt</button>
-				`;
-			}
+			update_clicked_image(imghash);
 
 		}
 	}
@@ -10238,7 +10296,59 @@ Current version: 111
 		document.getElementById("lastreq2").innerHTML = lastreq;
 	}
 
+	function poll_interrogation_db()
+	{
+		let imagecount = Object.keys(interrogation_db).length;
+		if (!imagecount) return;
+
+		console.log("polling for pending interrogations " + imagecount);
+		for (let key in interrogation_db) {
+			let img = interrogation_db[key];
+			if (img.done == false && !img.local) {
+				//call check
+				fetch(stablehorde_output_interrogate_endpoint + "/" + key)
+					.then(x => x.json())
+					.then((data) => {
+						console.log('pollimg result:', data);
+						if (!data.state || (data.state!="processing" && data.state!="done")) {
+							msgbox("Pending image interrogation could not complete.");
+							console.log("removing from interrogation: " + key);
+							delete interrogation_db[key];
+						}
+						else if (data.state == "done") {
+							//fetch final image
+							img.done = true;
+							//save results
+							if(data.forms && data.forms.length>0 && data.forms[0].result && data.forms[0].result.caption)
+							{
+								let caption = data.forms[0].result.caption;
+								let savedmeta = completed_imgs_meta[img.imghash];
+								if(caption && savedmeta)
+								{
+									savedmeta.desc = caption;
+									update_clicked_image(img.imghash);
+								}
+							}
+
+							delete interrogation_db[key];
+						}
+						else {
+							//do nothing
+						}
+					})
+					.catch((error) => {
+						console.error('Error:', error);
+						msgbox("Interrogate poll error: " + error);
+						delete interrogation_db[key];
+					});
+			}
+		}
+	}
+
 	function poll_image_db() {
+
+		poll_interrogation_db();
+
 		//every time this runs, we loop through our image cache for unfinished images and poll for a response
 		//console.log("polling for pending images: " + JSON.stringify(image_db));
 		let imagecount = Object.keys(image_db).length;
@@ -10313,7 +10423,7 @@ Current version: 111
 							let newstr = "[<|d|" + img.result + "|d|>]";
 							console.log("Replacing with Image: " + matchstr);
 							gametext_arr[i] = gametext_arr[i].replace(matchstr, newstr);
-							completed_imgs_meta[cyrb_hash(img.result)] = {prompt:image_db[key].prompt, desc:""};
+							completed_imgs_meta[cyrb_hash(img.result)] = {prompt:image_db[key].prompt, desc:"", enabled:false};
 							delete image_db[key];
 						}
 					}
@@ -10769,7 +10879,7 @@ Current version: 111
 		}
 	}
 
-	function concat_gametext(stripimg = false, stripimg_replace_str = "", append_before_segment="",append_after_segment="",escapeTxt=false) {
+	function concat_gametext(stripimg = false, stripimg_replace_str = "", append_before_segment="",append_after_segment="",escapeTxt=false,insertAIVision=false) {
 		let fulltxt = "";
 		for (let i = 0; i < gametext_arr.length; ++i) {
 			let extracted = (gametext_arr[i]);
@@ -10820,7 +10930,21 @@ Current version: 111
 				fulltxt = replaceAll(fulltxt,b,get_instruct_endtag(false));
 			}
 		}
-		if (stripimg) {
+		if (stripimg)
+		{
+			if(insertAIVision)
+			{
+				fulltxt = fulltxt.replace(/\[<\|d\|.+?\|d\|>\]/g, function (m) {
+					// m here means the whole matched string
+					let inner = m.substring(5, m.length - 5);
+					let imghash = cyrb_hash(inner);
+					let foundmeta = completed_imgs_meta[imghash];
+					if (foundmeta != null && foundmeta.enabled && foundmeta.desc) {
+						return "\n(Attached Image: " + foundmeta.desc + ")\n";
+					}
+					return "";
+				});
+			}
 			fulltxt = fulltxt.replace(/\[<\|p\|.+?\|p\|>\]/g, stripimg_replace_str);
 			fulltxt = fulltxt.replace(/\[<\|d\|.+?\|d\|>\]/g, stripimg_replace_str);
 
