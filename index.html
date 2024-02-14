@@ -3490,6 +3490,7 @@ Current version: 112
 		invert_colors: false,
 		passed_ai_warning: false, //used to store AI safety panel acknowledgement state
 		entersubmit: true, //enter sends the prompt
+		hideinstructions: false,
 
 		max_context_length: 1600,
 		max_length: 120,
@@ -5074,6 +5075,10 @@ Current version: 112
 						//old versions dont have this flag
 						if (localsettings.entersubmit === true || localsettings.entersubmit === false) {
 							document.getElementById("entersubmit").checked = localsettings.entersubmit;
+						}
+
+						if (localsettings.hideinstructions === true || localsettings.hideinstructions === false) {
+							document.getElementById("hideinstructions").checked = localsettings.hideinstructions;
 						}
 					}
 					localsettings.my_api_key = tmpapikey1;
@@ -8272,6 +8277,13 @@ Current version: 112
 		localsettings.entersubmit = (document.getElementById("entersubmit").checked ? true : false);
 		render_gametext();
 	}
+
+	function toggle_hideinstructions()
+	{
+		localsettings.hideinstructions = (document.getElementById("hideinstructions").checked ? true : false);
+		render_gametext();
+	}
+
 	function toggle_editable() {
 		if (gametext_arr.length == 0)
 		{
@@ -8290,6 +8302,17 @@ Current version: 112
 			{
 				gametext_arr.pop();
 			}
+		}
+
+		if (document.getElementById("allowediting").checked)
+		{
+			document.getElementById("hideinstructions").classList.add("hidden");
+			document.getElementById("hideinstructions_label").classList.add("hidden");
+		}
+		else
+		{
+			document.getElementById("hideinstructions").classList.remove("hidden");
+			document.getElementById("hideinstructions_label").classList.remove("hidden");
 		}
 		render_gametext(false);
 	}
@@ -11089,6 +11112,7 @@ Current version: 112
 
 		document.getElementById("gametext").contentEditable = (document.getElementById("allowediting").checked && pending_response_id=="");
 		let inEditMode = (document.getElementById("allowediting").checked ? true : false);
+		let hideInstructions = (document.getElementById("hideinstructions").checked ? true : false);
 
 		//adventure mode has a toggle to choose action mode
 		document.getElementById("adventure_mode_img").classList.remove("input_story");
@@ -11211,8 +11235,14 @@ Current version: 112
 					fulltxt = simpleMarkdown(fulltxt);
 				}
 
-				fulltxt = replaceAll(fulltxt, `%SpcStg%`, `<hr class="hr_instruct"><span class="color_cyan"><img src="`+human_square+`" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>`);
-				fulltxt = replaceAll(fulltxt, `%SpcEtg%`, `</span><hr class="hr_instruct"><img src="`+niko_square+`" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>`);
+				if (localsettings.hideinstructions)
+				{
+					fulltxt = replaceAll(fulltxt, `%SpcStg%`, `<span class="hidden">`);
+					fulltxt = replaceAll(fulltxt, `%SpcEtg%`, `</span><hr class="hr_instruct">`);
+				} else {
+					fulltxt = replaceAll(fulltxt, `%SpcStg%`, `<hr class="hr_instruct"><span class="color_cyan"><img src="`+human_square+`" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>`);
+					fulltxt = replaceAll(fulltxt, `%SpcEtg%`, `</span><hr class="hr_instruct"><img src="`+niko_square+`" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>`);
+				}
 			}else{
 				fulltxt = replaceAll(fulltxt, get_instruct_starttag(true), `%SclStg%`+escapeHtml(get_instruct_starttag(true))+`%SpnEtg%`);
 				fulltxt = replaceAll(fulltxt, get_instruct_endtag(true), `%SclStg%`+escapeHtml(get_instruct_endtag(true))+`%SpnEtg%`);
@@ -12681,6 +12711,8 @@ Current version: 112
 				<div class="box-label"><label class="unstyled" for="entersubmit">Enter Sends</label></div>
 				<input type="checkbox" id="allowediting"  onclick="toggle_editable()">
 				<div class="box-label"><label class="unstyled" for="allowediting">Allow Editing</label></div>
+				<input type="checkbox" id="hideinstructions" onclick="toggle_hideinstructions()">
+				<div class="box-label" id="hideinstructions_label"><label class="unstyled" for="hideinstructions">Hide Instructions</label></div>
 			</div>
 		</div>
 		<div class="">
