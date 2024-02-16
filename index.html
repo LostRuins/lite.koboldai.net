@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 112
+Current version: 113
 -Concedo
 -->
 
@@ -8370,12 +8370,17 @@ Current version: 112
 		if (p2 > 0 && p2 < first) { first = p2; }
 		if (p3 > 0 && p3 < first) { first = p3; }
 		if (p4 > 0 && p4 < first) { first = p4; skip1 = true; }
+		let ret = input;
 		if (first > 0) {
 			if (skip1) {
-				return input.substring(first + 1);
+				ret = input.substring(first + 1);
 			} else {
-				return input.substring(first + 2);
+				ret = input.substring(first + 2);
 			}
+		}
+		if(ret!="")
+		{
+			return ret;
 		}
 		return input;
 	}
@@ -8529,19 +8534,27 @@ Current version: 112
 		}, 10000);
 	}
 
+	function do_auto_gen_image(truncated_context)
+	{
+		var tclen = truncated_context.length;
+		var sentence = truncated_context.substring(tclen - 300, tclen);
+		sentence = start_trim_to_sentence(sentence);
+		sentence = end_trim_to_sentence(sentence,true);
+		if (sentence.length > 0) {
+			nextgeneratedimagemilestone = tclen + generateimagesinterval;
+			do_manual_gen_image(sentence);
+		}
+	}
+
 	function add_img_btn_auto() {
 		let truncated_context = concat_gametext(true, "");
 		truncated_context = replace_placeholders(truncated_context);
 		var tclen = truncated_context.length;
 		if (tclen > 0) {
-			var sentence = truncated_context.substring(tclen - 300, tclen);
-			sentence = start_trim_to_sentence(sentence);
-			sentence = end_trim_to_sentence(sentence,true);
-			if (sentence.length > 0) {
-				nextgeneratedimagemilestone = tclen + generateimagesinterval;
-				do_manual_gen_image(sentence);
-			}
-		}else{
+			do_auto_gen_image(truncated_context);
+		}
+		else
+		{
 			msgbox("Error: Your current story is blank.\nAdd some text, or try generating from custom prompt instead.","Story is Blank")
 		}
 		document.getElementById("addimgcontainer").classList.add("hidden");
@@ -9032,12 +9045,7 @@ Current version: 112
 					//generate every few hundred chars
 					var tclen = truncated_context.length;
 					if (tclen > nextgeneratedimagemilestone) {
-						nextgeneratedimagemilestone = tclen + generateimagesinterval; //set next milestone and trigger generation, using the last 300 characters advanced to the nearest sentence.
-						var sentence = truncated_context.substring(tclen - 300, tclen);
-						sentence = start_trim_to_sentence(sentence);
-						sentence = end_trim_to_sentence(sentence, true);
-						generate_new_image(sentence);
-
+						do_auto_gen_image(truncated_context);
 					}
 				}
 			}
