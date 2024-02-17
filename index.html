@@ -5360,6 +5360,68 @@ Current version: 113
 		},false);
 	}
 
+	function load_temp_scenario_from_tavernobj(obj,loadall)
+	{
+		if(obj!=null)
+		{
+			//a lightweight tavern card loader, not fully compliant
+			if(obj.spec=="chara_card_v2" && obj.data!=null)
+			{
+				obj = obj.data;
+			}
+
+			if(loadall)
+			{
+				let chatopponent = obj.name?obj.name:"Bot";
+				let memory = obj.description?("Persona: "+obj.description):"";
+				memory += obj.personality?("\nPersonality: "+obj.personality):"";
+				let scenario = obj.scenario?obj.scenario:"";
+				let examplemsg = obj.mes_example?obj.mes_example:"";
+				let greeting = obj.first_mes?obj.first_mes:"";
+				let sysprompt = obj.system_prompt?obj.system_prompt:"";
+
+				//aliases
+				if(examplemsg=="" && obj.mesExample!="")
+				{
+					examplemsg = obj.mesExample;
+				}
+				if(greeting=="" && obj.firstMes!="")
+				{
+					greeting = obj.firstMes;
+				}
+
+				if(scenario!="")
+				{
+					scenario = "\n[Scenario: "+scenario+"]";
+				}
+				if(examplemsg!="")
+				{
+					examplemsg = "\n"+examplemsg;
+				}
+				if(sysprompt!="")
+				{
+					sysprompt = sysprompt+"\n";
+				}
+				let combinedmem = sysprompt + memory + scenario + examplemsg;
+				temp_scenario.title = chatopponent;
+				let prev2 = replaceAll(obj.description,"{{char}}",chatopponent,true);
+				prev2 = replaceAll(prev2,"{{user}}","You",true);
+				temp_scenario.desc = prev2;
+				temp_scenario.chatopponent = chatopponent;
+				temp_scenario.prompt = ("\n{{char}}: "+ greeting);
+				temp_scenario.memory = combinedmem;
+			}
+
+			//since cai format has no wi, try to grab it from tavern format
+			if(obj.character_book && obj.character_book.entries && obj.character_book.entries.length>0)
+			{
+				let myname = ((localsettings.chatname && localsettings.chatname!="")?localsettings.chatname:"You");
+				temp_scenario.worldinfo = load_tavern_wi(obj.character_book,chatopponent,myname);
+			}
+			preview_temp_scenario();
+		}
+	}
+
 	function get_chubai_portrait(userinput, card_is_defective, original_no_exist)
 	{
 		//try to obtain the full portrait image
@@ -5387,55 +5449,7 @@ Current version: 113
 				preview_temp_scenario();
 
 				readTavernPngFromBlob(blob,(obj)=>{
-					if(obj!=null)
-					{
-						//a lightweight tavern card loader, not fully compliant
-						if(obj.spec=="chara_card_v2" && obj.data!=null)
-						{
-							obj = obj.data;
-						}
-
-						if(card_is_defective)
-						{
-							let chatopponent = obj.name?obj.name:"Bot";
-							let memory = obj.description?("Persona: "+obj.description):"";
-							memory += obj.personality?("\nPersonality: "+obj.personality):"";
-							let scenario = obj.scenario?obj.scenario:"";
-							let examplemsg = obj.mes_example?obj.mes_example:"";
-							let greeting = obj.first_mes?obj.first_mes:"";
-							let sysprompt = obj.system_prompt?obj.system_prompt:"";
-
-							if(scenario!="")
-							{
-								scenario = "\n[Scenario: "+scenario+"]";
-							}
-							if(examplemsg!="")
-							{
-								examplemsg = "\n"+examplemsg;
-							}
-							if(sysprompt!="")
-							{
-								sysprompt = sysprompt+"\n";
-							}
-							let combinedmem = sysprompt + memory + scenario + examplemsg;
-							temp_scenario.title = chatopponent;
-							let prev2 = replaceAll(obj.description,"{{char}}",chatopponent,true);
-							prev2 = replaceAll(prev2,"{{user}}","You",true);
-							temp_scenario.desc = prev2;
-							temp_scenario.chatopponent = chatopponent;
-							temp_scenario.prompt = ("\n{{char}}: "+ greeting);
-							temp_scenario.memory = combinedmem;
-						}
-
-						//since cai format has no wi, try to grab it from tavern format
-						if(obj.character_book && obj.character_book.entries && obj.character_book.entries.length>0)
-						{
-							let myname = ((localsettings.chatname && localsettings.chatname!="")?localsettings.chatname:"You");
-							temp_scenario.worldinfo = load_tavern_wi(obj.character_book,chatopponent,myname);
-						}
-						preview_temp_scenario();
-					}
-
+					load_temp_scenario_from_tavernobj(obj,card_is_defective);
 				});
 
 				const objectURL = URL.createObjectURL(blob);
@@ -5459,6 +5473,102 @@ Current version: 113
 				}
 
 		});
+	}
+
+	function get_pygchat_scenario(charstr="")
+	{
+		const loadpyg = function(userinput)
+		{
+			if(userinput=="")
+			{
+				//pass
+			}
+			else
+			{
+				if (userinput.match(/pygmalion\.chat\//i)) {
+					const urlParams = new URLSearchParams(userinput);
+					const cid = urlParams.get('id');
+					if(cid && cid!="")
+					{
+						userinput = cid;
+					}
+				}
+				userinput = userinput.endsWith('/') ? userinput.slice(0, -1) : userinput;
+				if(userinput!="")
+				{
+					temp_scenario = {
+						"title":"",
+						"desc": "",
+						"opmode":3,
+						"chatname": "You",
+						"chatopponent": "",
+						"gui_type":1,
+						"prefmodel1":chatmodels1,
+						"prefmodel2":chatmodels2,
+						"prompt":"",
+						"memory": "",
+						"authorsnote": "",
+						"worldinfo": [],
+					};
+
+					document.getElementById("scenariodesc").innerText = "Loading scenario from Pygmalion.Chat...";
+					fetch(cors_proxy+"?https://server.pygmalion.chat/galatea.v1.PublicCharacterService/CharacterExport", {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify({ "character_id": userinput }),
+					referrerPolicy: 'no-referrer',
+					})
+					.then(x => {
+						if(x.ok)
+						{
+							return x.json();
+						}else{
+							console.log('Cannot fetch pyg scenario: try fallback to tavern image');
+							throw new Error('Cannot fetch character from pygmalion.chat');
+							return null;
+						}
+					})
+					.then(data => {
+						console.log(data);
+						if(data && data.card) //if fetch was successful
+						{
+							load_temp_scenario_from_tavernobj(data.card,true);
+							if(data.card.data && data.card.data.avatar)
+							{
+								const compressedImg = compressImage(data.card.data.avatar, (compressedImageURI, aspectratio)=>{
+									temp_scenario.image = compressedImageURI;
+									temp_scenario.image_aspect = aspectratio;
+									preview_temp_scenario();
+								}, true);
+							}
+						}else{
+							temp_scenario = null;
+							document.getElementById("scenariodesc").innerText = "Error: Selected scenario is invalid.";
+						}
+
+					}).catch((error) => {
+						temp_scenario = null;
+						document.getElementById("scenariodesc").innerText = "Error: Selected scenario is invalid.";
+						console.log("Error: " + error);
+					});
+				}else{
+					temp_scenario = null;
+					document.getElementById("scenariodesc").innerText = "Error: User input is invalid\n\n Please ensure you have input a valid Pygmalion.Chat UUID.";
+				}
+			}
+		}
+
+		if(charstr=="")
+		{
+			inputBox("Enter pygmalion.chat character UUID","Import from pygmalion.chat","","d7950ca8-c241-4725-8de1-42866e389ebf", ()=>{
+				let userinput = getInputBoxValue().trim();
+				loadpyg(userinput);
+			},false);
+		}else{
+			loadpyg(charstr);
+		}
 	}
 
 	function get_chubai_scenario(chubstr="")
@@ -5828,7 +5938,8 @@ Current version: 113
 		document.getElementById("quickstartcontainer").classList.remove("hidden");
 
 		let scenarios = `<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_aetherroom_scenario()">Import from<br>aetherroom.club</button>`+
-		`<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_chubai_scenario()">Import from<br>chub.ai</button>`;
+		`<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_chubai_scenario()">Import from<br>chub.ai</button>` +
+		`<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_pygchat_scenario()">Import from<br>pygmalion.chat</button>`;
 		for(let i=0;i<scenario_db.length;++i)
 		{
 			let curr = scenario_db[i];
@@ -8592,7 +8703,7 @@ Current version: 113
 					compressImage(img.target.result, (newDataUri) => {
 						image_db[imgid].done = true;
 						image_db[imgid].result = newDataUri;
-					}, true, true, imgres,0.33,true);
+					}, true, true, imgres,0.35,true);
 
 				}
 				reader.readAsDataURL(file);
@@ -10507,7 +10618,7 @@ Current version: 113
 		}
 	}
 
-	function compressImage(inputDataUri, onDone, isJpeg=true, fixedSize=true, maxSize=NO_HD_RES_PX, quality = 0.33, forceCrop=false) {
+	function compressImage(inputDataUri, onDone, isJpeg=true, fixedSize=true, maxSize=NO_HD_RES_PX, quality = 0.35, forceCrop=false) {
 		let img = document.createElement('img');
 		let wantedWidth = maxSize;
 		let wantedHeight = maxSize;
@@ -10571,6 +10682,7 @@ Current version: 113
 			}
 			onDone(dataURI,aspectratio);
 		};
+		img.setAttribute('crossorigin', 'anonymous');
 
 		// We put the Data URI in the image's src attribute
 		if (typeof inputDataUri === 'string' || inputDataUri instanceof String)
