@@ -1489,7 +1489,14 @@ Current version: 113
 			position: relative;
 			padding: 4px;
 		}
-		.storyimg
+		.storyimgside
+		{
+			text-align: left;
+			position: relative;
+			padding: 4px;
+			margin: 0 auto;
+		}
+		.storyimgcenter
 		{
 			text-align: center;
 			position: relative;
@@ -10218,11 +10225,12 @@ Current version: 113
 	function update_clicked_image(imghash)
 	{
 		let savedmeta = completed_imgs_meta[imghash];
-		if(!savedmeta)
+		if(!savedmeta && imghash!="")
 		{
-			document.getElementById("zoomedimgdesc").innerText = "No Saved Data";
+			savedmeta = completed_imgs_meta[imghash] = {prompt:"", desc:"", enabled:false};
 		}
-		else
+
+		if(savedmeta)
 		{
 			let origprompt = (savedmeta.prompt?replaceAll(savedmeta.prompt,"\n"," ") : "No Saved Description");
 			origprompt = escapeHtml(origprompt);
@@ -10234,6 +10242,11 @@ Current version: 113
 			<br><button type="button" class="btn btn-primary" style="width: 140px; padding: 2px; margin: 3px; font-size:12px;" onclick="msgbox('`+origprompt+`','Original Prompt')">View Original Prompt</button>
 			`;
 		}
+		else
+		{
+			document.getElementById("zoomedimgdesc").innerText = "No Saved Data";
+		}
+
 	}
 	function click_image(target,imghash)
 	{
@@ -10270,9 +10283,9 @@ Current version: 113
 		}
 	}
 
-	function render_image_html(data, pend_txt = "", float=true) {
+	function render_image_html(data, pend_txt = "", float=true, center=false) {
 		var dim = (localsettings.opmode == 2 ? 160 : 200); //adventure mode has smaller pictures
-		let siclass = (float?"storyimgfloat":"storyimg");
+		let siclass = (float?"storyimgfloat":(center?"storyimgcenter":"storyimgside"));
 		let reinvertcolor = localsettings.invert_colors?" invert_colors":"";
 		let alttxt = "";
 		if (!data || data == "") {
@@ -11008,7 +11021,7 @@ Current version: 113
 				redo_prev_text = "";
 
 				//stash images
-				gametext_elem.querySelectorAll('div.storyimg,div.storyimgfloat').forEach(
+				gametext_elem.querySelectorAll('div.storyimgcenter,div.storyimgside,div.storyimgfloat').forEach(
 					(el) => {
 						let chimg = el.getElementsByTagName("img")[0];
 						if(el && chimg)
@@ -11442,19 +11455,33 @@ Current version: 113
 				fulltxt += "<span class=\"color_yellow pending_text\">" + escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream) + "</span>";
 			}
 
-			//handle images
-			fulltxt = fulltxt.replace(/\[<\|p\|.+?\|p\|>\]/g, function (m) {
-				// m here means the whole matched string
-				let inner = m.substring(5, m.length - 5);
-				inner = render_image_html("", inner);
-				return inner;
-			});
-			fulltxt = fulltxt.replace(/\[<\|d\|.+?\|d\|>\]/g, function (m) {
-				// m here means the whole matched string
-				let inner = m.substring(5, m.length - 5);
-				inner = render_image_html(inner, "");
-				return inner;
-			});
+			if(!inEditMode)
+			{
+				let floatimg = (localsettings.opmode!=4);
+
+				//handle images
+				fulltxt = fulltxt.replace(/\[<\|p\|.+?\|p\|>\]/g, function (m) {
+					// m here means the whole matched string
+					let inner = m.substring(5, m.length - 5);
+					inner = render_image_html("", inner,floatimg,false);
+					return inner;
+				});
+				fulltxt = fulltxt.replace(/\[<\|d\|.+?\|d\|>\]/g, function (m) {
+					// m here means the whole matched string
+					let inner = m.substring(5, m.length - 5);
+					inner = render_image_html(inner, "",floatimg,false);
+					return inner;
+				});
+			}
+			else
+			{
+				fulltxt = fulltxt.replace(/\[<\|p\|.+?\|p\|>\]/g, function (m) {
+					return `<span class=\"color_pink\">`+m+`</span>`;
+				});
+				fulltxt = fulltxt.replace(/\[<\|d\|.+?\|d\|>\]/g, function (m) {
+					return `<span class=\"color_pink\">`+m+`</span>`;
+				});
+			}
 
 
 			fulltxt = fulltxt.replace(/(\r\n|\r|\n)/g, '<br>');
@@ -11734,13 +11761,13 @@ Current version: 113
 				curr.msg = curr.msg.replace(/\[<\|p\|.+?\|p\|>\]/g, function (m) {
 					// m here means the whole matched string
 					let inner = m.substring(5, m.length - 5);
-					inner = render_image_html("", inner,false);
+					inner = render_image_html("", inner,false,true);
 					return inner;
 				});
 				curr.msg = curr.msg.replace(/\[<\|d\|.+?\|d\|>\]/g, function (m) {
 					// m here means the whole matched string
 					let inner = m.substring(5, m.length - 5);
-					inner = render_image_html(inner, "",false);
+					inner = render_image_html(inner, "",false,true);
 					return inner;
 				});
 				curr.msg = curr.msg.replace(/\[<\|.+?\|>\]/g, ""); //remove normal comments too
@@ -12671,13 +12698,13 @@ Current version: 113
 		newbodystr = newbodystr.replace(/\[<\|p\|.+?\|p\|>\]/g, function (m) {
 			// m here means the whole matched string
 			let inner = m.substring(5, m.length - 5);
-			inner = render_image_html("", inner,false);
+			inner = render_image_html("", inner,false,true);
 			return inner;
 		});
 		newbodystr = newbodystr.replace(/\[<\|d\|.+?\|d\|>\]/g, function (m) {
 			// m here means the whole matched string
 			let inner = m.substring(5, m.length - 5);
-			inner = render_image_html(inner, "",false);
+			inner = render_image_html(inner, "",false,true);
 			return inner;
 		});
 		return portraitsStyling + newbodystr.replaceAll(/(\r\n|\r|\n)/g,'<br>'); // Finally, convert newlines to HTML format and return the stylized string.
