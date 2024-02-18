@@ -1485,19 +1485,23 @@ Current version: 113
 		}
 		.storyimgfloat
 		{
+			width: fit-content;
 			float: right;
 			position: relative;
 			padding: 4px;
 		}
 		.storyimgside
 		{
-			text-align: left;
+			display: inline-block;
+			width: fit-content;
+			text-align: center;
 			position: relative;
 			padding: 4px;
 			margin: 0 auto;
 		}
 		.storyimgcenter
 		{
+			width: fit-content;
 			text-align: center;
 			position: relative;
 			padding: 4px;
@@ -3416,6 +3420,7 @@ Current version: 113
 	var image_db = {}; //stores a dictionary of pending images
 	var interrogation_db = {};
 	var completed_imgs_meta = {}; //stores temp info on completed images like alt text
+	var img_hash_to_b64_lookup = {}; //used to revert imghash to b64. temporary storage
 	//key is ID, body is {done:false,queue:10,result:""}
 	var stablemodels = [{"name": "stable_diffusion","count": 1}]; //stored as {name,count}
 	var custom_kobold_endpoint = ""; //if set, does not use horde. Instead, attempts to use this sync endpoint
@@ -10288,6 +10293,7 @@ Current version: 113
 		let siclass = (float?"storyimgfloat":(center?"storyimgcenter":"storyimgside"));
 		let reinvertcolor = localsettings.invert_colors?" invert_colors":"";
 		let alttxt = "";
+		let suffix = ((float==false&&center==false)?"<br>":"");
 		if (!data || data == "") {
 			let waittime = "Unavailable";
 			if (image_db[pend_txt] != null) {
@@ -10298,13 +10304,13 @@ Current version: 113
 				console.log("Cannot render " + pend_txt);
 			}
 
-			return `<div class="`+siclass+reinvertcolor+`" contenteditable="false"><img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wAARCAEAAQADASIAAhEBAxEB/8QAGQABAQEBAQEAAAAAAAAAAAAAAAEDAgQF/8QAIBABAAIBBQEBAQEAAAAAAAAAAAECEgMRMVKRIWFBof/EABQBAQAAAAAAAAAAAAAAAAAAAAD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwD7AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABETPENNPT3je3jUHm22HpmInljqUx+xwDgAAAAAAAAAAAAAAAAAAAAAAAAABaxvaIRaztaJB6AAEmN4mFSZ2iZB5wAAAAAAAAAAAAAAAAAAAAAAAAAAAaaeptG1vWrzETMcSD0zMRyx1L5fI4cb7gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA7rpzNd/HAAAAAAAAAAAAAAAAAAAAAAAAAAAAADTT09/s8Gnp7/Z4agONSmX2OXYDzDbUpl9jliAAAAAAAAAAAAAAAAAAAsVmd9o4KVm0/jeIiI2gHnGupp/2vjIAABpp6e/2TT09/s8NQAAAAHGpTL7HLsB5htqUy+xyxAAAAAAAAAAAAAAAWlZtP4UrNp/G8RFY2gCIiI2hQAZ6mn/a+NAHmaaenv8AZ4dzp1m2/wDjoAAAAAAAABxqUy+xy7AeYbalMvscsQAAAAAAAAAAFpWbT+FKzafxvEREbQBEREbQoAAAAAAAAAAAAAAAAAONSmX2OXYDzDbUpl9jliAAAAAAAtKzafxaVm0/jaIiI2gCIiI2hQAAAAAAAAAAAAAAAAAAAAAcalMvscuwHmG2pTL7HLEAAAAFi0xxMwZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6kzvyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/Z" width=` + dim + ` height=` + dim + ` style="border-radius: 6%;" title="`+alttxt+`" alt="` + pend_txt + `"><div class=\"loader2\"></div><div class=\"imagelabel\">` + waittime + `</div></div>`;
+			return `<div class="`+siclass+reinvertcolor+`" contenteditable="false"><img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wAARCAEAAQADASIAAhEBAxEB/8QAGQABAQEBAQEAAAAAAAAAAAAAAAEDAgQF/8QAIBABAAIBBQEBAQEAAAAAAAAAAAECEgMRMVKRIWFBof/EABQBAQAAAAAAAAAAAAAAAAAAAAD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwD7AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABETPENNPT3je3jUHm22HpmInljqUx+xwDgAAAAAAAAAAAAAAAAAAAAAAAAABaxvaIRaztaJB6AAEmN4mFSZ2iZB5wAAAAAAAAAAAAAAAAAAAAAAAAAAAaaeptG1vWrzETMcSD0zMRyx1L5fI4cb7gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA7rpzNd/HAAAAAAAAAAAAAAAAAAAAAAAAAAAAADTT09/s8Gnp7/Z4agONSmX2OXYDzDbUpl9jliAAAAAAAAAAAAAAAAAAAsVmd9o4KVm0/jeIiI2gHnGupp/2vjIAABpp6e/2TT09/s8NQAAAAHGpTL7HLsB5htqUy+xyxAAAAAAAAAAAAAAAWlZtP4UrNp/G8RFY2gCIiI2hQAZ6mn/a+NAHmaaenv8AZ4dzp1m2/wDjoAAAAAAAABxqUy+xy7AeYbalMvscsQAAAAAAAAAAFpWbT+FKzafxvEREbQBEREbQoAAAAAAAAAAAAAAAAAONSmX2OXYDzDbUpl9jliAAAAAAAtKzafxaVm0/jaIiI2gCIiI2hQAAAAAAAAAAAAAAAAAAAAAcalMvscuwHmG2pTL7HLEAAAAFi0xxMwZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6kzvyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/Z" width=` + dim + ` height=` + dim + ` style="border-radius: 6%;" title="`+alttxt+`" alt="` + pend_txt + `"><div class=\"loader2\"></div><div class=\"imagelabel\">` + waittime + `</div></div>` + suffix;
 		} else {
 			let imghash = cyrb_hash(data).trim();
 			if (completed_imgs_meta[imghash] != null) {
 				alttxt = completed_imgs_meta[imghash].prompt?escapeHtml(completed_imgs_meta[imghash].prompt):"";
 			}
-			return `<div class="`+siclass+reinvertcolor+`"><img src="` + data + `" width=` + dim + ` height=` + dim + ` title="`+alttxt+`" style="border-radius: 6%; cursor: pointer;" onclick="return click_image(this,\'`+imghash+`\');"></div>`;
+			return `<div class="`+siclass+reinvertcolor+`"><img src="` + data + `" width=` + dim + ` height=` + dim + ` title="`+alttxt+`" style="border-radius: 6%; cursor: pointer;" onclick="return click_image(this,\'`+imghash+`\');"></div>` + suffix;
 		}
 	}
 
@@ -10648,7 +10654,8 @@ Current version: 113
 							let newstr = "[<|d|" + img.result + "|d|>]";
 							console.log("Replacing with Image: " + matchstr);
 							gametext_arr[i] = gametext_arr[i].replace(matchstr, newstr);
-							completed_imgs_meta[cyrb_hash(img.result)] = {prompt:image_db[key].prompt, desc:"", enabled:false};
+							let metaid = cyrb_hash(img.result);
+							completed_imgs_meta[metaid] = {prompt:image_db[key].prompt, desc:"", enabled:false};
 							delete image_db[key];
 						}
 					}
@@ -11006,13 +11013,30 @@ Current version: 113
 		}
 	}
 
+	function unstash_image_placeholders(text)
+	{
+		return text.replace(/{{\[IMG_.+?_REF\]}}/g, function (m) {
+			let imghash = m.substring(7, m.length - 7);
+			if(!imghash)
+			{
+				return m;
+			}
+			let unstash = img_hash_to_b64_lookup[imghash];
+			if(!unstash)
+			{
+				return m;
+			}
+			return unstash;
+		});
+	}
+
 	function merge_edit_field() {
 		if (gametext_arr.length > 0 && document.getElementById("allowediting").checked) {
-			let oldInnerText = concat_gametext(true, "\n","","");
+			let oldInnerText = concat_gametext(false, "","","");
 			let gametext_elem = document.getElementById("gametext");
-			let edited = gametext_elem.innerText;
+			let editedmatcher = unstash_image_placeholders(gametext_elem.innerText);
 
-			if (oldInnerText != edited) {
+			if (oldInnerText != editedmatcher) {
 				gametext_arr = [];
 				redo_arr = [];
 				last_reply_was_empty = false;
@@ -11030,6 +11054,9 @@ Current version: 113
 						}
 					}
 				);
+
+				//replace b64 image placeholders
+				gametext_elem.innerHTML = unstash_image_placeholders(gametext_elem.innerHTML);
 
 				let editedChunks = []; //use to count chunk lengths before merging
 				gametext_elem.querySelectorAll('span.txtchunk').forEach(
@@ -11479,7 +11506,10 @@ Current version: 113
 					return `<span class=\"color_pink\">`+m+`</span>`;
 				});
 				fulltxt = fulltxt.replace(/\[<\|d\|.+?\|d\|>\]/g, function (m) {
-					return `<span class=\"color_pink\">`+m+`</span>`;
+					let inner = m.substring(5, m.length - 5);
+					let imghash = cyrb_hash(inner);
+					img_hash_to_b64_lookup[imghash] = m;
+					return `<span class=\"color_pink\">{{[IMG_${imghash}_REF]}}</span>`;
 				});
 			}
 
@@ -11693,11 +11723,12 @@ Current version: 113
 
 		for(var i=0;i<input.length;++i)
 		{
-			let tempfullsearchable = input[i];
-			var foundopponent = tempfullsearchable.match(othernamesregex);
-			var foundself = tempfullsearchable.match(mynameregex);
+			let tempfullsearchable = input[i]; //strip out images
+			let txtwithnoimages = tempfullsearchable.replace(/\[<\|.+?\|>\]/g, "");
+			var foundopponent = txtwithnoimages.match(othernamesregex);
+			var foundself = txtwithnoimages.match(mynameregex);
 
-			if(tempfullsearchable==null )
+			if(tempfullsearchable==null)
 			{
 				continue;
 			}
