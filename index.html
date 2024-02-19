@@ -8783,6 +8783,18 @@ Current version: 114
 		}
 	}
 
+	function test_tts()
+	{
+		inputBox("Enter phrase to speak.","Test TTS","","Input text to speak", ()=>{
+			let userinput = getInputBoxValue();
+			userinput = userinput.trim();
+			let ssval = document.getElementById("ttsselect").value;
+			if (userinput != null && userinput!="" && ssval > 0) {
+				tts_speak(userinput,ssval);
+			}
+		},false);
+	}
+
 	function toggle_tts_mode()
 	{
 		if(document.getElementById("ttsselect").value==XTTS_ID)
@@ -8813,11 +8825,16 @@ Current version: 114
 			}
 		},false);
 	}
-	function tts_speak(text)
+	function tts_speak(text, speech_synth_override=null)
 	{
 		if(!text || text=="" || text.trim()=="")
 		{
 			return;
+		}
+		let ssval = localsettings.speech_synth;
+		if(speech_synth_override!=null)
+		{
+			ssval = speech_synth_override;
 		}
 		if(localsettings.narrate_only_dialog)
 		{
@@ -8841,7 +8858,7 @@ Current version: 114
 			}
 		}
 
-		if(localsettings.speech_synth==XTTS_ID) //xtts api server
+		if(ssval==XTTS_ID) //xtts api server
 		{
 			if(xtts_is_connected)
 			{
@@ -8877,7 +8894,7 @@ Current version: 114
 		{
 			if ('speechSynthesis' in window) {
 				let utterance = new window.SpeechSynthesisUtterance(text);
-				utterance.voice = window.speechSynthesis.getVoices()[localsettings.speech_synth - 1];
+				utterance.voice = window.speechSynthesis.getVoices()[ssval - 1];
 				window.speechSynthesis.speak(utterance);
 			}
 		}
@@ -13738,8 +13755,9 @@ Current version: 114
 					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">TTS <span class="helpicon">?<span class="helptext">Enable Text-To-Speech to have your story automatically read to you.</span></span></div>
-							<select class="form-control" id="ttsselect" style="height:20px;padding:0;margin:0px 0 0;" onchange="toggle_tts_mode()">
+							<select class="form-control" id="ttsselect" style="font-size:12px;height:20px;padding:0;margin:0px 0 0;width:calc(100% - 32px);" onchange="toggle_tts_mode()">
 							</select>
+							<button id="test_tts" type="button" class="bg_green btn btn-primary" style="height:20px; width:30px; padding:2px 3px;font-size:11px;" onclick="test_tts()">Test</button>
 							<div id="xtts_container" class="settinglabel hidden">
 								<table width="100%"><tr>
 								<td><button id="xtts_url" type="button" class="btn btn-primary" style="width:100%; padding:2px 3px;margin-top:2px;font-size:11px;" onclick="set_xtts_url()">Set URL</button></td>
