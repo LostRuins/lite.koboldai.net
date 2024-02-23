@@ -4860,12 +4860,16 @@ Current version: 114
 			try {
 				let new_loaded_storyobj = JSON.parse(text);
 				//we don't want to fiddle with the file as its very complex. only handle the parts we are interested in, and just leave the rest untouched.
-				if (new_loaded_storyobj.prompt == null) {
+				if (new_loaded_storyobj.prompt != null && !new_loaded_storyobj.scenarioVersion) {
 					//quick sanity check. if prompt does not exist, this is not a KAI save.
-
+					kai_json_load(new_loaded_storyobj,false);
+					if (selectedFilename && selectedFilename != "") {
+						last_known_filename = selectedFilename;
+					}
+				} else {
 					//check for tavernai fields
-					if (new_loaded_storyobj.name != null || new_loaded_storyobj.description != null ||
-						new_loaded_storyobj.personality != null || new_loaded_storyobj.spec=="chara_card_v2") {
+					if (!new_loaded_storyobj.scenarioVersion && (new_loaded_storyobj.name != null || new_loaded_storyobj.description != null ||
+						new_loaded_storyobj.personality != null || new_loaded_storyobj.spec=="chara_card_v2")) {
 						load_tavern_obj(new_loaded_storyobj);
 					}
 					else if (new_loaded_storyobj.char_name != null || new_loaded_storyobj.char_persona != null) {
@@ -4876,13 +4880,16 @@ Current version: 114
 					{
 						kai_json_load(new_loaded_storyobj,false);
 					}
+					else if(new_loaded_storyobj.scenarioVersion>1 && new_loaded_storyobj.scenarioVersion<10)
+					{
+						nai_json_load(new_loaded_storyobj);
+					}
+					else if(new_loaded_storyobj.lorebookVersion>1 && new_loaded_storyobj.lorebookVersion<10)
+					{
+						current_wi = load_nai_wi(new_loaded_storyobj);
+					}
 					else {
 						msgbox("Could not load selected json file. Does not appear to be a KoboldAI story or compatible format.");
-					}
-				} else {
-					kai_json_load(new_loaded_storyobj,false);
-					if (selectedFilename && selectedFilename != "") {
-						last_known_filename = selectedFilename;
 					}
 				}
 			} catch (e) {
@@ -5282,6 +5289,7 @@ Current version: 114
 	}
 	function load_ooba_obj(obj)
 	{
+		console.log("Loading ooba obj");
 		let chatopponent = obj.char_name?obj.char_name:defaultchatopponent;
 		let myname = ((localsettings.chatname && localsettings.chatname!="")?localsettings.chatname:"You");
 		let memory = obj.char_persona?("Persona: "+obj.char_persona):"";
@@ -5305,6 +5313,53 @@ Current version: 114
 		localsettings.opmode = 3;
 		localsettings.gui_type_chat = 2;
 		render_gametext(true);
+	}
+	function nai_json_load(obj)
+	{
+		console.log("Loading nai obj");
+		restart_new_game(false);
+		if(obj.prompt!="")
+		{
+			gametext_arr.push(obj.prompt);
+		}
+		current_memory = "";
+		if(obj.context && obj.context.length>0)
+		{
+			for(let i=0;i<obj.context.length;++i)
+			{
+				current_memory += obj.context[i].text + "\n";
+			}
+		}
+		if(obj.lorebook)
+		{
+			current_wi = load_nai_wi(obj.lorebook);
+		}
+		render_gametext(true);
+	}
+	function load_nai_wi(obj)
+	{
+		console.log("Loading nai wi");
+		let loadedwi = [];
+		for (let i=0;i<obj.entries.length;++i) {
+			var itm = obj.entries[i];
+			var key = "";
+			if(itm.keys && itm.keys.length>0)
+			{
+				key = itm.keys[0];
+			}
+
+			let nwi = {
+				"key": key,
+				"keysecondary": "",
+				"content": itm.text,
+				"comment": "",
+				"folder": null,
+				"selective": false,
+				"constant": false
+			};
+			loadedwi.push(nwi);
+		}
+		return loadedwi;
 	}
 
 	function get_aetherroom_scenario()
