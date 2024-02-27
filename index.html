@@ -4505,19 +4505,46 @@ Current version: 115
 		})(storyjson);
 	}
 
-	function export_share_story() {
-		let cstoryjson = generate_compressed_story(false,localsettings.export_settings,false);
-		console.log("Export Len: " + cstoryjson.length);
+	function share_story_button()
+	{
+		document.getElementById("choosesharecontainer").classList.remove("hidden");
+	}
 
-		if (cstoryjson.length >= 4800) {
-			document.getElementById("sharewarning").classList.remove("hidden");
-		} else {
-			document.getElementById("sharewarning").classList.add("hidden");
-		}
+	function import_share_story()
+	{
+		document.getElementById("choosesharecontainer").classList.add("hidden");
+		inputBox("Paste shared TextData to Import it.\n","Import Story from TextData","","[Paste TextData Here]",()=>{
+			let userinput = getInputBoxValue().trim();
+			if(userinput!="")
+			{
+				import_compressed_story(userinput, false);
+			}
+		},false,true);
+	}
+
+	function export_share_story(via_url) {
+		let cstoryjson = "";
 
 		document.getElementById("sharecontainer").classList.remove("hidden");
-		let fullurl = "https://lite.koboldai.net/?s=" + cstoryjson;
-		document.getElementById("sharestorytext").innerHTML = "<a href=\"" + fullurl + "\">" + fullurl + "</a>";
+		document.getElementById("sharewarning").classList.add("hidden");
+		if(via_url)
+		{
+			cstoryjson = generate_compressed_story(false,localsettings.export_settings,false);
+			console.log("Export Len: " + cstoryjson.length);
+			document.getElementById("sharecontainertitle").innerText = "Share Story as URL";
+			if (cstoryjson.length >= 4800) {
+				document.getElementById("sharewarning").classList.remove("hidden");
+			}
+
+			let fullurl = "https://lite.koboldai.net/?s=" + cstoryjson;
+			document.getElementById("sharestorytext").innerHTML = "<a href=\"" + fullurl + "\">" + fullurl + "</a>";
+		}else{
+			cstoryjson = generate_compressed_story(localsettings.save_images,localsettings.export_settings,localsettings.export_settings);
+			console.log("Export Len: " + cstoryjson.length);
+			document.getElementById("sharecontainertitle").innerText = "Share Story as TextData";
+			document.getElementById("sharestorytext").innerHTML = "<p>"+cstoryjson+"</p>";
+		}
+		document.getElementById("choosesharecontainer").classList.add("hidden");
 	}
 	function copy_share_url() {
 		var copyText = document.getElementById("sharestorytext");
@@ -4613,7 +4640,7 @@ Current version: 115
 			kai_json_load(story, force_load_settngs);
 
 		} else {
-			msgbox("Could not import from URL. Is it valid?");
+			msgbox("Could not import from URL or TextData. Is it valid?");
 		}
 
 	}
@@ -6310,6 +6337,7 @@ Current version: 115
 			document.getElementById("groupselectcontainer").classList.contains("hidden") &&
 			document.getElementById("imagestylecontainer").classList.contains("hidden") &&
 			document.getElementById("addimgcontainer").classList.contains("hidden") &&
+			document.getElementById("choosesharecontainer").classList.contains("hidden") &&
 			document.getElementById("advancedloadfile").classList.contains("hidden")
 		);
 	}
@@ -6331,6 +6359,7 @@ Current version: 115
 		document.getElementById("groupselectcontainer").classList.add("hidden");
 		document.getElementById("imagestylecontainer").classList.add("hidden");
 		document.getElementById("addimgcontainer").classList.add("hidden");
+		document.getElementById("choosesharecontainer").classList.add("hidden");
 		document.getElementById("advancedloadfile").classList.add("hidden");
 	}
 
@@ -7132,7 +7161,7 @@ Current version: 115
 		let entry = `<div style="display:flex">
 				<button type="button" style="font-size:13px;margin:2px;width:33%" name="localsave" class="btn btn-primary" onclick="hide_popups();save_file_button()">`+"💾<br>Download File"+`</button>
 				<button type="button" style="font-size:13px;margin:2px;width:33%" name="localload" class="btn btn-primary" onclick="hide_popups();load_file_button()">`+"📁<br>Open File"+`</button>
-				<button type="button" style="font-size:13px;margin:2px;width:34%" name="shareurl" class="btn btn-primary" onclick="hide_popups();export_share_story()">`+"🌐<br>Share"+`</button>
+				<button type="button" style="font-size:13px;margin:2px;width:34%" name="shareurl" class="btn btn-primary" onclick="hide_popups();share_story_button()">`+"🌐<br>Share"+`</button>
 				</div>
 				<div style="font-size:12px; margin-top:3px; text-align: center; align-self: center; width: calc(100% - 184px);">
 				<span style="font-weight:bold;text-decoration: underline;">Temporary Browser Storage</span>
@@ -14123,13 +14152,13 @@ Current version: 115
 		<div class="popupbg flex"></div>
 		<div class="nspopup fixsize moderate">
 			<div class="popuptitlebar">
-				<div class="popuptitletext">Share Story URL</div>
+				<div class="popuptitletext" id="sharecontainertitle">Share Story</div>
 			</div>
 			<div class="aidgpopuplistheader anotelabel shareStory" id="sharestorytext" style=" word-wrap: break-word;">
 
 			</div>
 			<div class="popupfooter">
-				<button type="button" class="btn btn-primary" onclick="copy_share_url()">Copy URL</button>
+				<button type="button" class="btn btn-primary" onclick="copy_share_url()">Copy</button>
 				<button type="button" class="btn btn-primary" onclick="hide_popups()">Close</button>
 			</div>
 			<div class="box-label hidden" id="sharewarning">Warning: This story is very long. It may not load in some browsers. You should save it as a file instead.</div>
@@ -14252,6 +14281,28 @@ Current version: 115
 			</div>
 			<br>
 			<input type="file" id="addimgfileinput" style="display:none" accept="image/*">
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="choosesharecontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup fixsize">
+			<div class="popuptitlebar">
+				<div class="popuptitletext">Share Story Import / Export</div>
+			</div>
+			<div class="aidgpopuplistheader anotelabel">
+				<button type="button" class="btn btn-primary bg_green" onclick="export_share_story(false)">Export Share as TextData</button>
+			</div>
+			<div class="aidgpopuplistheader anotelabel">
+				<button type="button" class="btn btn-primary bg_green" onclick="export_share_story(true)">Export Share as Web URL</button>
+			</div>
+			<div class="aidgpopuplistheader anotelabel">
+				<button type="button" class="btn btn-primary" onclick="import_share_story()">Import Share from TextData</button>
+			</div>
+			<br>
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
 			</div>
