@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 115
+Current version: 116
 -Concedo
 -->
 
@@ -6747,6 +6747,33 @@ Current version: 115
 		}
 	}
 
+	var allow_update_kobold_model_display_timestamp = performance.now() + 60000;
+	function update_custom_kobold_endpoint_model_display()
+	{
+		if(custom_kobold_endpoint!="" && selected_workers.length==0 && selected_models.length==1)
+		{
+			if(performance.now() >= allow_update_kobold_model_display_timestamp)
+			{
+				allow_update_kobold_model_display_timestamp = performance.now() + 60000;
+				console.log("Updating selected model name...");
+				let murl = apply_proxy_url(custom_kobold_endpoint + kobold_custom_mdl_endpoint);
+				fetch(murl)
+				.then(x => x.json())
+				.then(values => {
+					if(custom_kobold_endpoint!="" && values && values.result!="")
+					{
+						let mdlname = values.result;
+						selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": mdlname, "count": 1 }];
+						selected_workers = [];
+						console.log("Updating selected model name done.");
+					}
+				})
+				.catch(error => {
+					console.log("Update Kobold Model Error: " + error);
+				});
+			}
+		}
+	}
 
 	function connect_custom_endpoint()
 	{
@@ -9646,6 +9673,7 @@ Current version: 115
 					let trackedgenid = pending_response_id; //if it changes, stop streaming
 					kobold_api_stream(sub_endpt, submit_payload, submit_payload.max_length, trackedgenid, "", streamchunk);
 				}
+				update_custom_kobold_endpoint_model_display();
 			}
 			else if (custom_oai_key != "")//handle for OAI
 			{
@@ -11362,7 +11390,7 @@ Current version: 115
 			render_gametext(false);
 		}
 
-		handle_autoscroll();
+		handle_autoscroll(false);
 	}
 
 	var allow_reenable_submitbtn_timestamp = performance.now();
@@ -11416,7 +11444,7 @@ Current version: 115
 		}
 	}
 
-	function handle_autoscroll()
+	function handle_autoscroll(alwaysscroll=true)
 	{
 		if (localsettings.autoscroll) {
 			let box1 = document.getElementById("gametext");
@@ -11424,11 +11452,11 @@ Current version: 115
 			function isScrolledToBottom(element) {
 				return element.scrollHeight - element.scrollTop <= element.clientHeight + 250;
 			}
-			if(isScrolledToBottom(box1))
+			if(alwaysscroll || isScrolledToBottom(box1))
 			{
 				box1.scrollTop = box1.scrollHeight - box1.clientHeight + 10;
 			}
-			if(isScrolledToBottom(box2))
+			if(alwaysscroll || isScrolledToBottom(box2))
 			{
 				box2.scrollTop = box2.scrollHeight - box2.clientHeight + 10;
 			}
@@ -11813,7 +11841,7 @@ Current version: 115
 			autosave();
 		}
 
-		handle_autoscroll();
+		handle_autoscroll(true);
 
 		if(localsettings.printer_view)
 		{
