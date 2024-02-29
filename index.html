@@ -3479,6 +3479,7 @@ Current version: 117
 		saved_kai_addr: "", //do not ever share this in save files!
 		saved_oai_jailbreak: "", //customized oai system prompt
 		saved_oai_custommodel: "", //customized oai custom model
+		saved_oai_role: 0, //0=user,1=assistant,2=system
 		saved_a1111_url: default_a1111_base,
 		saved_xtts_url: default_xtts_base,
 		prev_custom_endpoint_type: 0, //show a reconnect box to custom endpoint if needed. 0 is horde, otherwise its dropdown value+1
@@ -6589,6 +6590,21 @@ Current version: 117
 			document.getElementById("jailbreakprompttext").classList.add("hidden");
 		}
 	}
+	function toggleoairole()
+	{
+		if(localsettings.saved_oai_role!=null)
+		{
+			document.getElementById("oairoledropdown").value = localsettings.saved_oai_role;
+		}else{
+			document.getElementById("oairoledropdown").value = 0;
+		}
+		if(document.getElementById("useoaichatcompl").checked)
+		{
+			document.getElementById("oairolebox").classList.remove("hidden");
+		}else{
+			document.getElementById("oairolebox").classList.add("hidden");
+		}
+	}
 
 	function select_custom_oai_model()
 	{
@@ -6619,6 +6635,7 @@ Current version: 117
 		} else {
 			document.getElementById("useoaichatcompl").checked = !non_completions;
 		}
+		toggleoairole();
 	}
 	function oai_fetch_models()
 	{
@@ -6729,6 +6746,7 @@ Current version: 117
 			}
 			oai_model_change();
 			togglejailbreak();
+			toggleoairole();
 		}
 		else if(epchoice==2)
 		{
@@ -7009,6 +7027,7 @@ Current version: 117
 				{
 					document.getElementById("jailbreakprompttext").value = defaultoaijailbreak;
 				}
+				localsettings.saved_oai_role = document.getElementById("oairoledropdown").value;
 				let isOpenrouter = (document.getElementById("customapidropdown").value==5);
 				let dropdown = (isOpenrouter?document.getElementById("custom_openrouter_model"):document.getElementById("custom_oai_model"));
 				custom_oai_model = dropdown.value.trim();
@@ -7028,7 +7047,7 @@ Current version: 117
 					document.getElementById("connectstatus").classList.add("color_green");
 				}
 				document.getElementById("connectstatus").innerHTML = "Connected to OAI Endpoint";
-				render_gametext();
+				render_gametext(true);
 			}
 		}
 		else if(epchoice==2) //connect to Scale Endpoint
@@ -9704,16 +9723,17 @@ Current version: 117
 				}
 
 				if (document.getElementById("useoaichatcompl").checked) {
+					let myrole = (localsettings.saved_oai_role==2)?"system":(localsettings.saved_oai_role==1?"assistant":"user");
 					targetep = (custom_oai_endpoint + oai_submit_endpoint_turbo);
 					if (document.getElementById("jailbreakprompt") && document.getElementById("jailbreakprompt").checked && document.getElementById("jailbreakprompttext").value!="") {
 						oai_payload.messages = [
 							{ "role": "system", "content": document.getElementById("jailbreakprompttext").value },
-							{ "role": "user", "content": submit_payload.prompt },
+							{ "role": myrole, "content": submit_payload.prompt },
 						];
 					}
 					else {
 						oai_payload.messages = [
-							{ "role": "user", "content": submit_payload.prompt },
+							{ "role": myrole, "content": submit_payload.prompt },
 						];
 					}
 				}
@@ -13357,10 +13377,19 @@ Current version: 117
 				<div class="box-label" title="Add endpoint version">Add Endpoint Version</div>
 				<input type="checkbox" id="jailbreakprompt" onchange="togglejailbreak()">
 				<div class="box-label" title="Adds extra text to improve AI response">Add System Message</div>
-				<input type="checkbox" id="useoaichatcompl">
+				<input type="checkbox" id="useoaichatcompl" onchange="toggleoairole()">
 				<div class="box-label" id="useoaichatcompllabel" title="">Use ChatCompletions API</div>
 				<input class="form-control hidden" type="text" id="jailbreakprompttext" placeholder="(Enter System Message)"
-				value="" onload="togglejailbreak()">
+				value="" onload="togglejailbreak();">
+				<span id="oairolebox" class="hidden" onload="toggleoairole();">
+					Message Role:
+					<select class="form-control" style="padding:4px;display:inline;width:100px" id="oairoledropdown">
+						<option value="0" selected>User</option>
+						<option value="1">Assistant</option>
+						<option value="2">System</option>
+					</select>
+				</span>
+
 			</div>
 			<div id="scalecustom" class="aidgpopuplistheader anotelabel hidden">
 				Uses Spellbook by Scale. This is an experimental endpoint. It may break at any time.<br><br>
