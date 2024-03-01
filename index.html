@@ -3478,6 +3478,7 @@ Current version: 117
 		saved_palm_key: "", //do not ever share this in save files!
 		saved_kai_addr: "", //do not ever share this in save files!
 		saved_oai_jailbreak: "", //customized oai system prompt
+		saved_oai_jailbreak2: "", //oai assistant postfix
 		saved_oai_custommodel: "", //customized oai custom model
 		saved_oai_role: 0, //0=user,1=assistant,2=system
 		saved_a1111_url: default_a1111_base,
@@ -6590,20 +6591,37 @@ Current version: 117
 			document.getElementById("jailbreakprompttext").classList.add("hidden");
 		}
 	}
-	function toggleoairole()
+	function togglejailbreak2()
 	{
-		if(localsettings.saved_oai_role!=null)
+		if(localsettings.saved_oai_jailbreak2=="")
 		{
-			document.getElementById("oairoledropdown").value = localsettings.saved_oai_role;
-		}else{
-			document.getElementById("oairoledropdown").value = 0;
+			document.getElementById("jailbreakprompttext2").value = "";
 		}
+		else
+		{
+			document.getElementById("jailbreakprompttext2").value = localsettings.saved_oai_jailbreak2;
+		}
+		if(document.getElementById("jailbreakprompt2").checked)
+		{
+			document.getElementById("jailbreakprompttext2").classList.remove("hidden");
+		}else{
+			document.getElementById("jailbreakprompttext2").classList.add("hidden");
+		}
+	}
+	function toggleoaichatcompl()
+	{
 		if(document.getElementById("useoaichatcompl").checked)
 		{
-			document.getElementById("oairolebox").classList.remove("hidden");
+			document.getElementById("useoaichatcomplbox").classList.remove("hidden");
+			if(localsettings.saved_oai_role!=null)
+			{
+				document.getElementById("oairoledropdown").value = localsettings.saved_oai_role;
+			}
 		}else{
-			document.getElementById("oairolebox").classList.add("hidden");
+			document.getElementById("useoaichatcomplbox").classList.add("hidden");
 		}
+		togglejailbreak();
+		togglejailbreak2();
 	}
 
 	function select_custom_oai_model()
@@ -6635,7 +6653,7 @@ Current version: 117
 		} else {
 			document.getElementById("useoaichatcompl").checked = !non_completions;
 		}
-		toggleoairole();
+		toggleoaichatcompl();
 	}
 	function oai_fetch_models()
 	{
@@ -6745,8 +6763,7 @@ Current version: 117
 
 			}
 			oai_model_change();
-			togglejailbreak();
-			toggleoairole();
+			toggleoaichatcompl();
 		}
 		else if(epchoice==2)
 		{
@@ -7028,6 +7045,7 @@ Current version: 117
 					document.getElementById("jailbreakprompttext").value = defaultoaijailbreak;
 				}
 				localsettings.saved_oai_role = document.getElementById("oairoledropdown").value;
+				localsettings.saved_oai_jailbreak2 = document.getElementById("jailbreakprompttext2").value;
 				let isOpenrouter = (document.getElementById("customapidropdown").value==5);
 				let dropdown = (isOpenrouter?document.getElementById("custom_openrouter_model"):document.getElementById("custom_oai_model"));
 				custom_oai_model = dropdown.value.trim();
@@ -9724,18 +9742,16 @@ Current version: 117
 
 				if (document.getElementById("useoaichatcompl").checked) {
 					let myrole = (localsettings.saved_oai_role==2)?"system":(localsettings.saved_oai_role==1?"assistant":"user");
+					oai_payload.messages = [];
 					targetep = (custom_oai_endpoint + oai_submit_endpoint_turbo);
 					if (document.getElementById("jailbreakprompt") && document.getElementById("jailbreakprompt").checked && document.getElementById("jailbreakprompttext").value!="") {
-						oai_payload.messages = [
-							{ "role": "system", "content": document.getElementById("jailbreakprompttext").value },
-							{ "role": myrole, "content": submit_payload.prompt },
-						];
+						oai_payload.messages.push({ "role": "system", "content": document.getElementById("jailbreakprompttext").value });
 					}
-					else {
-						oai_payload.messages = [
-							{ "role": myrole, "content": submit_payload.prompt },
-						];
+					oai_payload.messages.push({ "role": myrole, "content": submit_payload.prompt });
+					if (document.getElementById("jailbreakprompt2") && document.getElementById("jailbreakprompt2").checked && document.getElementById("jailbreakprompttext2").value!="") {
+						oai_payload.messages.push({ "role": "assistant", "content": document.getElementById("jailbreakprompttext2").value });
 					}
+
 				}
 				else {
 					//apply custom logit bias for official OAI only
@@ -13375,19 +13391,26 @@ Current version: 117
 				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaiusecustom" onclick="select_custom_oai_model()">Use Custom</button>
 				<input type="checkbox" id="oaiaddversion" onchange="" checked>
 				<div class="box-label" title="Add endpoint version">Add Endpoint Version</div>
-				<input type="checkbox" id="jailbreakprompt" onchange="togglejailbreak()">
-				<div class="box-label" title="Adds extra text to improve AI response">Add System Message</div>
-				<input type="checkbox" id="useoaichatcompl" onchange="toggleoairole()">
+				<input type="checkbox" id="useoaichatcompl" onchange="toggleoaichatcompl()">
 				<div class="box-label" id="useoaichatcompllabel" title="">Use ChatCompletions API</div>
-				<input class="form-control hidden" type="text" id="jailbreakprompttext" placeholder="(Enter System Message)"
-				value="" onload="togglejailbreak();">
-				<span id="oairolebox" class="hidden" onload="toggleoairole();">
+
+				<span id="useoaichatcomplbox" class="hidden" onload="toggleoaichatcompl();">
+					<br>
 					Message Role:
-					<select class="form-control" style="padding:4px;display:inline;width:100px" id="oairoledropdown">
+					<select class="form-control" style="height: 25px; font-size:12px; padding:4px;display:inline;width:100px" id="oairoledropdown">
 						<option value="0" selected>User</option>
 						<option value="1">Assistant</option>
 						<option value="2">System</option>
 					</select>
+					<input type="checkbox" id="jailbreakprompt" onchange="togglejailbreak()">
+					<div class="box-label" title="Adds extra text at the start to improve AI response">Add System Prefix</div>
+					<input type="checkbox" id="jailbreakprompt2" onchange="togglejailbreak2()">
+					<div class="box-label" title="Adds extra text to the end to improve AI response">Add Assistant Postfix</div>
+
+					<input class="form-control hidden" type="text" id="jailbreakprompttext" placeholder="(Enter System Prefix)"
+					value="" onload="togglejailbreak();">
+					<input class="form-control hidden" type="text" id="jailbreakprompttext2" placeholder="(Enter Assistant Postfix)"
+					value="" onload="togglejailbreak2();">
 				</span>
 
 			</div>
