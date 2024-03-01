@@ -7,7 +7,7 @@ Just copy this single static HTML file anywhere and open it in a browser, or fro
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 If you are submitting a pull request for Lite, PLEASE use the above repo, not the KoboldCpp one.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 117
+Current version: 118
 -Concedo
 -->
 
@@ -6882,28 +6882,22 @@ Current version: 117
 							{
 								//now we get the version number, however this is optional
 								//if it fails we can still proceed
-								let urls2 = [
-									apply_proxy_url(tmpep + kobold_custom_version_endpoint),
-								];
-								Promise.all(urls2.map(url => fetch(url)
-								.then(response => response.json())))
+								fetch(apply_proxy_url(tmpep + kobold_custom_version_endpoint))
+								.then(response => response.json())
 								.then(values2 => {
 									console.log(values2);
-									let ep_version = values2[0].result;
+									let ep_version = values2.result;
 									kobold_endpoint_version = (ep_version?ep_version:"");
 								}).catch(error => {
 									console.log("Failed to get KAI version number: " + error);
 								});
 
 								//also get max ctx supported
-								let urls3 = [
-									apply_proxy_url(tmpep + kobold_custom_maxctxlen_endpoint),
-								];
-								Promise.all(urls3.map(url => fetch(url)
-								.then(response => response.json())))
+								fetch(apply_proxy_url(tmpep + kobold_custom_maxctxlen_endpoint))
+								.then(response => response.json())
 								.then(values3 => {
 									console.log(values3);
-									let ep_maxctx = values3[0].value;
+									let ep_maxctx = values3.value;
 									if(ep_maxctx && ep_maxctx>document.getElementById("max_context_length_slide").max)
 									{
 										document.getElementById("max_context_length_slide").max = ep_maxctx;
@@ -6918,7 +6912,7 @@ Current version: 117
 							//allow kcpp version check for remote endpoints too
 							{
 								//for local mode, check if we are using koboldcpp, if so we can use streaming if permitted by version
-								fetch(tmpep + koboldcpp_version_endpoint)
+								fetch(apply_proxy_url(tmpep + koboldcpp_version_endpoint))
 								.then(x => x.json())
 								.then(data => {
 									if(data && data!="" && data.version && data.version!="")
@@ -6927,14 +6921,11 @@ Current version: 117
 										console.log("KoboldCpp Detected: " + koboldcpp_version);
 
 										//also check against kcpp's max true context length
-										let urls4 = [
-											apply_proxy_url(tmpep + koboldcpp_truemaxctxlen_endpoint),
-										];
-										Promise.all(urls4.map(url => fetch(url)
-										.then(response => response.json())))
+										fetch(apply_proxy_url(tmpep + koboldcpp_truemaxctxlen_endpoint))
+										.then(response => response.json())
 										.then(values4 => {
 											console.log(values4);
-											let ep_maxctx = values4[0].value;
+											let ep_maxctx = values4.value;
 											if(ep_maxctx && ep_maxctx>document.getElementById("max_context_length_slide").max)
 											{
 												document.getElementById("max_context_length_slide").max = ep_maxctx;
@@ -6945,13 +6936,10 @@ Current version: 117
 										});
 
 										//and check if there's a kcpp savefile preloaded
-										let urls5 = [
-											apply_proxy_url(tmpep + koboldcpp_preloadstory_endpoint),
-										];
-										Promise.all(urls5.map(url => fetch(url)
-										.then(response => response.json())))
+										fetch(apply_proxy_url(tmpep + koboldcpp_preloadstory_endpoint))
+										.then(response => response.json())
 										.then(values5 => {
-											let tmpstory = values5[0];
+											let tmpstory = values5;
 											let is_kai = !(tmpstory.prompt==null);
 											if(is_kai)
 											{
@@ -6964,6 +6952,41 @@ Current version: 117
 											}
 										}).catch(error => {
 											console.log("Failed to get preloaded story: " + error);
+										});
+
+										//check if image gen is supported
+										fetch(apply_proxy_url(tmpep + a1111_models_endpoint))
+										.then(response => response.json())
+										.then(values6 => {
+											console.log(values6);
+											if(values6 && values6.length>0)
+											{
+												let firstitem = values6[0];
+												if(firstitem.model_name!="inactive" && firstitem.filename!=null)
+												{
+													//local image gen is available
+													if(localsettings.generate_images_mode==0)
+													{
+														console.log("Connect to KoboldCpp Image Gen");
+														localsettings.generate_images_mode = 2;
+														localsettings.saved_a1111_url = tmpep;
+														connect_to_a1111(true);
+														render_gametext(true);
+													}
+												}
+												else
+												{
+													//hide the add img if the image server is down
+													if(localsettings.generate_images_mode==2 && localsettings.saved_a1111_url==tmpep)
+													{
+														localsettings.generate_images_mode = 0;
+														localsettings.saved_a1111_url = default_a1111_base
+														render_gametext(true);
+													}
+												}
+											}
+										}).catch(error => {
+											console.log("Failed to get local image models: " + error);
 										});
 
 									}else{
