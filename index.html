@@ -3379,6 +3379,8 @@ Current version: 119
 
 	const xtts_gen_endpoint = "/tts_to_audio/";
 	const xtts_voices_endpoint = "/speakers_list";
+	const alltalk_gen_endpoint = "/api/tts-generate";
+	const alltalk_voices_endpoint = "/api/voices";
 
 	//support for quick news updates
 	const horde_news_endpoint = "https://hordenews.concedo.workers.dev"
@@ -3392,8 +3394,10 @@ Current version: 119
 
 	const default_a1111_base = "http://localhost:7860";
 	const default_xtts_base = " http://localhost:8020";
+	const default_alltalk_base = "http://localhost:7851";
 
 	const XTTS_ID = 1000;
+	const ALLTALK_ID = 1001;
 	const HD_RES_PX = 400;
 	const NO_HD_RES_PX = 256;
 
@@ -3483,6 +3487,7 @@ Current version: 119
 		saved_oai_role: 0, //0=user,1=assistant,2=system
 		saved_a1111_url: default_a1111_base,
 		saved_xtts_url: default_xtts_base,
+		saved_alltalk_url: default_alltalk_base,
 		prev_custom_endpoint_type: 0, //show a reconnect box to custom endpoint if needed. 0 is horde, otherwise its dropdown value+1
 		generate_images_mode: (localflag?0:1), //0=off, 1=horde, 2=a1111, 3=dalle
 
@@ -4028,9 +4033,9 @@ Current version: 119
 		{
 			fetch_image_models();
 		}
-		if(localsettings.speech_synth==XTTS_ID)
+		if(localsettings.speech_synth==XTTS_ID || localsettings.speech_synth==ALLTALK_ID)
 		{
-			fetch_xtts_voices(true);
+			fetch_xtts_voices(true,localsettings.speech_synth==XTTS_ID);
 		}
 		if(localsettings.generate_images_mode==2)
 		{
@@ -7921,6 +7926,7 @@ Current version: 119
 			console.log("No speech synth available");
 		}
 		ttshtml += "<option value=\"1000\">XTTS API Server</option>";
+		ttshtml += "<option value=\"1001\">AllTalk API Server</option>";
 		document.getElementById("ttsselect").innerHTML = ttshtml;
 		document.getElementById("ttsselect").value = localsettings.speech_synth;
 		toggle_tts_mode();
@@ -8956,15 +8962,20 @@ Current version: 119
 	}
 
 	var xtts_is_connected = false;
-	function fetch_xtts_voices(silent)
+	function fetch_xtts_voices(silent, is_xtts)
 	{
 		if(!xtts_is_connected)
 		{
-			fetch(localsettings.saved_xtts_url + xtts_voices_endpoint)
+			let endpt = (is_xtts?(localsettings.saved_xtts_url + xtts_voices_endpoint):(localsettings.saved_alltalk_url + alltalk_voices_endpoint));
+			fetch(endpt)
 			.then(x => x.json())
 			.then(data => {
 				console.log(data);
 				//repopulate our voices list
+				if (data && !data.length && data.voices) {
+					//alltalk mode
+					data = data.voices;
+				}
 				let dropdown = document.getElementById("xtts_voices");
 					let selectionhtml = ``;
 					for (var i = 0; i < data.length; ++i) {
@@ -8979,7 +8990,8 @@ Current version: 119
 				xtts_is_connected = false;
 				if(!silent)
 				{
-					msgbox("XTTS Connect Error: " + error+"\nCheck XTTS API Server endpoint URL.\n");
+					let epname = (is_xtts?"XTTS":"AllTalk");
+					msgbox(epname + " Connect Error: " + error+"\nCheck "+epname+" API Server endpoint URL.\n");
 				}
 			});
 		}
@@ -8999,17 +9011,19 @@ Current version: 119
 
 	function toggle_tts_mode()
 	{
-		if(document.getElementById("ttsselect").value==XTTS_ID)
+		if(document.getElementById("ttsselect").value==XTTS_ID || document.getElementById("ttsselect").value==ALLTALK_ID)
 		{
 			document.getElementById("xtts_container").classList.remove("hidden");
-			fetch_xtts_voices(true);
+			fetch_xtts_voices(true, document.getElementById("ttsselect").value==XTTS_ID);
 		}else{
 			document.getElementById("xtts_container").classList.add("hidden");
 		}
 	}
 	function set_xtts_url()
 	{
-		inputBox("Enter XTTS API Server URL.","XTTS API Server URL",localsettings.saved_xtts_url,"Input XTTS API Server URL", ()=>{
+		let is_xtts = (document.getElementById("ttsselect").value==XTTS_ID);
+		let epname = (is_xtts?"XTTS":"AllTalk");
+		inputBox("Enter "+epname+" API Server URL.",epname+" API Server URL",(is_xtts?localsettings.saved_xtts_url:localsettings.saved_alltalk_url),"Input "+epname+" API Server URL", ()=>{
 			let userinput = getInputBoxValue();
 			userinput = userinput.trim();
 			if(userinput!="" && userinput.slice(-1)=="/")
@@ -9018,12 +9032,20 @@ Current version: 119
 			}
 			if(userinput=="")
 			{
-				userinput = default_xtts_base;
+				userinput = (is_xtts?default_xtts_base:default_alltalk_base);
 			}
 			if (userinput != null && userinput!="") {
-				localsettings.saved_xtts_url = userinput.trim();
+				if(is_xtts)
+				{
+					localsettings.saved_xtts_url = userinput.trim();
+				}
+				else
+				{
+					localsettings.saved_alltalk_url = userinput.trim();
+				}
+
 				xtts_is_connected = false;
-				fetch_xtts_voices(false);
+				fetch_xtts_voices(false, is_xtts);
 			}
 		},false);
 	}
@@ -9060,36 +9082,74 @@ Current version: 119
 			}
 		}
 
-		if(ssval==XTTS_ID) //xtts api server
+		if(ssval==XTTS_ID || ssval==ALLTALK_ID) //xtts api server
 		{
 			if(xtts_is_connected)
 			{
+				let is_xtts = (localsettings.speech_synth==XTTS_ID);
 				const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-				let xtts_payload = {
-					"text": text,
-					"speaker_wav": document.getElementById("xtts_voices").value,
-					"language": "EN"
-				};
 
-				fetch(localsettings.saved_xtts_url + xtts_gen_endpoint, {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json'
-					},
-					body: JSON.stringify(xtts_payload),
-				})
-				.then(response => response.arrayBuffer())
-				.then(data => {
-					return audioContext.decodeAudioData(data);
-				})
-				.then(decodedData => {
-					const playSound = audioContext.createBufferSource();
-					playSound.buffer = decodedData;
-					playSound.connect(audioContext.destination);
-					playSound.start(audioContext.currentTime);
-				}).catch((error) => {
-					console.log("XTTS Speak Error: " + error);
-				});
+				if(is_xtts)
+				{
+					let xtts_payload = {
+						"text": text,
+						"speaker_wav": document.getElementById("xtts_voices").value,
+						"language": "EN"
+					};
+					fetch(localsettings.saved_xtts_url + xtts_gen_endpoint, {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json'
+						},
+						body: JSON.stringify(xtts_payload),
+					})
+					.then(response => response.arrayBuffer())
+					.then(data => {
+						return audioContext.decodeAudioData(data);
+					})
+					.then(decodedData => {
+						const playSound = audioContext.createBufferSource();
+						playSound.buffer = decodedData;
+						playSound.connect(audioContext.destination);
+						playSound.start(audioContext.currentTime);
+					}).catch((error) => {
+						console.log("XTTS Speak Error: " + error);
+					});
+				}
+				else
+				{
+					//alltalk
+					const formData = new FormData();
+					formData.append("text_input", text); // max 2000 chars
+					formData.append("text_filtering", "none"); // (none|standard|html)
+					formData.append("character_voice_gen", document.getElementById("xtts_voices").value);
+					formData.append("narrator_enabled", false);
+					formData.append("narrator_voice_gen", document.getElementById("xtts_voices").value);
+					formData.append("text_not_inside", "character"); // character or narrator, determines which to use
+					formData.append("language", "en");
+					formData.append("output_file_name", "audiofile"); // NOTE: file name only, with no extension and no dashes!
+					formData.append("output_file_timestamp", true);
+					formData.append("autoplay", false); //to play in browser
+					formData.append("autoplay_volume", 1.0); // (0.1..2.0)
+					formData.append("streaming", true); // unknown why
+
+					fetch(localsettings.saved_alltalk_url + alltalk_gen_endpoint, {
+						method: 'POST',
+						body: formData, // send payload as FormData
+					})
+					.then(response => response.arrayBuffer())
+					.then(data => {
+						return audioContext.decodeAudioData(data);
+					})
+					.then(decodedData => {
+						const playSound = audioContext.createBufferSource();
+						playSound.buffer = decodedData;
+						playSound.connect(audioContext.destination);
+						playSound.start(audioContext.currentTime);
+					}).catch((error) => {
+						console.log("AllTalk Speak Error: " + error);
+					});
+				}
 			}
 		}
 		else
@@ -13475,12 +13535,11 @@ Current version: 119
 				<input class="form-control" type="password" id="custom_claude_key" placeholder="Claude API Key" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
 				Model Choice:<br>
 				<select style="padding:4px;" class="form-control" id="custom_claude_model">
-					<option value="claude-v1" selected="selected">claude-v1</option>
-					<option value="claude-v1.2">claude-v1.2</option>
+					<option value="claude-v1">claude-v1</option>
 					<option value="claude-v1-100k">claude-v1-100k</option>
 					<option value="claude-instant-v1">claude-instant-v1</option>
 					<option value="claude-instant-v1-100k">claude-instant-v1-100k</option>
-					<option value="claude-2">claude-2</option>
+					<option value="claude-2" selected="selected">claude-2</option>
 					<option value="claude-2.1">claude-2.1</option>
 					<option value="claude-2.0">claude-2.0</option>
 				</select>
