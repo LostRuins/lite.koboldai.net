@@ -7,7 +7,7 @@ Just copy this single static HTML file anywhere and open it in a browser, or fro
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 If you are submitting a pull request for Lite, PLEASE use the above repo, not the KoboldCpp one.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 119
+Current version: 120
 -Concedo
 -->
 
@@ -10287,6 +10287,9 @@ Current version: 119
 			sentence = localsettings.image_styles + " " + sentence;
 		}
 
+		//remove ###
+		sentence = sentence.replace(/###/gm, "");
+
 		if (localsettings.generate_images_mode==1) {
 			sentence = sanitize_horde_image_prompt(sentence);
 		}
@@ -10525,13 +10528,13 @@ Current version: 119
 		if(savedmeta)
 		{
 			let origprompt = (savedmeta.prompt?replaceAll(savedmeta.prompt,"\n"," ") : "No Saved Description");
-			origprompt = escapeHtml(origprompt);
+			latest_orig_prompt = origprompt;
 			let visionstatus = (savedmeta.enabled?(savedmeta.desc?`<span class="color_green">Active</span>`:`<span class="color_yellow">Analyzing...</span>`):`<span class="color_red">Inactive</span>`);
 			let togglebtn = (savedmeta.enabled?`<button type="button" class="bg_red btn btn-primary" style="width: 84px; padding: 2px; margin: 3px; font-size:12px;" onclick="toggle_ai_vision(\'`+imghash+`\')">Disable</button>`:`<button type="button" class="bg_green btn btn-primary" style="width: 84px; padding: 2px; margin: 3px; font-size:12px;" onclick="toggle_ai_vision(\'`+imghash+`\')">👁️ Enable 👁️</button>`);
 			document.getElementById("zoomedimgdesc").innerHTML = `
 			AI Vision: `+visionstatus+` <span class="helpicon">?<span class="helptext">This allows the AI to visually recognize this image, to see and react to this image. Uses Horde or Local A1111 for image interrogation if enabled.</span></span>
 			`+togglebtn+`
-			<br><button type="button" class="btn btn-primary" style="width: 140px; padding: 2px; margin: 3px; font-size:12px;" onclick="msgbox('`+origprompt+`','Original Prompt')">View Original Prompt</button>
+			<br><button type="button" class="btn btn-primary" style="width: 140px; padding: 2px; margin: 3px; font-size:12px;" onclick="show_orig_prompt()">View Original Prompt</button>
 			`;
 		}
 		else
@@ -10539,6 +10542,11 @@ Current version: 119
 			document.getElementById("zoomedimgdesc").innerText = "No Saved Data";
 		}
 
+	}
+	var latest_orig_prompt = "";
+	function show_orig_prompt()
+	{
+		msgbox(latest_orig_prompt,"Original Prompt");
 	}
 	function click_image(target,imghash)
 	{
