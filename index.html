@@ -7,7 +7,7 @@ Just copy this single static HTML file anywhere and open it in a browser, or fro
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 If you are submitting a pull request for Lite, PLEASE use the above repo, not the KoboldCpp one.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 120
+Current version: 121
 -Concedo
 -->
 
@@ -3537,6 +3537,7 @@ Current version: 120
 		img_cfgscale: 7,
 		img_allowhd: false,
 		img_steps: 20,
+		img_sampler: "k_euler_a",
 		save_images: true,
 		save_remote_images: false,
 		prompt_for_savename: false,
@@ -4191,7 +4192,7 @@ Current version: 120
 		let a1111_t2i_payload = {
 			"prompt": prompt,
 			"seed": parsedseed,
-			"sampler_name": "Euler a",
+			"sampler_name": req_payload.params.sampler_name,
 			"batch_size": 1,
 			"n_iter": 1,
 			"steps": req_payload.params.steps,
@@ -7991,6 +7992,7 @@ Current version: 120
 		document.getElementById("save_images").checked = localsettings.save_images;
 		document.getElementById("save_remote_images").checked = localsettings.save_remote_images;
 		document.getElementById("img_cfgscale").value = localsettings.img_cfgscale;
+		document.getElementById("img_sampler").value = localsettings.img_sampler;
 		document.getElementById("img_steps").value = localsettings.img_steps;
 		document.getElementById("prompt_for_savename").checked = localsettings.prompt_for_savename;
 		document.getElementById("img_allownsfw").checked = localsettings.img_allownsfw;
@@ -8211,6 +8213,7 @@ Current version: 120
 		update_genimg_button_visiblility();
 
 		localsettings.img_cfgscale = parseFloat(document.getElementById("img_cfgscale").value);
+		localsettings.img_sampler = document.getElementById("img_sampler").value;
 		localsettings.img_steps = parseInt(document.getElementById("img_steps").value);
 		if(isNaN(localsettings.img_steps))
 		{
@@ -10375,8 +10378,14 @@ Current version: 120
 		//remove ###
 		sentence = sentence.replace(/###/gm, "");
 
+		let usedsampler = localsettings.img_sampler;
+
 		if (localsettings.generate_images_mode==1) {
 			sentence = sanitize_horde_image_prompt(sentence);
+			if(usedsampler=="k_lcm")
+			{
+				usedsampler = "k_euler_a"; //horde doesnt have lcm sampler
+			}
 		}
 
 		console.log("Generating image for: " + sentence);
@@ -10397,7 +10406,7 @@ Current version: 120
 			"prompt": (sentence + negprompt),
 			"params": {
 				"cfg_scale": localsettings.img_cfgscale,
-				"sampler_name": "k_euler_a",
+				"sampler_name": usedsampler,
 				"height": 512,
 				"width": 512,
 				"steps": localsettings.img_steps,
@@ -14544,7 +14553,7 @@ Current version: 120
 
 	<div class="popupcontainer flex hidden" id="imagestylecontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup fixsize">
+		<div class="nspopup fixsize moderate">
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Image Generation Settings</div>
 			</div>
@@ -14560,6 +14569,17 @@ Current version: 120
 			<div class="inlinelabel">
 				<div class="justifyleft" style="padding:4px">Cfg. Scale: </div>
 				<input type="text" inputmode="decimal" id="img_cfgscale" style="width:60px">
+			</div>
+			<div class="inlinelabel">
+				<div class="justifyleft" style="padding:4px">Sampler: </div>
+				<select style="padding:1px; height:23px; width: 90px;" class="form-control" id="img_sampler">
+					<option value="k_euler_a">Euler A</option>
+					<option value="k_euler">Euler</option>
+					<option value="k_heun">Heun</option>
+					<option value="k_dpm_2">DPM2</option>
+					<option value="k_lcm">LCM</option>
+					<option value="k_dpmpp_2m">DPM++ 2M</option>
+				</select>
 			</div>
 			<div class="inlinelabel">
 				<div class="justifyleft" style="padding:4px">Save Higher-Res <span class="helpicon">?
