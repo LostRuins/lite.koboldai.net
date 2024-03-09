@@ -10535,7 +10535,7 @@ Current version: 122
 					compressImage(origImg, (newDataUri) => {
 						image_db[imgid].done = true;
 						image_db[imgid].result = newDataUri;
-					}, true, true, imgres,0.35,false);
+					}, true, false, imgres,0.35,false);
 				}else{
 					image_db[imgid].queue = "Failed";
 					msgbox("Image Generation Failed!\n\nPlease make sure A1111 is running and properly configured!\nIn your local install of Automatic1111 WebUi, modify webui-user.bat and add these flags to enable API access:\n\nset COMMANDLINE_ARGS= --api --listen --cors-allow-origins=*\n");
@@ -11096,7 +11096,7 @@ Current version: 122
 										let imgres = localsettings.img_allowhd?HD_RES_PX:NO_HD_RES_PX;
 										compressImage(origImg, (newDataUri) => {
 											img.result = newDataUri;
-										}, true, true, imgres,0.35,false);
+										}, true, false, imgres,0.35,false);
 									}
 								})
 								.catch((error) => {
@@ -11167,23 +11167,15 @@ Current version: 122
 			if(!fixedSize)
 			{
 				//otherwise, we preserve the original ratio but scale them down to fit
-				let newwidth = maxSize;
-				let newheight = maxSize;
-				let scalef = 1;
-				if(origW>=origH)
+				let maxImgDim = Math.max(origW,origH);
+				wantedWidth = origW;
+				wantedHeight = origH;
+				if(maxImgDim > maxSize)
 				{
-					newwidth = origW>maxSize?maxSize:origW;
-					scalef = newwidth/origW;
-					newheight = origH*scalef;
+					let scalef = maxImgDim/maxSize;
+					wantedWidth = origW/scalef;
+					wantedHeight = origH/scalef;
 				}
-				else
-				{
-					newheight = origH>maxSize?maxSize:origH;
-					scalef = newheight/origH;
-					newwidth = origW*scalef;
-				}
-				wantedWidth = newwidth;
-				wantedHeight = newheight;
 			}
 
 			canvas.width = wantedWidth;
