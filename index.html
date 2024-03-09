@@ -7,7 +7,7 @@ Just copy this single static HTML file anywhere and open it in a browser, or fro
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 If you are submitting a pull request for Lite, PLEASE use the above repo, not the KoboldCpp one.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 121
+Current version: 122
 -Concedo
 -->
 
@@ -1526,13 +1526,34 @@ Current version: 121
 		.zoomedimg
 		{
 			border-radius: 6%;
-			width:420px;
-			height:420px;
+			width:462px;
+			height:462px;
 		}
-		@media (max-width: 520px) {
+		.zoomedimg.portrait
+		{
+			width:308px;
+			height:462px;
+		}
+		.zoomedimg.landscape
+		{
+			width:462px;
+			height:308px;
+		}
+
+		@media (max-width: 620px) {
 			.zoomedimg {
 				width:min(96vw, 420px);
 				height:min(96vw, 420px);
+			}
+			.zoomedimg.portrait
+			{
+				width:min(64vw, 280px);
+				height:min(96vw, 420px);
+			}
+			.zoomedimg.landscape
+			{
+				width:min(96vw, 420px);
+				height:min(64vw, 280px);
 			}
 		}
 		.mdlpicker::-webkit-calendar-picker-indicator {
@@ -3539,6 +3560,7 @@ Current version: 121
 		img_allowhd: false,
 		img_steps: 20,
 		img_sampler: "Euler a",
+		img_aspect:0, //0=square,1=portrait,2=landscape
 		save_images: true,
 		save_remote_images: false,
 		prompt_for_savename: false,
@@ -7996,6 +8018,7 @@ Current version: 121
 		document.getElementById("save_images").checked = localsettings.save_images;
 		document.getElementById("save_remote_images").checked = localsettings.save_remote_images;
 		document.getElementById("img_cfgscale").value = localsettings.img_cfgscale;
+		document.getElementById("img_aspect").value = localsettings.img_aspect;
 		document.getElementById("img_sampler").value = localsettings.img_sampler;
 		document.getElementById("img_steps").value = localsettings.img_steps;
 		document.getElementById("prompt_for_savename").checked = localsettings.prompt_for_savename;
@@ -8217,6 +8240,7 @@ Current version: 121
 		update_genimg_button_visiblility();
 
 		localsettings.img_cfgscale = parseFloat(document.getElementById("img_cfgscale").value);
+		localsettings.img_aspect = parseInt(document.getElementById("img_aspect").value);
 		localsettings.img_sampler = document.getElementById("img_sampler").value;
 		localsettings.img_steps = parseInt(document.getElementById("img_steps").value);
 		if(isNaN(localsettings.img_steps))
@@ -8226,6 +8250,10 @@ Current version: 121
 		if(isNaN(localsettings.img_cfgscale))
 		{
 			localsettings.img_cfgscale = defaultsettings.img_cfgscale;
+		}
+		if(isNaN(localsettings.img_aspect))
+		{
+			localsettings.img_aspect = defaultsettings.img_aspect;
 		}
 
 		if((localsettings.gui_type_story!=0 && localsettings.opmode==1)
@@ -8994,6 +9022,7 @@ Current version: 121
 					let nimgtag = "[<|p|" + imgid + "|p|>]";
 					gametext_arr.push(nimgtag);
 					image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:"", local:true };
+					image_db[imgid].aspect = 0;
 					let origImg = img.target.result;
 					let imgres = localsettings.img_allowhd?HD_RES_PX:NO_HD_RES_PX;
 					compressImage(origImg, (newDataUri) => {
@@ -10424,13 +10453,24 @@ Current version: 121
 			negprompt = "";
 		}
 
+		let iwidth = 512;
+		let iheight = 512;
+		if(localsettings.img_aspect==1)
+		{
+			iheight = 768;
+		}
+		else if(localsettings.img_aspect==2)
+		{
+			iwidth = 768;
+		}
+
 		let genimg_payload = {
 			"prompt": (sentence + negprompt),
 			"params": {
 				"cfg_scale": localsettings.img_cfgscale,
 				"sampler_name": usedsampler,
-				"height": 512,
-				"width": 512,
+				"height": iheight,
+				"width": iwidth,
 				"steps": localsettings.img_steps,
 				"karras": false,
 				"n": 1,
@@ -10464,6 +10504,7 @@ Current version: 121
 					let nimgtag = "[<|p|" + data.id + "|p|>]";
 					gametext_arr.push(nimgtag);
 					image_db[data.id] = { done: false, queue: "Starting", result: "", prompt:sentence, local:false };
+					image_db[data.id].aspect = (iwidth>iheight?2:(iwidth<iheight?1:0));
 					console.log("New image queued " + nimgtag);
 				}
 				else {
@@ -10484,6 +10525,7 @@ Current version: 121
 			let nimgtag = "[<|p|" + imgid + "|p|>]";
 			gametext_arr.push(nimgtag);
 			image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:sentence, local:true };
+			image_db[imgid].aspect = (iwidth>iheight?2:(iwidth<iheight?1:0));
 			generate_a1111_image(genimg_payload,(outputimg)=>{
 				if(outputimg)
 				{
@@ -10493,7 +10535,7 @@ Current version: 121
 					compressImage(origImg, (newDataUri) => {
 						image_db[imgid].done = true;
 						image_db[imgid].result = newDataUri;
-					}, true, true, imgres,0.35,true);
+					}, true, true, imgres,0.35,false);
 				}else{
 					image_db[imgid].queue = "Failed";
 					msgbox("Image Generation Failed!\n\nPlease make sure A1111 is running and properly configured!\nIn your local install of Automatic1111 WebUi, modify webui-user.bat and add these flags to enable API access:\n\nset COMMANDLINE_ARGS= --api --listen --cors-allow-origins=*\n");
@@ -10512,6 +10554,7 @@ Current version: 121
 				let nimgtag = "[<|p|" + imgid + "|p|>]";
 				gametext_arr.push(nimgtag);
 				image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:sentence, local:true };
+				image_db[imgid].aspect = 0;
 				generate_dalle_image(genimg_payload,(outputimg)=>{
 					if(outputimg)
 					{
@@ -10521,7 +10564,7 @@ Current version: 121
 						compressImage(origImg, (newDataUri) => {
 							image_db[imgid].done = true;
 							image_db[imgid].result = newDataUri;
-						}, true, true, imgres,0.35,true);
+						}, true, true, imgres,0.35,false);
 					}else{
 						image_db[imgid].queue = "Failed";
 						msgbox("Image Generation Failed!\n\nPlease make sure your OpenAI key is set correctly and you are allowed to use DALL-E.\n");
@@ -10638,11 +10681,22 @@ Current version: 121
 		let savedmeta = completed_imgs_meta[imghash];
 		if(!savedmeta && imghash!="")
 		{
-			savedmeta = completed_imgs_meta[imghash] = {prompt:"", desc:"", enabled:false};
+			savedmeta = completed_imgs_meta[imghash] = {prompt:"", desc:"", enabled:false, aspect:0};
 		}
 
 		if(savedmeta)
 		{
+			document.getElementById("zoomedimg").classList.remove("portrait");
+			document.getElementById("zoomedimg").classList.remove("landscape");
+			if(savedmeta.aspect==1)
+			{
+				document.getElementById("zoomedimg").classList.add("portrait");
+			}
+			else if(savedmeta.aspect==2)
+			{
+				document.getElementById("zoomedimg").classList.add("landscape");
+			}
+
 			let origprompt = (savedmeta.prompt?replaceAll(savedmeta.prompt,"\n"," ") : "No Saved Description");
 			latest_orig_prompt = origprompt;
 			let visionstatus = (savedmeta.enabled?(savedmeta.desc?`<span class="color_green">Active</span>`:`<span class="color_yellow">Analyzing...</span>`):`<span class="color_red">Inactive</span>`);
@@ -10701,6 +10755,8 @@ Current version: 121
 
 	function render_image_html(data, pend_txt = "", float=true, center=false) {
 		var dim = (localsettings.opmode == 2 ? 160 : 180); //adventure mode has smaller pictures
+		dimW = dim;
+		dimH = dim;
 		let siclass = (float?"storyimgfloat":(center?"storyimgcenter":"storyimgside"));
 		let reinvertcolor = localsettings.invert_colors?" invert_colors":"";
 		let alttxt = "";
@@ -10721,8 +10777,18 @@ Current version: 121
 			let imghash = cyrb_hash(data).trim();
 			if (completed_imgs_meta[imghash] != null) {
 				alttxt = completed_imgs_meta[imghash].prompt?escapeHtml(completed_imgs_meta[imghash].prompt):"";
+				if(completed_imgs_meta[imghash].aspect==1) //portrait
+				{
+					dimH *= 1.35;
+					dimW *= 0.9;
+				}
+				else if(completed_imgs_meta[imghash].aspect==2) //landscape
+				{
+					dimW *= 1.35;
+					dimH *= 0.9;
+				}
 			}
-			return prefix + `<div class="`+siclass+reinvertcolor+`"><img src="` + data + `" width=` + dim + ` height=` + dim + ` title="`+alttxt+`" style="border-radius: 6%; cursor: pointer;" onclick="return click_image(this,\'`+imghash+`\');"></div>` + suffix;
+			return prefix + `<div class="`+siclass+reinvertcolor+`"><img src="` + data + `" width=` + dimW + ` height=` + dimH + ` title="`+alttxt+`" style="border-radius: 6%; cursor: pointer;" onclick="return click_image(this,\'`+imghash+`\');"></div>` + suffix;
 		}
 	}
 
@@ -11030,7 +11096,7 @@ Current version: 121
 										let imgres = localsettings.img_allowhd?HD_RES_PX:NO_HD_RES_PX;
 										compressImage(origImg, (newDataUri) => {
 											img.result = newDataUri;
-										}, true, true, imgres,0.35,true);
+										}, true, true, imgres,0.35,false);
 									}
 								})
 								.catch((error) => {
@@ -11069,7 +11135,7 @@ Current version: 121
 							console.log("Replacing with Image: " + matchstr);
 							gametext_arr[i] = gametext_arr[i].replace(matchstr, newstr);
 							let metaid = cyrb_hash(img.result);
-							completed_imgs_meta[metaid] = {prompt:image_db[key].prompt, desc:"", enabled:false};
+							completed_imgs_meta[metaid] = {prompt:image_db[key].prompt, desc:"", enabled:false, aspect:image_db[key].aspect};
 							delete image_db[key];
 						}
 					}
@@ -13759,7 +13825,7 @@ Current version: 121
 
 	<div class="popupcontainer flex hidden" id="zoomedimgcontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup flexsizesmall highest">
+		<div class="nspopup flexsize highest">
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Image Information</div>
 			</div>
@@ -14594,13 +14660,23 @@ Current version: 121
 			</div>
 			<div class="inlinelabel">
 				<div class="justifyleft" style="padding:4px">Sampler: </div>
-				<select style="padding:1px; height:23px; width: 90px;" class="form-control" id="img_sampler">
+				<select style="padding:1px; height:23px; width: 100px;" class="form-control" id="img_sampler">
 					<option value="Euler a">Euler A</option>
 					<option value="Euler">Euler</option>
 					<option value="Heun">Heun</option>
 					<option value="DPM2">DPM2</option>
 					<option value="LCM">LCM</option>
 					<option value="DPM++ 2M">DPM++ 2M</option>
+				</select>
+			</div>
+			<div class="inlinelabel">
+				<div class="justifyleft" style="padding:4px">Aspect Ratio<span class="helpicon">?
+					<span class="helptext">Square is recommended. Changing aspect ratio will affect the resolution used to generate. This may impact quality or memory usage.</span>
+				</span>: </div>
+				<select style="padding:1px; height:23px; width: 100px;" class="form-control" id="img_aspect">
+					<option value="0">Square</option>
+					<option value="1">Portrait</option>
+					<option value="2">Landscape</option>
 				</select>
 			</div>
 			<div class="inlinelabel">
