@@ -4466,6 +4466,10 @@ Current version: 122
 	{
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.49") >= 0);
 	}
+	function is_using_kcpp_with_llava()
+	{
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.61") >= 0);
+	}
 
 	//0 is none, 1 is pseudostreaming, 2 is true poll-streaming, 3 is sse-streaming
 	function determine_streaming_type()
@@ -9728,6 +9732,10 @@ Current version: 122
 			{
 				submit_payload.params.memory = truncated_memory;
 			}
+			if(is_using_kcpp_with_llava() && insertAIVisionImages.length>0)
+			{
+				submit_payload.params.images = insertAIVisionImages;
+			}
 
 			if(localsettings.sampler_seed>=1)
 			{
@@ -10579,14 +10587,14 @@ Current version: 122
 		}
 	}
 
-	function interrogate_new_image(base64img, imghash)
+	function interrogate_new_image(base64img, imghash, use_horde=true)
 	{
 		let parts = base64img.split(',');
 		if (parts.length === 2 && parts[0].startsWith('data:image')) {
 			base64img = parts[1];
 		}
 
-		if(localsettings.generate_images_mode==2) //a1111
+		if(!use_horde) //a1111
 		{
 			let payload = {
 			"image": base64img,
@@ -10662,15 +10670,15 @@ Current version: 122
 		let savedmeta = completed_imgs_meta[imghash];
 		if(savedmeta)
 		{
-			savedmeta.enabled = !savedmeta.enabled;
-			if(!savedmeta.desc && savedmeta.enabled)
+			savedmeta.visionmode = document.getElementById("aivisionmode").value;
+			if(!savedmeta.desc && (savedmeta.visionmode==1 || savedmeta.visionmode==2))
 			{
 				//request a new interrogation
 				var alreadysent = Object.values(interrogation_db).some(item => item.imghash === imghash);
 				if(!alreadysent)
 				{
 					let b64 = document.getElementById("zoomedimg").src;
-					interrogate_new_image(b64,imghash);
+					interrogate_new_image(b64,imghash,(savedmeta.visionmode==1));
 				}
 			}
 			update_clicked_image(imghash);
@@ -10686,7 +10694,7 @@ Current version: 122
 		let savedmeta = completed_imgs_meta[imghash];
 		if(!savedmeta && imghash!="")
 		{
-			savedmeta = completed_imgs_meta[imghash] = {prompt:"", desc:"", enabled:false, aspect:0};
+			savedmeta = completed_imgs_meta[imghash] = {prompt:"", desc:"", visionmode:0, aspect:0};
 		}
 
 		if(savedmeta)
@@ -10702,15 +10710,26 @@ Current version: 122
 				document.getElementById("zoomedimg").classList.add("landscape");
 			}
 
+			if(!savedmeta.visionmode)
+			{
+				savedmeta.visionmode = 0;
+			}
+
 			let origprompt = (savedmeta.prompt?replaceAll(savedmeta.prompt,"\n"," ") : "No Saved Description");
 			latest_orig_prompt = origprompt;
-			let visionstatus = (savedmeta.enabled?(savedmeta.desc?`<span class="color_green">Active</span>`:`<span class="color_yellow">Analyzing...</span>`):`<span class="color_red">Inactive</span>`);
-			let togglebtn = (savedmeta.enabled?`<button type="button" class="bg_red btn btn-primary" style="width: 84px; padding: 2px; margin: 3px; font-size:12px;" onclick="toggle_ai_vision(\'`+imghash+`\')">Disable</button>`:`<button type="button" class="bg_green btn btn-primary" style="width: 84px; padding: 2px; margin: 3px; font-size:12px;" onclick="toggle_ai_vision(\'`+imghash+`\')">👁️ Enable 👁️</button>`);
+			let visionstatus = ((!savedmeta.visionmode || savedmeta.visionmode==0)?`<span class="color_red">Inactive</span>`:((savedmeta.desc||savedmeta.visionmode==3)?`<span class="color_green">Active</span>`:`<span class="color_yellow">Analyzing</span>`));
+			let togglebtn = `<select class="form-control" id="aivisionmode" style="display:inline;height:24px;width: 134px; padding: 2px; margin: 3px; font-size:12px;" onchange="toggle_ai_vision(\'`+imghash+`\')">
+								<option value="0">Disabled</option>
+								<option value="1">Interrogate (Horde)</option>
+								<option value="2">Interrogate (A1111)</option>
+								<option value="3">Multimodal (LLaVA)</option>
+							</select>`;
 			document.getElementById("zoomedimgdesc").innerHTML = `
 			AI Vision: `+visionstatus+` <span class="helpicon">?<span class="helptext">This allows the AI to visually recognize this image, to see and react to this image. Uses Horde or Local A1111 for image interrogation if enabled.</span></span>
 			`+togglebtn+`
 			<br><button type="button" class="btn btn-primary" style="width: 140px; padding: 2px; margin: 3px; font-size:12px;" onclick="show_orig_prompt()">View Original Prompt</button>
 			`;
+			document.getElementById("aivisionmode").value = savedmeta.visionmode;
 		}
 		else
 		{
@@ -11140,7 +11159,7 @@ Current version: 122
 							console.log("Replacing with Image: " + matchstr);
 							gametext_arr[i] = gametext_arr[i].replace(matchstr, newstr);
 							let metaid = cyrb_hash(img.result);
-							completed_imgs_meta[metaid] = {prompt:image_db[key].prompt, desc:"", enabled:false, aspect:image_db[key].aspect};
+							completed_imgs_meta[metaid] = {prompt:image_db[key].prompt, desc:"", visionmode:0, aspect:image_db[key].aspect};
 							delete image_db[key];
 						}
 					}
@@ -11609,6 +11628,7 @@ Current version: 122
 		}
 	}
 
+	var insertAIVisionImages = []; //concat gametext will populate this
 	function concat_gametext(stripimg = false, stripimg_replace_str = "", append_before_segment="",append_after_segment="",escapeTxt=false,insertAIVision=false) {
 		let fulltxt = "";
 		for (let i = 0; i < gametext_arr.length; ++i) {
@@ -11643,9 +11663,6 @@ Current version: 122
 				let a = escapeHtml(localsettings.chatname);
 				fulltxt = replaceAll(fulltxt,a,localsettings.chatname);
 
-				// let b = escapeHtml(localsettings.chatopponent);
-				// fulltxt = replaceAll(fulltxt,b,localsettings.chatopponent);
-
 				//unescape other chat opponents too (match anything that is NOT us)
 				var regex = new RegExp("\n(?!" + localsettings.chatname + ").+?\: ", "gi");
 				fulltxt = fulltxt.replace(regex, function (m) {
@@ -11664,13 +11681,25 @@ Current version: 122
 		{
 			if(insertAIVision)
 			{
+				insertAIVisionImages = []; //a bit hacky
 				fulltxt = fulltxt.replace(/\[<\|d\|.+?\|d\|>\]/g, function (m) {
 					// m here means the whole matched string
 					let inner = m.substring(5, m.length - 5);
 					let imghash = cyrb_hash(inner);
 					let foundmeta = completed_imgs_meta[imghash];
-					if (foundmeta != null && foundmeta.enabled && foundmeta.desc) {
-						return "\n(Attached Image: " + foundmeta.desc + ")\n";
+					if (foundmeta != null) {
+						if(foundmeta.desc && (foundmeta.visionmode==1||foundmeta.visionmode==2))
+						{
+							return "\n(Attached Image: " + foundmeta.desc + ")\n";
+						}
+						else if(foundmeta.visionmode==3)
+						{
+							let parts = inner.split(',');
+							if (parts.length === 2 && parts[0].startsWith('data:image')) {
+								insertAIVisionImages.push(parts[1]);
+							}
+							return "\n(Attached Image)\n";
+						}
 					}
 					return "";
 				});
