@@ -4469,7 +4469,7 @@ Current version: 123
 	}
 	function is_using_kcpp_with_llava()
 	{
-		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.61") >= 0);
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.61") >= 0 && koboldcpp_has_vision);
 	}
 
 	//0 is none, 1 is pseudostreaming, 2 is true poll-streaming, 3 is sse-streaming
@@ -8139,11 +8139,11 @@ Current version: 123
 	function update_genimg_button_visiblility()
 	{
 		if (localsettings.generate_images_mode==0) {
-			document.getElementById("btn_genimg").classList.add("hidden");
-			document.getElementById("btn_genimg2").classList.add("hidden");
+			document.getElementById("btn_inner_genimg_auto").disabled = true;
+			document.getElementById("btn_inner_genimg_custom").disabled = true;
 		} else {
-			document.getElementById("btn_genimg").classList.remove("hidden");
-			document.getElementById("btn_genimg2").classList.remove("hidden");
+			document.getElementById("btn_inner_genimg_auto").disabled = false;
+			document.getElementById("btn_inner_genimg_custom").disabled = false;
 		}
 	}
 
@@ -8973,11 +8973,11 @@ Current version: 123
 		generate_new_image(sentence);
 		document.getElementById("btn_genimg").disabled = true;
 		document.getElementById("btn_genimg2").disabled = true;
-		//disable it for 10 sec to prevent spam
+		//disable it for 8 sec to prevent spam
 		setTimeout(() => {
 			document.getElementById("btn_genimg").disabled = false;
 			document.getElementById("btn_genimg2").disabled = false;
-		}, 10000);
+		}, 8000);
 	}
 
 	function do_auto_gen_image(truncated_context)
@@ -10719,7 +10719,7 @@ Current version: 123
 
 			let origprompt = (savedmeta.prompt?replaceAll(savedmeta.prompt,"\n"," ") : "No Saved Description");
 			latest_orig_prompt = origprompt;
-			let hasllava = (is_using_kcpp_with_llava() && koboldcpp_has_vision);
+			let hasllava = is_using_kcpp_with_llava();
 			let visionstatus = "";
 			if(savedmeta.visionmode==3)
 			{
@@ -11171,7 +11171,8 @@ Current version: 123
 							console.log("Replacing with Image: " + matchstr);
 							gametext_arr[i] = gametext_arr[i].replace(matchstr, newstr);
 							let metaid = cyrb_hash(img.result);
-							completed_imgs_meta[metaid] = {prompt:image_db[key].prompt, desc:"", visionmode:0, aspect:image_db[key].aspect};
+							//default to llava if supported
+							completed_imgs_meta[metaid] = {prompt:image_db[key].prompt, desc:"", visionmode:(is_using_kcpp_with_llava()?3:0), aspect:image_db[key].aspect};
 							delete image_db[key];
 						}
 					}
@@ -14738,10 +14739,10 @@ Current version: 123
 				<div class="popuptitletext">Add New Image</div>
 			</div>
 			<div class="aidgpopuplistheader anotelabel">
-				<button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_auto()">Generate Image (Automatic)</button>
+				<button type="button" class="btn btn-primary bg_green" id="btn_inner_genimg_auto" onclick="add_img_btn_auto()">Generate Image (Automatic)</button>
 			</div>
 			<div class="aidgpopuplistheader anotelabel">
-				<button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_custom()">Generate Image (Custom Prompt)</button>
+				<button type="button" class="btn btn-primary bg_green" id="btn_inner_genimg_custom" onclick="add_img_btn_custom()">Generate Image (Custom Prompt)</button>
 			</div>
 			<div class="aidgpopuplistheader anotelabel">
 				<button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_upload()">Upload Image File</button>
