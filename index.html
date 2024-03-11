@@ -3497,6 +3497,7 @@ Current version: 122
 	var localmodehost = "localhost";
 	var kobold_endpoint_version = ""; //used to track problematic versions to avoid sending extra fields
 	var koboldcpp_version = ""; //detect if we are using koboldcpp
+	var koboldcpp_has_vision = false;
 	var last_request_str = "No Requests Available"; //full context of last submitted request
 	var lastcheckgenkey = ""; //for checking polled-streaming unique id when generating in kcpp
 	var globalabortcontroller = null;
@@ -7013,6 +7014,7 @@ Current version: 122
 									{
 										koboldcpp_version = data.version;
 										console.log("KoboldCpp Detected: " + koboldcpp_version);
+										koboldcpp_has_vision = (data.vision?true:false);
 
 										//also check against kcpp's max true context length
 										fetch(apply_proxy_url(tmpep + koboldcpp_truemaxctxlen_endpoint))
@@ -10717,7 +10719,17 @@ Current version: 122
 
 			let origprompt = (savedmeta.prompt?replaceAll(savedmeta.prompt,"\n"," ") : "No Saved Description");
 			latest_orig_prompt = origprompt;
-			let visionstatus = ((!savedmeta.visionmode || savedmeta.visionmode==0)?`<span class="color_red">Inactive</span>`:((savedmeta.desc||savedmeta.visionmode==3)?`<span class="color_green">Active</span>`:`<span class="color_yellow">Analyzing</span>`));
+			let hasllava = (is_using_kcpp_with_llava() && koboldcpp_has_vision);
+			let visionstatus = "";
+			if(savedmeta.visionmode==3)
+			{
+				visionstatus = ((!savedmeta.visionmode || savedmeta.visionmode==0)?`<span class="color_red">Inactive</span>`:(hasllava?`<span class="color_green">Active</span>`:`<span class="color_yellow">Unsupported</span>`));
+			}
+			else
+			{
+				visionstatus = ((!savedmeta.visionmode || savedmeta.visionmode==0)?`<span class="color_red">Inactive</span>`:(savedmeta.desc?`<span class="color_green">Active</span>`:`<span class="color_yellow">Analyzing</span>`));
+			}
+
 			let togglebtn = `<select class="form-control" id="aivisionmode" style="display:inline;height:24px;width: 134px; padding: 2px; margin: 3px; font-size:12px;" onchange="toggle_ai_vision(\'`+imghash+`\')">
 								<option value="0">Disabled</option>
 								<option value="1">Interrogate (Horde)</option>
@@ -10725,7 +10737,7 @@ Current version: 122
 								<option value="3">Multimodal (LLaVA)</option>
 							</select>`;
 			document.getElementById("zoomedimgdesc").innerHTML = `
-			AI Vision: `+visionstatus+` <span class="helpicon">?<span class="helptext">This allows the AI to visually recognize this image, to see and react to this image. Uses Horde or Local A1111 for image interrogation if enabled.</span></span>
+			AI Vision: `+visionstatus+` <span class="helpicon">?<span class="helptext">This allows the AI to visually recognize this image, to see and react to this image. On KoboldCpp, LLaVA support can be used with multimodal models. Otherwise, uses Horde or Local A1111 for image interrogation if enabled.</span></span>
 			`+togglebtn+`
 			<br><button type="button" class="btn btn-primary" style="width: 140px; padding: 2px; margin: 3px; font-size:12px;" onclick="show_orig_prompt()">View Original Prompt</button>
 			`;
