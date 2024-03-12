@@ -7,7 +7,7 @@ Just copy this single static HTML file anywhere and open it in a browser, or fro
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 If you are submitting a pull request for Lite, PLEASE use the above repo, not the KoboldCpp one.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 123
+Current version: 124
 -Concedo
 -->
 
@@ -2985,6 +2985,15 @@ Current version: 123
 		}
 		return proxy_part + url;
 	}
+	function get_kobold_header()
+	{
+		let header = {'Content-Type': 'application/json'};
+		if(custom_kobold_key!="")
+		{
+			header['Authorization'] = 'Bearer ' + custom_kobold_key;
+		}
+		return header;
+	}
 
 	//instead of a single fetch, optionally break it up into multiple repeated requests which update a local variable
 	function kobold_api_stream(sub_endpt,submit_payload,synchro_streaming_tokens_left,trackedgenid,synchro_streaming_response = "",tokens_per_tick = 4096)
@@ -3006,7 +3015,7 @@ Current version: 123
 
 			let reqOpt = {
 			method: 'POST', // or 'PUT'
-			headers: {'Content-Type': 'application/json',},
+			headers: get_kobold_header(),
 			body: JSON.stringify(new_submit_payload),
 			};
 			if(globalabortcontroller)
@@ -3123,13 +3132,22 @@ Current version: 123
 		synchro_pending_stream = "";
 		let reqOpt =
 		{method: 'POST',
-		headers: {'Content-Type': 'application/json'},
+		headers: get_kobold_header(),
 		body: JSON.stringify(submit_payload)};
 		if(globalabortcontroller)
 		{
 			reqOpt.signal = globalabortcontroller.signal;
 		}
 		fetch(sub_endpt, reqOpt)
+		.then(x => {
+			if(x.ok)
+			{
+				return x;
+			}else{
+				throw new Error('Error occurred while SSE streaming: ' + (x.statusText));
+				return null;
+			}
+		})
 		.then(resp => {
 			resp.body
 			.pipeThrough(new TextDecoderStream())
@@ -3476,6 +3494,7 @@ Current version: 123
 	//key is ID, body is {done:false,queue:10,result:""}
 	var stablemodels = [{"name": "stable_diffusion","count": 1}]; //stored as {name,count}
 	var custom_kobold_endpoint = ""; //if set, does not use horde. Instead, attempts to use this sync endpoint
+	var custom_kobold_key = ""; //only kcpp can potentially use this
 	var custom_oai_endpoint = "";
 	var custom_oai_key = ""; //if set, uses the OpenAI API to generate
 	var custom_oai_model = "";
@@ -3495,6 +3514,7 @@ Current version: 123
 	var last_known_filename = "saved_story.json";
 	var localmodeport = 5000;
 	var localmodehost = "localhost";
+	var localmodekey = "";
 	var kobold_endpoint_version = ""; //used to track problematic versions to avoid sending extra fields
 	var koboldcpp_version = ""; //detect if we are using koboldcpp
 	var koboldcpp_has_vision = false;
@@ -3518,6 +3538,7 @@ Current version: 123
 		saved_claude_addr: default_claude_base, //do not ever share this in save files!
 		saved_palm_key: "", //do not ever share this in save files!
 		saved_kai_addr: "", //do not ever share this in save files!
+		saved_kai_key: "", //do not ever share this in save files!
 		saved_oai_jailbreak: "", //customized oai system prompt
 		saved_oai_jailbreak2: "", //oai assistant postfix
 		saved_claude_jailbreak: "", //claude system prompt
@@ -3768,6 +3789,13 @@ Current version: 123
 			}else if(window.location.hostname && window.location.hostname!="" && !is_using_web_lite()){
 				localmodehost = window.location.hostname;
 			}
+
+			let inputkey = urlParams.get('key');
+			if(inputkey)
+			{
+				localmodekey = inputkey;
+			}
+
 		}
 
 		const fromfile = ( window.location.protocol == 'file:' );
@@ -4010,7 +4038,11 @@ Current version: 123
 			{
 				protocol = "https://";
 			}
-			document.getElementById("customendpoint").value =  protocol + localmodehost + ":" + localmodeport;
+			if(localmodekey)
+			{
+				document.getElementById("customkoboldkey").value = localmodekey;
+			}
+			document.getElementById("customkoboldendpoint").value =  protocol + localmodehost + ":" + localmodeport;
 			connect_custom_endpoint();
 			document.getElementById("lastreq").innerHTML = document.getElementById("lastreq2").innerHTML =
 			`<span class=color_gray>You're using Kobold Lite Embedded.</span>`;
@@ -4901,6 +4933,7 @@ Current version: 123
 			new_save_storyobj.savedsettings.saved_claude_key = "";
 			new_save_storyobj.savedsettings.saved_claude_addr = "";
 			new_save_storyobj.savedsettings.saved_kai_addr = "";
+			new_save_storyobj.savedsettings.saved_kai_key = "";
 			new_save_storyobj.savedsettings.saved_openrouter_key = "";
 
 			new_save_storyobj.savedsettings.modelhashes = [];
@@ -5199,6 +5232,7 @@ Current version: 123
 					let tmp_claude2 = localsettings.saved_claude_addr;
 					let tmp_palm1 = localsettings.saved_palm_key;
 					let tmp_kai = localsettings.saved_kai_addr;
+					let tmp_kai2 = localsettings.saved_kai_key;
 					let tmp_a1111 = localsettings.saved_a1111_url;
 					let tmp_xtts = localsettings.saved_xtts_url;
 					let tmp_imggen = localsettings.generate_images_mode;
@@ -5232,6 +5266,7 @@ Current version: 123
 					localsettings.saved_claude_addr = tmp_claude2;
 					localsettings.saved_palm_key = tmp_palm1;
 					localsettings.saved_kai_addr = tmp_kai;
+					localsettings.saved_kai_key = tmp_kai2;
 					localsettings.saved_a1111_url = tmp_a1111;
 					localsettings.saved_xtts_url = tmp_xtts;
 					localsettings.generate_images_mode = tmp_imggen;
@@ -6821,7 +6856,8 @@ Current version: 123
 			document.getElementById("koboldcustom").classList.remove("hidden");
 			if(!localflag)
 			{
-				document.getElementById("customendpoint").value = localsettings.saved_kai_addr;
+				document.getElementById("customkoboldendpoint").value = localsettings.saved_kai_addr;
+				document.getElementById("customkoboldkey").value = localsettings.saved_kai_key;
 			}
 		}
 		else if(epchoice==1 || epchoice==5)
@@ -6888,7 +6924,10 @@ Current version: 123
 				allow_update_kobold_model_display_timestamp = performance.now() + 60000;
 				console.log("Updating selected model name...");
 				let murl = apply_proxy_url(custom_kobold_endpoint + kobold_custom_mdl_endpoint);
-				fetch(murl)
+				fetch(murl, {
+					method: 'GET',
+					headers: get_kobold_header(),
+				})
 				.then(x => x.json())
 				.then(values => {
 					if(custom_kobold_endpoint!="" && values && values.result!="")
@@ -6909,6 +6948,7 @@ Current version: 123
 	function connect_custom_endpoint()
 	{
 		custom_kobold_endpoint = "";
+		custom_kobold_key = "";
 		custom_oai_key = "";
 		custom_scale_key = "";
 		custom_claude_key = "";
@@ -6917,25 +6957,30 @@ Current version: 123
 		let epchoice = document.getElementById("customapidropdown").value;
 		if(epchoice==0) //connect to kobold endpoint
 		{
-			let tmpep = document.getElementById("customendpoint").value;
-			if (tmpep != null && tmpep.trim() != "") {
+			let desiredkoboldendpoint = document.getElementById("customkoboldendpoint").value;
+			let desiredkoboldkey = document.getElementById("customkoboldkey").value;
+
+			if (desiredkoboldendpoint != null && desiredkoboldendpoint.trim() != "") {
 				hide_popups();
-				tmpep = tmpep.trim();
+				desiredkoboldendpoint = desiredkoboldendpoint.trim();
 
 				//remove trailing slash and pound
-				tmpep = tmpep.endsWith('#') ? tmpep.slice(0, -1) : tmpep;
-				tmpep = tmpep.endsWith('/') ? tmpep.slice(0, -1) : tmpep;
+				desiredkoboldendpoint = desiredkoboldendpoint.endsWith('#') ? desiredkoboldendpoint.slice(0, -1) : desiredkoboldendpoint;
+				desiredkoboldendpoint = desiredkoboldendpoint.endsWith('/') ? desiredkoboldendpoint.slice(0, -1) : desiredkoboldendpoint;
 
-				if (tmpep != "" && (tmpep.trim().endsWith("/api") || tmpep.trim().endsWith("/api/v1")))
+				if (desiredkoboldendpoint != "" && (desiredkoboldendpoint.trim().endsWith("/api") || desiredkoboldendpoint.trim().endsWith("/api/v1")))
 				{
-					tmpep = tmpep.split("/api")[0];
+					desiredkoboldendpoint = desiredkoboldendpoint.split("/api")[0];
 				}
 
 				let urls1 = [
-					apply_proxy_url(tmpep + kobold_custom_mdl_endpoint),
+					apply_proxy_url(desiredkoboldendpoint + kobold_custom_mdl_endpoint),
 				];
 
-				Promise.all(urls1.map(url => fetch(url)
+				Promise.all(urls1.map(url => fetch(url,{
+						method: 'GET',
+						headers: get_kobold_header(),
+					})
 					.then(response => response.json())))
 					.then(values => {
 						console.log(values);
@@ -6955,8 +7000,10 @@ Current version: 123
 						} else {
 
 							//good to go
-							custom_kobold_endpoint = tmpep;
+							custom_kobold_endpoint = desiredkoboldendpoint;
+							custom_kobold_key = desiredkoboldkey;
 							localsettings.saved_kai_addr = custom_kobold_endpoint;
+							localsettings.saved_kai_key = custom_kobold_key;
 							selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": mdlname, "count": 1 }];
 							selected_workers = [];
 							if (perfdata == null) {
@@ -6977,7 +7024,11 @@ Current version: 123
 							{
 								//now we get the version number, however this is optional
 								//if it fails we can still proceed
-								fetch(apply_proxy_url(tmpep + kobold_custom_version_endpoint))
+								fetch(apply_proxy_url(desiredkoboldendpoint + kobold_custom_version_endpoint),
+								{
+									method: 'GET',
+									headers: get_kobold_header(),
+								})
 								.then(response => response.json())
 								.then(values2 => {
 									console.log(values2);
@@ -6988,7 +7039,11 @@ Current version: 123
 								});
 
 								//also get max ctx supported
-								fetch(apply_proxy_url(tmpep + kobold_custom_maxctxlen_endpoint))
+								fetch(apply_proxy_url(desiredkoboldendpoint + kobold_custom_maxctxlen_endpoint),
+								{
+									method: 'GET',
+									headers: get_kobold_header(),
+								})
 								.then(response => response.json())
 								.then(values3 => {
 									console.log(values3);
@@ -7007,7 +7062,11 @@ Current version: 123
 							//allow kcpp version check for remote endpoints too
 							{
 								//for local mode, check if we are using koboldcpp, if so we can use streaming if permitted by version
-								fetch(apply_proxy_url(tmpep + koboldcpp_version_endpoint))
+								fetch(apply_proxy_url(desiredkoboldendpoint + koboldcpp_version_endpoint),
+								{
+									method: 'GET',
+									headers: get_kobold_header(),
+								})
 								.then(x => x.json())
 								.then(data => {
 									if(data && data!="" && data.version && data.version!="")
@@ -7015,9 +7074,14 @@ Current version: 123
 										koboldcpp_version = data.version;
 										console.log("KoboldCpp Detected: " + koboldcpp_version);
 										koboldcpp_has_vision = (data.vision?true:false);
+										let has_password = (data.protected?true:false);
 
 										//also check against kcpp's max true context length
-										fetch(apply_proxy_url(tmpep + koboldcpp_truemaxctxlen_endpoint))
+										fetch(apply_proxy_url(desiredkoboldendpoint + koboldcpp_truemaxctxlen_endpoint),
+										{
+											method: 'GET',
+											headers: get_kobold_header(),
+										})
 										.then(response => response.json())
 										.then(values4 => {
 											console.log(values4);
@@ -7032,7 +7096,11 @@ Current version: 123
 										});
 
 										//and check if there's a kcpp savefile preloaded
-										fetch(apply_proxy_url(tmpep + koboldcpp_preloadstory_endpoint))
+										fetch(apply_proxy_url(desiredkoboldendpoint + koboldcpp_preloadstory_endpoint),
+										{
+											method: 'GET',
+											headers: get_kobold_header(),
+										})
 										.then(response => response.json())
 										.then(values5 => {
 											let tmpstory = values5;
@@ -7051,7 +7119,7 @@ Current version: 123
 										});
 
 										//check if image gen is supported
-										fetch(apply_proxy_url(tmpep + a1111_models_endpoint))
+										fetch(apply_proxy_url(desiredkoboldendpoint + a1111_models_endpoint))
 										.then(response => response.json())
 										.then(values6 => {
 											console.log(values6);
@@ -7063,7 +7131,7 @@ Current version: 123
 												{
 													console.log("Connect to KoboldCpp Image Gen");
 													localsettings.generate_images_mode = 2;
-													localsettings.saved_a1111_url = tmpep;
+													localsettings.saved_a1111_url = desiredkoboldendpoint;
 													connect_to_a1111(true);
 													render_gametext(true);
 												}
@@ -7071,7 +7139,7 @@ Current version: 123
 											else
 											{
 												//hide the add img if the image server is down
-												if(localsettings.generate_images_mode==2 && localsettings.saved_a1111_url==tmpep)
+												if(localsettings.generate_images_mode==2 && localsettings.saved_a1111_url==desiredkoboldendpoint)
 												{
 													localsettings.generate_images_mode = 0;
 													localsettings.saved_a1111_url = default_a1111_base
@@ -7082,6 +7150,19 @@ Current version: 123
 										}).catch(error => {
 											console.log("Failed to get local image models: " + error);
 										});
+
+										//prompt to request password for kcpp
+										if(localflag && has_password && !localmodekey)
+										{
+											console.log("Password protection detected. Prompting for password...");
+											inputBox("This KoboldCpp instance may be password protected.\nPlease input password:","Kobold API Key Required",localsettings.saved_kai_key,"(Input Kobold API Key)", ()=>{
+												let userinput = getInputBoxValue();
+												userinput = userinput.trim();
+												if (userinput != null && userinput!="") {
+													custom_kobold_key = document.getElementById("customkoboldkey").value = localmodekey = localsettings.saved_kai_key = userinput.trim();
+												}
+											},false);
+										}
 
 									}else{
 										console.log("Unknown KoboldCpp Check Response: " + data);
@@ -7104,7 +7185,7 @@ Current version: 123
 							|| !custom_kobold_endpoint.toLowerCase().includes(".")); //hostname without dots cannot be wan accessible
 
 						if (uses_cors_proxy || is_local) {
-							msgbox("Failed to connect to Custom Kobold Endpoint!\n\nPlease check if KoboldAI is running at the url: " + tmpep + "");
+							msgbox("Failed to connect to Custom Kobold Endpoint!\n\nPlease check if KoboldAI is running at the url: " + desiredkoboldendpoint + "");
 							selected_models = [];
 							selected_workers = [];
 							custom_kobold_endpoint = "";
@@ -7855,6 +7936,10 @@ Current version: 123
 		if (x && x.type === "password") {
 			x.type = "text";
 		}
+		x = document.getElementById("customkoboldkey");
+		if (x && x.type === "password") {
+			x.type = "text";
+		}
 	}
 	function blur_api_keys() {
 		var x = document.getElementById("apikey");
@@ -7866,6 +7951,10 @@ Current version: 123
 			x.type = "password";
 		}
 		x = document.getElementById("custom_claude_key");
+		if (x && x.type === "text") {
+			x.type = "password";
+		}
+		x = document.getElementById("customkoboldkey");
 		if (x && x.type === "text") {
 			x.type = "password";
 		}
@@ -8945,9 +9034,7 @@ Current version: 123
 			//we can use abort functions
 			fetch(custom_kobold_endpoint + koboldcpp_abort_endpoint, {
 			method: 'POST', // or 'PUT'
-			headers: {
-				'Content-Type': 'application/json',
-			},
+			headers: get_kobold_header(),
 			body: JSON.stringify({
 				"genkey": lastcheckgenkey
 			}),
@@ -11342,9 +11429,7 @@ Current version: 123
 							//get in-progress results
 							fetch(custom_kobold_endpoint + koboldcpp_check_endpoint, {
 								method: 'POST',
-								headers: {
-									'Content-Type': 'application/json',
-								},
+								headers: get_kobold_header(),
 								body: JSON.stringify({
 								"genkey": lastcheckgenkey
 								}),
@@ -13685,7 +13770,8 @@ Current version: 123
 				You can use this to connect to a KoboldAI instance running via a remote tunnel such as <span class="color_orange" style="font-weight: bold;">trycloudflare, localtunnel, ngrok</span>.<br><br>
 				Localhost IPs require host mode enabled. You can use the remote address displayed in the <span class="color_orange" style="font-weight: bold;">remote-play.bat</span> window or <span class="color_orange" style="font-weight: bold;">colab window</span>, note that the model must be loaded first.<br><br>
 				<span class="color_green" style="font-weight: bold;">Please input URL of the KoboldAI instance.</span><br><br>
-				<input class="form-control" id="customendpoint" placeholder="https://sample-remote-address.trycloudflare.com" value="">
+				<input class="form-control" id="customkoboldendpoint" placeholder="https://sample-remote-address.trycloudflare.com" value="">
+				<input class="form-control" type="password" id="customkoboldkey" placeholder="Kobold API Key (Optional)" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
 				<div class="box flex flex-push-right">
 					<input type="checkbox" id="remoteconsolelog">
 					<div class="box-label" title="Will display outputs to the remote endpoint's console logs, useful for debugging.">Show Console Logging</div>
