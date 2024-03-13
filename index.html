@@ -9124,10 +9124,18 @@ Current version: 124
 					image_db[imgid].imsource = 1; //0=generated,1=uploaded
 					let origImg = img.target.result;
 					let imgres = localsettings.img_allowhd?HD_RES_PX:NO_HD_RES_PX;
-					compressImage(origImg, (newDataUri) => {
+					compressImage(origImg, (newDataUri, outAspect) => {
 						image_db[imgid].done = true;
 						image_db[imgid].result = newDataUri;
-					}, true, true, imgres,0.35,true);
+						if(outAspect<0.7)
+						{
+							image_db[imgid].aspect = 1; //portrait
+						}
+						else if(outAspect>1.4)
+						{
+							image_db[imgid].aspect = 2; //landscape
+						}
+					}, true, false, imgres,0.35,true);
 
 				}
 				reader.readAsDataURL(file);
@@ -11312,10 +11320,23 @@ Current version: 124
 			// We resize the image with the canvas method
 			if(forceCrop)
 			{
-				let minsize = Math.min(origW, origH);
-				let mx = (origW - minsize) / 2;
-				let my = (origH - minsize) / 2;
-				ctx.drawImage(this, mx, my, minsize, minsize, 0, 0, wantedWidth, wantedHeight);
+				let minsizeW = Math.min(origW, origH);
+				let minsizeH = Math.min(origW, origH);
+
+				if(aspectratio<0.7)
+				{
+					//portrait
+					minsizeH *= 1.5;
+				}
+				else if(aspectratio>1.4)
+				{
+					//landscape
+					minsizeW *= 1.5;
+				}
+
+				let mx = (origW - minsizeW) / 2;
+				let my = (origH - minsizeH) / 2;
+				ctx.drawImage(this, mx, my, minsizeW, minsizeH, 0, 0, wantedWidth, wantedHeight);
 			}else{
 				ctx.drawImage(this, 0, 0, wantedWidth, wantedHeight);
 			}
