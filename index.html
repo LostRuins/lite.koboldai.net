@@ -373,21 +373,6 @@ Current version: 124
 			margin-top: 100px;
 		}
 
-
-		.loadpopup {
-			width: 600px;
-			background-color: #262626;
-			margin-top: 150px;
-		}
-
-		@media (max-width: 768px) {
-			.loadpopup {
-				width: 100%;
-				background-color: #262626;
-				margin-top: 150px;
-			}
-		}
-
 		.workerpopup {
 			background-color: #262626;
 			margin-top: 170px;
@@ -420,7 +405,7 @@ Current version: 124
 			width: 330px;
 		}
 		.nspopup.flexsize {
-			width: 540px;
+			width: 600px;
 		}
 		@media (max-width: 620px) {
 			.nspopup.flexsize {
@@ -3357,7 +3342,7 @@ Current version: 124
 
 	const text_hordes = [
 		{
-			baseurl: "https://horde.koboldai.net",
+			baseurl: "https://aihorde.net",
 			tag: "🤖",
 			sort_order: 1,
 			client_agent: default_client_agent,
@@ -3826,8 +3811,8 @@ Current version: 124
 					if(!localflag && pending_eptype>0)
 					{
 						msgboxYesNo("Reconnect to previous custom endpoint?","Custom Endpoint Reconnect",()=>{
-							document.getElementById("customapidropdown").value = (pending_eptype - 1).toString();
-							display_custom_endpoint();
+							document.getElementById("customapidropdown").value = (pending_eptype).toString();
+							display_endpoint_container();
 						},null);
 					}
 				}
@@ -4032,7 +4017,7 @@ Current version: 124
 	function attempt_connect(popup_aiselect = true)
 	{
 		if (localflag) {
-			document.getElementById("customapidropdown").value = 0;
+			document.getElementById("customapidropdown").value = 1;
 			let protocol = "http://";
 			if(window.location.protocol.includes('https') && !is_using_web_lite())
 			{
@@ -4077,7 +4062,7 @@ Current version: 124
 						}
 					}
 					document.body.classList.add("connected");
-					document.getElementById("connectstatus").innerHTML = "Connected to KoboldAI Horde";
+					document.getElementById("connectstatus").innerHTML = "Connected to AI Horde";
 					document.getElementById("connectstatus").classList.remove("color_orange");
 					document.getElementById("connectstatus").classList.add("color_green");
 					render_gametext(false);
@@ -4085,12 +4070,12 @@ Current version: 124
 					read_url_params_data();
 
 					if (popup_aiselect) {
-						display_models();
+						display_endpoint_container();
 					}
 
 				}
 				else {
-					msgbox("Failed to connect to KAI Horde!\nPlease check your network connection.");
+					msgbox("Failed to connect to AI Service!\nPlease check your network connection.");
 					document.body.classList.remove("connected");
 					document.getElementById("connectstatus").innerHTML = "Offline Mode";
 					document.getElementById("connectstatus").classList.add("color_orange");
@@ -6433,7 +6418,6 @@ Current version: 124
 	{
 		return !(
 			document.getElementById("saveloadcontainer").classList.contains("hidden") &&
-			document.getElementById("loadmodelcontainer").classList.contains("hidden") &&
 			document.getElementById("newgamecontainer").classList.contains("hidden") &&
 			document.getElementById("yesnocontainer").classList.contains("hidden") &&
 			document.getElementById("settingscontainer").classList.contains("hidden") &&
@@ -6456,7 +6440,6 @@ Current version: 124
 	}
 	function hide_popups() {
 		document.getElementById("saveloadcontainer").classList.add("hidden");
-		document.getElementById("loadmodelcontainer").classList.add("hidden");
 		document.getElementById("newgamecontainer").classList.add("hidden");
 		document.getElementById("yesnocontainer").classList.add("hidden");
 		document.getElementById("settingscontainer").classList.add("hidden");
@@ -6725,7 +6708,7 @@ Current version: 124
 
 	function select_custom_oai_model()
 	{
-		let isOpenrouter = (document.getElementById("customapidropdown").value==5);
+		let isOpenrouter = (document.getElementById("customapidropdown").value==6);
 		inputBox("Enter custom model name","Custom Model Name",localsettings.saved_oai_custommodel,"", ()=>{
 			let coai = getInputBoxValue().trim();
 			let dropdown = (isOpenrouter?document.getElementById("custom_openrouter_model"):document.getElementById("custom_oai_model"));
@@ -6742,7 +6725,7 @@ Current version: 124
 	}
 	function oai_model_change()
 	{
-		let isOpenrouter = (document.getElementById("customapidropdown").value==5);
+		let isOpenrouter = (document.getElementById("customapidropdown").value==6);
 		let dropdown = (isOpenrouter?document.getElementById("custom_openrouter_model"):document.getElementById("custom_oai_model"));
 		let non_completions = (dropdown.value.includes("davinci-002") || dropdown.value.includes("text-davinci-003") || dropdown.value.includes("text-davinci-002")
 		|| dropdown.value.includes("text-davinci-001") || dropdown.value.includes("gpt-3.5-turbo-instruct") || dropdown.value == "davinci");
@@ -6790,7 +6773,7 @@ Current version: 124
 
 			if (!data.error && data.data && data.data.length > 0)
 			{
-				let isOpenrouter = (document.getElementById("customapidropdown").value==5);
+				let isOpenrouter = (document.getElementById("customapidropdown").value==6);
 				let dropdown = (isOpenrouter?document.getElementById("custom_openrouter_model"):document.getElementById("custom_oai_model"));
 				var lastOption = dropdown.lastElementChild;
 				for (var i = dropdown.options.length - 1; i >= 0; i--) {
@@ -6853,7 +6836,14 @@ Current version: 124
 		document.getElementById("palmcustom").classList.add("hidden");
 		document.getElementById("custom_oai_model").classList.add("hidden");
 		document.getElementById("custom_openrouter_model").classList.add("hidden");
+		document.getElementById("hordeloadmodelcontainer").classList.add("hidden");
+
 		if(epchoice==0)
+		{
+			document.getElementById("hordeloadmodelcontainer").classList.remove("hidden");
+			display_horde_models();
+		}
+		else if(epchoice==1)
 		{
 			document.getElementById("koboldcustom").classList.remove("hidden");
 			if(!localflag)
@@ -6862,10 +6852,10 @@ Current version: 124
 				document.getElementById("customkoboldkey").value = localsettings.saved_kai_key;
 			}
 		}
-		else if(epchoice==1 || epchoice==5)
+		else if(epchoice==2 || epchoice==6)
 		{
 			document.getElementById("oaicustom").classList.remove("hidden");
-			if(epchoice==5)
+			if(epchoice==6)
 			{
 				document.getElementById("oaidesc").classList.add("hidden");
 				document.getElementById("openrouterdesc").classList.remove("hidden");
@@ -6896,11 +6886,11 @@ Current version: 124
 			oai_model_change();
 			toggleoaichatcompl();
 		}
-		else if(epchoice==2)
+		else if(epchoice==3)
 		{
 			document.getElementById("scalecustom").classList.remove("hidden");
 		}
-		else if(epchoice==3)
+		else if(epchoice==4)
 		{
 			toggleclaudemodel();
 			document.getElementById("claudecustom").classList.remove("hidden");
@@ -6909,7 +6899,7 @@ Current version: 124
 			document.getElementById("claudesystemprompt").value = localsettings.saved_claude_jailbreak;
 			document.getElementById("claudejailbreakprompt").value = localsettings.saved_claude_jailbreak2;
 		}
-		else if(epchoice==4)
+		else if(epchoice==5)
 		{
 			document.getElementById("palmcustom").classList.remove("hidden");
 			document.getElementById("custom_palm_key").value = localsettings.saved_palm_key;
@@ -6957,7 +6947,11 @@ Current version: 124
 		custom_palm_key = "";
 
 		let epchoice = document.getElementById("customapidropdown").value;
-		if(epchoice==0) //connect to kobold endpoint
+		if(epchoice==0) //ai horde
+		{
+			confirm_horde_models();
+		}
+		else if(epchoice==1) //connect to kobold endpoint
 		{
 			let desiredkoboldendpoint = document.getElementById("customkoboldendpoint").value;
 			let desiredkoboldkey = document.getElementById("customkoboldkey").value;
@@ -7203,7 +7197,7 @@ Current version: 124
 					});
 			}
 		}
-		else if(epchoice==1 || epchoice==5) //connect to OAI / OpenRouter Endpoint
+		else if(epchoice==2 || epchoice==6) //connect to OAI / OpenRouter Endpoint
 		{
 			let desired_oai_key = document.getElementById("custom_oai_key").value.trim();
 			let desired_oai_ep = document.getElementById("custom_oai_endpoint").value.trim();
@@ -7230,7 +7224,7 @@ Current version: 124
 				//good to go
 				custom_oai_endpoint = desired_oai_ep;
 				custom_oai_key = desired_oai_key;
-				if(epchoice==1)
+				if(epchoice==2)
 				{
 					localsettings.saved_oai_key = custom_oai_key;
 					localsettings.saved_oai_addr = custom_oai_endpoint;
@@ -7246,7 +7240,7 @@ Current version: 124
 				}
 				localsettings.saved_oai_role = document.getElementById("oairoledropdown").value;
 				localsettings.saved_oai_jailbreak2 = document.getElementById("jailbreakprompttext2").value;
-				let isOpenrouter = (document.getElementById("customapidropdown").value==5);
+				let isOpenrouter = (document.getElementById("customapidropdown").value==6);
 				let dropdown = (isOpenrouter?document.getElementById("custom_openrouter_model"):document.getElementById("custom_oai_model"));
 				custom_oai_model = dropdown.value.trim();
 				localsettings.saved_oai_custommodel = custom_oai_model;
@@ -7268,7 +7262,7 @@ Current version: 124
 				render_gametext(true);
 			}
 		}
-		else if(epchoice==2) //connect to Scale Endpoint
+		else if(epchoice==3) //connect to Scale Endpoint
 		{
 			let desired_scale_key = document.getElementById("custom_scale_key").value.trim();
 			let desired_scale_ID = document.getElementById("custom_scale_ID").value.trim();
@@ -7335,7 +7329,7 @@ Current version: 124
 				});
 			}
 		}
-		else if(epchoice==3) //claude endpoint
+		else if(epchoice==4) //claude endpoint
 		{
 			let desired_claude_key = document.getElementById("custom_claude_key").value.trim();
 			let desired_claude_ep = document.getElementById("custom_claude_endpoint").value.trim();
@@ -7387,7 +7381,7 @@ Current version: 124
 
 			}
 		}
-		else if(epchoice==4) //palm endpoint
+		else if(epchoice==5) //palm endpoint
 		{
 			let desired_palm_key = document.getElementById("custom_palm_key").value.trim();
 			let mdlname = document.getElementById("custom_palm_model").value;
@@ -7421,12 +7415,12 @@ Current version: 124
 
 	}
 
-	function display_custom_endpoint()
+	function display_endpoint_container()
 	{
 		document.getElementById("customendpointcontainer").classList.remove("hidden");
 		customapi_dropdown();
 	}
-	function dismiss_custom_endpoint()
+	function dismiss_endpoint_container()
 	{
 		document.getElementById("customendpointcontainer").classList.add("hidden");
 	}
@@ -7584,9 +7578,8 @@ Current version: 124
 	}
 
 	//function to allow selection of models
-	function display_models() {
+	function display_horde_models() {
 		document.getElementById("pickedmodel").innerHTML = "";
-		document.getElementById("loadmodelcontainer").classList.remove("hidden");
 		document.getElementById("apikey").value = localsettings.my_api_key;
 		document.getElementById("modelquicksearch").value = "";
 		let manualworker = (document.getElementById("manualworker").checked ? true : false);
@@ -7643,7 +7636,6 @@ Current version: 124
 						}
 						model_choices += "<option value=\"" + i + "\" " + alrselected + ">" + clustertag + escapeHtml(curr.name) + " (ETA: "+ curr.eta +"s, Queue: " + curr.queued + ", Speed: " + mperf + ", Qty: " + curr.count + ")</option>";
 					}
-					model_choices += "<option style=\"color:#dd7723;font-weight:bold;\" value=\"9999\">📡 [ Remote Play / Custom API Endpoint ]</option>";
 					document.getElementById("pickedmodel").innerHTML = model_choices;
 				}
 			}
@@ -7689,92 +7681,80 @@ Current version: 124
         }
 	}
 
-	function confirm_models() {
+	function confirm_horde_models() {
 		let selected_idx_arr = Array.from(document.getElementById("pickedmodel").selectedOptions).map(({ value }) => value);
 
-		if (selected_idx_arr.length == 1 && selected_idx_arr[0] == 9999) //custom endpoint
-		{
-			hide_popups();
-			display_custom_endpoint();
-		} else {
-			custom_kobold_endpoint = "";
-			custom_oai_key = "";
-			custom_scale_key = "";
-			custom_claude_key = "";
-			custom_palm_key = "";
-			//remove the Custom Endpoint if it's multi selected together with others.
-			const findex = selected_idx_arr.indexOf("9999");
-			if (findex > -1) {
-				selected_idx_arr.splice(findex, 1);
-			}
+		custom_kobold_endpoint = "";
+		custom_oai_key = "";
+		custom_scale_key = "";
+		custom_claude_key = "";
+		custom_palm_key = "";
 
-			if (selected_idx_arr.length > 0) {
-				let prep_sel_models = [];
-				let prep_sel_workers = []; //if selected, pick a specific worker ids to use
+		if (selected_idx_arr.length > 0) {
+			let prep_sel_models = [];
+			let prep_sel_workers = []; //if selected, pick a specific worker ids to use
 
-				let manualworker = (document.getElementById("manualworker").checked ? true : false);
+			let manualworker = (document.getElementById("manualworker").checked ? true : false);
 
-				for (var i = 0; i < selected_idx_arr.length; ++i) {
-					if (manualworker) //we are looping through selected workers
-					{
-						let addedworker = worker_data[selected_idx_arr[i]];
-						prep_sel_workers.push(addedworker);
-						let modnames = addedworker.models;
-						for (var j = 0; j < modnames.length; ++j) {
-							let addedmodel = models_data.find(element => (element.name == modnames[j] && element.cluster==addedworker.cluster));
-							if (!prep_sel_models.includes(addedmodel)) {
-								prep_sel_models.push(addedmodel);
-							}
+			for (var i = 0; i < selected_idx_arr.length; ++i) {
+				if (manualworker) //we are looping through selected workers
+				{
+					let addedworker = worker_data[selected_idx_arr[i]];
+					prep_sel_workers.push(addedworker);
+					let modnames = addedworker.models;
+					for (var j = 0; j < modnames.length; ++j) {
+						let addedmodel = models_data.find(element => (element.name == modnames[j] && element.cluster==addedworker.cluster));
+						if (!prep_sel_models.includes(addedmodel)) {
+							prep_sel_models.push(addedmodel);
 						}
 					}
-					else //we are looping through selected models
-					{
-						let addedmodel = models_data[selected_idx_arr[i]];
-						prep_sel_models.push(addedmodel);
-					}
 				}
-
-				//remove undefined and nulls
-				prep_sel_models = prep_sel_models.filter(x=>x);
-				prep_sel_workers = prep_sel_workers.filter(x=>x);
-
-				const allMatched1 = prep_sel_models.every(item => item.cluster === prep_sel_models[0].cluster);
-				const allMatched2 = prep_sel_workers.every(item => item.cluster === prep_sel_workers[0].cluster);
-
-				if(!allMatched1 || !allMatched2)
+				else //we are looping through selected models
 				{
-					if (prep_sel_workers.length > 0) {
-						let pickedcluster = get_most_common_cluster(prep_sel_workers);
-						prep_sel_workers = prep_sel_workers.filter(item => item.cluster === pickedcluster);
-						prep_sel_models = prep_sel_models.filter(item => item.cluster === pickedcluster);
-					} else {
-						let pickedcluster = get_most_common_cluster(prep_sel_models);
-						prep_sel_models = prep_sel_models.filter(item => item.cluster === pickedcluster);
-					}
+					let addedmodel = models_data[selected_idx_arr[i]];
+					prep_sel_models.push(addedmodel);
 				}
+			}
 
-				selected_models = prep_sel_models;
-				selected_workers = prep_sel_workers;
-				localsettings.my_api_key = document.getElementById("apikey").value;
-				if(localsettings.my_api_key==null || localsettings.my_api_key=="")
-				{
-					localsettings.my_api_key = defaultsettings.my_api_key;
+			//remove undefined and nulls
+			prep_sel_models = prep_sel_models.filter(x=>x);
+			prep_sel_workers = prep_sel_workers.filter(x=>x);
+
+			const allMatched1 = prep_sel_models.every(item => item.cluster === prep_sel_models[0].cluster);
+			const allMatched2 = prep_sel_workers.every(item => item.cluster === prep_sel_workers[0].cluster);
+
+			if(!allMatched1 || !allMatched2)
+			{
+				if (prep_sel_workers.length > 0) {
+					let pickedcluster = get_most_common_cluster(prep_sel_workers);
+					prep_sel_workers = prep_sel_workers.filter(item => item.cluster === pickedcluster);
+					prep_sel_models = prep_sel_models.filter(item => item.cluster === pickedcluster);
+				} else {
+					let pickedcluster = get_most_common_cluster(prep_sel_models);
+					prep_sel_models = prep_sel_models.filter(item => item.cluster === pickedcluster);
 				}
-				if (desired_new_home_cluster != null) {
-					localsettings.home_cluster = desired_new_home_cluster;
-					desired_new_home_cluster = null;
-				}
+			}
 
-				document.getElementById("connectstatus").innerHTML = "Connected to KoboldAI Horde";
+			selected_models = prep_sel_models;
+			selected_workers = prep_sel_workers;
+			localsettings.my_api_key = document.getElementById("apikey").value;
+			if(localsettings.my_api_key==null || localsettings.my_api_key=="")
+			{
+				localsettings.my_api_key = defaultsettings.my_api_key;
+			}
+			if (desired_new_home_cluster != null) {
+				localsettings.home_cluster = desired_new_home_cluster;
+				desired_new_home_cluster = null;
+			}
 
-				render_gametext();
-				hide_popups();
+			document.getElementById("connectstatus").innerHTML = "Connected to AI Horde";
 
-				if(!allMatched1 || !allMatched2)
-				{
-					msgbox("You've selected multiple workers from different clusters. Only one cluster will be used.","Caution");
-				}
+			render_gametext();
+			hide_popups();
 
+			if(!allMatched1 || !allMatched2)
+			{
+				msgbox("You've selected multiple workers from different clusters. Only one cluster will be used.","Caution");
 			}
 		}
 	}
@@ -7902,7 +7882,7 @@ Current version: 124
 							if(uname.toLowerCase()=="anonymous#0")
 							{
 								document.getElementById("kudos_bal").innerHTML = clustertag + uname + "<br>"+
-								"<a class='color_blueurl' href='https://horde.koboldai.net/register'>(Register New User)</a>";
+								"<a class='color_blueurl' href='https://aihorde.net/register'>(Register New User)</a>";
 							}else{
 								document.getElementById("showownworkerslink").classList.remove("hidden");
 							}
@@ -7913,12 +7893,12 @@ Current version: 124
 
 					}
 					else {
-						document.getElementById("kudos_bal").innerHTML = "API Key Error<br><a class='color_blueurl' href='https://horde.koboldai.net/register'>(Register New User)</a>";
+						document.getElementById("kudos_bal").innerHTML = "API Key Error<br><a class='color_blueurl' href='https://aihorde.net/register'>(Register New User)</a>";
 					}
 				}
 				else {
 					console.log("Error: " + errArr);
-					document.getElementById("kudos_bal").innerHTML = "API Key Error<br><a class='color_blueurl' href='https://horde.koboldai.net/register'>(Register New User)</a>";
+					document.getElementById("kudos_bal").innerHTML = "API Key Error<br><a class='color_blueurl' href='https://aihorde.net/register'>(Register New User)</a>";
 				}
 			});
 		}
@@ -12285,8 +12265,8 @@ Current version: 124
 			document.getElementById("fvico").href = favivon_normal;
 		}
 		else if (selected_models.length == 0 && selected_workers.length == 0) {
-			let perfinfo = "There are <span class=\"color_orange\">" + perfdata.worker_count + "</span> total <a class=\"color_green\" href=\"#\" onclick=\"get_and_show_workers()\">volunteer(s)</a> in the KoboldAI Horde, and <span class=\"color_orange\">" + perfdata.queued_requests + "</span> request(s) in queues.<br>A total of <span class=\"color_orange\">" + perfdata.past_minute_tokens + "</span> tokens were generated in the last minute.<br><br>";
-			document.getElementById("gametext").innerHTML = "Welcome to <span class=\"color_cyan\">KoboldAI Lite</span>!<br><br>" + perfinfo + "<a href=\"#\" class=\"color_blueurl\" onclick=\"display_models()\">Please select an AI model to use!</a><br>";
+			let perfinfo = "There are <span class=\"color_orange\">" + perfdata.worker_count + "</span> total <a class=\"color_green\" href=\"#\" onclick=\"get_and_show_workers()\">volunteer(s)</a> in the AI Horde, and <span class=\"color_orange\">" + perfdata.queued_requests + "</span> request(s) in queues.<br>A total of <span class=\"color_orange\">" + perfdata.past_minute_tokens + "</span> tokens were generated in the last minute.<br><br>";
+			document.getElementById("gametext").innerHTML = "Welcome to <span class=\"color_cyan\">KoboldAI Lite</span>!<br><br>" + perfinfo + "<a href=\"#\" class=\"color_blueurl\" onclick=\"display_endpoint_container()\">Please select an AI service to use!</a><br>";
 			document.getElementById("fvico").href = favivon_normal;
 		}
 		else if (pending_response_id == "") {
@@ -13557,11 +13537,11 @@ Current version: 124
 								</li>
 
 								<li class="nav-item hidden" id="topbtn_customendpt">
-									<a class="nav-link" href="#" onclick="display_custom_endpoint()">Custom Endpoint</a>
+									<a class="nav-link" href="#" onclick="display_endpoint_container()">Custom Endpoint</a>
 								</li>
 
 								<li class="nav-item hidden" id="topbtn_ai">
-									<a class="nav-link" href="#" onclick="display_models()">AI</a>
+									<a class="nav-link" href="#" onclick="display_endpoint_container()">AI</a>
 								</li>
 
 								<li class="nav-item hidden" id="topbtn_newgame">
@@ -13758,29 +13738,41 @@ Current version: 124
 		</div>
 	</div>
 
-	<div class="popupcontainer flex hidden" id="loadmodelcontainer">
+
+
+	<div class="popupcontainer flex hidden" id="customendpointcontainer">
 		<div class="popupbg flex"></div>
-		<div class="loadpopup">
+		<div class="nspopup flexsize higher">
 			<div class="popuptitlebar">
-				<div class="popuptitletext">Select A Model To Load</div>
+				<div class="popuptitletext">Connect to AI service</div>
+			</div>
+			<div style="padding: 4px;">
+			<select style="padding:4px;" class="form-control" id="customapidropdown" onchange="customapi_dropdown()">
+				<option value="0">AI Horde</option>
+				<option value="1">KoboldAI Remote API</option>
+				<option value="2">OpenAI API</option>
+				<option value="3">Spellbook By Scale API</option>
+				<option value="4">Claude By Anthropic API</option>
+				<option value="5">PaLM/Gemini By Google API</option>
+				<option value="6">OpenRouter API</option>
+			</select>
 			</div>
 
-			<div id="loadmodellistcontent" style="overflow: auto;">
+			<div class="aidgpopuplistheader anotelabel" id="hordeloadmodelcontainer">
+				The AI Horde is a service that generates text using crowdsourced GPUs run by independent volunteer workers.
 				<div class="justifyleft anotelabel">
 					<span style="float:left; text-align: left;">
 					Your AI Horde API Key <span class="helpicon">?
-						<span class="helptext">You need an API key to use KoboldAI Horde to generate text. Get one at
-							https://horde.koboldai.net/register or use the anonymous key 0000000000.</span>
+						<span class="helptext">You need an API key to use AI Horde to generate text. Get one at
+							https://aihorde.net/register or use the anonymous key 0000000000.</span>
 					</span>
 					<br><a href="#" id="showownworkerslink" class="color_blueurl hidden" onclick="show_my_own_workers()">[Manage My Workers]</a></span>
 					<span class="color_green" style="float:right; text-align: right;" id="kudos_bal">
-						Need a Key?<br><a class='color_blueurl' href='https://horde.koboldai.net/register'>(Register New User)</a>
+						Need a Key?<br><a class='color_blueurl' href='https://aihorde.net/register'>(Register New User)</a>
 					</span>
 				</div>
-
 				<input class="form-control" type="password" placeholder="Enter API Key (or use 0000000000)" value=""
 					id="apikey" onfocus="focus_api_keys()" onblur="fetch_kudo_balance();blur_api_keys()">
-
 
 				<div class="justifyleft anotelabel">
 					Select AI Horde Model <span class="helpicon">?
@@ -13796,44 +13788,15 @@ Current version: 124
 					Select By Worker <span class="helpicon">?
 						<span class="helptext">This option explicitly assigns worker IDs, fixed based on the current workers available at model selection time.</span>
 					</span>
-					<input type="checkbox" id="manualworker" onclick="display_models()">
+					<input type="checkbox" id="manualworker" onclick="display_endpoint_container()">
 
 					<span style="float:right;">
 						<input class="settinglabel miniinput" style="margin: 3px; width: 90px;" type="text" placeholder="Quick Search" value="" id="modelquicksearch" oninput="model_quick_search()">
 					</span>
-					<span style="float:right;">
-						<button type="button" style="padding:2px 3px;margin:2px;font-size:11px;" class="bg_orange btn btn-primary" id="btn_cust_endpoint" onclick="display_custom_endpoint()">Use Custom Endpoint</button>
-					</span>
 				</div>
 
-
-				<div class="popupfooter">
-					<button type="button" class="btn btn-primary" id="btn_loadmodelaccept"
-						onclick="confirm_models()">Ok</button>
-					<button type="button" class="btn btn-primary" id="btn_loadmodelclose"
-						onclick="hide_popups()">Cancel</button>
-
-				</div>
 			</div>
-		</div>
-	</div>
 
-	<div class="popupcontainer flex hidden" id="customendpointcontainer">
-		<div class="popupbg flex"></div>
-		<div class="nspopup flexsize higher">
-			<div class="popuptitlebar">
-				<div class="popuptitletext">Custom Remote Play Endpoint</div>
-			</div>
-			<div style="padding: 4px;">
-			<select style="padding:4px;" class="form-control" id="customapidropdown" onchange="customapi_dropdown()">
-				<option value="0">KoboldAI Remote Play</option>
-				<option value="1">OpenAI API</option>
-				<option value="2">Spellbook By Scale API</option>
-				<option value="3">Claude By Anthropic API</option>
-				<option value="4">PaLM/Gemini By Google API</option>
-				<option value="5">OpenRouter API</option>
-			</select>
-			</div>
 			<div id="koboldcustom" class="aidgpopuplistheader anotelabel">
 				You can use this to connect to a KoboldAI instance running via a remote tunnel such as <span class="color_orange" style="font-weight: bold;">trycloudflare, localtunnel, ngrok</span>.<br><br>
 				Localhost IPs require host mode enabled. You can use the remote address displayed in the <span class="color_orange" style="font-weight: bold;">remote-play.bat</span> window or <span class="color_orange" style="font-weight: bold;">colab window</span>, note that the model must be loaded first.<br><br>
@@ -13844,7 +13807,6 @@ Current version: 124
 					<input type="checkbox" id="remoteconsolelog">
 					<div class="box-label" title="Will display outputs to the remote endpoint's console logs, useful for debugging.">Show Console Logging</div>
 				</div>
-
 			</div>
 			<div id="oaicustom" class="aidgpopuplistheader anotelabel hidden">
 				<span id="oaidesc">
@@ -13960,7 +13922,7 @@ Current version: 124
 			</div>
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="connect_custom_endpoint()">Ok</button>
-				<button type="button" class="btn btn-primary" onclick="dismiss_custom_endpoint()">Cancel</button>
+				<button type="button" class="btn btn-primary" onclick="dismiss_endpoint_container()">Cancel</button>
 			</div>
 		</div>
 	</div>
