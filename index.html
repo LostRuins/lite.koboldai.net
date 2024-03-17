@@ -2951,7 +2951,7 @@ Current version: 124
 		}
 	}
 
-	function apply_proxy_url(url)
+	function apply_proxy_url(url, proxy_by_default=false)
 	{
 		let proxy_part = "";
 
@@ -2965,7 +2965,7 @@ Current version: 124
 				!url.toLowerCase().includes("."));
 		}
 
-		if (uses_cors_proxy && !is_local) {
+		if ((uses_cors_proxy||proxy_by_default) && !is_local) {
 			proxy_part = cors_proxy + "?";
 		}
 		return proxy_part + url;
@@ -3400,8 +3400,6 @@ Current version: 124
 
 	const default_oai_image_endpoint = "/images/generations";
 
-	const scale_submit_endpoint = "https://dashboard.scale.com/spellbook/api/v2/deploy/"
-
 	const claude_submit_endpoint = "/complete";
 	const claude_submit_endpoint_v3 = "/messages";
 
@@ -3483,9 +3481,7 @@ Current version: 124
 	var custom_oai_endpoint = "";
 	var custom_oai_key = ""; //if set, uses the OpenAI API to generate
 	var custom_oai_model = "";
-	var custom_scale_key = "";
 	var custom_palm_key = "";
-	var custom_scale_ID = "";
 	var custom_claude_endpoint = "";
 	var custom_claude_key = "";
 	var custom_claude_model = "";
@@ -4460,7 +4456,7 @@ Current version: 124
 
 	function is_using_custom_ep()
 	{
-		return (custom_oai_key!=""||custom_kobold_endpoint!=""||custom_scale_key!=""||custom_claude_key!=""||custom_palm_key!="");
+		return (custom_oai_key!=""||custom_kobold_endpoint!=""||custom_claude_key!=""||custom_palm_key!="");
 	}
 
 	function is_using_kcpp_with_streaming()
@@ -5502,7 +5498,7 @@ Current version: 124
 				//remove common malformed ids to reduce load
 				if(userinput!="" && isNumeric(userinput) && userinput>0 && userinput<50000)
 				{
-					fetch(cors_proxy+"?https://aetherroom.club/api/"+userinput)
+					fetch(apply_proxy_url("https://aetherroom.club/api/"+userinput,true))
 					.then(x => x.json())
 					.then(data => {
 						console.log(data);
@@ -6708,7 +6704,7 @@ Current version: 124
 
 	function select_custom_oai_model()
 	{
-		let isOpenrouter = (document.getElementById("customapidropdown").value==6);
+		let isOpenrouter = (document.getElementById("customapidropdown").value==3);
 		inputBox("Enter custom model name","Custom Model Name",localsettings.saved_oai_custommodel,"", ()=>{
 			let coai = getInputBoxValue().trim();
 			let dropdown = (isOpenrouter?document.getElementById("custom_openrouter_model"):document.getElementById("custom_oai_model"));
@@ -6725,7 +6721,7 @@ Current version: 124
 	}
 	function oai_model_change()
 	{
-		let isOpenrouter = (document.getElementById("customapidropdown").value==6);
+		let isOpenrouter = (document.getElementById("customapidropdown").value==3);
 		let dropdown = (isOpenrouter?document.getElementById("custom_openrouter_model"):document.getElementById("custom_oai_model"));
 		let non_completions = (dropdown.value.includes("davinci-002") || dropdown.value.includes("text-davinci-003") || dropdown.value.includes("text-davinci-002")
 		|| dropdown.value.includes("text-davinci-001") || dropdown.value.includes("gpt-3.5-turbo-instruct") || dropdown.value == "davinci");
@@ -6773,7 +6769,7 @@ Current version: 124
 
 			if (!data.error && data.data && data.data.length > 0)
 			{
-				let isOpenrouter = (document.getElementById("customapidropdown").value==6);
+				let isOpenrouter = (document.getElementById("customapidropdown").value==3);
 				let dropdown = (isOpenrouter?document.getElementById("custom_openrouter_model"):document.getElementById("custom_oai_model"));
 				var lastOption = dropdown.lastElementChild;
 				for (var i = dropdown.options.length - 1; i >= 0; i--) {
@@ -6831,7 +6827,6 @@ Current version: 124
 		let epchoice = document.getElementById("customapidropdown").value;
 		document.getElementById("oaicustom").classList.add("hidden");
 		document.getElementById("koboldcustom").classList.add("hidden");
-		document.getElementById("scalecustom").classList.add("hidden");
 		document.getElementById("claudecustom").classList.add("hidden");
 		document.getElementById("palmcustom").classList.add("hidden");
 		document.getElementById("custom_oai_model").classList.add("hidden");
@@ -6852,10 +6847,19 @@ Current version: 124
 				document.getElementById("customkoboldkey").value = localsettings.saved_kai_key;
 			}
 		}
-		else if(epchoice==2 || epchoice==6)
+		else if(epchoice==2 || epchoice==3)
 		{
 			document.getElementById("oaicustom").classList.remove("hidden");
-			if(epchoice==6)
+			if(epchoice==2)
+			{
+				document.getElementById("oaidesc").classList.remove("hidden");
+				document.getElementById("custom_oai_model").classList.remove("hidden");
+				document.getElementById("openrouterdesc").classList.add("hidden");
+				document.getElementById("custom_oai_endpoint").classList.remove("hidden");
+				document.getElementById("custom_oai_key").value = localsettings.saved_oai_key;
+				document.getElementById("custom_oai_endpoint").value = (localsettings.saved_oai_addr?localsettings.saved_oai_addr:default_oai_base);
+			}
+			else
 			{
 				document.getElementById("oaidesc").classList.add("hidden");
 				document.getElementById("openrouterdesc").classList.remove("hidden");
@@ -6873,22 +6877,8 @@ Current version: 124
 					}
 				}
 			}
-			else
-			{
-				document.getElementById("oaidesc").classList.remove("hidden");
-				document.getElementById("custom_oai_model").classList.remove("hidden");
-				document.getElementById("openrouterdesc").classList.add("hidden");
-				document.getElementById("custom_oai_endpoint").classList.remove("hidden");
-				document.getElementById("custom_oai_key").value = localsettings.saved_oai_key;
-				document.getElementById("custom_oai_endpoint").value = (localsettings.saved_oai_addr?localsettings.saved_oai_addr:default_oai_base);
-
-			}
 			oai_model_change();
 			toggleoaichatcompl();
-		}
-		else if(epchoice==3)
-		{
-			document.getElementById("scalecustom").classList.remove("hidden");
 		}
 		else if(epchoice==4)
 		{
@@ -6942,7 +6932,6 @@ Current version: 124
 		custom_kobold_endpoint = "";
 		custom_kobold_key = "";
 		custom_oai_key = "";
-		custom_scale_key = "";
 		custom_claude_key = "";
 		custom_palm_key = "";
 
@@ -7197,7 +7186,7 @@ Current version: 124
 					});
 			}
 		}
-		else if(epchoice==2 || epchoice==6) //connect to OAI / OpenRouter Endpoint
+		else if(epchoice==2 || epchoice==3) //connect to OAI / OpenRouter Endpoint
 		{
 			let desired_oai_key = document.getElementById("custom_oai_key").value.trim();
 			let desired_oai_ep = document.getElementById("custom_oai_endpoint").value.trim();
@@ -7240,7 +7229,7 @@ Current version: 124
 				}
 				localsettings.saved_oai_role = document.getElementById("oairoledropdown").value;
 				localsettings.saved_oai_jailbreak2 = document.getElementById("jailbreakprompttext2").value;
-				let isOpenrouter = (document.getElementById("customapidropdown").value==6);
+				let isOpenrouter = (document.getElementById("customapidropdown").value==3);
 				let dropdown = (isOpenrouter?document.getElementById("custom_openrouter_model"):document.getElementById("custom_oai_model"));
 				custom_oai_model = dropdown.value.trim();
 				localsettings.saved_oai_custommodel = custom_oai_model;
@@ -7260,73 +7249,6 @@ Current version: 124
 				}
 				document.getElementById("connectstatus").innerHTML = "Connected to OAI Endpoint";
 				render_gametext(true);
-			}
-		}
-		else if(epchoice==3) //connect to Scale Endpoint
-		{
-			let desired_scale_key = document.getElementById("custom_scale_key").value.trim();
-			let desired_scale_ID = document.getElementById("custom_scale_ID").value.trim();
-
-			desired_scale_ID = desired_scale_ID.split("#")[0];
-			desired_scale_ID = desired_scale_ID.split("?")[0];
-			if(desired_scale_ID.includes("dashboard.scale.com/spellbook/api/v2/deploy/") &&
-			desired_scale_key.length == 25 &&!desired_scale_key.includes(" ")&&!desired_scale_key.includes("/"))
-			{
-				desired_scale_ID = desired_scale_ID.split("dashboard.scale.com/spellbook/api/v2/deploy/")[1];
-			}
-			else
-			{
-				desired_scale_ID = "";
-				desired_scale_key = "";
-				msgbox("Invalid inputs, please try again.");
-			}
-
-			if(desired_scale_key!="" && desired_scale_ID!="")
-			{
-				hide_popups();
-				fetch(cors_proxy+"?"+ scale_submit_endpoint+desired_scale_ID, {
-					method: 'GET',
-					headers: {
-						'Authorization': 'Bearer '+desired_scale_key,
-					},
-					referrerPolicy: 'no-referrer',
-				})
-				.then((response) => response.json())
-				.then((data) => {
-					console.log(data);
-					if (data.message && data.message!="")
-					{
-						//good to go
-						custom_scale_key = desired_scale_key;
-						custom_scale_ID = desired_scale_ID;
-						selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": "SpellbookScaleAI", "count": 1 }];
-						selected_workers = [];
-						if (perfdata == null) {
-							//generate some fake perf data if horde is offline and using custom endpoint
-							perfdata = {
-								"queued_requests": 0,
-								"queued_tokens": 0,
-								"past_minute_tokens": 0,
-								"worker_count": 0
-							};
-							document.body.classList.add("connected");
-							document.getElementById("connectstatus").classList.remove("color_orange");
-							document.getElementById("connectstatus").classList.add("color_green");
-						}
-						document.getElementById("connectstatus").innerHTML = "Connected to ScaleAI Endpoint";
-						render_gametext();
-					}
-					else
-					{
-						custom_scale_key = "";
-						msgbox("Cannot connect to Spellbook by ScaleAI");
-					}
-				})
-				.catch(error => {
-				console.log("Error: " + error);
-				custom_scale_key = "";
-				msgbox("Error: " + error);
-				});
 			}
 		}
 		else if(epchoice==4) //claude endpoint
@@ -7686,7 +7608,6 @@ Current version: 124
 
 		custom_kobold_endpoint = "";
 		custom_oai_key = "";
-		custom_scale_key = "";
 		custom_claude_key = "";
 		custom_palm_key = "";
 
@@ -10139,46 +10060,10 @@ Current version: 124
 						msgbox("Error while submitting prompt: " + error);
 					});
 			}
-			else if (custom_scale_key != "")//handle for Scale
-			{
-				let targetep = cors_proxy + "?" + scale_submit_endpoint + custom_scale_ID;
-				let scale_payload = { "input": { "input": submit_payload.prompt } };
-
-				last_request_str = JSON.stringify(scale_payload);
-				fetch(targetep, {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						'Authorization': 'Basic ' + custom_scale_key,
-					},
-					body: JSON.stringify(scale_payload),
-					referrerPolicy: 'no-referrer',
-				})
-					.then((response) => response.json())
-					.then((data) => {
-						console.log("sync finished response: " + JSON.stringify(data));
-						if (custom_scale_key != "" && data.output != null && data.output != "") {
-							synchro_polled_response = data.output;
-						}
-						else {
-							//error occurred, maybe captcha failed
-							console.error("error occurred in Scale generation");
-							clear_poll_flags();
-							render_gametext();
-							msgbox("Error occurred during text generation: " + formatError(data));
-						}
-					})
-					.catch((error) => {
-						console.error('Error:', error);
-						clear_poll_flags();
-						render_gametext();
-						msgbox("Error while submitting prompt: " + error);
-					});
-			}
 			else if (custom_claude_key != "")//handle for Claude
 			{
 				let claudev3mode = custom_claude_model.toLowerCase().includes("claude-3");
-				let targetep = cors_proxy + "?" + (custom_claude_endpoint + (claudev3mode?claude_submit_endpoint_v3:claude_submit_endpoint));
+				let targetep = apply_proxy_url((custom_claude_endpoint + (claudev3mode?claude_submit_endpoint_v3:claude_submit_endpoint)),true);
 				let claude_payload = null;
 				if(claudev3mode)
 				{
@@ -12025,10 +11910,6 @@ Current version: 124
 				{
 					whorun = "<br>You're using the OpenAI API";
 				}
-				else if(custom_scale_key!="")
-				{
-					whorun = "<br>You're using the Spellbook by Scale AI API";
-				}
 				else if(custom_claude_key!="")
 				{
 					whorun = "<br>You're using the Claude API";
@@ -12580,12 +12461,8 @@ Current version: 124
 			localsettings.prev_custom_endpoint_type = 2;
 			if(custom_oai_endpoint.toLowerCase().includes("openrouter.ai"))
 			{
-				localsettings.prev_custom_endpoint_type = 6;
+				localsettings.prev_custom_endpoint_type = 3;
 			}
-		}
-		else if(custom_scale_key!="")
-		{
-			localsettings.prev_custom_endpoint_type = 3;
 		}
 		else if(custom_claude_key!="")
 		{
@@ -13751,10 +13628,9 @@ Current version: 124
 				<option value="0">AI Horde</option>
 				<option value="1">KoboldAI Remote API</option>
 				<option value="2">OpenAI API</option>
-				<option value="3">Spellbook By Scale API</option>
+				<option value="3">OpenRouter API</option>
 				<option value="4">Claude By Anthropic API</option>
 				<option value="5">PaLM/Gemini By Google API</option>
-				<option value="6">OpenRouter API</option>
 			</select>
 			</div>
 
@@ -13868,15 +13744,6 @@ Current version: 124
 					value="" onload="togglejailbreak2();">
 				</span>
 
-			</div>
-			<div id="scalecustom" class="aidgpopuplistheader anotelabel hidden">
-				Uses Spellbook by Scale. This is an experimental endpoint. It may break at any time.<br><br>
-				This endpoint does not support custom settings - please configure all properties at the scale webpage. Note that KoboldAI Lite takes no responsibility for your usage or consequences of this feature.<br><span class="color_red">Due to CORS limitations, your connection will be proxied.</span><br><br>
-				<span class="color_green" style="font-weight: bold;">Please input Spellbook by Scale API Key.</span><br><br>
-				<input class="form-control" type="text" id="custom_scale_key" placeholder="Spellbook API Key" value=""><br>
-
-				<span class="color_green" style="font-weight: bold;">Please input the Deployment URL provided from the website.</span><br><br>
-				<input class="form-control" type="text" id="custom_scale_ID" placeholder="https://dashboard.scale.com/spellbook/api/v2/deploy/a12345b" value="" ><br>
 			</div>
 			<div id="claudecustom" class="aidgpopuplistheader anotelabel hidden">
 				Entering your Claude API key will allow you to use KoboldAI Lite with their API.<br><br>
