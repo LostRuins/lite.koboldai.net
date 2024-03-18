@@ -3563,6 +3563,7 @@ Current version: 125
 		img_allownsfw: true,
 		img_cfgscale: 7,
 		img_allowhd: false,
+		img_img2imgstr: 0.6,
 		img_steps: 20,
 		img_sampler: "Euler a",
 		img_aspect:0, //0=square,1=portrait,2=landscape
@@ -8022,6 +8023,7 @@ Current version: 125
 		document.getElementById("save_images").checked = localsettings.save_images;
 		document.getElementById("save_remote_images").checked = localsettings.save_remote_images;
 		document.getElementById("img_cfgscale").value = localsettings.img_cfgscale;
+		document.getElementById("img_img2imgstr").value = localsettings.img_img2imgstr;
 		document.getElementById("img_aspect").value = localsettings.img_aspect;
 		document.getElementById("img_sampler").value = localsettings.img_sampler;
 		document.getElementById("img_steps").value = localsettings.img_steps;
@@ -8244,6 +8246,7 @@ Current version: 125
 		update_genimg_button_visiblility();
 
 		localsettings.img_cfgscale = parseFloat(document.getElementById("img_cfgscale").value);
+		localsettings.img_img2imgstr = parseFloat(document.getElementById("img_img2imgstr").value);
 		localsettings.img_aspect = parseInt(document.getElementById("img_aspect").value);
 		localsettings.img_sampler = document.getElementById("img_sampler").value;
 		localsettings.img_steps = parseInt(document.getElementById("img_steps").value);
@@ -8255,6 +8258,11 @@ Current version: 125
 		{
 			localsettings.img_cfgscale = defaultsettings.img_cfgscale;
 		}
+		if(isNaN(localsettings.img_img2imgstr))
+		{
+			localsettings.img_img2imgstr = defaultsettings.img_img2imgstr;
+		}
+		localsettings.img_img2imgstr = cleannum(localsettings.img_img2imgstr, 0.0, 1.0);
 		if(isNaN(localsettings.img_aspect))
 		{
 			localsettings.img_aspect = defaultsettings.img_aspect;
@@ -10742,6 +10750,7 @@ Current version: 125
 			AI Vision: `+visionstatus+` <span class="helpicon">?<span class="helptext">This allows the AI to visually recognize this image and react to it. On KoboldCpp, LLaVA models can be used. Otherwise, uses Horde or Local A1111 for image interrogation if enabled.</span></span>
 			`+togglebtn+`
 			<br><button type="button" class="btn btn-primary" style="width: 140px; padding: 2px; margin: 3px; font-size:12px;" onclick="show_orig_prompt()">View Original Prompt</button>
+			<button type="button" class="btn btn-primary" style="width: 110px; padding: 2px; margin: 3px; font-size:12px;" onclick="add_img2img()">Create Img2Img</button>
 			`;
 			document.getElementById("aivisionmode").value = savedmeta.visionmode;
 		}
@@ -10755,6 +10764,17 @@ Current version: 125
 	function show_orig_prompt()
 	{
 		msgbox(latest_orig_prompt,"Original Prompt");
+	}
+	function add_img2img()
+	{
+		inputBox("Enter prompt to transform this image with using Img2Img.","Img2Img Transform","","Enter Img2Img Prompt",()=>{
+			let userinput = getInputBoxValue();
+			if(userinput.trim()!="")
+			{
+				var sentence = userinput.trim().substring(0, 380);
+
+			}
+		},false);
 	}
 	function click_image(target,imghash)
 	{
@@ -14668,7 +14688,7 @@ Current version: 125
 
 	<div class="popupcontainer flex hidden" id="imagestylecontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup fixsize moderate">
+		<div class="nspopup flexsizesmall higher">
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Image Generation Settings</div>
 			</div>
@@ -14697,7 +14717,7 @@ Current version: 125
 				</select>
 			</div>
 			<div class="inlinelabel">
-				<div class="justifyleft" style="padding:4px">Aspect Ratio<span class="helpicon">?
+				<div class="justifyleft" style="padding:4px">Aspect Ratio <span class="helpicon">?
 					<span class="helptext">Square is recommended. Changing aspect ratio will affect the resolution used to generate. This may impact quality or memory usage.</span>
 				</span>: </div>
 				<select style="padding:1px; height:23px; width: 100px;" class="form-control" id="img_aspect">
@@ -14705,6 +14725,10 @@ Current version: 125
 					<option value="1">Portrait</option>
 					<option value="2">Landscape</option>
 				</select>
+			</div>
+			<div class="inlinelabel">
+				<div class="justifyleft" style="padding:4px">Img2Img Strength: </div>
+				<input type="text" inputmode="decimal" id="img_img2imgstr" style="width:60px">
 			</div>
 			<div class="inlinelabel">
 				<div class="justifyleft" style="padding:4px">Save Higher-Res <span class="helpicon">?
