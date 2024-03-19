@@ -3412,6 +3412,7 @@ Current version: 125
 	const a1111_models_endpoint = "/sdapi/v1/sd-models";
     const a1111_options_endpoint = "/sdapi/v1/options";
     const a1111_txt2img_endpoint = "/sdapi/v1/txt2img";
+	const a1111_img2img_endpoint = "/sdapi/v1/img2img";
 	const a1111_interrogate_endpoint = "/sdapi/v1/interrogate";
 
 	const xtts_gen_endpoint = "/tts_to_audio/";
@@ -4261,6 +4262,14 @@ Current version: 125
 			}
 		}
 
+		let ep = a1111_txt2img_endpoint;
+		if(req_payload.source_image!="")
+		{
+			ep = a1111_img2img_endpoint;
+			a1111_t2i_payload.init_images = [req_payload.source_image];
+			a1111_t2i_payload.denoising_strength = req_payload.params.denoising_strength;
+		}
+
 		if(localsettings.save_remote_images)
 		{
 			a1111_t2i_payload["save_images"] = true;
@@ -4269,7 +4278,7 @@ Current version: 125
 		//remove all null fields
 		a1111_t2i_payload = Object.fromEntries(Object.entries(a1111_t2i_payload).filter(([_, v]) => v != null));
 
-		let gen_endpoint = localsettings.saved_a1111_url + a1111_txt2img_endpoint;
+		let gen_endpoint = localsettings.saved_a1111_url + ep;
 		console.log(a1111_t2i_payload);
 		fetch(gen_endpoint, {
 			method: 'POST',
@@ -8967,9 +8976,9 @@ Current version: 125
 		show_abort_button(false);
 	}
 
-	function do_manual_gen_image(sentence)
+	function do_manual_gen_image(sentence, base64img="") //b64 for img2img
 	{
-		generate_new_image(sentence);
+		generate_new_image(sentence, base64img);
 		document.getElementById("btn_genimg").disabled = true;
 		document.getElementById("btn_genimg2").disabled = true;
 		//disable it for 8 sec to prevent spam
@@ -10423,7 +10432,16 @@ Current version: 125
 		return inputtext;
 	}
 
-	function generate_new_image(sentence) {
+	function generate_new_image(sentence, base64img="") {
+
+		if(base64img!="")
+		{
+			let parts = base64img.split(',');
+			if (parts.length === 2 && parts[0].startsWith('data:image')) {
+				base64img = parts[1];
+			}
+		}
+
 
 		if(localsettings.image_styles && localsettings.image_styles!="")
 		{
@@ -10506,9 +10524,15 @@ Current version: 125
 			"replacement_filter": true,
 			"r2": false
 		}
+		if(base64img!="")
+		{
+			genimg_payload["source_image"] = base64img;
+			genimg_payload["params"]["denoising_strength"] = localsettings.img_img2imgstr;
+		}
 
 		if(localsettings.generate_images_mode==1) //horde
 		{
+
 			fetch(stablehorde_submit_endpoint, {
 				method: 'POST', // or 'PUT'
 				headers: {
@@ -10767,12 +10791,13 @@ Current version: 125
 	}
 	function add_img2img()
 	{
-		inputBox("Enter prompt to transform this image with using Img2Img.","Img2Img Transform","","Enter Img2Img Prompt",()=>{
+		inputBox("Enter prompt to create a new image, based on this source image.","Create Img2Img","","Enter Img2Img Prompt",()=>{
 			let userinput = getInputBoxValue();
 			if(userinput.trim()!="")
 			{
 				var sentence = userinput.trim().substring(0, 380);
-
+				let b64 = document.getElementById("zoomedimg").src;
+				do_manual_gen_image(sentence, b64);
 			}
 		},false);
 	}
@@ -14727,7 +14752,9 @@ Current version: 125
 				</select>
 			</div>
 			<div class="inlinelabel">
-				<div class="justifyleft" style="padding:4px">Img2Img Strength: </div>
+				<div class="justifyleft" style="padding:4px">Img2Img Strength <span class="helpicon">?
+					<span class="helptext">Higher values lead to a more different image.</span>
+				</span>: </div>
 				<input type="text" inputmode="decimal" id="img_img2imgstr" style="width:60px">
 			</div>
 			<div class="inlinelabel">
