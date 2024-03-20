@@ -197,8 +197,10 @@ Current version: 126
 			margin-top: 6px;
 		}
 
-		#actionmenuitems button {
-			width: 80px;
+		#actionmenuitems button,#actionmenuitems2 button {
+			width: 60px;
+			padding: 4px 4px;
+			font-size: 12px;
 		}
 
 		#messagefield {
@@ -1873,13 +1875,13 @@ Current version: 126
 	{
 		height: calc(98vh - 240px);
 	}
-	@media (max-width: 720px) {
+	@media (max-width: 598px) {
 		.normal_viewport_height
 		{
 			height: calc(98vh - 270px);
 		}
 	}
-	@media (max-width: 406px) {
+	@media (max-width: 342px) {
 		.normal_viewport_height
 		{
 			height: calc(98vh - 300px);
@@ -1903,7 +1905,7 @@ Current version: 126
 	}
 	.aesthetic_viewport_height.withmenu
 	{
-		height: calc(98vh - 206px);
+		height: calc(98vh - 198px);
 	}
 	.aesthetic_viewport_height.withtyping
 	{
@@ -1911,7 +1913,7 @@ Current version: 126
 	}
 	.aesthetic_viewport_height.withmenu.withtyping
 	{
-		height: calc(98vh - 256px);
+		height: calc(98vh - 248px);
 	}
 
 	/**
@@ -7475,6 +7477,8 @@ Current version: 126
 		});
 	}
 
+	var cached_model_list = null;
+	var stale_cached_model_time = performance.now();
 	function fetch_models(onDoneCallback)
 	{
 		if(localflag)
@@ -7482,6 +7486,14 @@ Current version: 126
 			onDoneCallback(selected_models);
 			return;
 		}
+
+		if(cached_model_list!=null && cached_model_list.length>1 && performance.now() < stale_cached_model_time)
+		{
+			console.log("Reuse cached model list");
+			onDoneCallback(cached_model_list);
+			return;
+		}
+
 		//fetch the model list
 		multifetch(models_endpoints,(resArr,errArr)=>{
 			if(resArr && resArr.length>0)
@@ -7500,6 +7512,8 @@ Current version: 126
 					}
 				}
 
+				cached_model_list = mdls;
+				stale_cached_model_time = performance.now() + 30000; //cache model list for 1m
 				onDoneCallback(mdls);
 			}
 			else
