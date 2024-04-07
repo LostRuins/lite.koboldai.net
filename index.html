@@ -3422,7 +3422,8 @@ Current version: 127
 	const default_oai_base = "https://api.openai.com";
 	const default_claude_base = "https://api.anthropic.com";
 	const default_palm_base = "https://generativelanguage.googleapis.com/v1beta2/models/text-bison-001:generateText?key=";
-	const default_gemini_base = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=";
+	const default_gemini_base = "https://generativelanguage.googleapis.com/v1beta/models/";
+	const default_gemini_suffix = ":generateContent?key=";
 
 	const a1111_models_endpoint = "/sdapi/v1/sd-models";
     const a1111_options_endpoint = "/sdapi/v1/options";
@@ -10226,7 +10227,9 @@ Current version: 127
 				"topK": (submit_payload.params.top_k<1?300:submit_payload.params.top_k),
 				"candidateCount":1};
 
-				if(document.getElementById("custom_palm_model").value=="text-bison-001")
+				let mdlname = document.getElementById("custom_palm_model").value;
+
+				if(mdlname=="text-bison-001")
 				{
 					payload.safetySettings = [
 						{
@@ -10251,7 +10254,7 @@ Current version: 127
 						}
 					];
 				}
-				else if(document.getElementById("custom_palm_model").value=="gemini-pro")
+				else if(mdlname=="gemini-pro" || mdlname=="gemini-1.5-pro-latest")
 				{
 					if(localsettings.opmode==1)
 					{
@@ -10259,7 +10262,7 @@ Current version: 127
 						submit_payload.params.max_length += 100; //add length
 					}
 
-					urlbase = default_gemini_base;
+					urlbase = default_gemini_base + mdlname + default_gemini_suffix;
 					payload = {
 					"contents": [
 						{
@@ -11050,6 +11053,14 @@ Current version: 127
 		{
 			let st = get_instruct_starttag(true);
 			let et = get_instruct_endtag(true);
+
+			//sometimes the OAI type endpoints get confused and repeat the instruct tag, so trim it
+			let earlymatch = gentxt.indexOf(et);
+			if(earlymatch==0)
+			{
+				gentxt = gentxt.substring(et.length);
+			}
+
 			let found = gentxt.indexOf(st);
 			let splitresponse = [];
 			if (found != -1) //if found, truncate to it
@@ -13837,6 +13848,7 @@ Current version: 127
 					<option value="claude-2.0">claude-2.0</option>
 					<option value="claude-3-opus-20240229">claude-3-opus</option>
 					<option value="claude-3-sonnet-20240229">claude-3-sonnet</option>
+					<option value="claude-3-haiku-20240307">claude-3-haiku</option>
 				</select>
 				<input type="checkbox" id="claudeaddversion" onchange="" checked>
 				<div class="box-label" title="Add endpoint version">Add Endpoint Version</div>
@@ -13857,6 +13869,7 @@ Current version: 127
 				<select style="padding:4px;" class="form-control" id="custom_palm_model">
 					<option value="text-bison-001" selected="selected">text-bison-001</option>
 					<option value="gemini-pro">gemini-pro</option>
+					<option value="gemini-1.5-pro-latest">gemini-1.5-pro-latest</option>
 				</select>
 				<span class="color_green" style="font-weight: bold;">Please input Gemini or PaLM API Key.</span><br><br>
 				<input class="form-control" type="text" id="custom_palm_key" placeholder="PaLM/Gemini API Key" value=""><br>
