@@ -3424,6 +3424,7 @@ Current version: 127
 	const default_palm_base = "https://generativelanguage.googleapis.com/v1beta2/models/text-bison-001:generateText?key=";
 	const default_gemini_base = "https://generativelanguage.googleapis.com/v1beta/models/";
 	const default_gemini_suffix = ":generateContent?key=";
+	const default_cohere_base = "https://api.cohere.ai/v1/chat";
 
 	const a1111_models_endpoint = "/sdapi/v1/sd-models";
     const a1111_options_endpoint = "/sdapi/v1/options";
@@ -3499,6 +3500,8 @@ Current version: 127
 	var custom_oai_key = ""; //if set, uses the OpenAI API to generate
 	var custom_oai_model = "";
 	var custom_palm_key = "";
+	var custom_cohere_key = "";
+	var custom_cohere_model = "";
 	var custom_claude_endpoint = "";
 	var custom_claude_key = "";
 	var custom_claude_model = "";
@@ -3537,10 +3540,12 @@ Current version: 127
 		saved_palm_key: "", //do not ever share this in save files!
 		saved_kai_addr: "", //do not ever share this in save files!
 		saved_kai_key: "", //do not ever share this in save files!
+		saved_cohere_key: "", //do not ever share this in save files!
 		saved_oai_jailbreak: "", //customized oai system prompt
 		saved_oai_jailbreak2: "", //oai assistant postfix
 		saved_claude_jailbreak: "", //claude system prompt
 		saved_claude_jailbreak2: "", //claude assistant postfix
+		saved_cohere_preamble: "", //cohere preamble
 		saved_oai_custommodel: "", //customized oai custom model
 		saved_oai_role: 0, //0=user,1=assistant,2=system
 		saved_a1111_url: default_a1111_base,
@@ -4482,7 +4487,7 @@ Current version: 127
 
 	function is_using_custom_ep()
 	{
-		return (custom_oai_key!=""||custom_kobold_endpoint!=""||custom_claude_key!=""||custom_palm_key!="");
+		return (custom_oai_key!=""||custom_kobold_endpoint!=""||custom_claude_key!=""||custom_palm_key!=""||custom_cohere_key!="");
 	}
 
 	function is_using_kcpp_with_streaming()
@@ -4942,6 +4947,8 @@ Current version: 127
 			new_save_storyobj.savedsettings.saved_kai_addr = "";
 			new_save_storyobj.savedsettings.saved_kai_key = "";
 			new_save_storyobj.savedsettings.saved_openrouter_key = "";
+			new_save_storyobj.savedsettings.saved_palm_key = "";
+			new_save_storyobj.savedsettings.saved_cohere_key = "";
 
 			new_save_storyobj.savedsettings.modelhashes = [];
 
@@ -5238,6 +5245,7 @@ Current version: 127
 					let tmp_claude1 = localsettings.saved_claude_key;
 					let tmp_claude2 = localsettings.saved_claude_addr;
 					let tmp_palm1 = localsettings.saved_palm_key;
+					let tmp_cohere1 = localsettings.saved_cohere_key;
 					let tmp_kai = localsettings.saved_kai_addr;
 					let tmp_kai2 = localsettings.saved_kai_key;
 					let tmp_a1111 = localsettings.saved_a1111_url;
@@ -5272,6 +5280,7 @@ Current version: 127
 					localsettings.saved_claude_key = tmp_claude1;
 					localsettings.saved_claude_addr = tmp_claude2;
 					localsettings.saved_palm_key = tmp_palm1;
+					localsettings.saved_cohere_key = tmp_cohere1;
 					localsettings.saved_kai_addr = tmp_kai;
 					localsettings.saved_kai_key = tmp_kai2;
 					localsettings.saved_a1111_url = tmp_a1111;
@@ -6729,6 +6738,23 @@ Current version: 127
 		togglejailbreak2();
 	}
 
+	function togglecoherepreamble()
+	{
+		if(localsettings.saved_cohere_preamble=="")
+		{
+			document.getElementById("cohere_preamble").value = "";
+		}else{
+			document.getElementById("cohere_preamble").value = localsettings.saved_cohere_preamble;
+		}
+
+		if(document.getElementById("useocoherepreamble").checked)
+		{
+			document.getElementById("useocoherepreamblebox").classList.remove("hidden");
+		}else{
+			document.getElementById("useocoherepreamblebox").classList.add("hidden");
+		}
+	}
+
 	function select_custom_oai_model()
 	{
 		let isOpenrouter = (document.getElementById("customapidropdown").value==3);
@@ -6859,6 +6885,7 @@ Current version: 127
 		document.getElementById("custom_oai_model").classList.add("hidden");
 		document.getElementById("custom_openrouter_model").classList.add("hidden");
 		document.getElementById("hordeloadmodelcontainer").classList.add("hidden");
+		document.getElementById("coherecustom").classList.add("hidden");
 
 		if(epchoice==0)
 		{
@@ -6921,6 +6948,14 @@ Current version: 127
 			document.getElementById("palmcustom").classList.remove("hidden");
 			document.getElementById("custom_palm_key").value = localsettings.saved_palm_key;
 		}
+		else if(epchoice==6)
+		{
+			document.getElementById("coherecustom").classList.remove("hidden");
+			document.getElementById("custom_cohere_key").value = localsettings.saved_cohere_key;
+			document.getElementById("cohere_preamble").value = localsettings.saved_cohere_preamble;
+
+			togglecoherepreamble();
+		}
 	}
 
 	var allow_update_kobold_model_display_timestamp = performance.now() + 60000;
@@ -6961,6 +6996,7 @@ Current version: 127
 		custom_oai_key = "";
 		custom_claude_key = "";
 		custom_palm_key = "";
+		custom_cohere_key = "";
 
 		let epchoice = document.getElementById("customapidropdown").value;
 		if(epchoice==0) //ai horde
@@ -7361,7 +7397,38 @@ Current version: 127
 				render_gametext();
 			}
 		}
+		else if(epchoice==6) //cohere endpoint
+		{
+			let desired_cohere_key = document.getElementById("custom_cohere_key").value.trim();
+			custom_cohere_model = document.getElementById("custom_cohere_model").value.trim();
 
+			if(desired_cohere_key!="")
+			{
+				hide_popups();
+
+				//good to go
+				custom_cohere_key = desired_cohere_key;
+				localsettings.saved_cohere_key = custom_cohere_key;
+				localsettings.saved_cohere_preamble = document.getElementById("cohere_preamble").value;
+
+				selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": custom_cohere_model, "count": 1 }];
+				selected_workers = [];
+				if (perfdata == null) {
+					//generate some fake perf data if horde is offline and using custom endpoint
+					perfdata = {
+						"queued_requests": 0,
+						"queued_tokens": 0,
+						"past_minute_tokens": 0,
+						"worker_count": 0
+					};
+					document.body.classList.add("connected");
+					document.getElementById("connectstatus").classList.remove("color_orange");
+					document.getElementById("connectstatus").classList.add("color_green");
+				}
+				document.getElementById("connectstatus").innerHTML = "Connected to Cohere Endpoint";
+				render_gametext();
+			}
+		}
 	}
 
 	function display_endpoint_container()
@@ -7649,6 +7716,7 @@ Current version: 127
 		custom_oai_key = "";
 		custom_claude_key = "";
 		custom_palm_key = "";
+		custom_cohere_key = "";
 
 		if (selected_idx_arr.length > 0) {
 			let prep_sel_models = [];
@@ -7882,6 +7950,14 @@ Current version: 127
 		if (x && x.type === "password") {
 			x.type = "text";
 		}
+		x = document.getElementById("custom_cohere_key");
+		if (x && x.type === "password") {
+			x.type = "text";
+		}
+		x = document.getElementById("custom_palm_key");
+		if (x && x.type === "password") {
+			x.type = "text";
+		}
 	}
 	function blur_api_keys() {
 		var x = document.getElementById("apikey");
@@ -7897,6 +7973,14 @@ Current version: 127
 			x.type = "password";
 		}
 		x = document.getElementById("customkoboldkey");
+		if (x && x.type === "text") {
+			x.type = "password";
+		}
+		x = document.getElementById("custom_cohere_key");
+		if (x && x.type === "text") {
+			x.type = "password";
+		}
+		x = document.getElementById("custom_palm_key");
 		if (x && x.type === "text") {
 			x.type = "password";
 		}
@@ -10336,6 +10420,74 @@ Current version: 127
 						msgbox("Error while submitting prompt: " + error);
 					});
 			}
+			else if (custom_cohere_key != "")//handle for Cohere
+			{
+				let targetep = default_cohere_base;
+
+				let scaled_rep_pen = 0;
+				if(submit_payload.params.presence_penalty > 0)
+				{
+					scaled_rep_pen = submit_payload.params.presence_penalty;
+				}else{
+					//original range between 1 and 3, scale to 0 and 2
+					scaled_rep_pen = (submit_payload.params.rep_pen - 1.0);
+				}
+
+				let cohere_payload =
+				{
+					"max_tokens": submit_payload.params.max_length,
+					"model": custom_cohere_model,
+					"presence_penalty": scaled_rep_pen,
+					"temperature": submit_payload.params.temperature,
+					"p": submit_payload.params.top_p,
+					"message": submit_payload.prompt
+				}
+
+				if (document.getElementById("useocoherepreamble").checked) {
+					cohere_payload.preamble = document.getElementById("cohere_preamble").value
+				}
+
+				last_request_str = JSON.stringify(cohere_payload);
+				let cohere_headers = {
+					'Content-Type': 'application/json',
+					'Authorization': 'Bearer ' + custom_cohere_key
+				};
+
+				fetch(targetep, {
+					method: 'POST',
+					headers: cohere_headers,
+					body: JSON.stringify(cohere_payload),
+					referrerPolicy: 'no-referrer',
+				})
+					.then((response) => response.json())
+					.then((data) => {
+						console.log("sync finished response: " + JSON.stringify(data));
+						if (custom_cohere_key != "" && data && data.text) {
+							if (data.text) {
+								synchro_polled_response = data.text
+							}
+							else {
+								console.error("Error, unknown Cohere response");
+								clear_poll_flags();
+								render_gametext();
+								msgbox("Error, unknown Cohere response");
+							}
+						}
+						else {
+							//error occurred, maybe captcha failed
+							console.error("error occurred in Cohere generation");
+							clear_poll_flags();
+							render_gametext();
+							msgbox("Error occurred during text generation: " + formatError(data));
+						}
+					})
+					.catch((error) => {
+						console.error('Error:', error);
+						clear_poll_flags();
+						render_gametext();
+						msgbox("Error while submitting prompt: " + error);
+					});
+			}
 			else {
 				console.log("Unknown sync endpoint!");
 			}
@@ -12003,6 +12155,10 @@ Current version: 127
 				{
 					whorun = "<br>You're using the PaLM API";
 				}
+				else if(custom_cohere_key!="")
+				{
+					whorun = "<br>You're using the Cohere API";
+				}
 				else {
 					whorun = "<br>There are <span class=\"color_orange\">" + selected_models.reduce((s, a) => s + a.count, 0) + "</span> <a class=\"color_green\" href=\"#\" onclick=\"get_and_show_workers()\">volunteer(s)</a> running selected models with a total queue length of <span class=\"color_orange\">"+ selected_models.reduce((s, a) => s + a.queued, 0) + "</span> tokens";
 				}
@@ -12556,6 +12712,10 @@ Current version: 127
 		else if(custom_palm_key!="")
 		{
 			localsettings.prev_custom_endpoint_type = 5;
+		}
+		else if(custom_cohere_key!="")
+		{
+			localsettings.prev_custom_endpoint_type = 6;
 		}
 
 	}
@@ -13716,6 +13876,7 @@ Current version: 127
 				<option value="3">OpenRouter API</option>
 				<option value="4">Claude By Anthropic API</option>
 				<option value="5">PaLM/Gemini By Google API</option>
+				<option value="6">Cohere API</option>
 			</select>
 			</div>
 
@@ -13872,7 +14033,25 @@ Current version: 127
 					<option value="gemini-1.5-pro-latest">gemini-1.5-pro-latest</option>
 				</select>
 				<span class="color_green" style="font-weight: bold;">Please input Gemini or PaLM API Key.</span><br><br>
-				<input class="form-control" type="text" id="custom_palm_key" placeholder="PaLM/Gemini API Key" value=""><br>
+				<input class="form-control" type="password" id="custom_palm_key" placeholder="PaLM/Gemini API Key" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
+			</div>
+			<div id="coherecustom" class="aidgpopuplistheader anotelabel hidden">
+				Uses Cohere's models through their own API.<br><br>
+				Note that KoboldAI Lite takes no responsibility for your usage or consequences of this feature.<br><br>
+				<select style="padding:4px;" class="form-control" id="custom_cohere_model">
+					<option value="command" selected="selected">command</option>
+					<option value="command-r">command-r</option>
+					<option value="command-r-plus">command-r-plus</option>
+				</select>
+				<span class="color_green" style="font-weight: bold;">Please input Cohere API Key.</span><br><br>
+				<input class="form-control" type="password" id="custom_cohere_key" placeholder="Cohere API Key" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
+				<input type="checkbox" id="useocoherepreamble" onchange="togglecoherepreamble()">
+				<div class="box-label" id="useocoherepreamblelabel" title="">Use Preamble</div>
+
+				<span id="useocoherepreamblebox" class="hidden" onload="togglecoherepreamble();">
+					<input class="form-control" type="text" id="cohere_preamble" placeholder="(Enter Preamble)"
+					value="">
+				</span>
 			</div>
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="connect_custom_endpoint()">Ok</button>
