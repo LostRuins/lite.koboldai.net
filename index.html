@@ -7,7 +7,7 @@ Just copy this single static HTML file anywhere and open it in a browser, or fro
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 If you are submitting a pull request for Lite, PLEASE use the above repo, not the KoboldCpp one.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 125
+Current version: 127
 -Concedo
 -->
 
@@ -197,8 +197,10 @@ Current version: 125
 			margin-top: 6px;
 		}
 
-		#actionmenuitems button {
-			width: 80px;
+		#actionmenuitems button,#actionmenuitems2 button {
+			width: 60px;
+			padding: 4px 4px;
+			font-size: 12px;
 		}
 
 		#messagefield {
@@ -417,6 +419,19 @@ Current version: 125
 		}
 		@media (max-width: 520px) {
 			.nspopup.flexsizesmall {
+			width: 100%;
+			}
+		}
+		.nspopup.flexsizebig {
+			width: 940px;
+		}
+		@media (max-width: 992px) {
+			.nspopup.flexsizebig {
+			width: 740px;
+			}
+		}
+		@media (max-width: 750px) {
+			.nspopup.flexsizebig {
 			width: 100%;
 			}
 		}
@@ -1873,13 +1888,13 @@ Current version: 125
 	{
 		height: calc(98vh - 240px);
 	}
-	@media (max-width: 720px) {
+	@media (max-width: 598px) {
 		.normal_viewport_height
 		{
 			height: calc(98vh - 270px);
 		}
 	}
-	@media (max-width: 406px) {
+	@media (max-width: 342px) {
 		.normal_viewport_height
 		{
 			height: calc(98vh - 300px);
@@ -1903,7 +1918,7 @@ Current version: 125
 	}
 	.aesthetic_viewport_height.withmenu
 	{
-		height: calc(98vh - 206px);
+		height: calc(98vh - 198px);
 	}
 	.aesthetic_viewport_height.withtyping
 	{
@@ -1911,7 +1926,7 @@ Current version: 125
 	}
 	.aesthetic_viewport_height.withmenu.withtyping
 	{
-		height: calc(98vh - 256px);
+		height: calc(98vh - 248px);
 	}
 
 	/**
@@ -3407,12 +3422,14 @@ Current version: 125
 	const default_oai_base = "https://api.openai.com";
 	const default_claude_base = "https://api.anthropic.com";
 	const default_palm_base = "https://generativelanguage.googleapis.com/v1beta2/models/text-bison-001:generateText?key=";
-	const default_gemini_base = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=";
+	const default_gemini_base = "https://generativelanguage.googleapis.com/v1beta/models/";
+	const default_gemini_suffix = ":generateContent?key=";
 	const default_cohere_base = "https://api.cohere.ai/v1/chat";
 
 	const a1111_models_endpoint = "/sdapi/v1/sd-models";
     const a1111_options_endpoint = "/sdapi/v1/options";
     const a1111_txt2img_endpoint = "/sdapi/v1/txt2img";
+	const a1111_img2img_endpoint = "/sdapi/v1/img2img";
 	const a1111_interrogate_endpoint = "/sdapi/v1/interrogate";
 
 	const xtts_gen_endpoint = "/tts_to_audio/";
@@ -3568,6 +3585,7 @@ Current version: 125
 		img_allownsfw: true,
 		img_cfgscale: 7,
 		img_allowhd: false,
+		img_img2imgstr: 0.6,
 		img_steps: 20,
 		img_sampler: "Euler a",
 		img_aspect:0, //0=square,1=portrait,2=landscape
@@ -4265,6 +4283,14 @@ Current version: 125
 			}
 		}
 
+		let ep = a1111_txt2img_endpoint;
+		if(req_payload.source_image && req_payload.source_image!="")
+		{
+			ep = a1111_img2img_endpoint;
+			a1111_t2i_payload.init_images = [req_payload.source_image];
+			a1111_t2i_payload.denoising_strength = req_payload.params.denoising_strength;
+		}
+
 		if(localsettings.save_remote_images)
 		{
 			a1111_t2i_payload["save_images"] = true;
@@ -4273,7 +4299,7 @@ Current version: 125
 		//remove all null fields
 		a1111_t2i_payload = Object.fromEntries(Object.entries(a1111_t2i_payload).filter(([_, v]) => v != null));
 
-		let gen_endpoint = localsettings.saved_a1111_url + a1111_txt2img_endpoint;
+		let gen_endpoint = localsettings.saved_a1111_url + ep;
 		console.log(a1111_t2i_payload);
 		fetch(gen_endpoint, {
 			method: 'POST',
@@ -7530,6 +7556,8 @@ Current version: 125
 		});
 	}
 
+	var cached_model_list = null;
+	var stale_cached_model_time = performance.now();
 	function fetch_models(onDoneCallback)
 	{
 		if(localflag)
@@ -7537,6 +7565,14 @@ Current version: 125
 			onDoneCallback(selected_models);
 			return;
 		}
+
+		if(cached_model_list!=null && cached_model_list.length>1 && performance.now() < stale_cached_model_time)
+		{
+			console.log("Reuse cached model list");
+			onDoneCallback(cached_model_list);
+			return;
+		}
+
 		//fetch the model list
 		multifetch(models_endpoints,(resArr,errArr)=>{
 			if(resArr && resArr.length>0)
@@ -7555,6 +7591,8 @@ Current version: 125
 					}
 				}
 
+				cached_model_list = mdls;
+				stale_cached_model_time = performance.now() + 30000; //cache model list for 1m
 				onDoneCallback(mdls);
 			}
 			else
@@ -8059,6 +8097,8 @@ Current version: 125
 		document.getElementById("presets").value = localsettings.last_selected_preset;
 
 		var ttshtml = "<option value=\"0\">Disabled</option>";
+		ttshtml += "<option value=\"1000\">XTTS API Server</option>";
+		ttshtml += "<option value=\"1001\">AllTalk API Server</option>";
 		if ('speechSynthesis' in window) {
 			let voices = window.speechSynthesis.getVoices();
 			console.log("speech synth available: " + voices.length);
@@ -8068,8 +8108,6 @@ Current version: 125
 		} else {
 			console.log("No speech synth available");
 		}
-		ttshtml += "<option value=\"1000\">XTTS API Server</option>";
-		ttshtml += "<option value=\"1001\">AllTalk API Server</option>";
 		document.getElementById("ttsselect").innerHTML = ttshtml;
 		document.getElementById("ttsselect").value = localsettings.speech_synth;
 		toggle_tts_mode();
@@ -8088,6 +8126,7 @@ Current version: 125
 		document.getElementById("save_images").checked = localsettings.save_images;
 		document.getElementById("save_remote_images").checked = localsettings.save_remote_images;
 		document.getElementById("img_cfgscale").value = localsettings.img_cfgscale;
+		document.getElementById("img_img2imgstr").value = localsettings.img_img2imgstr;
 		document.getElementById("img_aspect").value = localsettings.img_aspect;
 		document.getElementById("img_sampler").value = localsettings.img_sampler;
 		document.getElementById("img_steps").value = localsettings.img_steps;
@@ -8310,6 +8349,7 @@ Current version: 125
 		update_genimg_button_visiblility();
 
 		localsettings.img_cfgscale = parseFloat(document.getElementById("img_cfgscale").value);
+		localsettings.img_img2imgstr = parseFloat(document.getElementById("img_img2imgstr").value);
 		localsettings.img_aspect = parseInt(document.getElementById("img_aspect").value);
 		localsettings.img_sampler = document.getElementById("img_sampler").value;
 		localsettings.img_steps = parseInt(document.getElementById("img_steps").value);
@@ -8321,6 +8361,11 @@ Current version: 125
 		{
 			localsettings.img_cfgscale = defaultsettings.img_cfgscale;
 		}
+		if(isNaN(localsettings.img_img2imgstr))
+		{
+			localsettings.img_img2imgstr = defaultsettings.img_img2imgstr;
+		}
+		localsettings.img_img2imgstr = cleannum(localsettings.img_img2imgstr, 0.0, 1.0);
 		if(isNaN(localsettings.img_aspect))
 		{
 			localsettings.img_aspect = defaultsettings.img_aspect;
@@ -9025,9 +9070,9 @@ Current version: 125
 		show_abort_button(false);
 	}
 
-	function do_manual_gen_image(sentence)
+	function do_manual_gen_image(sentence, base64img="") //b64 for img2img
 	{
-		generate_new_image(sentence);
+		generate_new_image(sentence, base64img);
 		document.getElementById("btn_genimg").disabled = true;
 		document.getElementById("btn_genimg2").disabled = true;
 		//disable it for 8 sec to prevent spam
@@ -10248,7 +10293,9 @@ Current version: 125
 				"topK": (submit_payload.params.top_k<1?300:submit_payload.params.top_k),
 				"candidateCount":1};
 
-				if(document.getElementById("custom_palm_model").value=="text-bison-001")
+				let mdlname = document.getElementById("custom_palm_model").value;
+
+				if(mdlname=="text-bison-001")
 				{
 					payload.safetySettings = [
 						{
@@ -10273,7 +10320,7 @@ Current version: 125
 						}
 					];
 				}
-				else if(document.getElementById("custom_palm_model").value=="gemini-pro")
+				else if(mdlname=="gemini-pro" || mdlname=="gemini-1.5-pro-latest")
 				{
 					if(localsettings.opmode==1)
 					{
@@ -10281,7 +10328,7 @@ Current version: 125
 						submit_payload.params.max_length += 100; //add length
 					}
 
-					urlbase = default_gemini_base;
+					urlbase = default_gemini_base + mdlname + default_gemini_suffix;
 					payload = {
 					"contents": [
 						{
@@ -10549,7 +10596,16 @@ Current version: 125
 		return inputtext;
 	}
 
-	function generate_new_image(sentence) {
+	function generate_new_image(sentence, base64img="") {
+
+		if(base64img!="")
+		{
+			let parts = base64img.split(',');
+			if (parts.length === 2 && parts[0].startsWith('data:image')) {
+				base64img = parts[1];
+			}
+		}
+
 
 		if(localsettings.image_styles && localsettings.image_styles!="")
 		{
@@ -10632,9 +10688,15 @@ Current version: 125
 			"replacement_filter": true,
 			"r2": false
 		}
+		if(base64img!=null && base64img!="")
+		{
+			genimg_payload["source_image"] = base64img;
+			genimg_payload["params"]["denoising_strength"] = localsettings.img_img2imgstr;
+		}
 
 		if(localsettings.generate_images_mode==1) //horde
 		{
+
 			fetch(stablehorde_submit_endpoint, {
 				method: 'POST', // or 'PUT'
 				headers: {
@@ -10876,6 +10938,7 @@ Current version: 125
 			AI Vision: `+visionstatus+` <span class="helpicon">?<span class="helptext">This allows the AI to visually recognize this image and react to it. On KoboldCpp, LLaVA models can be used. Otherwise, uses Horde or Local A1111 for image interrogation if enabled.</span></span>
 			`+togglebtn+`
 			<br><button type="button" class="btn btn-primary" style="width: 140px; padding: 2px; margin: 3px; font-size:12px;" onclick="show_orig_prompt()">View Original Prompt</button>
+			<button type="button" class="btn btn-primary" style="width: 110px; padding: 2px; margin: 3px; font-size:12px;" onclick="add_img2img()">Create Img2Img</button>
 			`;
 			document.getElementById("aivisionmode").value = savedmeta.visionmode;
 		}
@@ -10889,6 +10952,19 @@ Current version: 125
 	function show_orig_prompt()
 	{
 		msgbox(latest_orig_prompt,"Original Prompt");
+	}
+	function add_img2img()
+	{
+		inputBox("Enter prompt to create a new image, based on this source image.","Create Img2Img","","Enter Img2Img Prompt",()=>{
+			let userinput = getInputBoxValue();
+			if(userinput.trim()!="")
+			{
+				var sentence = userinput.trim().substring(0, 380);
+				let b64 = document.getElementById("zoomedimg").src;
+				do_manual_gen_image(sentence, b64);
+				document.getElementById("zoomedimgcontainer").classList.add("hidden");
+			}
+		},false);
 	}
 	function click_image(target,imghash)
 	{
@@ -11111,6 +11187,14 @@ Current version: 125
 		{
 			let st = get_instruct_starttag(true);
 			let et = get_instruct_endtag(true);
+
+			//sometimes the OAI type endpoints get confused and repeat the instruct tag, so trim it
+			let earlymatch = gentxt.indexOf(et);
+			if(earlymatch==0)
+			{
+				gentxt = gentxt.substring(et.length);
+			}
+
 			let found = gentxt.indexOf(st);
 			let splitresponse = [];
 			if (found != -1) //if found, truncate to it
@@ -11474,7 +11558,7 @@ Current version: 125
 		show_abort_button(false);
 		if (pending_response_id && pending_response_id != "-1" && pending_response_id != "")
 		{
-			if (poll_ticks_passed > (3/(poll_interval_base_text*0.001))) //4sec passed
+			if (poll_ticks_passed > (1/(poll_interval_base_text*0.001))) //1sec passed
 			{
 				show_abort_button(true);
 			}
@@ -13903,6 +13987,7 @@ Current version: 125
 					<option value="claude-2.0">claude-2.0</option>
 					<option value="claude-3-opus-20240229">claude-3-opus</option>
 					<option value="claude-3-sonnet-20240229">claude-3-sonnet</option>
+					<option value="claude-3-haiku-20240307">claude-3-haiku</option>
 				</select>
 				<input type="checkbox" id="claudeaddversion" onchange="" checked>
 				<div class="box-label" title="Add endpoint version">Add Endpoint Version</div>
@@ -13923,6 +14008,7 @@ Current version: 125
 				<select style="padding:4px;" class="form-control" id="custom_palm_model">
 					<option value="text-bison-001" selected="selected">text-bison-001</option>
 					<option value="gemini-pro">gemini-pro</option>
+					<option value="gemini-1.5-pro-latest">gemini-1.5-pro-latest</option>
 				</select>
 				<span class="color_green" style="font-weight: bold;">Please input Gemini or PaLM API Key.</span><br><br>
 				<input class="form-control" type="text" id="custom_palm_key" placeholder="PaLM/Gemini API Key" value=""><br>
@@ -14606,7 +14692,7 @@ Current version: 125
 
 	<div class="popupcontainer flex hidden" id="memorycontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup flexsize evenhigher">
+		<div class="nspopup flexsizebig evenhigher">
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Memory</div>
 			</div>
@@ -14825,7 +14911,7 @@ Current version: 125
 
 	<div class="popupcontainer flex hidden" id="imagestylecontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup fixsize moderate">
+		<div class="nspopup flexsizesmall higher">
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Image Generation Settings</div>
 			</div>
@@ -14854,7 +14940,7 @@ Current version: 125
 				</select>
 			</div>
 			<div class="inlinelabel">
-				<div class="justifyleft" style="padding:4px">Aspect Ratio<span class="helpicon">?
+				<div class="justifyleft" style="padding:4px">Aspect Ratio <span class="helpicon">?
 					<span class="helptext">Square is recommended. Changing aspect ratio will affect the resolution used to generate. This may impact quality or memory usage.</span>
 				</span>: </div>
 				<select style="padding:1px; height:23px; width: 100px;" class="form-control" id="img_aspect">
@@ -14862,6 +14948,12 @@ Current version: 125
 					<option value="1">Portrait</option>
 					<option value="2">Landscape</option>
 				</select>
+			</div>
+			<div class="inlinelabel">
+				<div class="justifyleft" style="padding:4px">Img2Img Strength <span class="helpicon">?
+					<span class="helptext">Higher values lead to a more different image.</span>
+				</span>: </div>
+				<input type="text" inputmode="decimal" id="img_img2imgstr" style="width:60px">
 			</div>
 			<div class="inlinelabel">
 				<div class="justifyleft" style="padding:4px">Save Higher-Res <span class="helpicon">?
