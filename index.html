@@ -198,9 +198,9 @@ Current version: 131
 		}
 
 		#actionmenuitems button,#actionmenuitems2 button {
-			width: 76px;
+			width: 78px;
 		}
-		@media (max-width: 720px) {
+		@media (max-width: 624px) {
 			#actionmenuitems button,#actionmenuitems2 button {
 				width: 60px;
 				padding: 4px 4px;
@@ -1051,6 +1051,11 @@ Current version: 131
 			background-color: #b1b1b1;
 		}
 
+		.memtabcontainer
+		{
+			padding:3px;
+		}
+
 		.navbar-button-bar {
 			display: block;
 			height: 2px;
@@ -1388,13 +1393,21 @@ Current version: 131
 		margin: 2px;
 		font-weight: bolder;
 		}
+		.wiinputkeycol
+		{
+			min-width: 70px;
+    		width: 15%;
+		}
 		.wiinputkey
 		{
 		font-size: 14px;
 		height: 24px;
 		padding: 2px;
 		margin: 0px;
-		width: 20vw;
+		}
+		.wiinputvalcol
+		{
+			width: 85%;
 		}
 		.wiinputval
 		{
@@ -1402,7 +1415,6 @@ Current version: 131
 		height: 24px;
 		padding: 2px;
 		margin: 0px;
-		width: 60vw;
 		resize: vertical;
 		}
 		.wilist
@@ -3610,6 +3622,8 @@ Current version: 131
 	var welcome = "";
 	var personal_notes = "";
 	var logitbiasdict = {};
+	var regexreplace_pattern = [];
+	var regexreplace_replacement = [];
 
 	var localsettings = {
 		my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
@@ -5056,6 +5070,8 @@ Current version: 131
 		new_save_storyobj.wiinsertlocation = wi_insertlocation;
 		new_save_storyobj.personal_notes = personal_notes;
 		new_save_storyobj.logitbiasdict = JSON.parse(JSON.stringify(logitbiasdict));
+		new_save_storyobj.regexreplace_pattern = JSON.parse(JSON.stringify(regexreplace_pattern));
+		new_save_storyobj.regexreplace_replacement = JSON.parse(JSON.stringify(regexreplace_replacement));
 
 		if (export_settings) {
 			new_save_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
@@ -5227,6 +5243,8 @@ Current version: 131
 			let old_current_wi = current_wi;
 			let old_extrastopseq = extrastopseq;
 			let old_notes = personal_notes;
+			let old_regexreplace_pattern = regexreplace_pattern;
+			let old_regexreplace_replacement = regexreplace_replacement;
 
 			//determine if oldui file or newui file format
 			restart_new_game(false);
@@ -5297,6 +5315,12 @@ Current version: 131
 				if (storyobj.personal_notes) {
 					personal_notes = storyobj.personal_notes;
 				}
+				if (storyobj.regexreplace_pattern) {
+					regexreplace_pattern = storyobj.regexreplace_pattern;
+				}
+				if (storyobj.regexreplace_replacement) {
+					regexreplace_replacement = storyobj.regexreplace_replacement;
+				}
 			} else {
 				//v2 load
 				if(storyobj.prompt!="")
@@ -5355,6 +5379,8 @@ Current version: 131
 				if(!loadstopseq)
 				{
 					extrastopseq = old_extrastopseq;
+					regexreplace_pattern = old_regexreplace_pattern;
+					regexreplace_replacement = old_regexreplace_replacement;
 				}
 
 				if (storyobj.savedsettings && storyobj.savedsettings != "")
@@ -6579,7 +6605,6 @@ Current version: 131
 			document.getElementById("workercontainer").classList.contains("hidden") &&
 			document.getElementById("myownworkercontainer").classList.contains("hidden") &&
 			document.getElementById("sharecontainer").classList.contains("hidden") &&
-			document.getElementById("wicontainer").classList.contains("hidden") &&
 			document.getElementById("customendpointcontainer").classList.contains("hidden") &&
 			document.getElementById("quickstartcontainer").classList.contains("hidden") &&
 			document.getElementById("zoomedimgcontainer").classList.contains("hidden") &&
@@ -6601,7 +6626,6 @@ Current version: 131
 		document.getElementById("workercontainer").classList.add("hidden");
 		document.getElementById("myownworkercontainer").classList.add("hidden");
 		document.getElementById("sharecontainer").classList.add("hidden");
-		document.getElementById("wicontainer").classList.add("hidden");
 		document.getElementById("customendpointcontainer").classList.add("hidden");
 		document.getElementById("quickstartcontainer").classList.add("hidden");
 		document.getElementById("zoomedimgcontainer").classList.add("hidden");
@@ -6702,6 +6726,23 @@ Current version: 131
 			}
 
 		},true,true);
+	}
+
+	function add_stop_seq()
+	{
+		inputBox("Enter a new stopping sequence to be added.","Add Stop Sequence","","Enter a Stop Sequence",()=>{
+			let userinput = getInputBoxValue();
+			if(userinput.trim()!="")
+			{
+				let ov = document.getElementById("extrastopseq").value;
+				if(ov!="")
+				{
+					ov += "||$||";
+				}
+				ov += userinput.trim();
+				document.getElementById("extrastopseq").value = ov;
+			}
+		},false);
 	}
 
 	var msgboxOnDone = hide_msgbox;
@@ -8327,6 +8368,17 @@ Current version: 131
 		}
 	}
 
+	function validate_regex(pattern)
+	{
+		var isValid = true;
+		try {
+			new RegExp(pattern);
+		} catch(e) {
+			isValid = false;
+		}
+		return isValid;
+	}
+
 	function validate_sd_model() {
 		var inputmodel = document.getElementById("generate_images_model").value;
 		let matched = false;
@@ -8784,8 +8836,34 @@ Current version: 131
 		extrastopseq = document.getElementById("extrastopseq").value;
 		newlineaftermemory = (document.getElementById("newlineaftermemory").checked?true:false);
 		logitbiasdict = pendinglogitbias;
-		hide_popups();
-		render_gametext();
+		regexreplace_pattern = [];
+		regexreplace_replacement = [];
+		for(let i=0;i<20;++i)
+		{
+			let v1 = "";
+			let v2 = "";
+			let box1 = document.getElementById("regexreplace_pattern"+i);
+			let box2 = document.getElementById("regexreplace_replacement"+i);
+			if(!box1 || !box2)
+			{
+				break;
+			}
+			if(validate_regex(box1.value))
+			{
+				v1 = box1.value;
+			}
+			if(validate_regex(box2.value))
+			{
+				v2 = box2.value;
+			}
+
+			if(v1)
+			{
+				regexreplace_pattern.push(v1);
+				regexreplace_replacement.push(v2);
+			}
+		}
+
 	}
 
 	function set_personal_notes()
@@ -8979,6 +9057,8 @@ Current version: 131
 			wi_searchdepth = 0;
 			wi_insertlocation = 0;
 			current_anotetemplate = "[Author's note: <|>]";
+			regexreplace_pattern = [];
+			regexreplace_replacement = [];
 		}
 		render_gametext(save); //necessary to trigger an autosave to wipe out current story in case they exit browser after newgame.
 	}
@@ -11250,6 +11330,19 @@ Current version: 131
 		//do a second pass, this time removing the actual stop token
 		gentxt = trim_extra_stop_seqs(gentxt,false);
 
+		//apply regex transform
+		if(regexreplace_pattern && regexreplace_pattern.length>0)
+		{
+			for(let i=0;i<regexreplace_pattern.length;++i)
+			{
+				if(regexreplace_pattern[i]!="")
+				{
+					let pat = new RegExp(regexreplace_pattern[i], "gm");
+					gentxt = gentxt.replace(pat, regexreplace_replacement[i]);
+				}
+			}
+		}
+
 		//trim trailing whitespace, and multiple newlines
 		if (localsettings.trimwhitespace) {
 			gentxt = gentxt.replace(/[\t\r\n ]+$/, '');
@@ -12525,18 +12618,15 @@ Current version: 131
 		if (selected_models.length == 0) //if no model, disable all first
 		{
 			document.getElementById("btn_actmem").disabled = true;
-			document.getElementById("btn_actwi").disabled = true;
 			document.getElementById("btn_actundo").disabled = true;
 			document.getElementById("btn_actredo").disabled = true;
 			document.getElementById("btn_actretry").disabled = true;
 			if(perfdata==null) //allow these 2 in offline mode
 			{
 				document.getElementById("btn_actmem").disabled = false;
-				document.getElementById("btn_actwi").disabled = false;
 			}
 		} else {
 			document.getElementById("btn_actmem").disabled = false;
-			document.getElementById("btn_actwi").disabled = false;
 			document.getElementById("btn_actundo").disabled = false;
 			document.getElementById("btn_actredo").disabled = false;
 			document.getElementById("btn_actretry").disabled = false;
@@ -12899,8 +12989,39 @@ Current version: 131
 		render_gametext();
 	}
 
+	var memory_tab = 0;
+	function display_memory_tab(newtab)
+	{
+		memory_tab = newtab;
+		document.getElementById("memory_tab").classList.remove("active");
+		document.getElementById("wi_tab").classList.remove("active");
+		document.getElementById("token_tab").classList.remove("active");
+		document.getElementById("memory_tab_container").classList.add("hidden");
+		document.getElementById("wi_tab_container").classList.add("hidden");
+		document.getElementById("token_tab_container").classList.add("hidden");
+		switch (newtab) {
+			case 0:
+				document.getElementById("memory_tab").classList.add("active");
+				document.getElementById("memory_tab_container").classList.remove("hidden");
+				break;
+			case 1:
+				document.getElementById("wi_tab").classList.add("active");
+				document.getElementById("wi_tab_container").classList.remove("hidden");
+				break;
+			case 2:
+				document.getElementById("token_tab").classList.add("active");
+				document.getElementById("token_tab_container").classList.remove("hidden");
+				break;
+			default:
+				break;
+		}
+	}
+
 	function btn_memory() {
 		document.getElementById("memorycontainer").classList.remove("hidden");
+		display_memory_tab(memory_tab);
+
+		//setup memory tab
 		document.getElementById("memorytext").value = current_memory;
 		document.getElementById("anotetext").value = current_anote;
 		document.getElementById("anotetemplate").value = current_anotetemplate;
@@ -12916,6 +13037,29 @@ Current version: 131
 		{
 			document.getElementById("noextrastopseq").classList.remove("hidden");
 		}
+
+		//setup wi tab
+		backup_wi();
+		update_wi();
+
+		for(let i=0;i<20;++i)
+		{
+			let a1 = document.getElementById("regexreplace_pattern"+i);
+			let a2 = document.getElementById("regexreplace_replacement"+i);
+			if(a1 && a2)
+			{
+				if(i<regexreplace_pattern.length)
+				{
+					a1.value = regexreplace_pattern[i];
+					a2.value = regexreplace_replacement[i];
+				}
+				else
+				{
+					a1.value = a2.value = "";
+				}
+			}
+		}
+
 	}
 
 	function toggle_wi_sk(idx) {
@@ -12951,7 +13095,7 @@ Current version: 131
 		save_wi();
 		var ce = current_wi[idx];
 		current_wi.splice(idx, 1);
-		btn_wi();
+		update_wi();
 	}
 
 	function add_wi() {
@@ -12966,7 +13110,7 @@ Current version: 131
 			"constant": false
 		};
 		current_wi.push(ne);
-		btn_wi();
+		update_wi();
 	}
 
 	function save_wi() {
@@ -12993,12 +13137,11 @@ Current version: 131
 	function wi_quick_search()
 	{
 		save_wi();
-		btn_wi();
+		update_wi();
 	}
 
-	function btn_wi() {
+	function update_wi() {
 		document.getElementById("case_sensitive_wi").checked = (localsettings.case_sensitive_wi?true:false);
-		document.getElementById("wicontainer").classList.remove("hidden");
 
 		let wilist = document.getElementById("wilist");
 		let qsval = document.getElementById("wiquicksearch").value;
@@ -13016,15 +13159,15 @@ Current version: 131
 			}
 
 			selectionhtml += `<tr class='`+ (ishidden?"hidden":"") +`' id="wirow` + i + `"><td class="col-8" style="font-size: 10px;">` +
-				`<button type="button" class="btn btn-danger widelbtn" id="widel` + i + `" onclick="return del_wi(` + i + `)">X</button></td>` +
-				`<td class="col-6">
-		<input class="form-control wiinputkey" id="wikey`+ i + `" placeholder="Key(s)" value="` + winame + `">
-		<input class="form-control wiinputkey `+ (curr.selective ? `` : `hidden`) + `" id="wikeysec` + i + `" placeholder="Sec. Key(s)" value="` + wisec + `">` + `</td>
-		<td class="col-10">
-		<textarea class="form-control wiinputval" style="line-height:1.1" id="wival`+ i + `" placeholder="What To Remember" rows="3">` + witxt + `</textarea>
-		</td>`+
-				`
-		<td>
+			`<button type="button" class="btn btn-danger widelbtn" id="widel` + i + `" onclick="return del_wi(` + i + `)">X</button></td>` +
+			`<td class="col-6 wiinputkeycol">
+			<input class="form-control wiinputkey" id="wikey`+ i + `" placeholder="Key(s)" value="` + winame + `">
+			<input class="form-control wiinputkey `+ (curr.selective ? `` : `hidden`) + `" id="wikeysec` + i + `" placeholder="Sec. Key(s)" value="` + wisec + `">` + `</td>
+			<td class="col-10 wiinputvalcol">
+			<textarea class="form-control wiinputval" style="line-height:1.1" id="wival`+ i + `" placeholder="What To Remember" rows="3">` + witxt + `</textarea>
+			</td>`+
+					`
+			<td>
 			<a id="wiskt`+ i + `" href="#" class=` + (curr.selective ? "witoggleron" : "witoggleroff") + ` title="Toggle Selective Key mode (if enabled, this world info entry will be included in memory only if at least one PRIMARY KEY and at least one SECONDARY KEY are both present in the story)" onclick="return toggle_wi_sk(` + i + `)">📑</a>
 			<a id="wickt`+ i + `" href="#" class=` + (curr.constant ? "witoggleron" : "witoggleroff") + ` title="Toggle Constant Key mode (if enabled, this world info entry will always be included in memory)" onclick="return toggle_wi_ck(` + i + `)">📌</a>
 			</td>
@@ -13032,7 +13175,7 @@ Current version: 131
 		`;
 		}
 		if (current_wi.length == 0) {
-			selectionhtml = "<div class=\"aidgpopuplistheader anotelabel\">No world info.<br>Click [+] to add a new entry.</div>"
+			selectionhtml = "<div class=\"aidgpopuplistheader anotelabel\">No world info.<br>Click [+Add] to add a new entry.</div>"
 		}
 
 		selectionhtml += "</table>"
@@ -13883,7 +14026,6 @@ Current version: 131
 		<div class="flex" id="actionmenu">
 			<div id="actionmenuitems">
 				<button type="button" class="btn btn-primary" id="btn_actmem" onclick="btn_memory()">Memory</button>
-				<button type="button" class="btn btn-primary" id="btn_actwi" onclick="backup_wi();btn_wi()">W Info</button>
 				<button type="button" class="btn btn-primary" id="btn_actundo" onpointerdown="btn_back_longpress_start()" onpointerleave="btn_back_longpress_end()" onpointerup="btn_back_longpress_end()" onclick="btn_back()">Back</button>
 				<button type="button" class="btn btn-primary" id="btn_actredo" onpointerdown="btn_redo_longpress_start()" onpointerleave="btn_redo_longpress_end()" onpointerup="btn_redo_longpress_end()" onclick="btn_redo()">Redo</button>
 				<button type="button" class="btn btn-primary" id="btn_actretry" onclick="btn_retry()">Retry</button>
@@ -13930,7 +14072,6 @@ Current version: 131
 			<div class="flex hidden" id="actionmenu2">
 				<div id="actionmenuitems2" class="box flex-push-right" style="margin-bottom: 2px;">
 					<button type="button" class="btn btn-primary" id="btn_actmem2" onclick="btn_memory()">Memory</button>
-					<button type="button" class="btn btn-primary" id="btn_actwi2" onclick="backup_wi();btn_wi()">W Info</button>
 					<button type="button" class="btn btn-primary" id="btn_actundo2" onpointerdown="btn_back_longpress_start()" onpointerleave="btn_back_longpress_end()" onpointerup="btn_back_longpress_end()" onclick="btn_back()">Back</button>
 					<button type="button" class="btn btn-primary" id="btn_actredo2" onpointerdown="btn_redo_longpress_start()" onpointerleave="btn_redo_longpress_end()" onpointerup="btn_redo_longpress_end()" onclick="btn_redo()">Redo</button>
 					<button type="button" class="btn btn-primary" id="btn_actretry2" onclick="btn_retry()">Retry</button>
@@ -14883,110 +15024,131 @@ Current version: 131
 		<div class="popupbg flex"></div>
 		<div class="nspopup flexsizebig evenhigher">
 			<div class="popuptitlebar">
-				<div class="popuptitletext">Memory</div>
+				<div class="popuptitletext">Memory and Data</div>
 			</div>
-			<div class="settinglabel">
-				<span class="justifyleft">Memory<span class="helpicon">?<span
-					class="helptext">Put the information you want the AI to always remember. It will be inserted into the top of every request sent to the AI.</span></span></span>
-				<span class="justifyright flex-push-right" >
-					<div class="settinglabel" style="padding-top: 4px;">
-						<div class="justifyleft settingsmall" title="Add newline after injecting memory text">Newline After Memory </div>
-					   <input type="checkbox" id="newlineaftermemory" style="margin:0px 0 0;" checked>
-					</div>
-				</span>
-			</div>
-			<textarea class="form-control" id="memorytext" style="height: 120px;"
-				placeholder="Edit the memory to be sent with each request to the AI."></textarea>
+			<div><ul class="nav nav-tabs settingsnav">
+				<li id="memory_tab" class="active"><a class="" href="#" onclick="display_memory_tab(0)">Memory</a></li>
+				<li id="wi_tab"><a class="" href="#" onclick="display_memory_tab(1)">World Info</a></li>
+				<li id="token_tab"><a class="" href="#" onclick="display_memory_tab(2)">Tokens</a></li>
+			  </ul></div>
 
-			<div class="settinglabel">
-
-				<div class="justifyleft"><br>Author's Note<span class="helpicon">?<span
-					class="helptext">Similar to Memory, but inserted near the end of the text instead of the start. A good way to control the mood/behavior of the AI.</span></span></div>
-				<span class="justifyright flex-push-right" >
-					<button type="button" class="btn btn-primary" style="padding:4px 6px;margin-top:4px;" id="btnnotes" onclick="set_personal_notes()">Notes</button>
-					<button type="button" class="btn btn-primary" style="padding:4px 6px;margin-top:4px;" id="btnautogenmem" onclick="autogenerate_summary_memory()">AutoGenerate Memory</button>
-				</span>
+			<div class="memtabcontainer" id="memory_tab_container">
+				<div class="settinglabel">
+					<span class="justifyleft">Memory<span class="helpicon">?<span
+						class="helptext">Put the information you want the AI to always remember. It will be inserted into the top of every request sent to the AI.</span></span></span>
+					<span class="justifyright flex-push-right" >
+						<div class="settinglabel" style="padding-top: 4px;">
+							<div class="justifyleft settingsmall" title="Add newline after injecting memory text">Newline After Memory </div>
+						<input type="checkbox" id="newlineaftermemory" style="margin:0px 0 0;" checked>
+						</div>
+					</span>
+				</div>
+				<textarea class="form-control" id="memorytext" style="height: 120px;"
+					placeholder="Edit the memory to be sent with each request to the AI."></textarea>
+				<div class="settinglabel">
+					<div class="justifyleft"><br>Author's Note<span class="helpicon">?<span
+						class="helptext">Similar to Memory, but inserted near the end of the text instead of the start. A good way to control the mood/behavior of the AI.</span></span></div>
+					<span class="justifyright flex-push-right" >
+						<button type="button" class="btn btn-primary" style="padding:4px 6px;margin-top:4px;" id="btnnotes" onclick="set_personal_notes()">Notes</button>
+						<button type="button" class="btn btn-primary" style="padding:4px 6px;margin-top:4px;" id="btnautogenmem" onclick="autogenerate_summary_memory()">AutoGenerate Memory</button>
+					</span>
+				</div>
+				<textarea class="form-control" id="anotetext"
+					placeholder="Author's Note will be inserted close to end of context."></textarea>
+				<br>
+				<div class="settinglabel">
+					<span class="justifyleft">Author's Note Template<span class="helpicon">?<span
+						class="helptext">A placeholder, will be inserted with the author's note replacing the &lt;|&gt;. You generally don't need to change this.</span></span></span>
+					<span class="justifyright flex-push-right" >
+						A/N Strength<span class="helpicon">?<span
+							class="helptext">Controls how far back to insert the Author's Note. Notes injected closer to the end have a stronger effect.</span></span>
+					</span>
+				</div>
+				<div style="display: flex; column-gap: 4px;">
+				<input class="form-control anotetempbox" type="text"
+					placeholder="(the &lt;|&gt; will be replaced with the Author's Note text)" value="" id="anotetemplate">
+					<select style="padding:4px;" class="anotetempscale form-control" id="anote_strength">
+						<option value="480">Weak</option>
+						<option value="320">Medium</option>
+						<option value="160">Strong</option>
+						<option value="0">Immediate</option>
+					</select>
+				</div>
 			</div>
 
+			<div class="memtabcontainer" id="wi_tab_container">
+				<div style="text-align: right;">
+				<button type="button" style="padding:4px;margin:4px" class="btn btn-info widelbtn" id="wiadd" onclick="add_wi()">+Add</button>
+				</div>
+				<div class="wilist" id="wilist">
+				</div>
 
-			<textarea class="form-control" id="anotetext"
-				placeholder="Author's Note will be inserted close to end of context."></textarea>
-			<br>
-			<div class="settinglabel">
-				<span class="justifyleft">Author's Note Template<span class="helpicon">?<span
-					class="helptext">A placeholder, will be inserted with the author's note replacing the &lt;|&gt;. You generally don't need to change this.</span></span></span>
-				<span class="justifyright flex-push-right" >
-					A/N Strength<span class="helpicon">?<span
-						class="helptext">Controls how far back to insert the Author's Note. Notes injected closer to the end have a stronger effect.</span></span>
-				</span>
+				<div class="settinglabel" style="padding: 4px;">
+					<div class="justifyleft settingsmall">WI Insert Location <span class="helpicon">?<span
+						class="helptext">Controls where the world info should be inserted</span></span></div>
+				<select style="height:16px;padding:0px;margin:0px 4px 0; width:90px;font-size:10px;" class="form-control" id="wi_insertlocation">
+					<option value="0">After Memory</option>
+					<option value="1">Before A/N</option>
+				</select></div>
+				<div class="settinglabel" style="padding: 4px;">
+					<div class="justifyleft settingsmall">WI Search Depth <span class="helpicon">?<span
+						class="helptext">Controls how far back in the text to search for World Info Keys</span></span></div>
+				<select style="height:16px;padding:0px;margin:0px 4px 0; width:90px;font-size:10px;" class="form-control" id="wi_searchdepth">
+					<option value="0">Full Context</option>
+					<option value="1024">Last 1024</option>
+					<option value="512">Last 512</option>
+					<option value="256">Last 256</option>
+				</select></div>
+
+
+				<div style="float:right;">
+					<input class="settinglabel miniinput" style="margin: 3px; width: 90px;" type="text" placeholder="Quick Search" value="" id="wiquicksearch" oninput="wi_quick_search()">
+				</div>
+				<div class="settinglabel" style="padding: 4px;">
+					<div class="justifyleft settingsmall" title="Controls whether the world info keys are matched in a case-sensitive way.">Case Sensitive Keys </div>
+				<input type="checkbox" id="case_sensitive_wi" style="margin:0px 0 0;">
+				</div>
 			</div>
 
-			<div style="display: flex; column-gap: 4px;">
-			<input class="form-control anotetempbox" type="text"
-				placeholder="(the &lt;|&gt; will be replaced with the Author's Note text)" value="" id="anotetemplate">
-				<select style="padding:4px;" class="anotetempscale form-control" id="anote_strength">
-					<option value="480">Weak</option>
-					<option value="320">Medium</option>
-					<option value="160">Strong</option>
-					<option value="0">Immediate</option>
-				</select>
+			<div class="memtabcontainer" id="token_tab_container">
+				<div class="justifyleft settinglabel">Extra Stopping Sequences <span class="helpicon">?<span
+					class="helptext">Triggers the text generator to stop generating early if this sequence appears, in addition to default stop sequences. If you want multiple sequences, separate them with the following delimiter: ||$||</span></span></div>
+					<div class="color_red hidden" id="noextrastopseq">Stop Sequences may be unavailable.</div>
+					<div style="display: flex; column-gap: 4px; margin-bottom: 4px;">
+					<input class="form-control stopseqbox" type="text" placeholder="None" value="" id="extrastopseq">
+					<button type="button" class="btn btn-primary" style="width:90px;padding:6px 6px;" onclick="add_stop_seq()">Add New</button>
+				</div>
+				<div class="settinglabel">
+					<div class="justifyleft"><br>Logit Biases <span class="helpicon">?<span
+						class="helptext">Specify a dictionary of token IDs to modify the probability of occuring.</span></span></div>
+				</div>
+				<div><button type="button" class="btn btn-primary" style="width:134px;padding:6px 6px;" id="btnlogitbias" onclick="set_logit_bias()">Edit Logit Biases</button></div>
+				<div class="settinglabel">
+					<div class="justifyleft"><br>Custom Regex Replace <span class="helpicon">?<span
+						class="helptext">Allows transforming incoming text with up to 3 regex patterns, modifying all matches. Replacements will be applied in sequence.</span></span></div>
+				</div>
+				<table class="settinglabel text-center" style="border-spacing: 3px 2px;	border-collapse: separate;">
+					<tr>
+						<th>Pattern <span class="helpicon">?<span class="helptext">The regex pattern to match against any incoming text. Leave blank to disable.</span></span></th>
+						<th>Replacement <span class="helpicon">?<span class="helptext">The string to replace matches with. Capture groups are allowed (e.g. $1). To remove all matches, leave this blank.</span></span></th>
+					</tr>
+					<tr>
+					<td><input class="settinglabel miniinput" type="text" placeholder="(Inactive)" value="" id="regexreplace_pattern0"></td>
+					<td><input class="settinglabel miniinput" type="text" placeholder="(Remove)" value="" id="regexreplace_replacement0"></td>
+					</tr>
+					<tr>
+					<td><input class="settinglabel miniinput" type="text" placeholder="(Inactive)" value="" id="regexreplace_pattern1"></td>
+					<td><input class="settinglabel miniinput" type="text" placeholder="(Remove)" value="" id="regexreplace_replacement1"></td>
+					</tr>
+					<tr>
+					<td><input class="settinglabel miniinput" type="text" placeholder="(Inactive)" value="" id="regexreplace_pattern2"></td>
+					<td><input class="settinglabel miniinput" type="text" placeholder="(Remove)" value="" id="regexreplace_replacement2"></td>
+					</tr>
+				</table>
 			</div>
-			<br>
-			<div class="justifyleft settinglabel">Extra Stopping Sequences <span class="helpicon">?<span
-				class="helptext">Triggers the text generator to stop generating early if this sequence appears, in addition to default stop sequences. If you want multiple sequences, separate them with the following delimiter: ||$||</span></span></div>
-				<div class="color_red hidden" id="noextrastopseq">Stop Sequences may be unavailable.</div>
-				<div style="display: flex; column-gap: 4px; margin-bottom: 4px;">
-				<input class="form-control stopseqbox" type="text" placeholder="None" value="" id="extrastopseq">
-				<button type="button" class="btn btn-primary" style="width:104px;padding:6px 6px;" id="btnlogitbias" onclick="set_logit_bias()">Logit Biases</button>
-			</div>
+
 			<div class="popupfooter">
-				<button type="button" class="btn btn-primary" onclick="confirm_memory()">OK</button>
-				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
-			</div>
-		</div>
-	</div>
-
-	<div class="popupcontainer flex hidden" id="wicontainer">
-		<div class="popupbg flex"></div>
-		<div class="nspopup higher">
-			<div class="popuptitlebar">
-				<div style="float:right;"><button type="button" class="btn btn-info widelbtn" id="wiadd" onclick="add_wi()">+</button></div>
-				<div class="popuptitletext">World Info</div>
-			</div>
-
-			<div class="wilist" id="wilist">
-
-			</div>
-
-			<div class="settinglabel" style="padding: 4px;">
-				<div class="justifyleft settingsmall">WI Insert Location <span class="helpicon">?<span
-					class="helptext">Controls where the world info should be inserted</span></span></div>
-			<select style="height:16px;padding:0px;margin:0px 4px 0; width:90px;font-size:10px;" class="form-control" id="wi_insertlocation">
-				<option value="0">After Memory</option>
-				<option value="1">Before A/N</option>
-			</select></div>
-			<div class="settinglabel" style="padding: 4px;">
-				<div class="justifyleft settingsmall">WI Search Depth <span class="helpicon">?<span
-					class="helptext">Controls how far back in the text to search for World Info Keys</span></span></div>
-			<select style="height:16px;padding:0px;margin:0px 4px 0; width:90px;font-size:10px;" class="form-control" id="wi_searchdepth">
-				<option value="0">Full Context</option>
-				<option value="1024">Last 1024</option>
-				<option value="512">Last 512</option>
-				<option value="256">Last 256</option>
-			</select></div>
-
-
-			<div style="float:right;">
-				<input class="settinglabel miniinput" style="margin: 3px; width: 90px;" type="text" placeholder="Quick Search" value="" id="wiquicksearch" oninput="wi_quick_search()">
-			</div>
-			<div class="settinglabel" style="padding: 4px;">
-				<div class="justifyleft settingsmall" title="Controls whether the world info keys are matched in a case-sensitive way.">Case Sensitive Keys </div>
-			   <input type="checkbox" id="case_sensitive_wi" style="margin:0px 0 0;">
-			</div>
-
-			<div class="popupfooter">
-
-				<button type="button" class="btn btn-primary" onclick="save_wi();autosave();hide_popups()">Ok</button>
+				<button type="button" class="btn btn-primary" onclick="confirm_memory();save_wi();render_gametext();hide_popups()">OK</button>
 				<button type="button" class="btn btn-primary" onclick="revert_wi();hide_popups()">Cancel</button>
 			</div>
 		</div>
