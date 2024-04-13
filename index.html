@@ -7,7 +7,7 @@ Just copy this single static HTML file anywhere and open it in a browser, or fro
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 If you are submitting a pull request for Lite, PLEASE use the above repo, not the KoboldCpp one.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 131
+Current version: 132
 -Concedo
 -->
 
@@ -1706,9 +1706,11 @@ Current version: 131
 	}
 
 	.chat_mesgs{
-		padding: 12px 20px 12px 20px;
 		width:100%;
 		background: #0b141a;
+	}
+	.chat_mesgs_inner{
+		padding: 12px 20px 12px 20px;
 	}
 
 	.gamescreenbgnormal
@@ -1722,7 +1724,7 @@ Current version: 131
 	}
 	.transparentbg
 	{
-		background-color: #00000000;
+		background-color: #00000000 !important;
 	}
 
 	.chat_sent_msg p {
@@ -3945,6 +3947,7 @@ Current version: 131
 					document.body.style.backgroundImage = selectedImg;
 					document.getElementById("gamescreen").classList.add("translucentbg");
 					document.getElementById("enhancedchatinterface").classList.add("transparentbg");
+					document.getElementById("enhancedchatinterface_inner").classList.add("transparentbg");
 				}
 				loadok = true;
 			} else {
@@ -4926,6 +4929,7 @@ Current version: 131
 				document.body.style.backgroundImage = selectedImg;
 				document.getElementById("gamescreen").classList.add("translucentbg");
 				document.getElementById("enhancedchatinterface").classList.add("transparentbg");
+				document.getElementById("enhancedchatinterface_inner").classList.add("transparentbg");
 				localStorage.setItem(STORAGE_PREFIX + "bgimg", compressedImageURI);
 			}, true, false, 1024, 0.5);
 		}
@@ -4935,6 +4939,7 @@ Current version: 131
 		document.body.style.backgroundImage = "none";
 		document.getElementById("gamescreen").classList.remove("translucentbg");
 		document.getElementById("enhancedchatinterface").classList.remove("transparentbg");
+		document.getElementById("enhancedchatinterface_inner").classList.remove("transparentbg");
 		localStorage.setItem(STORAGE_PREFIX + "bgimg", "");
 	}
 
@@ -13469,6 +13474,7 @@ Current version: 131
 
 			this.show_chat_names = true;
 			this.rounded_bubbles = true;
+			this.match_background = false;
 
 			this.you_portrait = null;
 			this.AI_portrait = "default";
@@ -13654,6 +13660,7 @@ Current version: 131
 		aestheticInstructUISettings.code_block_background = document.getElementById('code-block-background-colorselector').style.color;
 		aestheticInstructUISettings.code_block_foreground = document.getElementById('code-block-foreground-colorselector').style.color;
 
+		aestheticInstructUISettings.match_background = document.getElementById('aui_match_background').checked;
 		aestheticInstructUISettings.rounded_bubbles = document.getElementById('aui_rounded_bubbles').checked;
 		aestheticInstructUISettings.show_chat_names = document.getElementById('aui_show_chat_names').checked;
 		aestheticInstructUISettings.use_markdown = document.getElementById('instructModeMarkdown').checked;
@@ -13696,6 +13703,7 @@ Current version: 131
 		setElementColor('code-block-foreground-colorselector', aestheticInstructUISettings.code_block_foreground, false);
 
 		// Apply the settings from the json file to the UI.
+		document.getElementById('aui_match_background').checked = aestheticInstructUISettings.match_background;
 		document.getElementById('aui_rounded_bubbles').checked = aestheticInstructUISettings.rounded_bubbles;
 		document.getElementById('aui_show_chat_names').checked = aestheticInstructUISettings.show_chat_names;
 		document.getElementById('instructModeMarkdown').checked = aestheticInstructUISettings.use_markdown;
@@ -13751,6 +13759,16 @@ Current version: 131
 
 	function render_enhanced_chat_instruct(input, isPreview) //class suffix string used to prevent defined styles from leaking into global scope
 	{
+		if(!isPreview)
+		{
+			if(aestheticInstructUISettings.match_background)
+			{
+				document.getElementById('enhancedchatinterface_inner').style.backgroundColor = aestheticInstructUISettings.bubbleColor_sys;
+			}else
+			{
+				document.getElementById('enhancedchatinterface_inner').style.backgroundColor = null;
+			}
+		}
 		let classSuffixStr = isPreview ? "prv" : "";
 		const contextDict = { sysOpen: '<sys_context_koboldlite_internal>', youOpen: '<user_context_koboldlite_internal>', AIOpen: '<AI_context_koboldlite_internal>', closeTag: '<end_of_context_koboldlite_internal>' }
 		let you = "$UnusedTagMatch$"; let bot = "$UnusedTagMatch$"; // Instruct tags will be used to wrap text in styled bubbles.
@@ -14065,38 +14083,40 @@ Current version: 131
 		</div>
 
 		<div id="enhancedchatinterface" class="chat_mesgs hidden">
-			<div id="chat_msg_body" class="chat_msg_history aesthetic_viewport_height"></div>
-			<div class="hidden" id="chatistyping" style="text-align:right;font-size:13px;color:#999999; padding-bottom: 3px;"><div style="padding-bottom: 2px;" id="chataityping">The AI is typing...</div><div style="padding-top:2px;text-align:right;" class="dot-flashing flex flex-push-right"></div></div>
+			<div id="enhancedchatinterface_inner" class="chat_mesgs_inner">
+				<div id="chat_msg_body" class="chat_msg_history aesthetic_viewport_height"></div>
+				<div class="hidden" id="chatistyping" style="text-align:right;font-size:13px;color:#999999; padding-bottom: 3px;"><div style="padding-bottom: 2px;" id="chataityping">The AI is typing...</div><div style="padding-top:2px;text-align:right;" class="dot-flashing flex flex-push-right"></div></div>
 
-			<!-- A greatly simplified action menu for this mode -->
-			<div class="flex hidden" id="actionmenu2">
-				<div id="actionmenuitems2" class="box flex-push-right" style="margin-bottom: 2px;">
-					<button type="button" class="btn btn-primary" id="btn_actmem2" onclick="btn_memory()">Memory</button>
-					<button type="button" class="btn btn-primary" id="btn_actundo2" onpointerdown="btn_back_longpress_start()" onpointerleave="btn_back_longpress_end()" onpointerup="btn_back_longpress_end()" onclick="btn_back()">Back</button>
-					<button type="button" class="btn btn-primary" id="btn_actredo2" onpointerdown="btn_redo_longpress_start()" onpointerleave="btn_redo_longpress_end()" onpointerup="btn_redo_longpress_end()" onclick="btn_redo()">Redo</button>
-					<button type="button" class="btn btn-primary" id="btn_actretry2" onclick="btn_retry()">Retry</button>
-					<button type="button" class="btn btn-primary bg_green" id="btn_genimg2" onclick="add_img_btn_menu()">Add Img</button>
-					<button type="button" class="btn btn-primary" id="btn_editmode" onclick="btn_editmode()">Edit</button>
+				<!-- A greatly simplified action menu for this mode -->
+				<div class="flex hidden" id="actionmenu2">
+					<div id="actionmenuitems2" class="box flex-push-right" style="margin-bottom: 2px;">
+						<button type="button" class="btn btn-primary" id="btn_actmem2" onclick="btn_memory()">Memory</button>
+						<button type="button" class="btn btn-primary" id="btn_actundo2" onpointerdown="btn_back_longpress_start()" onpointerleave="btn_back_longpress_end()" onpointerup="btn_back_longpress_end()" onclick="btn_back()">Back</button>
+						<button type="button" class="btn btn-primary" id="btn_actredo2" onpointerdown="btn_redo_longpress_start()" onpointerleave="btn_redo_longpress_end()" onpointerup="btn_redo_longpress_end()" onclick="btn_redo()">Redo</button>
+						<button type="button" class="btn btn-primary" id="btn_actretry2" onclick="btn_retry()">Retry</button>
+						<button type="button" class="btn btn-primary bg_green" id="btn_genimg2" onclick="add_img_btn_menu()">Add Img</button>
+						<button type="button" class="btn btn-primary" id="btn_editmode" onclick="btn_editmode()">Edit</button>
 
+					</div>
 				</div>
+
+				<div class="cht_inp_hold_outer">
+					<div class="cht_inp_hold">
+					<button onclick="show_groupchat_select()" id="chat_btnmode_chat" class="chat_btnmode_chat hidden" type="button"></button>
+					<button onclick="btn_adventure_mode()" id="chat_btnmode_adventure" class="chat_btnmode_adventure actionmode hidden" type="button"></button>
+					<div id="cht_inp_bg" class="cht_inp_bg">
+					<div class="cht_inp_bg_inner" id="cht_inp_lengthtester" style="white-space: nowrap; visibility: hidden; height: 0px; position:absolute; width: auto;"></div>
+					<textarea class="cht_inp_bg_inner" id="cht_inp" type="text" name="chtchtinp"  role="presentation" autocomplete="noppynop" spellcheck="true" rows="1" wrap="on" placeholder="Type a message" value="" oninput="update_submit_button();chat_resize_input();" onkeypress="return chat_handle_typing(event)"/></textarea>
+					</div>
+					<button onclick="chat_submit_generation()" id="chat_msg_send_btn" class="chat_msg_send_btn" type="button"></button>
+					<button onclick="abort_generation()" id="chat_msg_send_btn_abort" class="hidden chat_msg_send_btn_abort" type="button"></button>
+					<button type="button" class="chat_msg_cust_btn" id="btn_chat_cust" onclick="chat_toggle_actionmenu()"></button>
+					</div>
+				</div>
+
+				<div class="lastreq" id="lastreq2" style="padding-top: 2px; color:#999999"><span class="color_gray">KoboldAI Lite - A frontend for self hosted and third party API services.</span></div>
 			</div>
-
-			<div class="cht_inp_hold_outer">
-			  <div class="cht_inp_hold">
-				<button onclick="show_groupchat_select()" id="chat_btnmode_chat" class="chat_btnmode_chat hidden" type="button"></button>
-				<button onclick="btn_adventure_mode()" id="chat_btnmode_adventure" class="chat_btnmode_adventure actionmode hidden" type="button"></button>
-				<div id="cht_inp_bg" class="cht_inp_bg">
-				<div class="cht_inp_bg_inner" id="cht_inp_lengthtester" style="white-space: nowrap; visibility: hidden; height: 0px; position:absolute; width: auto;"></div>
-				<textarea class="cht_inp_bg_inner" id="cht_inp" type="text" name="chtchtinp"  role="presentation" autocomplete="noppynop" spellcheck="true" rows="1" wrap="on" placeholder="Type a message" value="" oninput="update_submit_button();chat_resize_input();" onkeypress="return chat_handle_typing(event)"/></textarea>
-				</div>
-				<button onclick="chat_submit_generation()" id="chat_msg_send_btn" class="chat_msg_send_btn" type="button"></button>
-				<button onclick="abort_generation()" id="chat_msg_send_btn_abort" class="hidden chat_msg_send_btn_abort" type="button"></button>
-				<button type="button" class="chat_msg_cust_btn" id="btn_chat_cust" onclick="chat_toggle_actionmenu()"></button>
-				</div>
-			</div>
-
-			<div class="lastreq" id="lastreq2" style="padding-top: 2px; color:#999999"><span class="color_gray">KoboldAI Lite - A frontend for self hosted and third party API services.</span></div>
-		  </div>
+		</div>
 	</div>
 
 	<div class="popupcontainer flex hidden" id="quickstartcontainer">
@@ -15431,6 +15451,9 @@ Current version: 131
 									<div class="ui-settings-inline" style="font-size: 10px; margin-left: 10px">
 										<div style="padding-top: 2px;">Rounded Bubbles: </div>
 										<input id="aui_rounded_bubbles"  type="checkbox" style="height: 10px">
+
+										<div style="padding-top: 2px; padding-left: 5px;">Color Background: </div>
+										<input id="aui_match_background"  type="checkbox" style="height: 10px">
 									</div>
 
 									<div class="ui-settings-inline">
