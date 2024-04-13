@@ -4179,7 +4179,7 @@ Current version: 131
 
 				}
 				else {
-					msgbox("Failed to connect to AI Service!\nPlease check your network connection.");
+					msgbox("Failed to connect to AI Horde Service!\nPlease check your network connection.<br><br>You may still be able to connect to an alternative service, <a href='#' class='color_blueurl' onclick='display_endpoint_container()'>click here to view options</a>.","Error Encountered",true);
 					document.body.classList.remove("connected");
 					document.getElementById("connectstatus").innerHTML = "Offline Mode";
 					document.getElementById("connectstatus").classList.add("color_orange");
@@ -4769,6 +4769,45 @@ Current version: 131
 			return null;
 		}
 		return story;
+	}
+
+	function pick_default_horde_models()
+	{
+		fetch_models((mdls) => {
+			//can we find the model that's used? if yes load it, otherwise load the first one
+			if (mdls.length == 0 && !localflag) {
+				msgbox("No models available. Unable to load.");
+			}
+			else
+			{
+				if (!localflag) {
+					selected_models = [];
+
+					for (var i = 0; i < mdls.length; ++i) {
+						for (var j = 0; j < defaultmodels.length; ++j) {
+							if (mdls[i].name.trim().toLowerCase().includes(defaultmodels[j].trim().toLowerCase()) ||
+								defaultmodels[j].trim().toLowerCase().includes(mdls[i].name.trim().toLowerCase())) {
+								selected_models.push(mdls[i]);
+							}
+						}
+					}
+
+					if (selected_models.length == 0) //no matching models, just assign one
+					{
+						selected_models.push(mdls[0]);
+					}
+
+					const allMatched1 = selected_models.every(item => item.cluster === selected_models[0].cluster);
+
+					if (!allMatched1) {
+						//if conflicted, get the most numerous cluster (mode)
+						let pickedcluster = get_most_common_cluster(selected_models);
+						selected_models = selected_models.filter(item => item.cluster === pickedcluster);
+					}
+					render_gametext();
+				}
+			}
+		});
 	}
 
 	//attempts to load story from compressed json, in KAI format
@@ -6371,7 +6410,7 @@ Current version: 131
 			else
 			{
 				console.log("Error: " + errArr);
-				msgbox("Failed to connect to Worker Endpoint!\nPlease check your network connection.");
+				msgbox("Failed to retrieve AI Horde Worker list!\nPlease check your network connection.");
 			}
 		});
 
@@ -8956,6 +8995,7 @@ Current version: 131
 			confirm_settings();
 			document.getElementById("keep_memory").checked = false;
 			clear_bg_img();
+			pick_default_horde_models();
 		},null);
 
 	}
