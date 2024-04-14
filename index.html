@@ -7,7 +7,7 @@ Just copy this single static HTML file anywhere and open it in a browser, or fro
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 If you are submitting a pull request for Lite, PLEASE use the above repo, not the KoboldCpp one.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 132
+Current version: 133
 -Concedo
 -->
 
@@ -5356,7 +5356,8 @@ Current version: 132
 								"comment": itm.comment,
 								"folder": null,
 								"selective": itm.selective,
-								"constant": itm.constant
+								"constant": itm.constant,
+								"probability":100
 							};
 							current_wi.push(nwi);
 						}
@@ -5495,7 +5496,8 @@ Current version: 132
 				"comment": "",
 				"folder": null,
 				"selective": false,
-				"constant": false
+				"constant": false,
+				"probability":100
 			};
 			loadedwi.push(nwi);
 		}
@@ -5524,7 +5526,8 @@ Current version: 132
 				"comment": itm.comment,
 				"folder": null,
 				"selective": itm.selective,
-				"constant": itm.constant
+				"constant": itm.constant,
+				"probability":100
 			};
 			loadedwi.push(nwi);
 		}
@@ -5660,7 +5663,8 @@ Current version: 132
 				"comment": "",
 				"folder": null,
 				"selective": false,
-				"constant": false
+				"constant": false,
+				"probability":100
 			};
 			loadedwi.push(nwi);
 		}
@@ -5718,7 +5722,8 @@ Current version: 132
 									"comment": "",
 									"folder": null,
 									"selective": false,
-									"constant": false
+									"constant": false,
+									"probability":100
 								};
 								temp_scenario.worldinfo.push(nwi);
 							}
@@ -9992,42 +9997,63 @@ Current version: 132
 				for (var x = 0; x < current_wi.length; ++x) {
 					let wi = current_wi[x];
 
+					let shoulduse = false;
+
 					//see if this is a valid wi entry
-					if (wi.key == null || wi.key == "") {
+					if (wi.content == null || wi.content == "") {
 						continue;
 					}
 
-					//selective, but bad secondary key. treat as only 1 key
-					let invalidseckey = (wi.selective && (wi.keysecondary == "" || wi.keysecondary == null));
-
-					let wiks = wi.key.split(",");
-
-					let shoulduse = false;
 					if (wi.constant) {
 						shoulduse = true;
 					}
-					else if (!wi.selective || invalidseckey) {
-						if (localsettings.case_sensitive_wi) {
-							shoulduse = wiks.some(k => wimatch_context.includes(k.trim()));
-						} else {
-							shoulduse = wiks.some(k => wimatch_context.includes(k.trim().toLowerCase()));
-						}
-					} else {
-						let wiks2 = wi.keysecondary.split(",");
-						if (localsettings.case_sensitive_wi) {
-							let t1 = wiks.some(k => wimatch_context.includes(k.trim()));
-							let t2 = wiks2.some(k => wimatch_context.includes(k.trim()));
-							shoulduse = (t1 && t2);
-						} else {
-							let t1 = wiks.some(k => wimatch_context.includes(k.trim().toLowerCase()));
-							let t2 = wiks2.some(k => wimatch_context.includes(k.trim().toLowerCase()));
-							shoulduse = (t1 && t2);
+					else
+					{
+						//see if this is a valid wi entry
+						if (wi.key == null || wi.key == "") {
+							continue;
 						}
 
+						//selective, but bad secondary key. treat as only 1 key
+						let invalidseckey = (wi.selective && (wi.keysecondary == "" || wi.keysecondary == null));
+
+						let wiks = wi.key.split(",");
+
+						if (!wi.selective || invalidseckey) {
+							if (localsettings.case_sensitive_wi) {
+								shoulduse = wiks.some(k => wimatch_context.includes(k.trim()));
+							} else {
+								shoulduse = wiks.some(k => wimatch_context.includes(k.trim().toLowerCase()));
+							}
+						} else {
+							let wiks2 = wi.keysecondary.split(",");
+							if (localsettings.case_sensitive_wi) {
+								let t1 = wiks.some(k => wimatch_context.includes(k.trim()));
+								let t2 = wiks2.some(k => wimatch_context.includes(k.trim()));
+								shoulduse = (t1 && t2);
+							} else {
+								let t1 = wiks.some(k => wimatch_context.includes(k.trim().toLowerCase()));
+								let t2 = wiks2.some(k => wimatch_context.includes(k.trim().toLowerCase()));
+								shoulduse = (t1 && t2);
+							}
+						}
 					}
 
 					if (shoulduse) {
-						wistr += wi.content + "\n";
+						//check if randomness less than 100%
+						if(wi.probability && wi.probability<100)
+						{
+							let roll = Math.floor(Math.random() * 100) + 1;
+							if(roll>=wi.probability)
+							{
+								wistr += wi.content + "\n";
+							}
+						}
+						else
+						{
+							//always insert
+							wistr += wi.content + "\n";
+						}
 					}
 				}
 			}
@@ -13112,7 +13138,8 @@ Current version: 132
 			"comment": "",
 			"folder": null,
 			"selective": false,
-			"constant": false
+			"constant": false,
+			"probability":100
 		};
 		current_wi.push(ne);
 		update_wi();
@@ -13123,6 +13150,8 @@ Current version: 132
 			current_wi[i].key = document.getElementById("wikey" + i).value;
 			current_wi[i].keysecondary = document.getElementById("wikeysec" + i).value;
 			current_wi[i].content = document.getElementById("wival" + i).value;
+			let prb = document.getElementById("wirng" + i).value;
+			current_wi[i].probability = (prb?prb:100);
 		}
 		localsettings.case_sensitive_wi = (document.getElementById("case_sensitive_wi").checked?true:false);
 		wi_searchdepth = document.getElementById("wi_searchdepth").value;
@@ -13150,18 +13179,21 @@ Current version: 132
 
 		let wilist = document.getElementById("wilist");
 		let qsval = document.getElementById("wiquicksearch").value;
-		selectionhtml = `<table style="border-collapse: separate; border-spacing: 1.5pt;">`;
+		let selectionhtml = `<table style="border-collapse: separate; border-spacing: 1.5pt;">`;
 		for (var i = 0; i < current_wi.length; ++i) {
 			var curr = current_wi[i];
 			var winame = escapeHtml(curr.key);
 			var witxt = escapeHtml(curr.content);
 			var wisec = curr.keysecondary;
+			var wirngval = (curr.probability?curr.probability:100);
 
 			var ishidden = false;
 			if(qsval!="" && !winame.toLowerCase().includes(qsval.toLowerCase()) && !witxt.toLowerCase().includes(qsval.toLowerCase()))
 			{
 				ishidden = true;
 			}
+
+			let probarr = [100,90,75,50,25,10,5,1];
 
 			selectionhtml += `<tr class='`+ (ishidden?"hidden":"") +`' id="wirow` + i + `"><td class="col-8" style="font-size: 10px;">` +
 			`<button type="button" class="btn btn-danger widelbtn" id="widel` + i + `" onclick="return del_wi(` + i + `)">X</button></td>` +
@@ -13170,11 +13202,19 @@ Current version: 132
 			<input class="form-control wiinputkey `+ (curr.selective ? `` : `hidden`) + `" id="wikeysec` + i + `" placeholder="Sec. Key(s)" value="` + wisec + `">` + `</td>
 			<td class="col-10 wiinputvalcol">
 			<textarea class="form-control wiinputval" style="line-height:1.1" id="wival`+ i + `" placeholder="What To Remember" rows="3">` + witxt + `</textarea>
-			</td>`+
-					`
+			</td>
 			<td>
 			<a id="wiskt`+ i + `" href="#" class=` + (curr.selective ? "witoggleron" : "witoggleroff") + ` title="Toggle Selective Key mode (if enabled, this world info entry will be included in memory only if at least one PRIMARY KEY and at least one SECONDARY KEY are both present in the story)" onclick="return toggle_wi_sk(` + i + `)">📑</a>
 			<a id="wickt`+ i + `" href="#" class=` + (curr.constant ? "witoggleron" : "witoggleroff") + ` title="Toggle Constant Key mode (if enabled, this world info entry will always be included in memory)" onclick="return toggle_wi_ck(` + i + `)">📌</a>
+			<select id="wirng`+i+`" style="padding:1px; height:auto; width: 30px; appearance: none; font-size: 7pt;" class="form-control" title="Chance to trigger if allowed">`;
+
+			let opts = "";
+			for(let n=0;n<probarr.length;++n)
+			{
+				opts += `<option value="`+probarr[n]+`" `+(probarr[n]==wirngval?"selected":"")+`>`+probarr[n]+`%</option>`;
+			}
+			selectionhtml += opts +`
+			</select>
 			</td>
 		</tr>
 		`;
