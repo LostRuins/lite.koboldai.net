@@ -6824,6 +6824,7 @@ Current version: 133
 	}
 
 	var onInputboxOk = null;
+	var onInputboxCancel = null;
 	function inputBox(text,title,inputVal,inputPlaceholder,onDone,isHtml=false,isTextArea=false)
 	{
 		if (!text) { text = ""; }
@@ -6852,6 +6853,14 @@ Current version: 133
 		}
 
 		onInputboxOk = function(){document.getElementById("inputboxcontainer").classList.add("hidden");onDone();};
+		onInputboxCancel = null;
+		document.getElementById("inputboxcancel").classList.add("hidden");
+	}
+	function inputBoxOkCancel(text,title,inputVal,inputPlaceholder,onDone,onCancel,isHtml=false,isTextArea=false)
+	{
+		inputBox(text,title,inputVal,inputPlaceholder,onDone,isHtml,isTextArea);
+		document.getElementById("inputboxcancel").classList.remove("hidden");
+		onInputboxCancel = function(){document.getElementById("inputboxcontainer").classList.add("hidden");onCancel();};
 	}
 	function getInputBoxValue()
 	{
@@ -9012,13 +9021,18 @@ Current version: 133
 	}
 	function apply_user_mod()
 	{
-		inputBox("Here, you can apply third-party mod scripts shared by other users.<br><br><span class='color_red'>Caution: This mod will have full access to your story and API keys, so only run third-party mods that you trust! For security, mods must always be manually applied every time.</span><br><br>Want to start modding? <a href='#' class='color_blueurl' onclick='simplemodexample()'>Click here</a> to load a simple example mod.","Apply Third-Party Mod","","Paste Mod Script Here",()=>{
+		let currmod = localStorage.getItem(STORAGE_PREFIX + "savedusermod", "");
+		inputBoxOkCancel("Here, you can apply third-party mod scripts shared by other users.<br><br><span class='color_red'>Caution: This mod will have full access to your story and API keys, so only run third-party mods that you trust! For security, mods must always be manually applied every time.</span><br><br>Want to start modding? <a href='#' class='color_blueurl' onclick='simplemodexample()'>Click here</a> to load a simple example mod.","Apply Third-Party Mod",currmod,"Paste Mod Script Here",()=>{
 			let userinput = getInputBoxValue().trim();
+			localStorage.setItem(STORAGE_PREFIX + "savedusermod", userinput);
 			if(userinput!="" && userinput.trim()!="")
 			{
 				var userModScript = new Function(userinput);
 				userModScript();
 			}
+		},
+		()=>{
+			//do nothing on cancel
 		},true,true);
 	}
 
@@ -9092,6 +9106,7 @@ Current version: 133
 			document.getElementById("keep_memory").checked = false;
 			clear_bg_img();
 			pick_default_horde_models();
+			localStorage.setItem(STORAGE_PREFIX + "savedusermod", "");
 		},null);
 
 	}
@@ -15677,6 +15692,7 @@ Current version: 133
 
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="onInputboxOk()">OK</button>
+				<button type="button" id="inputboxcancel" class="btn btn-primary hidden" onclick="onInputboxCancel()">Cancel</button>
 			</div>
 		</div>
 	</div>
