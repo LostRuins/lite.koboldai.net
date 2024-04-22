@@ -8256,6 +8256,7 @@ Current version: 134
 		document.getElementById("miro_type").value = localsettings.miro_type;
 		document.getElementById("miro_tau").value = localsettings.miro_tau;
 		document.getElementById("miro_eta").value = localsettings.miro_eta;
+		edit_instruct_tag_format();
 		if(is_using_kcpp_with_mirostat())
 		{
 			document.getElementById("mirosupporteddiv").classList.remove("hidden");
@@ -8655,54 +8656,86 @@ Current version: 134
 		render_gametext(false);
 	}
 
-	function toggle_instruct_tag_format()
+	function get_preset_instruct_tag_format(sel)
 	{
-		let sel = document.getElementById('instruct_tag_format').value;
+		let st = "";
+		let et = "";
+
 		switch(sel)
 		{
 			case "1": //alpaca
-				document.getElementById('instruct_starttag').value = defaultsettings.instruct_starttag;
-				document.getElementById('instruct_endtag').value = defaultsettings.instruct_endtag;
+				st = defaultsettings.instruct_starttag;
+				et = defaultsettings.instruct_endtag;
 				break;
 			case "2": //vicuna
-				document.getElementById('instruct_starttag').value = "\\nUSER: ";
-				document.getElementById('instruct_endtag').value = "\\nASSISTANT: ";
+				st = "\\nUSER: ";
+				et = "\\nASSISTANT: ";
 				break;
 			case "3": //metharme
-				document.getElementById('instruct_starttag').value = `<|user|>`;
-				document.getElementById('instruct_endtag').value = `<|model|>`;
+				st = `<|user|>`;
+				et = `<|model|>`;
 				break;
 			case "4": //llama 2 chat
-				document.getElementById('instruct_starttag').value = "[INST] ";
-				document.getElementById('instruct_endtag').value = " [/INST]";
+				st = "[INST] ";
+				et = " [/INST]";
 				break;
 			case "5": //Q & A
-				document.getElementById('instruct_starttag').value = "\\nQuestion: ";
-				document.getElementById('instruct_endtag').value = "\\nAnswer: ";
+				st = "\\nQuestion: ";
+				et = "\\nAnswer: ";
 				break;
 			case "6": //ChatML
-				document.getElementById('instruct_starttag').value = "<|im_end|>\\n<|im_start|>user\\n";
-				document.getElementById('instruct_endtag').value = "<|im_end|>\\n<|im_start|>assistant\\n";
+				st = "<|im_end|>\\n<|im_start|>user\\n";
+				et = "<|im_end|>\\n<|im_start|>assistant\\n";
 				break;
 			case "7": //Input & Output
-				document.getElementById('instruct_starttag').value = "\\n{{[INPUT]}}\\n";
-				document.getElementById('instruct_endtag').value = "\\n{{[OUTPUT]}}\\n";
+				st = "\\n{{[INPUT]}}\\n";
+				et = "\\n{{[OUTPUT]}}\\n";
 				break;
 			case "8": //CommandR
-				document.getElementById('instruct_starttag').value = "<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|USER_TOKEN|>";
-				document.getElementById('instruct_endtag').value = "<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>";
+				st = "<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|USER_TOKEN|>";
+				et = "<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>";
 				break;
 			case "9": //llama 3 chat
-				document.getElementById('instruct_starttag').value = "<|eot_id|><|start_header_id|>user<|end_header_id|>\\n\\n";
-				document.getElementById('instruct_endtag').value = "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\\n\\n";
+				st = "<|eot_id|><|start_header_id|>user<|end_header_id|>";
+				et = "<|eot_id|><|start_header_id|>assistant<|end_header_id|>";
 				break;
 			default:
 				break;
 		}
+
+		return {"start":st,"end":et};
+	}
+	function toggle_instruct_tag_format()
+	{
+		let sel = document.getElementById('instruct_tag_format').value;
+		let itags = get_preset_instruct_tag_format(sel);
+		if(itags.start!="" && itags.end!="")
+		{
+			document.getElementById('instruct_starttag').value = itags.start;
+			document.getElementById('instruct_endtag').value = itags.end;
+		}
 	}
 	function edit_instruct_tag_format()
 	{
-		document.getElementById('instruct_tag_format').value = "0";
+		let dropdown = document.getElementById('instruct_tag_format');
+		let options = dropdown.options;
+		let found = false;
+		for (let i = 0; i < options.length; i++) {
+			let option = options[i];
+			let itags = get_preset_instruct_tag_format(option.value);
+			let st = document.getElementById('instruct_starttag').value;
+			let et = document.getElementById('instruct_endtag').value;
+			if(itags.start!="" && itags.end!="" && itags.start==st && itags.end==et)
+			{
+				document.getElementById('instruct_tag_format').value = option.value;
+				found = true;
+				break;
+			}
+		}
+		if(!found)
+		{
+			document.getElementById('instruct_tag_format').value = "0";
+		}
 	}
 
 	function handle_bot_name_input()
