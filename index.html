@@ -1396,11 +1396,19 @@ Current version: 134
 
 		.widelbtn
 		{
-		font-size: 12px;
-		height: 24px;
-		padding: 5px;
-		margin: 2px;
-		font-weight: bolder;
+			font-size: 12px;
+			height: 24px;
+			padding: 5px;
+			margin: 2px;
+			font-weight: bolder;
+		}
+		.wiarrowbtn
+		{
+			font-size: 12px;
+			height: 18px;
+			padding: 2px;
+			margin: 0px 1px 0px 1px;
+			font-weight: bolder;
 		}
 		.wiinputkeycol
 		{
@@ -3633,8 +3641,8 @@ Current version: 134
 	var welcome = "";
 	var personal_notes = "";
 	var logitbiasdict = {};
-	var regexreplace_pattern = [];
-	var regexreplace_replacement = [];
+	var regexreplace_data = [];
+	const num_regex_rows = 4;
 
 	var localsettings = {
 		my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
@@ -5084,8 +5092,7 @@ Current version: 134
 		new_save_storyobj.wiinsertlocation = wi_insertlocation;
 		new_save_storyobj.personal_notes = personal_notes;
 		new_save_storyobj.logitbiasdict = JSON.parse(JSON.stringify(logitbiasdict));
-		new_save_storyobj.regexreplace_pattern = JSON.parse(JSON.stringify(regexreplace_pattern));
-		new_save_storyobj.regexreplace_replacement = JSON.parse(JSON.stringify(regexreplace_replacement));
+		new_save_storyobj.regexreplace_data = JSON.parse(JSON.stringify(regexreplace_data));
 
 		if (export_settings) {
 			new_save_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
@@ -5257,8 +5264,7 @@ Current version: 134
 			let old_current_wi = current_wi;
 			let old_extrastopseq = extrastopseq;
 			let old_notes = personal_notes;
-			let old_regexreplace_pattern = regexreplace_pattern;
-			let old_regexreplace_replacement = regexreplace_replacement;
+			let old_regexreplace_data = regexreplace_data;
 
 			//determine if oldui file or newui file format
 			restart_new_game(false);
@@ -5329,11 +5335,18 @@ Current version: 134
 				if (storyobj.personal_notes) {
 					personal_notes = storyobj.personal_notes;
 				}
-				if (storyobj.regexreplace_pattern) {
-					regexreplace_pattern = storyobj.regexreplace_pattern;
+				//todo: remove temporary backwards compatibility for regex
+				if (storyobj.regexreplace_pattern && storyobj.regexreplace_replacement) {
+					let pat = storyobj.regexreplace_pattern;
+					let rep = storyobj.regexreplace_replacement;
+					let ll = Math.min(pat.length,rep.length)
+					for(let i=0;i<ll;++i)
+					{
+						regexreplace_data.push({"p":pat[i],"r":rep[i],"b":false});
+					}
 				}
-				if (storyobj.regexreplace_replacement) {
-					regexreplace_replacement = storyobj.regexreplace_replacement;
+				if (storyobj.regexreplace_data) {
+					regexreplace_data = storyobj.regexreplace_data;
 				}
 			} else {
 				//v2 load
@@ -5394,8 +5407,7 @@ Current version: 134
 				if(!loadstopseq)
 				{
 					extrastopseq = old_extrastopseq;
-					regexreplace_pattern = old_regexreplace_pattern;
-					regexreplace_replacement = old_regexreplace_replacement;
+					regexreplace_data = old_regexreplace_data;
 				}
 
 				if (storyobj.savedsettings && storyobj.savedsettings != "")
@@ -8901,14 +8913,15 @@ Current version: 134
 		extrastopseq = document.getElementById("extrastopseq").value;
 		newlineaftermemory = (document.getElementById("newlineaftermemory").checked?true:false);
 		logitbiasdict = pendinglogitbias;
-		regexreplace_pattern = [];
-		regexreplace_replacement = [];
-		for(let i=0;i<20;++i)
+		regexreplace_data = [];
+		for(let i=0;i<num_regex_rows;++i)
 		{
 			let v1 = "";
 			let v2 = "";
+			let bothways = false;
 			let box1 = document.getElementById("regexreplace_pattern"+i);
 			let box2 = document.getElementById("regexreplace_replacement"+i);
+			let bw = document.getElementById("regexreplace_bothways"+i).checked;
 			if(!box1 || !box2)
 			{
 				break;
@@ -8924,8 +8937,7 @@ Current version: 134
 
 			if(v1)
 			{
-				regexreplace_pattern.push(v1);
-				regexreplace_replacement.push(v2);
+				regexreplace_data.push({"p":v1,"r":v2,"b":bw});
 			}
 		}
 
@@ -9127,8 +9139,7 @@ Current version: 134
 			wi_searchdepth = 0;
 			wi_insertlocation = 0;
 			current_anotetemplate = "[Author's note: <|>]";
-			regexreplace_pattern = [];
-			regexreplace_replacement = [];
+			regexreplace_data = [];
 		}
 		render_gametext(save); //necessary to trigger an autosave to wipe out current story in case they exit browser after newgame.
 	}
@@ -9718,6 +9729,20 @@ Current version: 134
 	function submit_generation() {
 
 		let newgen = document.getElementById("input_text").value;
+
+		//apply regex transforms
+		if(regexreplace_data && regexreplace_data.length>0)
+		{
+			for(let i=0;i<regexreplace_data.length;++i)
+			{
+				if(regexreplace_data[i].b && regexreplace_data[i].p!="")
+				{
+					let pat = new RegExp(regexreplace_data[i].p, "gm");
+					newgen = newgen.replace(pat, regexreplace_data[i].r);
+				}
+			}
+		}
+
 		const user_input_empty = (newgen.trim()=="");
 		let doNotGenerate = false;
 		pending_context_postinjection = "";
@@ -11428,14 +11453,14 @@ Current version: 134
 		gentxt = trim_extra_stop_seqs(gentxt,false);
 
 		//apply regex transform
-		if(regexreplace_pattern && regexreplace_pattern.length>0)
+		if(regexreplace_data && regexreplace_data.length>0)
 		{
-			for(let i=0;i<regexreplace_pattern.length;++i)
+			for(let i=0;i<regexreplace_data.length;++i)
 			{
-				if(regexreplace_pattern[i]!="")
+				if(regexreplace_data[i].p!="")
 				{
-					let pat = new RegExp(regexreplace_pattern[i], "gm");
-					gentxt = gentxt.replace(pat, regexreplace_replacement[i]);
+					let pat = new RegExp(regexreplace_data[i].p, "gm");
+					gentxt = gentxt.replace(pat, regexreplace_data[i].r);
 				}
 			}
 		}
@@ -13139,26 +13164,56 @@ Current version: 134
 		backup_wi();
 		update_wi();
 
-		for(let i=0;i<20;++i)
+		//setup regex replacers
+		populate_regex_replacers();
+
+		document.getElementById("btnlogitbias").disabled = !is_using_custom_ep();
+
+	}
+
+	function populate_regex_replacers()
+	{
+		let regextablehtml = `
+		<tr>
+		<th>Pattern <span class="helpicon">?<span class="helptext">The regex pattern to match against any incoming text. Leave blank to disable.</span></span></th>
+		<th>Replacement <span class="helpicon">?<span class="helptext">The string to replace matches with. Capture groups are allowed (e.g. $1). To remove all matches, leave this blank.</span></span></th>
+		<th>Both Ways <span class="helpicon">?<span class="helptext">If enabled, regex applies for both inputs and outputs, otherwise output only.</span></span></th>
+		</tr>`;
+		let regextable = document.getElementById("regex_replace_table");
+
+		for(let i=0;i<num_regex_rows;++i)
+		{
+			regextablehtml += `
+			<tr>
+			<td><input class="settinglabel miniinput" type="text" placeholder="(Inactive)" value="" id="regexreplace_pattern${i}"></td>
+			<td><input class="settinglabel miniinput" type="text" placeholder="(Remove)" value="" id="regexreplace_replacement${i}"></td>
+			<td><input type="checkbox" id="regexreplace_bothways${i}" style="margin:0px 0 0;"></td>
+			</tr>
+			`;
+		}
+
+		regextable.innerHTML = regextablehtml;
+
+		for(let i=0;i<num_regex_rows;++i)
 		{
 			let a1 = document.getElementById("regexreplace_pattern"+i);
 			let a2 = document.getElementById("regexreplace_replacement"+i);
-			if(a1 && a2)
+			let a3 = document.getElementById("regexreplace_bothways"+i);
+			if(a1 && a2 && a3)
 			{
-				if(i<regexreplace_pattern.length)
+				if(i<regexreplace_data.length)
 				{
-					a1.value = regexreplace_pattern[i];
-					a2.value = regexreplace_replacement[i];
+					a1.value = regexreplace_data[i].p;
+					a2.value = regexreplace_data[i].r;
+					a3.checked = (regexreplace_data[i].b?true:false);
 				}
 				else
 				{
 					a1.value = a2.value = "";
+					a3.checked = false;
 				}
 			}
 		}
-
-		document.getElementById("btnlogitbias").disabled = !is_using_custom_ep();
-
 	}
 
 	function toggle_wi_sk(idx) {
@@ -13194,6 +13249,28 @@ Current version: 134
 		save_wi();
 		var ce = current_wi[idx];
 		current_wi.splice(idx, 1);
+		update_wi();
+	}
+
+	function up_wi(idx) {
+		save_wi();
+		var ce = current_wi[idx];
+		if (idx > 0 && idx < current_wi.length) {
+			const temp = current_wi[idx - 1];
+			current_wi[idx - 1] = current_wi[idx];
+			current_wi[idx] = temp;
+   		}
+		update_wi();
+	}
+
+	function down_wi(idx) {
+		save_wi();
+		var ce = current_wi[idx];
+		if (idx >= 0 && idx+1 < current_wi.length) {
+			const temp = current_wi[idx + 1];
+			current_wi[idx + 1] = current_wi[idx];
+			current_wi[idx] = temp;
+   		}
 		update_wi();
 	}
 
@@ -13263,8 +13340,10 @@ Current version: 134
 
 			let probarr = [100,90,75,50,25,10,5,1];
 
-			selectionhtml += `<tr class='`+ (ishidden?"hidden":"") +`' id="wirow` + i + `"><td class="col-8" style="font-size: 10px;">` +
-			`<button type="button" class="btn btn-danger widelbtn" id="widel` + i + `" onclick="return del_wi(` + i + `)">X</button></td>` +
+			selectionhtml += `<tr class='`+ (ishidden?"hidden":"") +`' id="wirow` + i + `"><td class="col-8" style="font-size: 10px;">`
+			+`<button type="button" class="btn btn-danger widelbtn" id="widel` + i + `" onclick="return del_wi(` + i + `)">X</button></td>`
+			+`<td><button type="button" class="btn btn-primary wiarrowbtn" id="wiup` + i + `" onclick="return up_wi(` + i + `)">▲</button>`
+			+`<button type="button" class="btn btn-primary wiarrowbtn" id="widown` + i + `" onclick="return down_wi(` + i + `)">▼</button></td>` +
 			`<td class="col-6 wiinputkeycol">
 			<input class="form-control wiinputkey" id="wikey`+ i + `" placeholder="Key(s)" value="` + winame + `">
 			<input class="form-control wiinputkey `+ (curr.selective ? `` : `hidden`) + `" id="wikeysec` + i + `" placeholder="Sec. Key(s)" value="` + wisec + `">` + `</td>
@@ -15256,25 +15335,10 @@ Current version: 134
 				<div><button type="button" class="btn btn-primary" style="width:134px;padding:6px 6px;" id="btnlogitbias" onclick="set_logit_bias()">Edit Logit Biases</button></div>
 				<div class="settinglabel">
 					<div class="justifyleft"><br>Custom Regex Replace <span class="helpicon">?<span
-						class="helptext">Allows transforming incoming text with up to 3 regex patterns, modifying all matches. Replacements will be applied in sequence.</span></span></div>
+						class="helptext">Allows transforming incoming text with regex patterns, modifying all matches. Replacements will be applied in sequence.</span></span></div>
 				</div>
-				<table class="settinglabel text-center" style="border-spacing: 3px 2px;	border-collapse: separate;">
-					<tr>
-						<th>Pattern <span class="helpicon">?<span class="helptext">The regex pattern to match against any incoming text. Leave blank to disable.</span></span></th>
-						<th>Replacement <span class="helpicon">?<span class="helptext">The string to replace matches with. Capture groups are allowed (e.g. $1). To remove all matches, leave this blank.</span></span></th>
-					</tr>
-					<tr>
-					<td><input class="settinglabel miniinput" type="text" placeholder="(Inactive)" value="" id="regexreplace_pattern0"></td>
-					<td><input class="settinglabel miniinput" type="text" placeholder="(Remove)" value="" id="regexreplace_replacement0"></td>
-					</tr>
-					<tr>
-					<td><input class="settinglabel miniinput" type="text" placeholder="(Inactive)" value="" id="regexreplace_pattern1"></td>
-					<td><input class="settinglabel miniinput" type="text" placeholder="(Remove)" value="" id="regexreplace_replacement1"></td>
-					</tr>
-					<tr>
-					<td><input class="settinglabel miniinput" type="text" placeholder="(Inactive)" value="" id="regexreplace_pattern2"></td>
-					<td><input class="settinglabel miniinput" type="text" placeholder="(Remove)" value="" id="regexreplace_replacement2"></td>
-					</tr>
+				<table id="regex_replace_table" class="settinglabel text-center" style="border-spacing: 3px 2px;	border-collapse: separate;">
+
 				</table>
 			</div>
 
