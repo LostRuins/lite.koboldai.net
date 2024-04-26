@@ -7,7 +7,7 @@ Just copy this single static HTML file anywhere and open it in a browser, or fro
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 If you are submitting a pull request for Lite, PLEASE use the above repo, not the KoboldCpp one.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 134
+Current version: 135
 -Concedo
 -->
 
@@ -3073,6 +3073,9 @@ Current version: 134
 				if (custom_kobold_endpoint != "" && data && data.results != null && data.results.length > 0) {
 					synchro_streaming_response += data.results[0].text;
 					synchro_streaming_tokens_left -= tokens_per_tick;
+					if (data.results[0].finish_reason == "stop") {
+						last_stop_reason = "stop";
+					}
 
 					//handle some early stopping criterias
 					if (localsettings.opmode == 3) //stop on selfname found
@@ -3221,6 +3224,10 @@ Current version: 134
 						for (let event of chunk) {
 							if (event.event === 'message') {
 								synchro_pending_stream += event.data.token;
+								if(event.data.finish_reason=="stop")
+								{
+									last_stop_reason = "stop";
+								}
 							}
 						}
 					}
@@ -3622,6 +3629,7 @@ Current version: 134
 	var custom_claude_model = "";
 	var uses_cors_proxy = false; //we start off attempting a direct connection. switch to proxy if that fails
 	var synchro_polled_response = null;
+	var last_stop_reason = ""; //update stop reason if known
 	var synchro_pending_stream = ""; //used for token pseduo streaming for kobold api only
 	var waiting_for_autosummary = false;
 	var italics_regex = new RegExp(/\*(\S[^*]+\S)\*/g); //the fallback regex
@@ -9093,6 +9101,7 @@ Current version: 134
 		pending_response_id = "";
 		poll_in_progress = false;
 		synchro_polled_response = null;
+		last_stop_reason = "";
 		synchro_pending_stream = "";
 		waiting_for_autosummary = false;
 		horde_poll_nearly_completed = false;
@@ -9109,6 +9118,7 @@ Current version: 134
 		nextgeneratedimagemilestone = generateimagesinterval;
 		pending_response_id = "";
 		synchro_polled_response = null;
+		last_stop_reason = "";
 		synchro_pending_stream = "";
 		waiting_for_autosummary = false;
 		last_reply_was_empty = false;
@@ -10374,6 +10384,7 @@ Current version: 134
 			poll_ticks_passed = 0;
 			poll_in_progress = false;
 			synchro_polled_response = null;
+			last_stop_reason = "";
 			synchro_pending_stream = "";
 
 			//if this is set, we don't use horde, use the custom endpoint instead
@@ -11445,7 +11456,11 @@ Current version: 134
 		gentxt = trim_extra_stop_seqs(gentxt,true);
 
 		//always trim incomplete sentences for adventure and chat (if not multiline)
-		if (localsettings.opmode == 2 || (localsettings.opmode == 3 && !localsettings.allow_continue_chat) || localsettings.trimsentences == true) {
+		//do not trim if instruct mode AND stop token reached
+		let donottrim = ((localsettings.opmode == 4||localsettings.opmode == 3) && last_stop_reason=="stop");
+		if (!donottrim && (localsettings.opmode == 2
+		|| (localsettings.opmode == 3 && !localsettings.allow_continue_chat)
+		|| localsettings.trimsentences == true)) {
 			gentxt = end_trim_to_sentence(gentxt,true);
 		}
 
@@ -12026,6 +12041,7 @@ Current version: 134
 							}
 						}
 						synchro_polled_response = null;
+						last_stop_reason = "";
 						synchro_pending_stream = "";
 						show_abort_button(false);
 						render_gametext();
