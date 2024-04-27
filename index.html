@@ -7,7 +7,7 @@ Just copy this single static HTML file anywhere and open it in a browser, or fro
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 If you are submitting a pull request for Lite, PLEASE use the above repo, not the KoboldCpp one.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 135
+Current version: 136
 -Concedo
 -->
 
@@ -299,7 +299,7 @@ Current version: 135
 			padding-right: 10px;
 		}
 
-		#extrastopseq, #anotetemplate {
+		.inlineinput {
 			background-color: #404040;
 			color: #ffffff;
 			resize: none;
@@ -3603,6 +3603,7 @@ Current version: 135
 	var current_anote = ""; //stored author note
 	var current_anotetemplate = "[Author\'s note: <|>]";
 	var extrastopseq = "";
+	var tokenbans = "";
 	var anote_strength = 320; //distance from end
 	var newlineaftermemory = true;
 	var current_wi = []; //each item stores a wi object.
@@ -5095,6 +5096,7 @@ Current version: 135
 
 		//extra unofficial fields for the story
 		new_save_storyobj.extrastopseq = extrastopseq;
+		new_save_storyobj.tokenbans = tokenbans;
 		new_save_storyobj.anotestr = anote_strength;
 		new_save_storyobj.wisearchdepth = wi_searchdepth;
 		new_save_storyobj.wiinsertlocation = wi_insertlocation;
@@ -5271,6 +5273,7 @@ Current version: 135
 			let old_current_memory = current_memory;
 			let old_current_wi = current_wi;
 			let old_extrastopseq = extrastopseq;
+			let old_tokenbans = tokenbans;
 			let old_notes = personal_notes;
 			let old_regexreplace_data = regexreplace_data;
 
@@ -5324,6 +5327,10 @@ Current version: 135
 				}
 				if (storyobj.extrastopseq) {
 					extrastopseq = storyobj.extrastopseq;
+				}
+				if(storyobj.tokenbans)
+				{
+					tokenbans = storyobj.tokenbans;
 				}
 				if (storyobj.anotestr) {
 					anote_strength = storyobj.anotestr;
@@ -5416,6 +5423,7 @@ Current version: 135
 				{
 					extrastopseq = old_extrastopseq;
 					regexreplace_data = old_regexreplace_data;
+					tokenbans = old_tokenbans;
 				}
 
 				if (storyobj.savedsettings && storyobj.savedsettings != "")
@@ -6748,7 +6756,7 @@ Current version: 135
 
 	function expand_tokens_section(targetid)
 	{
-		let tablist = ["expandregexreplace"];
+		let tablist = ["expandregexreplace","expandtokenbans","expandlogitbias"];
 
 		for(let i=0;i<tablist.length;++i)
 		{
@@ -6771,25 +6779,28 @@ Current version: 135
 		}
 	}
 
-	var pendinglogitbias = {};
-	function set_logit_bias()
+	function add_logit_bias()
 	{
-		inputBox("Enter OpenAI-formatted logit bias dictionary. Each key is the integer token IDs and their values are the biases (-100.0 to 100.0)<br><a href='https://platform.openai.com/docs/api-reference/chat/create#chat-create-logit_bias' class='color_blueurl'>Input is a JSON object, reference here.</a><br>Leave blank to disable.<br>","Set Logit Biases",JSON.stringify(pendinglogitbias),"Enter JSON Object",()=>{
-			let userinput = getInputBoxValue().trim();
-			if(userinput=="")
-			{
-				pendinglogitbias = {};
-			}
-			else
-			{
-				try {
-					pendinglogitbias = JSON.parse(userinput);
-				} catch (e) {
-					msgbox("Your logit bias JSON dictionary was not correctly formatted!");
+		let key = document.getElementById("newlogitbiasid").value;
+		let val = document.getElementById("newlogitbiasval").value;
+		if(key && val && key.trim()!="" && val.trim()!="")
+		{
+			let old = document.getElementById("logitbiastxtarea").value;
+			try {
+				let dict = JSON.parse(old);
+				key = parseInt(key);
+				val = parseInt(val);
+				if(!isNaN(key) && !isNaN(val))
+				{
+					dict[key] = parseInt(val);
+					document.getElementById("logitbiastxtarea").value = JSON.stringify(dict,null,2);
 				}
+			} catch (e) {
+				msgbox("Your inputs or logit bias JSON dictionary was not correctly formatted!");
 			}
-
-		},true,true);
+			document.getElementById("newlogitbiasid").value = "";
+			document.getElementById("newlogitbiasval").value = "";
+		}
 	}
 
 	function add_stop_seq()
@@ -6805,6 +6816,23 @@ Current version: 135
 				}
 				ov += userinput.trim();
 				document.getElementById("extrastopseq").value = ov;
+			}
+		},false);
+	}
+
+	function add_token_ban()
+	{
+		inputBox("Enter a token substring to be banned. ALL matching tokens will be removed.\nFor example adding 'ice' will also ban 'nice' and 'rice', assuming they are individual tokens.","Add Banned Token Substring","","Enter a Token Substring",()=>{
+			let userinput = getInputBoxValue();
+			if(userinput.trim()!="")
+			{
+				let ov = document.getElementById("tokenbans").value;
+				if(ov!="")
+				{
+					ov += "||$||";
+				}
+				ov += userinput.trim();
+				document.getElementById("tokenbans").value = ov;
 			}
 		},false);
 	}
@@ -8944,8 +8972,20 @@ Current version: 135
 		current_anotetemplate = document.getElementById("anotetemplate").value;
 		anote_strength = document.getElementById("anote_strength").value;
 		extrastopseq = document.getElementById("extrastopseq").value;
+		tokenbans = document.getElementById("tokenbans").value;
 		newlineaftermemory = (document.getElementById("newlineaftermemory").checked?true:false);
-		logitbiasdict = pendinglogitbias;
+		try
+		{
+			let lb = document.getElementById("logitbiastxtarea").value;
+			let dict = {};
+			if(lb!="")
+			{
+				dict = JSON.parse(lb);
+			}
+			logitbiasdict = dict;
+		} catch (e) {
+			console.log("Your logit bias JSON dictionary was not correctly formatted!");
+		}
 		regexreplace_data = [];
 		for(let i=0;i<num_regex_rows;++i)
 		{
@@ -9169,6 +9209,7 @@ Current version: 135
 			current_anote = "";
 			current_wi = [];
 			extrastopseq = "";
+			tokenbans = "";
 			anote_strength = 320;
 			logitbiasdict = {};
 			wi_searchdepth = 0;
@@ -10373,6 +10414,24 @@ Current version: 135
 		return seqs;
 	}
 
+	function get_token_bans()
+	{
+		let seqs = [];
+		if (tokenbans != "") {
+			let rep = replaceAll(tokenbans, "\\n", "\n");
+			let srep = rep.split("||$||");
+			if (srep.length > 0 && !seqs) {
+				seqs = [];
+			}
+			for (let i = 0; i < srep.length; ++i) {
+				if (srep[i] && srep[i] != "") {
+					seqs.push(srep[i]);
+				}
+			}
+		}
+		return seqs;
+	}
+
 	function dispatch_submit_generation(submit_payload, input_was_empty) //if input is not empty, always unban eos
 	{
 		console.log(submit_payload);
@@ -10392,6 +10451,7 @@ Current version: 135
 			submit_payload.params.dynatemp_range = localsettings.dynatemp_range;
 			submit_payload.params.dynatemp_exponent = localsettings.dynatemp_exponent;
 			submit_payload.params.smoothing_factor = localsettings.smoothing_factor;
+			submit_payload.params.banned_tokens = get_token_bans();
 		}
 		//presence pen and logit bias for OAI and newer kcpp
 		if((custom_kobold_endpoint != "" && is_using_kcpp_with_mirostat()) || custom_oai_endpoint!="")
@@ -13190,8 +13250,10 @@ Current version: 135
 		document.getElementById("anotetemplate").value = current_anotetemplate;
 		document.getElementById("anote_strength").value = anote_strength;
 		document.getElementById("extrastopseq").value = extrastopseq;
+		document.getElementById("tokenbans").value = tokenbans;
 		document.getElementById("newlineaftermemory").checked = (newlineaftermemory?true:false);
-		pendinglogitbias = logitbiasdict;
+		document.getElementById("logitbiastxtarea").value = JSON.stringify(logitbiasdict,null,2);
+
 		if(custom_kobold_endpoint!="" || !is_using_custom_ep() )
 		{
 			document.getElementById("noextrastopseq").classList.add("hidden");
@@ -13208,7 +13270,16 @@ Current version: 135
 		//setup regex replacers
 		populate_regex_replacers();
 
-		document.getElementById("btnlogitbias").disabled = !is_using_custom_ep();
+		if(is_using_custom_ep())
+		{
+			document.getElementById("nologitbias").classList.add("hidden");
+			document.getElementById("notokenbans").classList.add("hidden");
+		}
+		else
+		{
+			document.getElementById("nologitbias").classList.remove("hidden");
+			document.getElementById("notokenbans").classList.remove("hidden");
+		}
 
 	}
 
@@ -15316,7 +15387,7 @@ Current version: 135
 					</span>
 				</div>
 				<div style="display: flex; column-gap: 4px;">
-				<input class="form-control anotetempbox" type="text"
+				<input class="form-control anotetempbox inlineinput" type="text"
 					placeholder="(the &lt;|&gt; will be replaced with the Author's Note text)" value="" id="anotetemplate">
 					<select style="padding:4px;" class="anotetempscale form-control" id="anote_strength">
 						<option value="480">Weak</option>
@@ -15366,38 +15437,55 @@ Current version: 135
 					class="helptext">Triggers the text generator to stop generating early if this sequence appears, in addition to default stop sequences. If you want multiple sequences, separate them with the following delimiter: ||$||</span></span></div>
 					<div class="color_red hidden" id="noextrastopseq">Stop Sequences may be unavailable.</div>
 					<div style="display: flex; column-gap: 4px; margin-bottom: 4px;">
-					<input class="form-control stopseqbox" type="text" placeholder="None" value="" id="extrastopseq">
+					<input class="form-control stopseqbox inlineinput" type="text" placeholder="None" value="" id="extrastopseq">
 					<button type="button" class="btn btn-primary" style="width:90px;padding:6px 6px;" onclick="add_stop_seq()">Add New</button>
 				</div>
 
 				<div style="padding:3px;" class="justifyleft settinglabel">Logit Biases <span class="helpicon">?<span
 					class="helptext">Specify a dictionary of token IDs to modify the probability of occuring.</span></span>
-					<button type="button" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" id="btnlogitbias" onclick="expand_tokens_section('');set_logit_bias()">Edit Logit Biases</button>
+					<button type="button" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('expandlogitbias')">Expand Section</button>
 				</div>
+				<div id="expandlogitbias" class="hidden">
+					<div class="color_red hidden" id="nologitbias">Logit bias may be unavailable.</div>
+					<div style="color:#ffffff;">Enter OpenAI-formatted logit bias dictionary. Each key is the integer token IDs and their values are the biases (-100.0 to 100.0). Leave blank to disable.<br><a href='https://platform.openai.com/docs/api-reference/chat/create#chat-create-logit_bias' target='_blank' class='color_blueurl'>Input is a JSON object, reference here.</a><br></div>
+					<textarea class="form-control" style="line-height:1.1;margin-bottom: 4px;padding:3px" id="logitbiastxtarea" placeholder="" rows="5"></textarea>
+					<div style="display: flex; column-gap: 4px; margin-bottom: 4px;">
+					<input style="padding:2px" class="form-control stopseqbox inlineinput" inputmode="decimal" type="text" placeholder="Token ID" value="" id="newlogitbiasid">
+					<input style="padding:2px" class="form-control stopseqbox inlineinput" inputmode="decimal" type="text" placeholder="Bias Value" value="" id="newlogitbiasval">
+					<button type="button" class="btn btn-primary" style="width:90px;padding:6px 6px;" onclick="add_logit_bias()">Add New</button>
+					</div>
+				</div>
+
 				<div style="padding:3px;" class="justifyleft settinglabel">Token Bans <span class="helpicon">?<span
-					class="helptext">Outright bans for all tokens containing a specific substring.</span></span>
-					<button type="button" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" id="btntokenbans" onclick="expand_tokens_section('')">Expand Section</button>
+					class="helptext">Outright removal for ANY tokens containing a specific substring from model vocab. If you want multiple sequences, separate them with the following delimiter: ||$||</span></span>
+					<button type="button" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('expandtokenbans')">Expand Section</button>
 				</div>
+				<div id="expandtokenbans" class="hidden">
+					<div class="color_red hidden" id="notokenbans">Token bans may be unavailable.</div>
+					<div style="color:#ffffff;">Outright removal for ANY tokens containing a specific substring from model vocab. If you want multiple sequences, separate them with the following delimiter: ||$||<br></div>
+					<div style="display: flex; column-gap: 4px; margin-bottom: 4px;">
+					<input class="form-control stopseqbox inlineinput" type="text" placeholder="None" value="" id="tokenbans">
+					<button type="button" class="btn btn-primary" style="width:90px;padding:6px 6px;" onclick="add_token_ban()">Add New</button>
+					</div>
+				</div>
+
 				<div style="padding:3px;" class="justifyleft settinglabel">Regex Replace <span class="helpicon">?<span
 					class="helptext">Allows transforming incoming text with regex patterns, modifying all matches. Replacements will be applied in sequence.</span></span>
-					<button type="button" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" id="btnlogitbias" onclick="expand_tokens_section('expandregexreplace')">Expand Section</button>
+					<button type="button" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('expandregexreplace')">Expand Section</button>
 				</div>
 				<div id="expandregexreplace" class="hidden">
-					<div class="settinglabel">
-						<div class="justifyleft"><b>Custom Regex Replace</b></div>
-					</div>
-					<table id="regex_replace_table" class="settinglabel text-center" style="border-spacing: 3px 2px;	border-collapse: separate;">
+					<table id="regex_replace_table" class="settinglabel text-center" style="border-spacing: 3px 2px; border-collapse: separate;">
 					</table>
 				</div>
-				<div style="padding:3px;" class="justifyleft settinglabel">Repetition Exclusions <span class="helpicon">?<span
+
+				<!-- <div style="padding:3px;" class="justifyleft settinglabel">Repetition Exclusions <span class="helpicon">?<span
 					class="helptext">Configure specific tokens that will be excluded from repetition and presence penalties.</span></span>
-					<button type="button" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" id="btnrepexclude" onclick="expand_tokens_section('')">Expand Section</button>
+					<button type="button" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('')">Expand Section</button>
 				</div>
 				<div style="padding:3px;" class="justifyleft settinglabel">Placeholder Tags <span class="helpicon">?<span
 					class="helptext">Configure automatic substitutions for placeholders in text.</span></span>
-					<button type="button" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" id="btnplaceholdertags" onclick="expand_tokens_section('')">Expand Section</button>
-				</div>
-
+					<button type="button" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('')">Expand Section</button>
+				</div> -->
 			</div>
 
 			<div class="popupfooter">
