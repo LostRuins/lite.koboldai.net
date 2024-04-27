@@ -3651,6 +3651,7 @@ Current version: 136
 	var personal_notes = "";
 	var logitbiasdict = {};
 	var regexreplace_data = [];
+	var placeholder_tags_data = [];
 	const num_regex_rows = 4;
 
 	var localsettings = {
@@ -5103,6 +5104,7 @@ Current version: 136
 		new_save_storyobj.personal_notes = personal_notes;
 		new_save_storyobj.logitbiasdict = JSON.parse(JSON.stringify(logitbiasdict));
 		new_save_storyobj.regexreplace_data = JSON.parse(JSON.stringify(regexreplace_data));
+		new_save_storyobj.placeholder_tags_data = JSON.parse(JSON.stringify(placeholder_tags_data));
 
 		if (export_settings) {
 			new_save_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
@@ -5276,6 +5278,7 @@ Current version: 136
 			let old_tokenbans = tokenbans;
 			let old_notes = personal_notes;
 			let old_regexreplace_data = regexreplace_data;
+			let old_placeholder_tags_data = placeholder_tags_data;
 
 			//determine if oldui file or newui file format
 			restart_new_game(false);
@@ -5363,6 +5366,10 @@ Current version: 136
 				if (storyobj.regexreplace_data) {
 					regexreplace_data = storyobj.regexreplace_data;
 				}
+				if(storyobj.placeholder_tags_data)
+				{
+					placeholder_tags_data = storyobj.placeholder_tags_data;
+				}
 			} else {
 				//v2 load
 				if(storyobj.prompt!="")
@@ -5424,6 +5431,7 @@ Current version: 136
 					extrastopseq = old_extrastopseq;
 					regexreplace_data = old_regexreplace_data;
 					tokenbans = old_tokenbans;
+					placeholder_tags_data = old_placeholder_tags_data;
 				}
 
 				if (storyobj.savedsettings && storyobj.savedsettings != "")
@@ -6756,7 +6764,7 @@ Current version: 136
 
 	function expand_tokens_section(targetid)
 	{
-		let tablist = ["expandregexreplace","expandtokenbans","expandlogitbias"];
+		let tablist = ["expandregexreplace","expandtokenbans","expandlogitbias","expandplaceholdertags"];
 
 		for(let i=0;i<tablist.length;++i)
 		{
@@ -8557,6 +8565,28 @@ Current version: 136
 		}
 	}
 
+	function confirm_chat_and_instruct_tags()
+	{
+		localsettings.chatname = document.getElementById("chatname").value;
+		if (localsettings.chatname == null || localsettings.chatname == "") {
+			localsettings.chatname = "You";
+		}
+		let newopps = replaceAll(document.getElementById("chatopponent").value,"\n","||$||");
+		if(localsettings.chatopponent!=newopps)
+		{
+			groupchat_removals = [];
+		}
+		localsettings.chatopponent = newopps;
+		localsettings.instruct_starttag = document.getElementById("instruct_starttag").value;
+		if (localsettings.instruct_starttag == null || localsettings.instruct_starttag == "") {
+			localsettings.instruct_starttag = "\\n### Instruction:\\n";
+		}
+		localsettings.instruct_endtag = document.getElementById("instruct_endtag").value;
+		if (localsettings.instruct_endtag == null || localsettings.instruct_endtag == "") {
+			localsettings.instruct_endtag = "\\n### Response:\\n";
+		}
+	}
+
 	function confirm_settings() {
 		localsettings.max_context_length = document.getElementById("max_context_length").value;
 		localsettings.max_length = document.getElementById("max_length").value;
@@ -8607,24 +8637,7 @@ Current version: 136
 		localsettings.generate_images_model = document.getElementById("generate_images_model").value;
 		localsettings.generate_images_mode = document.getElementById("generate_images_mode").value;
 		localsettings.opmode = document.getElementById("opmode").value;
-		localsettings.chatname = document.getElementById("chatname").value;
-		if (localsettings.chatname == null || localsettings.chatname == "") {
-			localsettings.chatname = "You";
-		}
-		let newopps = replaceAll(document.getElementById("chatopponent").value,"\n","||$||");
-		if(localsettings.chatopponent!=newopps)
-		{
-			groupchat_removals = [];
-		}
-		localsettings.chatopponent = newopps;
-		localsettings.instruct_starttag = document.getElementById("instruct_starttag").value;
-		if (localsettings.instruct_starttag == null || localsettings.instruct_starttag == "") {
-			localsettings.instruct_starttag = "\\n### Instruction:\\n";
-		}
-		localsettings.instruct_endtag = document.getElementById("instruct_endtag").value;
-		if (localsettings.instruct_endtag == null || localsettings.instruct_endtag == "") {
-			localsettings.instruct_endtag = "\\n### Response:\\n";
-		}
+		confirm_chat_and_instruct_tags();
 		localsettings.sampler_seed = document.getElementById("sampler_seed").value;
 		localsettings.min_p = document.getElementById("min_p").value;
 		localsettings.dynatemp_range = document.getElementById("dynatemp_range").value;
@@ -9014,6 +9027,32 @@ Current version: 136
 			}
 		}
 
+		localsettings.placeholder_tags = (document.getElementById("placeholder_tags2").checked?true:false);
+		//bit of a hack to save modified placeholders
+		document.getElementById("chatname").value = document.getElementById("placeholder_replace_hc0").value;
+		document.getElementById("chatopponent").value = document.getElementById("placeholder_replace_hc1").value;
+		document.getElementById("instruct_starttag").value = document.getElementById("placeholder_replace_hc2").value;
+		document.getElementById("instruct_endtag").value = document.getElementById("placeholder_replace_hc3").value;
+		confirm_chat_and_instruct_tags();
+		placeholder_tags_data = [];
+		for(let i=0;i<num_regex_rows;++i)
+		{
+			let v1 = "";
+			let v2 = "";
+			let box1 = document.getElementById("placeholder_pattern"+i);
+			let box2 = document.getElementById("placeholder_replace"+i);
+			if(!box1 || !box2)
+			{
+				break;
+			}
+			v1 = box1.value;
+			v2 = box2.value;
+			if(v1 && v2)
+			{
+				placeholder_tags_data.push({"p":v1,"r":v2});
+			}
+		}
+
 	}
 
 	function set_personal_notes()
@@ -9216,6 +9255,7 @@ Current version: 136
 			wi_insertlocation = 0;
 			current_anotetemplate = "[Author's note: <|>]";
 			regexreplace_data = [];
+			placeholder_tags_data = [];
 		}
 		render_gametext(save); //necessary to trigger an autosave to wipe out current story in case they exit browser after newgame.
 	}
@@ -9280,6 +9320,15 @@ Current version: 136
 		//failsafe to handle removing newline tags
 		inputtxt = replaceAll(inputtxt,instructstartplaceholder.trim(),get_instruct_starttag(false));
 		inputtxt = replaceAll(inputtxt,instructendplaceholder.trim(),get_instruct_endtag(false));
+
+		for(let i=0;i<placeholder_tags_data.length;++i)
+		{
+			if(placeholder_tags_data[i].p && placeholder_tags_data[i].r)
+			{
+				inputtxt = replaceAll(inputtxt,placeholder_tags_data[i].p,placeholder_tags_data[i].r);
+			}
+		}
+
 		return inputtxt;
 	}
 	function replace_placeholders(inputtxt)
@@ -13267,7 +13316,7 @@ Current version: 136
 		backup_wi();
 		update_wi();
 
-		//setup regex replacers
+		populate_placeholder_tags();
 		populate_regex_replacers();
 
 		if(is_using_custom_ep())
@@ -13323,6 +13372,61 @@ Current version: 136
 				{
 					a1.value = a2.value = "";
 					a3.checked = false;
+				}
+			}
+		}
+	}
+
+	function populate_placeholder_tags()
+	{
+		let regextablehtml = `
+		<tr>
+		<th>Placeholder <span class="helpicon">?<span class="helptext">The placeholder to match against</span></span></th>
+		<th>Replacement <span class="helpicon">?<span class="helptext">The text to substitude on display. Actual context is unchanged.</span></span></th>
+		</tr>`;
+		let regextable = document.getElementById("placeholder_replace_table");
+
+		let hardcoded1 = ["{{user}}","{{char}}","\\n{{[INPUT]}}\\n","\\n{{[OUTPUT]}}\\n"];
+		let hardcoded2 = [localsettings.chatname,localsettings.chatopponent,localsettings.instruct_starttag,localsettings.instruct_endtag];
+
+		for(let i=0;i<hardcoded1.length;++i)
+		{
+			regextablehtml += `
+			<tr>
+			<td>${hardcoded1[i]}</td>
+			<td><input class="settinglabel miniinput" type="text" placeholder="" value="${hardcoded2[i]}" id="placeholder_replace_hc${i}"></td>
+			</tr>
+			`;
+		}
+
+		for(let i=0;i<num_regex_rows;++i)
+		{
+			regextablehtml += `
+			<tr>
+			<td><input class="settinglabel miniinput" type="text" placeholder="(Inactive)" value="" id="placeholder_pattern${i}"></td>
+			<td><input class="settinglabel miniinput" type="text" placeholder="(Remove)" value="" id="placeholder_replace${i}"></td>
+			</tr>
+			`;
+		}
+
+		regextable.innerHTML = regextablehtml;
+
+		document.getElementById("placeholder_tags2").checked = localsettings.placeholder_tags;
+
+		for(let i=0;i<num_regex_rows;++i)
+		{
+			let a1 = document.getElementById("placeholder_pattern"+i);
+			let a2 = document.getElementById("placeholder_replace"+i);
+			if(a1 && a2)
+			{
+				if(i<placeholder_tags_data.length)
+				{
+					a1.value = placeholder_tags_data[i].p;
+					a2.value = placeholder_tags_data[i].r;
+				}
+				else
+				{
+					a1.value = a2.value = "";
 				}
 			}
 		}
@@ -14099,14 +14203,10 @@ Current version: 136
 				input = input.replaceAll(othernamesregex, function(match) {
 					return "{{botplaceholder}}<p class='aui_nametag'>" + match.substring(0,match.length-2).trim() + "</p>";
 				});
-				// input = input.replaceAll(othernamesregex2, function(match) {
-				// 	return "{{botplaceholder}}<p class='aui_nametag'>" + match.substring(0,match.length-2).trim() + "</p>";
-				// });
 			}
 			else
 			{
 				input = input.replaceAll(othernamesregex, "{{botplaceholder}}");
-				//input = input.replaceAll(othernamesregex2, "{{botplaceholder}}");
 			}
 
 			you = "{{userplaceholder}}";
@@ -15478,14 +15578,26 @@ Current version: 136
 					</table>
 				</div>
 
+				<div style="padding:3px;" class="justifyleft settinglabel">Placeholder Tags <span class="helpicon">?<span
+					class="helptext">Configure automatic substitutions for placeholders in text.</span></span>
+					<button type="button" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('expandplaceholdertags')">Expand Section</button>
+				</div>
+				<div id="expandplaceholdertags" class="hidden">
+					<div class="settinglabel justifyleft">Stories can use placeholders like {{user}} and {{[INPUT]}} that require dynamic substitution. If disabled, uses plaintext tags verbatim.</div>
+					<div class="settinglabel">
+						<div class="justifyleft settingsmall">Enable Placeholder Tags <span class="helpicon">?<span
+							class="helptext">If enabled, uses placeholders that get swapped on submit. If disabled, uses plaintext verbatim.</span></span></div>
+					<input type="checkbox" id="placeholder_tags2">
+					</div>
+					<table id="placeholder_replace_table" class="settinglabel text-center" style="border-spacing: 3px 2px; border-collapse: separate;">
+					</table>
+				</div>
+
 				<!-- <div style="padding:3px;" class="justifyleft settinglabel">Repetition Exclusions <span class="helpicon">?<span
 					class="helptext">Configure specific tokens that will be excluded from repetition and presence penalties.</span></span>
 					<button type="button" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('')">Expand Section</button>
-				</div>
-				<div style="padding:3px;" class="justifyleft settinglabel">Placeholder Tags <span class="helpicon">?<span
-					class="helptext">Configure automatic substitutions for placeholders in text.</span></span>
-					<button type="button" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('')">Expand Section</button>
 				</div> -->
+
 			</div>
 
 			<div class="popupfooter">
