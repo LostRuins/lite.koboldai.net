@@ -5396,6 +5396,7 @@ Current version: 136
 							let nwi = {
 								"key": itm.key[0],
 								"keysecondary": (itm.keysecondary.length > 0 ? itm.keysecondary[0] : ""),
+								"keyanti": (itm.keyanti.length > 0 ? itm.keyanti[0] : ""),
 								"content": itm.content,
 								"comment": itm.comment,
 								"folder": null,
@@ -5537,6 +5538,7 @@ Current version: 136
 			let nwi = {
 				"key": karr.join(","),
 				"keysecondary": "",
+				"keyanti": "",
 				"content": itm.entry,
 				"comment": "",
 				"folder": null,
@@ -5567,6 +5569,7 @@ Current version: 136
 			let nwi = {
 				"key": karr.join(","),
 				"keysecondary": ((ksarr && ksarr.length) > 0 ? ksarr.join(",") : ""),
+				"keyanti": "",
 				"content": itm.content,
 				"comment": itm.comment,
 				"folder": null,
@@ -5704,6 +5707,7 @@ Current version: 136
 			let nwi = {
 				"key": key,
 				"keysecondary": "",
+				"keyanti": "",
 				"content": itm.text,
 				"comment": "",
 				"folder": null,
@@ -5763,6 +5767,7 @@ Current version: 136
 								let nwi = {
 									"key": (keys ? keys : ""),
 									"keysecondary": "",
+									"keyanti": "",
 									"content": (entry ? entry : ""),
 									"comment": "",
 									"folder": null,
@@ -10231,25 +10236,50 @@ Current version: 136
 
 						//selective, but bad secondary key. treat as only 1 key
 						let invalidseckey = (wi.selective && (wi.keysecondary == "" || wi.keysecondary == null));
+						let invalidantikey = (wi.selective && (wi.keyanti == "" || wi.keyanti == null));
 
 						let wiks = wi.key.split(",");
 
-						if (!wi.selective || invalidseckey) {
+						if (!wi.selective || (invalidseckey && invalidantikey)) {
 							if (localsettings.case_sensitive_wi) {
 								shoulduse = wiks.some(k => wimatch_context.includes(k.trim()));
 							} else {
 								shoulduse = wiks.some(k => wimatch_context.includes(k.trim().toLowerCase()));
 							}
-						} else {
-							let wiks2 = wi.keysecondary.split(",");
+						}
+						else
+						{
+							let wikanti = [];
+							let wiks2 = [];
+							if(!invalidantikey)
+							{
+								wikanti = wi.keyanti.split(",");
+							}
+							if(!invalidseckey)
+							{
+								wiks2 = wi.keysecondary.split(",");
+							}
+							let t1=false, t2=false, t3=false;
 							if (localsettings.case_sensitive_wi) {
-								let t1 = wiks.some(k => wimatch_context.includes(k.trim()));
-								let t2 = wiks2.some(k => wimatch_context.includes(k.trim()));
-								shoulduse = (t1 && t2);
+								t1 = wiks.some(k => wimatch_context.includes(k.trim()));
+								t2 = wiks2.some(k => wimatch_context.includes(k.trim()));
+								t3 = wikanti.some(k => wimatch_context.includes(k.trim()));
 							} else {
-								let t1 = wiks.some(k => wimatch_context.includes(k.trim().toLowerCase()));
-								let t2 = wiks2.some(k => wimatch_context.includes(k.trim().toLowerCase()));
+								t1 = wiks.some(k => wimatch_context.includes(k.trim().toLowerCase()));
+								t2 = wiks2.some(k => wimatch_context.includes(k.trim().toLowerCase()));
+								t3 = wikanti.some(k => wimatch_context.includes(k.trim().toLowerCase()));
+							}
+							if(!invalidantikey && !invalidseckey) //all keys valid
+							{
+								shoulduse = (t1 && t2 && !t3);
+							}
+							else if(invalidantikey)
+							{
 								shoulduse = (t1 && t2);
+							}
+							else
+							{
+								shoulduse = (t1 && !t3);
 							}
 						}
 					}
@@ -13441,14 +13471,17 @@ Current version: 136
 		ce.selective = !ce.selective;
 		var tgt = document.getElementById("wiskt" + idx);
 		var tgt2 = document.getElementById("wikeysec" + idx);
+		var tgt3 = document.getElementById("wikeyanti" + idx);
 		if (ce.selective) {
 			tgt.classList.add("witoggleron");
 			tgt.classList.remove("witoggleroff");
 			tgt2.classList.remove("hidden");
+			tgt3.classList.remove("hidden");
 		} else {
 			tgt.classList.remove("witoggleron");
 			tgt.classList.add("witoggleroff");
 			tgt2.classList.add("hidden");
+			tgt3.classList.add("hidden");
 		}
 	}
 
@@ -13499,6 +13532,7 @@ Current version: 136
 		var ne = {
 			"key": "",
 			"keysecondary": "",
+			"keyanti": "",
 			"content": "",
 			"comment": "",
 			"folder": null,
@@ -13514,6 +13548,7 @@ Current version: 136
 		for (var i = 0; i < current_wi.length; ++i) {
 			current_wi[i].key = document.getElementById("wikey" + i).value;
 			current_wi[i].keysecondary = document.getElementById("wikeysec" + i).value;
+			current_wi[i].keyanti = document.getElementById("wikeyanti" + i).value;
 			current_wi[i].content = document.getElementById("wival" + i).value;
 			let prb = document.getElementById("wirng" + i).value;
 			current_wi[i].probability = (prb?prb:100);
@@ -13550,6 +13585,7 @@ Current version: 136
 			var winame = escapeHtml(curr.key);
 			var witxt = escapeHtml(curr.content);
 			var wisec = curr.keysecondary;
+			var wianti = curr.keyanti;
 			var wirngval = (curr.probability?curr.probability:100);
 
 			var ishidden = false;
@@ -13566,9 +13602,10 @@ Current version: 136
 			+`<button type="button" class="btn btn-primary wiarrowbtn" id="widown` + i + `" onclick="return down_wi(` + i + `)">▼</button></td>` +
 			`<td class="col-6 wiinputkeycol">
 			<input class="form-control wiinputkey" id="wikey`+ i + `" placeholder="Key(s)" value="` + winame + `">
-			<input class="form-control wiinputkey `+ (curr.selective ? `` : `hidden`) + `" id="wikeysec` + i + `" placeholder="Sec. Key(s)" value="` + wisec + `">` + `</td>
+			<input class="form-control wiinputkey `+ (curr.selective ? `` : `hidden`) + `" id="wikeysec` + i + `" placeholder="Sec. Key(s)" value="` + wisec + `">` + `
+			<input class="form-control wiinputkey `+ (curr.selective ? `` : `hidden`) + `" id="wikeyanti` + i + `" placeholder="Anti Key(s)" value="` + wianti + `">` + `</td>
 			<td class="col-10 wiinputvalcol">
-			<textarea class="form-control wiinputval" style="line-height:1.1" id="wival`+ i + `" placeholder="What To Remember" rows="3">` + witxt + `</textarea>
+			<textarea class="form-control wiinputval" style="line-height:1.1" id="wival`+ i + `" placeholder="What To Remember" rows="4">` + witxt + `</textarea>
 			</td>
 			<td>
 			<a id="wiskt`+ i + `" href="#" class=` + (curr.selective ? "witoggleron" : "witoggleroff") + ` title="Toggle Selective Key mode (if enabled, this world info entry will be included in memory only if at least one PRIMARY KEY and at least one SECONDARY KEY are both present in the story)" onclick="return toggle_wi_sk(` + i + `)">📑</a>
