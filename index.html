@@ -7,7 +7,7 @@ Just copy this single static HTML file anywhere and open it in a browser, or fro
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 If you are submitting a pull request for Lite, PLEASE use the above repo, not the KoboldCpp one.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 136
+Current version: 137
 -Concedo
 -->
 
@@ -11616,7 +11616,21 @@ Current version: 136
 		if (!donottrim && (localsettings.opmode == 2
 		|| (localsettings.opmode == 3 && !localsettings.allow_continue_chat)
 		|| localsettings.trimsentences == true)) {
-			gentxt = end_trim_to_sentence(gentxt,true);
+			//also, to prevent a trim from bisecting a chat name, if a response contains a chatname, do not trim
+			donottrim = false;
+			if(localsettings.opmode == 3)
+			{
+				let foundOppoName = gentxt.indexOf(localsettings.chatopponent + "\: ");
+				let foundMyName = gentxt.indexOf(localsettings.chatname + "\: ");
+				if(foundOppoName > 0 || foundMyName > 0)
+				{
+					donottrim = true;
+				}
+			}
+			if(!donottrim)
+			{
+				gentxt = end_trim_to_sentence(gentxt,true);
+			}
 		}
 
 		//do a second pass, this time removing the actual stop token
