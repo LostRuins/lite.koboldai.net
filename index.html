@@ -7,7 +7,7 @@ Just copy this single static HTML file anywhere and open it in a browser, or fro
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 If you are submitting a pull request for Lite, PLEASE use the above repo, not the KoboldCpp one.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 137
+Current version: 138
 -Concedo
 -->
 
@@ -3706,7 +3706,7 @@ Current version: 137
 		trimsentences: true, //trim to last punctuation
 		trimwhitespace: false, //trim trailing whitespace
 		compressnewlines: false, //compress multiple newlines
-		eos_ban_mode: 0, //allow the EOS token when using locally 0=auto,1=unban,2=ban
+		eos_ban_mode: 0, //allow the EOS token when using locally 0=auto,1=unban,2=ban,3=bypass
 		opmode: 4, //what mode are we in? 1=story, 2=adventure, 3=chat, 4=instruct
 		adventure_is_action: false, //in adventure mode, determine story or action
 		adventure_context_mod: true, //extra injection for adventure mode
@@ -4677,6 +4677,11 @@ Current version: 137
 	}
 
 	function determine_if_ban_eos(input_was_empty) {
+		if(localsettings.eos_ban_mode == 3)
+		{
+			return false;
+		}
+
 		if (localsettings.eos_ban_mode == 0) {
 			if (localsettings.opmode == 1) {
 				return true; //story mode always ban
@@ -10637,6 +10642,10 @@ Current version: 137
 				if (kobold_endpoint_version && kobold_endpoint_version != "" && compare_version_str(kobold_endpoint_version, "1.2.4") >= 0)
 				{
 					submit_payload.use_default_badwordsids = determine_if_ban_eos(input_was_empty);
+					if(is_using_kcpp_with_added_memory())
+					{
+						submit_payload.bypass_eos = (localsettings.eos_ban_mode == 3?true:false);
+					}
 				}
 
 				let pseudostreaming = (determine_streaming_type()==1);
@@ -15496,6 +15505,7 @@ Current version: 137
 								<option value="0">Auto</option>
 								<option value="1">Unban</option>
 								<option value="2">Ban</option>
+								<option value="3">Bypass</option>
 							</select>
 						</div>
 						<div class="settinglabel">
