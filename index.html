@@ -3659,6 +3659,7 @@ Current version: 138
 	var last_known_filename = "saved_story.json";
 	var localmodeport = 5000;
 	var localmodehost = "localhost";
+	var sublocalpathname = "";
 	var localmodekey = "";
 	var kobold_endpoint_version = ""; //used to track problematic versions to avoid sending extra fields
 	var koboldcpp_version = ""; //detect if we are using koboldcpp
@@ -3920,10 +3921,28 @@ Current version: 138
 			}
 
 			let inputhost = urlParams.get('host');
+			sublocalpathname = "";
 			if (inputhost) {
 				localmodehost = inputhost;
 			}else if(window.location.hostname && window.location.hostname!="" && !is_using_web_lite()){
 				localmodehost = window.location.hostname;
+
+				//this is a little hack to tolerate the rare case of a reverse proxy being used in url path with a subfolder.
+				//it assumes that the server is also within the same path
+				let pn = window.location.pathname;
+				const twoslashes = /\/[^/]+\/[^/]*$/;
+				if(window.location.protocol != 'file:' && pn!="" && pn!="/" && twoslashes.test(pn))
+				{
+					const segments = pathname.split('/').filter(segment => segment.length > 0);
+					for(let i=0;i<segments.length;++i)
+					{
+						if(!pathname.endsWith("/") && (i==segments.length-1))
+						{
+							break;
+						}
+						sublocalpathname += "/"+segments[i];
+					}
+				}
 			}
 
 			let inputkey = urlParams.get('key');
@@ -4190,7 +4209,7 @@ Current version: 138
 			{
 				document.getElementById("customkoboldkey").value = localmodekey;
 			}
-			document.getElementById("customkoboldendpoint").value =  protocol + localmodehost + ":" + localmodeport;
+			document.getElementById("customkoboldendpoint").value = protocol + localmodehost + ":" + localmodeport + sublocalpathname;
 			connect_custom_endpoint();
 			document.getElementById("lastreq").innerHTML = document.getElementById("lastreq2").innerHTML =
 			`<span class=color_gray>You're using Kobold Lite Embedded.</span>`;
@@ -7597,15 +7616,23 @@ Current version: 138
 							|| !custom_kobold_endpoint.toLowerCase().includes(".")); //hostname without dots cannot be wan accessible
 
 						if (uses_cors_proxy || is_local) {
-							msgbox("Failed to connect to Custom Kobold Endpoint!\n\nPlease check if KoboldAI is running at the url: " + desiredkoboldendpoint + "");
-							selected_models = [];
-							selected_workers = [];
-							custom_kobold_endpoint = "";
-							if(localflag)
+							if(is_local && sublocalpathname!="")
 							{
-								document.getElementById("connectstatus").innerHTML = "Offline Mode";
+								sublocalpathname = ""; //one more try
+								attempt_connect(false);
 							}
-							render_gametext();
+							else
+							{
+								msgbox("Failed to connect to Custom Kobold Endpoint!\n\nPlease check if KoboldAI is running at the url: " + desiredkoboldendpoint + "");
+								selected_models = [];
+								selected_workers = [];
+								custom_kobold_endpoint = "";
+								if(localflag)
+								{
+									document.getElementById("connectstatus").innerHTML = "Offline Mode";
+								}
+								render_gametext();
+							}
 						} else {
 							uses_cors_proxy = true; //fallback to cors proxy, this will remain for rest of session
 							connect_custom_endpoint(); //one more try
