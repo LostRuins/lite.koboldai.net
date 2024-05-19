@@ -66,6 +66,33 @@ Current version: 138
 			filter: invert(1);
 		}
 
+		.maincontainer {
+			padding-right: 4px;
+			padding-left: 4px;
+			margin-right: auto;
+			margin-left: auto;
+		}
+
+
+		@media (min-width: 768px) {
+		.adaptivecontainer {
+			width: 750px;
+		}}
+		@media (min-width: 992px) {
+		.adaptivecontainer {
+			width: 970px;
+		}}
+		@media (min-width: 1200px) {
+		.adaptivecontainer {
+			width: 1170px;
+		}}
+
+		@media (min-width: 1200px) {
+		.clampedcontainer {
+			width: 1170px;
+		}}
+
+
 		.settinglabel input {
 			width: 6ch;
 			background-color: #1a3364;
@@ -1234,13 +1261,6 @@ Current version: 138
 			padding: 2px 6px;
 		}
 
-		.maincontainer {
-			padding-right: 4px;
-			padding-left: 4px;
-			margin-right: auto;
-			margin-left: auto;
-		}
-
 		.workerTableDiv,.shareStory{
 			max-height: 420px;
 			overflow-y: auto;
@@ -1951,16 +1971,16 @@ Current version: 138
 	{
 		height: calc(98vh - 240px);
 	}
-	@media (max-width: 598px) {
+	@media (max-width: 534px) {
 		.normal_viewport_height
 		{
-			height: calc(98vh - 270px);
+			height: calc(98vh - 260px);
 		}
 	}
 	@media (max-width: 342px) {
 		.normal_viewport_height
 		{
-			height: calc(98vh - 300px);
+			height: calc(98vh - 280px);
 		}
 	}
 	@media print {
@@ -3705,6 +3725,7 @@ Current version: 138
 
 		autoscroll: true, //automatically scroll to bottom on render
 		printer_view: false, //automatically scroll to bottom on render
+		viewport_width_mode: 0, //0=adapt, 1=clamp, 2=unlock
 		trimsentences: true, //trim to last punctuation
 		trimwhitespace: false, //trim trailing whitespace
 		compressnewlines: false, //compress multiple newlines
@@ -8411,6 +8432,7 @@ Current version: 138
 		document.getElementById("top_p").value = document.getElementById("top_p_slide").value = localsettings.top_p;
 		document.getElementById("autoscroll").checked = localsettings.autoscroll;
 		document.getElementById("printer_view").checked = localsettings.printer_view;
+		document.getElementById("viewport_width_mode").value = localsettings.viewport_width_mode;
 		document.getElementById("export_settings").checked = localsettings.export_settings;
 		document.getElementById("show_advanced_load").checked = localsettings.show_advanced_load;
 		document.getElementById("invert_colors").checked = localsettings.invert_colors;
@@ -8715,6 +8737,7 @@ Current version: 138
 		localsettings.top_p = document.getElementById("top_p").value;
 		localsettings.autoscroll = (document.getElementById("autoscroll").checked ? true : false);
 		localsettings.printer_view = (document.getElementById("printer_view").checked ? true : false);
+		localsettings.viewport_width_mode = document.getElementById("viewport_width_mode").value;
 		localsettings.export_settings = (document.getElementById("export_settings").checked ? true : false);
 		localsettings.show_advanced_load = (document.getElementById("show_advanced_load").checked ? true : false);
 		localsettings.invert_colors = (document.getElementById("invert_colors").checked ? true : false);
@@ -13223,6 +13246,23 @@ Current version: 138
 			document.getElementById("chat_msg_body").classList.add("aesthetic_viewport_height");
 		}
 
+		let maincon = document.getElementById("maincontainer");
+		if(localsettings.viewport_width_mode==1) //clamped
+		{
+			maincon.classList.remove("adaptivecontainer");
+			maincon.classList.add("clampedcontainer");
+		}
+		else if(localsettings.viewport_width_mode==2) //unlock
+		{
+			maincon.classList.remove("adaptivecontainer");
+			maincon.classList.remove("clampedcontainer");
+		}
+		else //adaptive
+		{
+			maincon.classList.add("adaptivecontainer");
+			maincon.classList.remove("clampedcontainer");
+		}
+
 		update_genimg_button_visiblility();
 
 		idle_timer = 0;
@@ -14590,7 +14630,7 @@ Current version: 138
 
 <body id="outerbody" class="">
 
-	<div class="container maincontainer">
+	<div id="maincontainer" class="adaptivecontainer maincontainer">
 		<div id="outerbodybg"></div>
 		<div class="" id="topmenu">
 			<div id="menuitems">
@@ -15682,6 +15722,15 @@ Current version: 138
 							<div class="justifyleft settingsmall">Unlock Scroll Height <span class="helpicon">?<span
 								class="helptext">Unlocks the text viewport, allowing for infinite height without scrolling</span></span></div>
 						   <input type="checkbox" id="printer_view" style="margin:0px 0px 0px auto;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="">Viewport Width <span class="helpicon">?<span
+								class="helptext">Controls horizontal scaling of the viewport window</span></span></div>
+						   <select style="padding:1px; height:auto; width: 34px; appearance: none; font-size: 7pt; margin:0px 0px 0px auto;" class="form-control" id="viewport_width_mode">
+								<option value="0">Adapt</option>
+								<option value="1">Clamp</option>
+								<option value="2">Unlock</option>
+							</select>
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Inverted Colors <span class="helpicon">?<span
