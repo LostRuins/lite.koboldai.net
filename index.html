@@ -4545,7 +4545,7 @@ Current version: 140
 			if (userinput != null && userinput!="") {
 				localsettings.my_api_key = userinput.trim();
 			}
-		},false);
+		},false,false,true);
 	}
 
 	function set_dalle_key()
@@ -4556,7 +4556,7 @@ Current version: 140
 			if (userinput != null && userinput!="") {
 				localsettings.saved_dalle_key = userinput.trim();
 			}
-		},false);
+		},false,false,true);
 	}
 	function set_dalle_url()
 	{
@@ -7027,8 +7027,11 @@ Current version: 140
 
 	var onInputboxOk = null;
 	var onInputboxCancel = null;
-	function inputBox(text,title,inputVal,inputPlaceholder,onDone,isHtml=false,isTextArea=false)
+	var inputboxIsPassword = false;
+	// Note: `isPassword` is ignored when `isTextArea` is true
+	function inputBox(text,title,inputVal,inputPlaceholder,onDone,isHtml=false,isTextArea=false,isPassword=false)
 	{
+		inputboxIsPassword = false;
 		if (!text) { text = ""; }
 		if (!title) { title = "User Input"; }
 		document.getElementById("inputboxcontainer").classList.remove("hidden");
@@ -7052,8 +7055,12 @@ Current version: 140
 			document.getElementById("inputboxcontainerinputarea").classList.add("hidden");
 			document.getElementById("inputboxcontainerinput").value = inputVal;
 			document.getElementById("inputboxcontainerinput").placeholder = escapeHtml(inputPlaceholder);
+			if(isPassword)
+			{
+				inputboxIsPassword = true;
+			}
 		}
-
+		inputboxblur();
 		onInputboxOk = function(){document.getElementById("inputboxcontainer").classList.add("hidden");onDone();};
 		onInputboxCancel = null;
 		document.getElementById("inputboxcancel").classList.add("hidden");
@@ -7620,7 +7627,7 @@ Current version: 140
 												if (userinput != null && userinput!="") {
 													custom_kobold_key = document.getElementById("customkoboldkey").value = localmodekey = localsettings.saved_kai_key = userinput.trim();
 												}
-											},false);
+											},false,true);
 										}
 
 									}else{
@@ -8351,6 +8358,15 @@ Current version: 140
 			});
 		}
 
+	}
+
+	function inputboxfocus()
+	{
+		document.getElementById("inputboxcontainerinput").type = "text";
+	}
+	function inputboxblur()
+	{
+		document.getElementById("inputboxcontainerinput").type = (inputboxIsPassword?"password":"text");
 	}
 
 	function focus_api_keys() {
@@ -16394,7 +16410,7 @@ Current version: 140
 
 			</div>
 			<input class="form-control" type="text" placeholder="" value=""
-			id="inputboxcontainerinput">
+			id="inputboxcontainerinput" onfocus="inputboxfocus()" onblur="inputboxblur()">
 			<textarea class="form-control hidden" style="line-height:1.1" id="inputboxcontainerinputarea" placeholder="" rows="5"></textarea>
 
 			<div class="popupfooter">
