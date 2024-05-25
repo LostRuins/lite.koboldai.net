@@ -10706,6 +10706,22 @@ Current version: 141
 		return seqs;
 	}
 
+	function cleanup_story_completion(resp)
+	{
+		if(!gametext_arr[gametext_arr.length-1].endsWith(" ") && !gametext_arr[gametext_arr.length-1].endsWith("\n"))
+		{
+			if(/^\.\.\.[a-zA-Z0-9]/.test(resp))
+			{
+				resp = resp.slice(3);
+			}
+			if(/^[^\p{P}\p{Z}\s]/u.test(resp))
+			{
+				resp = " "+resp;
+			}
+		}
+		return resp;
+	}
+
 	function dispatch_submit_generation(submit_payload, input_was_empty) //if input is not empty, always unban eos
 	{
 		console.log(submit_payload);
@@ -10929,20 +10945,30 @@ Current version: 141
 					claude_payload =
 					{
 						"model": custom_claude_model,
-						"messages": [{"role": "user", "content": submit_payload.prompt}],
+						"messages": [],
 						"max_tokens": submit_payload.params.max_length,
 						"top_k": (submit_payload.params.top_k<1?300:submit_payload.params.top_k),
 						"temperature": submit_payload.params.temperature,
 						"top_p": submit_payload.params.top_p,
 					};
+					claude_payload.messages.push({"role": "user", "content": submit_payload.prompt})
 					if(sysprompt)
 					{
 						claude_payload.system = sysprompt;
+					}
+					if(localsettings.opmode==1)
+					{
+						claude_payload.system = "Always respond with a direct partial continuation of the story immediately from the latest word.";
+						if(sysprompt)
+						{
+							claude_payload.system = sysprompt +"\n"+ claude_payload.system;
+						}
 					}
 					if(assistantprompt)
 					{
 						claude_payload.messages.push({"role": "assistant", "content": assistantprompt});
 					}
+
 				}
 				else
 				{
@@ -11008,6 +11034,10 @@ Current version: 141
 						if(custom_claude_key != "" && data.content && data.content.length > 0 && data.content[0].text)
 						{
 							data.completion = data.content[0].text; //for claudev3
+							if(localsettings.opmode==1 && gametext_arr.length>0 && data.completion!="")
+							{
+								data.completion = cleanup_story_completion(data.completion);
+							}
 						}
 						if (custom_claude_key != "" && data.completion != null && data.completion != "")
 						{
@@ -11144,6 +11174,11 @@ Current version: 141
 							synchro_polled_response = data.candidates[0].output;
 						}else if (custom_palm_key != "" && data.candidates != null && data.candidates.length>0 && data.candidates[0].content && data.candidates[0].content.parts != null && data.candidates[0].content.parts.length>0) {
 							synchro_polled_response = data.candidates[0].content.parts[0].text;
+							//try to handle the stripping of spaces
+							if(localsettings.opmode==1 && gametext_arr.length>0 && synchro_polled_response!="")
+							{
+								synchro_polled_response = cleanup_story_completion(synchro_polled_response);
+							}
 						}
 						else {
 							//error occurred, maybe captcha failed
