@@ -3522,7 +3522,8 @@ Current version: 141
 	const stablehorde_url = "https://aihorde.net";
 	const poll_interval_base_text = 500;
 	const poll_interval_base_img = 3800;
-	const poll_interval_background = 1000;
+	const poll_interval_idle = 1000;
+	const poll_interval_voice = 100;
 
 	const text_hordes = [
 		{
@@ -3754,6 +3755,7 @@ Current version: 141
 		xtts_voice: "female_calm",
 		beep_on: false,
 		notify_on: false,
+		voice_keyboard_mode: false,
 		narrate_both_sides: false,
 		narrate_only_dialog: false,
 		image_styles: "",
@@ -4096,7 +4098,8 @@ Current version: 141
 		//start the polling script for async generation status checking every Xs
 		setInterval(poll_pending_response, poll_interval_base_text);
 		setInterval(poll_image_db, poll_interval_base_img); //check images every Xs
-		setInterval(poll_background_tasks, poll_interval_background); //a basic update loop for running background tasks
+		setInterval(poll_idle_responses, poll_interval_idle); //a basic update loop for idle responses
+		setInterval(poll_voice_typing, poll_interval_voice);
 
 		attempt_connect(false);
 
@@ -6787,6 +6790,13 @@ Current version: 141
 		document.getElementById("workercontainer").classList.add("hidden");
 		document.getElementById("myownworkercontainer").classList.add("hidden");
 	}
+	function is_aesthetic_ui()
+	{
+		return (localsettings.gui_type_story!=0 && localsettings.opmode==1)
+		||(localsettings.gui_type_adventure!=0 && localsettings.opmode==2)
+		||(localsettings.gui_type_chat!=0 && localsettings.opmode==3)
+		||(localsettings.gui_type_instruct!=0 && localsettings.opmode==4);
+	}
 	function is_popup_open()
 	{
 		return !(
@@ -8600,6 +8610,7 @@ Current version: 141
 		toggle_tts_mode();
 		document.getElementById("beep_on").checked = localsettings.beep_on;
 		document.getElementById("notify_on").checked = localsettings.notify_on;
+		document.getElementById("voice_keyboard_mode").checked = localsettings.voice_keyboard_mode;
 		document.getElementById("narrate_both_sides").checked = localsettings.narrate_both_sides;
 		document.getElementById("narrate_only_dialog").checked = localsettings.narrate_only_dialog;
 		toggle_opmode();
@@ -8849,6 +8860,7 @@ Current version: 141
 		localsettings.xtts_voice = document.getElementById("xtts_voices").value;
 		localsettings.beep_on = (document.getElementById("beep_on").checked?true:false);
 		localsettings.notify_on = (document.getElementById("notify_on").checked?true:false);
+		localsettings.voice_keyboard_mode = (document.getElementById("voice_keyboard_mode").checked?true:false);
 		localsettings.narrate_both_sides = (document.getElementById("narrate_both_sides").checked?true:false);
 		localsettings.narrate_only_dialog = (document.getElementById("narrate_only_dialog").checked?true:false);
 		localsettings.auto_ctxlen = (document.getElementById("auto_ctxlen").checked ? true : false);
@@ -8889,10 +8901,7 @@ Current version: 141
 			localsettings.img_aspect = defaultsettings.img_aspect;
 		}
 
-		if((localsettings.gui_type_story!=0 && localsettings.opmode==1)
-		||(localsettings.gui_type_adventure!=0 && localsettings.opmode==2)
-		||(localsettings.gui_type_chat!=0 && localsettings.opmode==3)
-		||(localsettings.gui_type_instruct!=0 && localsettings.opmode==4))
+		if(is_aesthetic_ui())
 		{
 			//kick out of edit mode
 			if(document.getElementById("allowediting"))
@@ -9416,6 +9425,7 @@ Current version: 141
 	}
 
 	function restart_new_game(save = true, keep_memory = false) {
+		xtts_is_playing = false;
 		idle_timer = 0;
 		gametext_arr = [];
 		redo_arr = [];
@@ -9857,6 +9867,7 @@ Current version: 141
 	}
 
 	var xtts_is_connected = false;
+	var xtts_is_playing = false;
 	function fetch_xtts_voices(silent, is_xtts)
 	{
 		if(!xtts_is_connected)
@@ -10006,7 +10017,12 @@ Current version: 141
 						const playSound = audioContext.createBufferSource();
 						playSound.buffer = decodedData;
 						playSound.connect(audioContext.destination);
+						xtts_is_playing = true;
 						playSound.start(audioContext.currentTime);
+						playSound.onended = function() {
+							xtts_is_playing = false;
+							console.log("Audio finished playing");
+						};
 					}).catch((error) => {
 						console.log("XTTS Speak Error: " + error);
 					});
@@ -10040,7 +10056,12 @@ Current version: 141
 						const playSound = audioContext.createBufferSource();
 						playSound.buffer = decodedData;
 						playSound.connect(audioContext.destination);
+						xtts_is_playing = true;
 						playSound.start(audioContext.currentTime);
+						playSound.onended = function() {
+							xtts_is_playing = false;
+							console.log("Audio finished playing");
+						};
 					}).catch((error) => {
 						console.log("AllTalk Speak Error: " + error);
 					});
@@ -12357,7 +12378,7 @@ Current version: 141
 	var idle_timer = 0; //used in chat mode to send multi replies
 	var idle_triggered_counter = 0;
 	var idle_backoff_array = [15000,60000,300000,1200000,14400000];
-	function poll_background_tasks()
+	function poll_idle_responses()
 	{
 		let idle_timer_max = 0;
 		if(localsettings.idle_duration>0)
@@ -12397,6 +12418,46 @@ Current version: 141
 			console.log("Idling: " + idle_timer + ", " + idle_triggered_counter);
 		} else {
 			idle_timer = 0;
+		}
+
+	}
+
+	var voice_typing_trigger_timer = 0;
+	var voice_typing_last_text = "";
+	function poll_voice_typing()
+	{
+		//handle voice typing mode
+		if (localsettings.voice_keyboard_mode && !is_popup_open()) {
+			let boxtext = "";
+
+			if (is_aesthetic_ui()) {
+				boxtext = document.getElementById("cht_inp").value;
+			}
+			else {
+				boxtext = document.getElementById("input_text").value;
+			}
+			let currentlySpeaking = false;
+			if ('speechSynthesis' in window) {
+				currentlySpeaking = window.speechSynthesis.speaking;
+			}
+			if (!document.getElementById("btnsend").disabled && !currentlySpeaking && !xtts_is_playing) {
+				if (boxtext != "") {
+					voice_typing_trigger_timer += 1;
+					if (voice_typing_last_text != boxtext) {
+						voice_typing_last_text = boxtext;
+						voice_typing_trigger_timer = 0;
+					}
+					if (voice_typing_trigger_timer >= 18) { //1.8 sec
+						submit_generation();
+						voice_typing_last_text = "";
+						voice_typing_trigger_timer = 0;
+					}
+				}
+			} else {
+				voice_typing_last_text = "";
+				voice_typing_trigger_timer = 0;
+				document.getElementById("cht_inp").value = document.getElementById("input_text").value = "";
+			}
 		}
 	}
 
@@ -12897,6 +12958,19 @@ Current version: 141
 			else {
 				document.getElementById("btnsend").innerHTML = "Submit";
 			}
+			if(localsettings.voice_keyboard_mode)
+			{
+				document.getElementById("btnsend").innerHTML = "Awaiting<br>Input";
+				if(!is_popup_open())
+				{
+					if(is_aesthetic_ui())
+					{
+						document.getElementById("cht_inp").focus();
+					}else{
+						document.getElementById("input_text").focus();
+					}
+				}
+			}
 		}
 		else {
 			if(full_update)
@@ -13245,14 +13319,9 @@ Current version: 141
 		else {
 			document.getElementById("fvico").href = favicon_busy;
 		}
-		update_submit_button(true); //full update for submit button, otherwise just text when not generating
 
-		// Render onto enhanced chat interface if selected. Currently only applicable to Chat & Instruct modes.
-		let isStyleApplicable = (
-			(localsettings.opmode==1 && localsettings.gui_type_story!=0) ||
-			(localsettings.opmode==2 && localsettings.gui_type_adventure!=0) ||
-			(localsettings.opmode==3 && localsettings.gui_type_chat!=0) ||
-			(localsettings.opmode==4 && localsettings.gui_type_instruct!=0));
+		// Render onto enhanced chat interface if selected.
+		let isStyleApplicable = is_aesthetic_ui();
 
 		if (!inEditMode && isStyleApplicable)
 		{
@@ -13313,6 +13382,8 @@ Current version: 141
 			document.getElementById("enhancedchatinterface").classList.add("hidden");
 			document.getElementById("normalinterface").classList.remove("hidden");
 		}
+
+		update_submit_button(true); //full update for submit button, otherwise just text when not generating
 
 		document.getElementById("btnautogenmem").disabled = document.getElementById("btnsend").disabled;
 
@@ -14165,6 +14236,23 @@ Current version: 141
 				hide_popups();
 			},false);
 		}
+	}
+	function add_another_participant()
+	{
+		inputBox("Turn it into a group chat by adding more AI characters.\n\nInput name of additional character:","Add Another Participant","","[Enter Character Name]", ()=>{
+			let userinput = getInputBoxValue();
+			userinput = userinput.trim();
+			if(userinput!="")
+			{
+				if(document.getElementById("chatopponent").value=="")
+				{
+					document.getElementById("chatopponent").value = userinput;
+				}else{
+					document.getElementById("chatopponent").value += "||$||"+userinput;
+					handle_bot_name_onchange();
+				}
+			}
+		},false);
 	}
 	function confirm_groupchat_select()
 	{
@@ -15510,6 +15598,7 @@ Current version: 141
 								class="helptext">Allow incomplete AI chat replies, which can be continued by pressing submit again. Not recommended for newbies.</span></span></div>
 							<input type="checkbox" id="allow_continue_chat" style="margin:0px 0 0;">
 							</div>
+							<button type="button" class="btn btn-primary" style="padding:2px 3px;margin-top:2px;font-size:11px;" onclick="add_another_participant()">Add Another Participant</button>
 						</div>
 					</div>
 					</div>
@@ -15717,6 +15806,11 @@ Current version: 141
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall"  title="Show notification when generation is complete">Notify on Done </div>
 						   <input type="checkbox" id="notify_on" style="margin:0px 0 0;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="">VoiceKeyboard Mode <span class="helpicon">?<span
+								class="helptext">Designed to work with a Speech-To-Text voice keyboard input. Automatically submits text after input.</span></span></div>
+						   <input type="checkbox" id="voice_keyboard_mode" style="margin:0px 0px 0px auto;">
 						</div>
 						<button id="resetallsettings" type="button" class="btn btn-primary bg_red" style="padding:2px 3px;margin-top:2px;font-size:11px;" onclick="reset_all_settings()">Reset ALL Settings</button>
 					</div>
