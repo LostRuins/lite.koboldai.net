@@ -2656,6 +2656,10 @@ Current version: 141
 	}
 	function escapeHtml(unsafe)
 	{
+		if(localsettings.no_escape_html)
+		{
+			return unsafe;
+		}
 		return unsafe
 			.replace(/&/g, "&amp;")
 			.replace(/</g, "&lt;")
@@ -2665,6 +2669,10 @@ Current version: 141
 	}
 	function unescapeHtml(input)
 	{
+		if(localsettings.no_escape_html)
+		{
+			return input;
+		}
 		return input
 			.replace(/&amp;/g, "&")
 			.replace(/&lt;/g, "<")
@@ -3755,7 +3763,7 @@ Current version: 141
 		xtts_voice: "female_calm",
 		beep_on: false,
 		notify_on: false,
-		voice_keyboard_mode: false,
+		no_escape_html: false,
 		narrate_both_sides: false,
 		narrate_only_dialog: false,
 		image_styles: "",
@@ -8610,7 +8618,7 @@ Current version: 141
 		toggle_tts_mode();
 		document.getElementById("beep_on").checked = localsettings.beep_on;
 		document.getElementById("notify_on").checked = localsettings.notify_on;
-		document.getElementById("voice_keyboard_mode").checked = localsettings.voice_keyboard_mode;
+		document.getElementById("no_escape_html").checked = localsettings.no_escape_html;
 		document.getElementById("narrate_both_sides").checked = localsettings.narrate_both_sides;
 		document.getElementById("narrate_only_dialog").checked = localsettings.narrate_only_dialog;
 		toggle_opmode();
@@ -8860,7 +8868,7 @@ Current version: 141
 		localsettings.xtts_voice = document.getElementById("xtts_voices").value;
 		localsettings.beep_on = (document.getElementById("beep_on").checked?true:false);
 		localsettings.notify_on = (document.getElementById("notify_on").checked?true:false);
-		localsettings.voice_keyboard_mode = (document.getElementById("voice_keyboard_mode").checked?true:false);
+		localsettings.no_escape_html = (document.getElementById("no_escape_html").checked?true:false);
 		localsettings.narrate_both_sides = (document.getElementById("narrate_both_sides").checked?true:false);
 		localsettings.narrate_only_dialog = (document.getElementById("narrate_only_dialog").checked?true:false);
 		localsettings.auto_ctxlen = (document.getElementById("auto_ctxlen").checked ? true : false);
@@ -9525,7 +9533,7 @@ Current version: 141
 		render_gametext(false);
 	}
 
-	function replace_placeholders_direct(inputtxt)
+	function replace_placeholders_direct(inputtxt,escape=false)
 	{
 		inputtxt = replaceAll(inputtxt,instructstartplaceholder,get_instruct_starttag(false));
 		inputtxt = replaceAll(inputtxt,instructendplaceholder,get_instruct_endtag(false));
@@ -9533,8 +9541,16 @@ Current version: 141
 		inputtxt = replaceAll(inputtxt,instructstartplaceholder.trim(),get_instruct_starttag(false));
 		inputtxt = replaceAll(inputtxt,instructendplaceholder.trim(),get_instruct_endtag(false));
 
-		inputtxt = replaceAll(inputtxt,"{{user}}",localsettings.chatname?localsettings.chatname:"User",true);
-		inputtxt = replaceAll(inputtxt,"{{char}}",localsettings.chatopponent?localsettings.chatopponent:defaultchatopponent,true);
+		if(escape)
+		{
+			inputtxt = replaceAll(inputtxt,"{{user}}",escapeHtml(localsettings.chatname?localsettings.chatname:"User"),true);
+			inputtxt = replaceAll(inputtxt,"{{char}}",escapeHtml(localsettings.chatopponent?localsettings.chatopponent:defaultchatopponent),true);
+		}
+		else
+		{
+			inputtxt = replaceAll(inputtxt,"{{user}}",(localsettings.chatname?localsettings.chatname:"User"),true);
+			inputtxt = replaceAll(inputtxt,"{{char}}",(localsettings.chatopponent?localsettings.chatopponent:defaultchatopponent),true);
+		}
 
 		for(let i=0;i<placeholder_tags_data.length;++i)
 		{
@@ -9546,12 +9562,12 @@ Current version: 141
 
 		return inputtxt;
 	}
-	function replace_placeholders(inputtxt)
+	function replace_placeholders(inputtxt, escape=false)
 	{
 		//only do this for chat and instruct modes
 		if(localsettings.placeholder_tags)
 		{
-			inputtxt = replace_placeholders_direct(inputtxt);
+			inputtxt = replace_placeholders_direct(inputtxt,escape);
 		}
 		return inputtxt;
 	}
@@ -12427,7 +12443,7 @@ Current version: 141
 	function poll_voice_typing()
 	{
 		//handle voice typing mode
-		if (localsettings.voice_keyboard_mode && !is_popup_open()) {
+		if (document.getElementById("voice_keyboard_mode").checked && !is_popup_open()) {
 			let boxtext = "";
 
 			if (is_aesthetic_ui()) {
@@ -12958,7 +12974,7 @@ Current version: 141
 			else {
 				document.getElementById("btnsend").innerHTML = "Submit";
 			}
-			if(localsettings.voice_keyboard_mode)
+			if(document.getElementById("voice_keyboard_mode").checked)
 			{
 				document.getElementById("btnsend").innerHTML = "Awaiting<br>Input";
 				if(!is_popup_open())
@@ -13106,7 +13122,7 @@ Current version: 141
 				fulltxt = concat_gametext(false, "", "%SpnStg%", "%SpnEtg%",true);
 			} else {
 				fulltxt = concat_gametext(false, "", "", "",true);
-				fulltxt = replace_placeholders(fulltxt);
+				fulltxt = replace_placeholders(fulltxt,true);
 			}
 
 
@@ -13326,7 +13342,7 @@ Current version: 141
 		if (!inEditMode && isStyleApplicable)
 		{
 			let textToRender = (gametext_arr.length == 0 ? document.getElementById("gametext").innerHTML : concat_gametext(false, "", "", "", true));
-			textToRender = replace_placeholders(textToRender);
+			textToRender = replace_placeholders(textToRender,true);
 
 			if(localsettings.opmode==3 && localsettings.gui_type_chat==1)
 			{
@@ -14647,9 +14663,9 @@ Current version: 141
 			input = input.replaceAll(mynameregex3, '{{userplaceholder}}');
 			if(as.show_chat_names)
 			{
-				input = input.replaceAll("{{userplaceholder}}", `{{userplaceholder}}<p class='aui_nametag'>`+localsettings.chatname+`</p>`);
+				input = input.replaceAll("{{userplaceholder}}", `{{userplaceholder}}<p class='aui_nametag'>`+escapeHtml(localsettings.chatname)+`</p>`);
 				input = input.replaceAll(othernamesregex, function(match) {
-					return "{{botplaceholder}}<p class='aui_nametag'>" + match.substring(0,match.length-2).trim() + "</p>";
+					return "{{botplaceholder}}<p class='aui_nametag'>" + escapeHtml(match.substring(0,match.length-2).trim()) + "</p>";
 				});
 			}
 			else
@@ -15873,6 +15889,11 @@ Current version: 141
 								<option value="2">Ban</option>
 								<option value="3">Bypass</option>
 							</select>
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Never Escape HTML <span class="helpicon">?<span
+								class="helptext">Avoids escaping any HTML tags, allowing HTML injections. Not recommended!</span></span></div>
+						   <input type="checkbox" id="no_escape_html" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Placeholder Tags <span class="helpicon">?<span
