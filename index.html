@@ -7,7 +7,7 @@ Just copy this single static HTML file anywhere and open it in a browser, or fro
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 If you are submitting a pull request for Lite, PLEASE use the above repo, not the KoboldCpp one.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 141
+Current version: 142
 -Concedo
 -->
 
@@ -3569,7 +3569,6 @@ Current version: 141
 	const poll_interval_base_text = 500;
 	const poll_interval_base_img = 3800;
 	const poll_interval_idle = 1000;
-	const poll_interval_voice = 100;
 
 	const text_hordes = [
 		{
@@ -3624,6 +3623,7 @@ Current version: 141
 	const koboldcpp_check_endpoint = "/api/extra/generate/check";
 	const koboldcpp_truemaxctxlen_endpoint = "/api/extra/true_max_context_length";
 	const koboldcpp_preloadstory_endpoint = "/api/extra/preloadstory";
+	const koboldcpp_transcribe_endpoint = "/api/extra/transcribe";
 
 	const oai_models_endpoint = "/models";
 	const oai_submit_endpoint = "/completions";
@@ -3747,8 +3747,10 @@ Current version: 141
 	var logitbiasdict = {};
 	var regexreplace_data = [];
 	var placeholder_tags_data = [];
-	var voice_typing_enabled = false;
-	var koboldcpp_has_whisper = false;
+	var voice_typing_enabled = false; //did user toggle on voice typing
+	var koboldcpp_has_whisper = false; //does backend support voice typing
+	var voice_is_recording = false; //currently recording voice?
+	var voice_is_processing = false; //currently processing voice?
 	const num_regex_rows = 4;
 
 	var localsettings = {
@@ -4147,7 +4149,6 @@ Current version: 141
 		setInterval(poll_pending_response, poll_interval_base_text);
 		setInterval(poll_image_db, poll_interval_base_img); //check images every Xs
 		setInterval(poll_idle_responses, poll_interval_idle); //a basic update loop for idle responses
-		setInterval(poll_voice_typing, poll_interval_voice);
 
 		attempt_connect(false);
 
@@ -9516,6 +9517,7 @@ Current version: 141
 		welcome = "";
 		last_known_filename = "saved_story.json";
 		is_impersonate_user = false;
+		voice_is_processing = false;
 		if (!keep_memory)
 		{
 			personal_notes = "";
@@ -12491,43 +12493,16 @@ Current version: 141
 
 	}
 
-	var voice_typing_trigger_timer = 0;
-	var voice_typing_last_text = "";
-	function poll_voice_typing()
+	function ready_to_record()
 	{
-		//handle voice typing mode
-		if (voice_typing_enabled && is_using_kcpp_with_whisper() && !is_popup_open()) {
-			let boxtext = "";
-
-			if (is_aesthetic_ui()) {
-				boxtext = document.getElementById("cht_inp").value;
-			}
-			else {
-				boxtext = document.getElementById("input_text").value;
-			}
-			let currentlySpeaking = false;
-			if ('speechSynthesis' in window) {
-				currentlySpeaking = window.speechSynthesis.speaking;
-			}
-			if (!document.getElementById("btnsend").disabled && !currentlySpeaking && !xtts_is_playing) {
-				if (boxtext != "") {
-					voice_typing_trigger_timer += 1;
-					if (voice_typing_last_text != boxtext) {
-						voice_typing_last_text = boxtext;
-						voice_typing_trigger_timer = 0;
-					}
-					if (voice_typing_trigger_timer >= 18) { //1.8 sec
-						submit_generation();
-						voice_typing_last_text = "";
-						voice_typing_trigger_timer = 0;
-					}
-				}
-			} else {
-				voice_typing_last_text = "";
-				voice_typing_trigger_timer = 0;
-				document.getElementById("cht_inp").value = document.getElementById("input_text").value = "";
-			}
+		let currentlySpeaking = false;
+		if ('speechSynthesis' in window) {
+			currentlySpeaking = window.speechSynthesis.speaking;
 		}
+		return (voice_typing_enabled && is_using_kcpp_with_whisper()
+			&& !document.getElementById("btnsend").disabled
+			&& !voice_is_processing && !voice_is_recording && isVoiceInputConfigured
+			&& !currentlySpeaking && !xtts_is_playing && !is_popup_open());
 	}
 
 	var isVoiceInputConfigured = false;
@@ -12582,35 +12557,89 @@ Current version: 141
 			return new Blob([buffer], { type: 'audio/wav' });
 		}
 
-		let onRecordingReady = function (e) {
-			if(!voice_typing_enabled || !is_using_kcpp_with_whisper())
-			{
-				return;
+		let audioBlobToDecodedAudioBuffer = function(inBlob, onDone)
+		{
+			let reader = new window.FileReader();
+			reader.readAsArrayBuffer(inBlob);
+			reader.onloadend = function() {
+			let arrayBuffer = reader.result;
+			window.AudioContext = window.AudioContext || window.webkitAudioContext;
+			let audioContext = new AudioContext({ sampleRate: 16000 });
+			audioContext.decodeAudioData(arrayBuffer, (buffer)=>{
+				onDone(buffer);
+			});
 			}
+		}
+
+		let concatenateAudioBuffers = function(buffer1, buffer2) {
+			const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+			const numberOfChannels = Math.min(buffer1.numberOfChannels, buffer2.numberOfChannels);
+			const tmp = audioContext.createBuffer(
+				numberOfChannels,
+				buffer1.length + buffer2.length,
+				buffer1.sampleRate
+			);
+			for (let i = 0; i < numberOfChannels; i++) {
+				const channel = tmp.getChannelData(i);
+				channel.set(buffer1.getChannelData(i), 0);
+				channel.set(buffer2.getChannelData(i), buffer1.length);
+			}
+			return tmp;
+		}
+
+		let prerecorder, preaudiobuffers = [], preaudioblobs = []; //will store 2 preblobs at a time
+		let onRecordingReady = function (e) {
 			let completeRecording = new Blob([e.data], { type: 'audio/webm' });
-			let reader1 = new window.FileReader();
-			let reader2 = new window.FileReader();
-			reader1.readAsArrayBuffer(completeRecording);
-			reader1.onloadend = function () {
-				let arrayBuffer = reader1.result;
-				window.AudioContext = window.AudioContext || window.webkitAudioContext;
-				let audioContext = new AudioContext({ sampleRate: 16000 });
-				audioContext.decodeAudioData(arrayBuffer, (buffer) => {
-					let wavblob = audioBufferToWavBlob(buffer);
-					reader2.readAsDataURL(wavblob);
+			let audiodatareader = new window.FileReader();
+
+			if(preaudioblobs.length<2)
+			{
+				audioBlobToDecodedAudioBuffer(completeRecording,(buffer)=>{
+					let wavblob = audioBufferToWavBlob(finalbuf);
+					audiodatareader.readAsDataURL(wavblob);
+				});
+			} else {
+				audioBlobToDecodedAudioBuffer(completeRecording,(buffer)=>{
+					audioBlobToDecodedAudioBuffer(preaudioblobs[0],(buffer2)=>{
+						audioBlobToDecodedAudioBuffer(preaudioblobs[1],(buffer3)=>{
+							let prefix = concatenateAudioBuffers(buffer2,buffer3);
+							let finalbuf = concatenateAudioBuffers(prefix,buffer);
+							let wavblob = audioBufferToWavBlob(finalbuf);
+							audiodatareader.readAsDataURL(wavblob);
+						});
+					});
 				});
 			}
-			reader2.onloadend = function () {
-				let dataurl = reader2.result;
+
+			audiodatareader.onloadend = function () {
+				let dataurl = audiodatareader.result;
 				dispatch_transcribe(dataurl);
 			}
 		}
 
-		let recorder, is_speaking = false, speaking_counter = 0, is_recording = false;
+
+		let recorder, is_speaking = false, speaking_counter = 0;
 		// get audio stream from user's mic
 		navigator.mediaDevices.getUserMedia({
 			audio: true
 		}).then(function (stream) {
+			prerecorder = new MediaRecorder(stream);
+			prerecorder.addEventListener('dataavailable', (ev)=>{
+				preaudiobuffers.push(ev.data);
+				if(preaudiobuffers.length>2)
+				{
+					preaudiobuffers.shift();
+				}
+			});
+			setInterval(()=>{
+				if (prerecorder.state !== "inactive") {
+					prerecorder.stop();
+				}
+				if(ready_to_record()){
+					prerecorder.start();
+				}
+			}, 500);
+
 			recorder = new MediaRecorder(stream);
 			recorder.addEventListener('dataavailable', onRecordingReady);
 			window.AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -12622,26 +12651,34 @@ Current version: 141
 					is_speaking = false;
 					let check_speak_counter = speaking_counter;
 					setTimeout(() => {
-						if (is_recording && !is_speaking && speaking_counter == check_speak_counter) {
+						if (voice_is_recording && !is_speaking && speaking_counter == check_speak_counter) {
+							//generate prerecorder blobs (prebuffer 1sec)
+							preaudioblobs = [];
+							for(let i=0;i<preaudiobuffers.length;++i)
+							{
+								preaudioblobs.push(new Blob([preaudiobuffers[i]], { type: 'audio/webm' }));
+							}
 							if (recorder.state !== "inactive") {
 								recorder.stop();
 							}
-							is_recording = false;
+							voice_is_recording = false;
+							update_submit_button(false);
 						}
-					}, "1200"); //prevent premature stopping
+					}, "500"); //prevent premature stopping
 				},
 				voice_start: function () {
-					if(!voice_typing_enabled || !is_using_kcpp_with_whisper())
-					{
-						return;
-					}
 					is_speaking = true;
 					++speaking_counter;
-					if (!is_recording) {
+					if(ready_to_record())
+					{
 						if (recorder.state === "inactive") {
+							if (prerecorder.state !== "inactive") {
+								prerecorder.stop();
+							}
 							recorder.start();
 						}
-						is_recording = true;
+						voice_is_recording = true;
+						update_submit_button(false);
 					}
 				}
 			};
@@ -12651,7 +12688,41 @@ Current version: 141
 	}
 	function dispatch_transcribe(dataurl)
 	{
-		console.log(dataurl);
+		voice_is_processing = true;
+		update_submit_button(false);
+
+		let payload = {
+			"audio_data": dataurl
+		};
+		fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_transcribe_endpoint), {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify(payload),
+		})
+		.then(x => x.json())
+		.then(resp => {
+			console.log(resp);
+			voice_is_processing = false;
+			update_submit_button(false);
+			if(resp && resp.text && resp.text!="")
+			{
+				let trimmed = resp.text.trim();
+				let noise = trimmed.startsWith("(") && trimmed.endsWith(")");
+				let blank = trimmed.startsWith("[") && trimmed.endsWith("]");
+				let willsubmit = (document.getElementById("btnsend").disabled ? false : true);
+				if(willsubmit && trimmed && !noise && !blank)
+				{
+					document.getElementById("input_text").value = trimmed;
+					submit_generation();
+				}
+			}
+		}).catch((error) => {
+			console.log("Transcribe Error: " + error);
+			voice_is_processing = false;
+			update_submit_button(false);
+		});
 	}
 
 	//clock speed is 500ms per tick
@@ -13151,17 +13222,23 @@ Current version: 141
 			else {
 				document.getElementById("btnsend").innerHTML = "Submit";
 			}
+			document.getElementById("chat_msg_send_btn").classList.remove("showmic");
+			document.getElementById("chat_msg_send_btn").classList.remove("showmiclive");
+			document.getElementById("chat_msg_send_btn").classList.remove("showmicoff");
 			if(voice_typing_enabled && is_using_kcpp_with_whisper())
 			{
-				document.getElementById("btnsend").innerHTML = "<div class='showmicbig'></div>Standby";
-				if(!is_popup_open())
-				{
-					if(is_aesthetic_ui())
-					{
-						document.getElementById("cht_inp").focus();
-					}else{
-						document.getElementById("input_text").focus();
-					}
+				if (voice_is_processing) {
+					document.getElementById("chat_msg_send_btn").classList.add("showmicoff");
+					document.getElementById("btnsend").innerHTML = "<div class='showmicoffbig'></div><span style='font-size:12px'>Busy</span>";
+				} else if (voice_is_recording) {
+					document.getElementById("chat_msg_send_btn").classList.add("showmiclive");
+					document.getElementById("btnsend").innerHTML = "<div class='showmiclivebig'></div><span style='font-size:12px'>Record</span>";
+				} else if (ready_to_record()) {
+					document.getElementById("chat_msg_send_btn").classList.add("showmic");
+					document.getElementById("btnsend").innerHTML = "<div class='showmicbig'></div><span style='font-size:12px'>Standby</span>";
+				} else {
+					document.getElementById("chat_msg_send_btn").classList.add("showmicoff");
+					document.getElementById("btnsend").innerHTML = "<div class='showmicoffbig'></div><span style='font-size:12px'>Busy</span>";
 				}
 			}
 		}
