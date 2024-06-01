@@ -3747,10 +3747,12 @@ Current version: 143
 	var logitbiasdict = {};
 	var regexreplace_data = [];
 	var placeholder_tags_data = [];
-	var voice_typing_enabled = false; //did user toggle on voice typing
+	var voice_typing_mode = 0; //0=off, 1=on, 2=ptt
 	var koboldcpp_has_whisper = false; //does backend support voice typing
 	var voice_is_recording = false; //currently recording voice?
 	var voice_is_processing = false; //currently processing voice?
+	let voiceprerecorder = null, voicerecorder = null, voice_is_speaking = false, voice_speaking_counter = 0;
+	let preaudiobuffers = [], preaudioblobs = []; //will store 2 preblobs at a time
 	const num_regex_rows = 4;
 
 	var localsettings = {
@@ -8996,8 +8998,8 @@ Current version: 143
 		localsettings.sampler_seed = cleannum(localsettings.sampler_seed, -1, 999999);
 		toggle_invert_colors();
 
-		voice_typing_enabled = (document.getElementById("voice_typing_mode").checked?true:false);
-		if(voice_typing_enabled && is_using_kcpp_with_whisper())
+		voice_typing_mode = document.getElementById("voice_typing_mode").value;
+		if(voice_typing_mode>0 && is_using_kcpp_with_whisper())
 		{
 			init_voice_typing();
 		}
@@ -10157,6 +10159,63 @@ Current version: 143
 				utterance.onend = function(event) {
 					update_submit_button(false);
 				};
+			}
+		}
+	}
+
+	function ptt_start()
+	{
+		if(voice_typing_mode>0)
+		{
+			voice_is_speaking = true;
+			++voice_speaking_counter;
+			if(ready_to_record())
+			{
+				if (voicerecorder.state === "inactive") {
+					if (voiceprerecorder.state !== "inactive") {
+						voiceprerecorder.stop();
+					}
+					voicerecorder.start();
+				}
+				voice_is_recording = true;
+				update_submit_button(false);
+			}
+		}
+	}
+	function ptt_end()
+	{
+		if(voice_typing_mode>0)
+		{
+			voice_is_speaking = false;
+			let check_speak_counter = voice_speaking_counter;
+			setTimeout(() => {
+				if (voice_is_recording && !voice_is_speaking && voice_speaking_counter == check_speak_counter) {
+					//generate prerecorder blobs (prebuffer 1sec)
+					preaudioblobs = [];
+					for(let i=0;i<preaudiobuffers.length;++i)
+					{
+						preaudioblobs.push(new Blob([preaudiobuffers[i]], { type: 'audio/webm' }));
+					}
+					if (voicerecorder.state !== "inactive") {
+						voicerecorder.stop();
+					}
+					voice_is_recording = false;
+					update_submit_button(false);
+				}
+			}, 500); //prevent premature stopping
+		}
+	}
+	function submit_generation_button(aesthetic_ui)
+	{
+		if(voice_typing_mode==0) //only when voice is off
+		{
+			if(aesthetic_ui)
+			{
+				submit_generation();
+			}
+			else
+			{
+				chat_submit_generation();
 			}
 		}
 	}
@@ -12511,7 +12570,7 @@ Current version: 143
 		if ('speechSynthesis' in window) {
 			currentlySpeaking = window.speechSynthesis.speaking;
 		}
-		return (voice_typing_enabled && is_using_kcpp_with_whisper()
+		return (voice_typing_mode>0 && is_using_kcpp_with_whisper()
 			&& !document.getElementById("btnsend").disabled
 			&& !voice_is_processing && !voice_is_recording && isVoiceInputConfigured
 			&& !currentlySpeaking && !xtts_is_playing && !is_popup_open());
@@ -12523,7 +12582,7 @@ Current version: 143
 		if(navigator.mediaDevices==null)
 		{
 			msgbox("Cannot initialize microphone. If you're using a non-localhost URL, it needs to be served over HTTPS!","Error Starting Microphone");
-			voice_typing_enabled = document.getElementById("voice_typing_mode").checked = false;
+			voice_typing_mode = document.getElementById("voice_typing_mode").checked = 0;
 			return;
 		}
 		if (isVoiceInputConfigured) {
@@ -12609,7 +12668,6 @@ Current version: 143
 			return tmp;
 		}
 
-		let prerecorder, preaudiobuffers = [], preaudioblobs = []; //will store 2 preblobs at a time
 		let onRecordingReady = function (e) {
 			let completeRecording = new Blob([e.data], { type: 'audio/webm' });
 			let audiodatareader = new window.FileReader();
@@ -12640,13 +12698,12 @@ Current version: 143
 		}
 
 
-		let recorder, is_speaking = false, speaking_counter = 0;
 		// get audio stream from user's mic
 		navigator.mediaDevices.getUserMedia({
 			audio: true
 		}).then(function (stream) {
-			prerecorder = new MediaRecorder(stream);
-			prerecorder.addEventListener('dataavailable', (ev)=>{
+			voiceprerecorder = new MediaRecorder(stream);
+			voiceprerecorder.addEventListener('dataavailable', (ev)=>{
 				preaudiobuffers.push(ev.data);
 				if(preaudiobuffers.length>2)
 				{
@@ -12654,55 +12711,33 @@ Current version: 143
 				}
 			});
 			setInterval(()=>{
-				if (prerecorder.state !== "inactive") {
-					prerecorder.stop();
+				if (voiceprerecorder.state !== "inactive") {
+					voiceprerecorder.stop();
 				}
 				if(ready_to_record()){
-					prerecorder.start();
+					voiceprerecorder.start();
 				}
 			}, 500);
 
-			recorder = new MediaRecorder(stream);
-			recorder.addEventListener('dataavailable', onRecordingReady);
+			voicerecorder = new MediaRecorder(stream);
+			voicerecorder.addEventListener('dataavailable', onRecordingReady);
 			window.AudioContext = window.AudioContext || window.webkitAudioContext;
 			let audioContext = new AudioContext({ sampleRate: 16000 });
 			let source = audioContext.createMediaStreamSource(stream);
 			let options = {
 				source: source,
 				voice_stop: function () {
-					is_speaking = false;
-					let check_speak_counter = speaking_counter;
-					console.log("speech stopped");
-					setTimeout(() => {
-						if (voice_is_recording && !is_speaking && speaking_counter == check_speak_counter) {
-							//generate prerecorder blobs (prebuffer 1sec)
-							preaudioblobs = [];
-							for(let i=0;i<preaudiobuffers.length;++i)
-							{
-								preaudioblobs.push(new Blob([preaudiobuffers[i]], { type: 'audio/webm' }));
-							}
-							if (recorder.state !== "inactive") {
-								recorder.stop();
-							}
-							voice_is_recording = false;
-							update_submit_button(false);
-						}
-					}, 500); //prevent premature stopping
+					if(voice_typing_mode==1)
+					{
+						console.log("speech stopped");
+						ptt_end();
+					}
 				},
 				voice_start: function () {
-					is_speaking = true;
-					++speaking_counter;
-					console.log("speech started");
-					if(ready_to_record())
+					if(voice_typing_mode==1)
 					{
-						if (recorder.state === "inactive") {
-							if (prerecorder.state !== "inactive") {
-								prerecorder.stop();
-							}
-							recorder.start();
-						}
-						voice_is_recording = true;
-						update_submit_button(false);
+						console.log("speech started");
+						ptt_start();
 					}
 				}
 			};
@@ -12716,7 +12751,8 @@ Current version: 143
 		update_submit_button(false);
 
 		let payload = {
-			"audio_data": dataurl
+			"audio_data": dataurl,
+			"prompt": ""
 		};
 		fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_transcribe_endpoint), {
 			method: 'POST',
@@ -13249,7 +13285,7 @@ Current version: 143
 			document.getElementById("chat_msg_send_btn").classList.remove("showmic");
 			document.getElementById("chat_msg_send_btn").classList.remove("showmiclive");
 			document.getElementById("chat_msg_send_btn").classList.remove("showmicoff");
-			if(voice_typing_enabled && is_using_kcpp_with_whisper())
+			if(voice_typing_mode>0 && is_using_kcpp_with_whisper())
 			{
 				if (voice_is_processing) {
 					document.getElementById("chat_msg_send_btn").classList.add("showmicoff");
@@ -13259,7 +13295,7 @@ Current version: 143
 					document.getElementById("btnsend").innerHTML = "<div class='showmiclivebig'></div><span style='font-size:12px'>Record</span>";
 				} else if (ready_to_record()) {
 					document.getElementById("chat_msg_send_btn").classList.add("showmic");
-					document.getElementById("btnsend").innerHTML = "<div class='showmicbig'></div><span style='font-size:12px'>Standby</span>";
+					document.getElementById("btnsend").innerHTML = "<div class='showmicbig'></div><span style='font-size:12px'>"+(voice_typing_mode==1?"Standby":"PTT")+"</span>";
 				} else {
 					document.getElementById("chat_msg_send_btn").classList.add("showmicoff");
 					document.getElementById("btnsend").innerHTML = "<div class='showmicoffbig'></div><span style='font-size:12px'>Busy</span>";
@@ -15227,7 +15263,7 @@ Current version: 143
 				</div>
 				<div id="inputrowright" style="padding-right: 2px;">
 					<button type="button" class="btn btn-secondary wait" id="btnsend" disabled
-						onclick="submit_generation()">Loading</button>
+						onclick="submit_generation_button(false)" onmousedown="ptt_start()" onmouseup="ptt_end()">Loading</button>
 						<a href="#" id="abortgen" class="hidden bg_black" style="text-align: center;color: #ffaaaa;" onclick="abort_generation()"><b style="display: block;">[ABORT]</b></a>
 				</div>
 			</div>
@@ -15261,7 +15297,7 @@ Current version: 143
 					<div class="cht_inp_bg_inner" id="cht_inp_lengthtester" style="white-space: nowrap; visibility: hidden; height: 0px; position:absolute; width: auto;"></div>
 					<textarea class="cht_inp_bg_inner" id="cht_inp" type="text" name="chtchtinp"  role="presentation" autocomplete="noppynop" spellcheck="true" rows="1" wrap="on" placeholder="Type a message" value="" oninput="update_submit_button();chat_resize_input();" onkeypress="return chat_handle_typing(event)"/></textarea>
 					</div>
-					<button onclick="chat_submit_generation()" id="chat_msg_send_btn" class="chat_msg_send_btn" type="button"></button>
+					<button onclick="submit_generation_button(true)" onmousedown="ptt_start()" onmouseup="ptt_end()" id="chat_msg_send_btn" class="chat_msg_send_btn" type="button"></button>
 					<button onclick="abort_generation()" id="chat_msg_send_btn_abort" class="hidden chat_msg_send_btn_abort" type="button"></button>
 					<button type="button" class="chat_msg_cust_btn" id="btn_chat_cust" onclick="chat_toggle_actionmenu()"></button>
 					</div>
@@ -16103,9 +16139,13 @@ Current version: 143
 						   <input type="checkbox" id="notify_on" style="margin:0px 0 0;">
 						</div>
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="">Voice Typing Mode <span class="helpicon">?<span
-								class="helptext">Requires KoboldCpp with Whisper model loaded. Enables Speech-To-Text voice input. Automatically submits text after input.</span></span></div>
-						   <input type="checkbox" id="voice_typing_mode" style="margin:0px 0px 0px auto;">
+							<div class="justifyleft settingsmall" title="">Speech Control <span class="helpicon">?<span
+							class="helptext">Requires KoboldCpp with Whisper model loaded. Enables Speech-To-Text voice input. Automatically listens for speech in 'On' mode (Voice Detection), or use Push-To-Talk (PTT).</span></span></div>
+							<select style="padding:1px; height:auto; width: 60px; appearance: none; font-size: 6pt; margin:0px 0px 0px auto;" class="form-control" id="voice_typing_mode">
+								<option value="0">Off</option>
+								<option value="1">Detect Voice</option>
+								<option value="2">Push-To-Talk</option>
+							</select>
 						</div>
 						<button id="resetallsettings" type="button" class="btn btn-primary bg_red" style="padding:2px 3px;margin-top:2px;font-size:11px;" onclick="reset_all_settings()">Reset ALL Settings</button>
 					</div>
