@@ -7,7 +7,7 @@ Just copy this single static HTML file anywhere and open it in a browser, or fro
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 If you are submitting a pull request for Lite, PLEASE use the above repo, not the KoboldCpp one.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 142
+Current version: 143
 -Concedo
 -->
 
@@ -8844,6 +8844,7 @@ Current version: 142
 	}
 
 	function confirm_settings() {
+		hide_popups();
 		localsettings.max_context_length = document.getElementById("max_context_length").value;
 		localsettings.max_length = document.getElementById("max_length").value;
 		localsettings.temperature = document.getElementById("temperature").value;
@@ -9001,7 +9002,6 @@ Current version: 142
 			init_voice_typing();
 		}
 
-		hide_popups();
 		autosave();//need to always autosave, so that we can switch back to non persistent sessions
 		render_gametext(false);
 	}
@@ -12520,6 +12520,12 @@ Current version: 142
 	var isVoiceInputConfigured = false;
 	function init_voice_typing()
 	{
+		if(navigator.mediaDevices==null)
+		{
+			msgbox("Cannot initialize microphone. If you're using a non-localhost URL, it needs to be served over HTTPS!","Error Starting Microphone");
+			voice_typing_enabled = document.getElementById("voice_typing_mode").checked = false;
+			return;
+		}
 		if (isVoiceInputConfigured) {
 			return;
 		}
@@ -12527,7 +12533,7 @@ Current version: 142
 
 		//under BSD-3-Clause license
 		//original source https://github.com/kdavis-mozilla/vad.js Copyright (c) 2015, Kelly Daviss
-		let VAD=function(t){for(var e in this.options={fftSize:256,bufferLen:256,voice_stop:function(){},voice_start:function(){},smoothingTimeConstant:.99,energy_offset:1e-8,energy_threshold_ratio_pos:2,energy_threshold_ratio_neg:.5,energy_integration:1,filter:[{f:200,v:0},{f:2e3,v:1}],source:null,context:null},t)t.hasOwnProperty(e)&&(this.options[e]=t[e]);if(!this.options.source)throw Error("The options must specify a MediaStreamAudioSourceNode.");this.options.context=this.options.source.context,this.hertzPerBin=this.options.context.sampleRate/this.options.fftSize,this.iterationFrequency=this.options.context.sampleRate/this.options.bufferLen,this.iterationPeriod=1/this.iterationFrequency,this.setFilter=function(t){this.filter=[];for(var e=0,i=this.options.fftSize/2;e<i;e++){this.filter[e]=0;for(var s=0,o=t.length;s<o;s++)if(e*this.hertzPerBin<t[s].f){this.filter[e]=t[s].v;break}}},this.setFilter(this.options.filter),this.ready={},this.vadState=!1,this.energy_offset=this.options.energy_offset,this.energy_threshold_pos=this.energy_offset*this.options.energy_threshold_ratio_pos,this.energy_threshold_neg=this.energy_offset*this.options.energy_threshold_ratio_neg,this.voiceTrend=0,this.voiceTrendMax=10,this.voiceTrendMin=-10,this.voiceTrendStart=5,this.voiceTrendEnd=-5,this.analyser=this.options.context.createAnalyser(),this.analyser.smoothingTimeConstant=this.options.smoothingTimeConstant,this.analyser.fftSize=this.options.fftSize,this.floatFrequencyData=new Float32Array(this.analyser.frequencyBinCount),this.floatFrequencyDataLinear=new Float32Array(this.floatFrequencyData.length),this.options.source.connect(this.analyser),this.scriptProcessorNode=this.options.context.createScriptProcessor(this.options.bufferLen,1,1),this.scriptProcessorNode.connect(this.options.context.destination);var i=this;this.scriptProcessorNode.onaudioprocess=function(t){i.analyser.getFloatFrequencyData(i.floatFrequencyData),i.update(),i.monitor()},this.options.source.connect(this.scriptProcessorNode),this.update=function(){for(var t=this.floatFrequencyData,e=0,i=t.length;e<i;e++)this.floatFrequencyDataLinear[e]=Math.pow(10,t[e]/10);this.ready={}},this.getEnergy=function(){if(this.ready.energy)return this.energy;for(var t=0,e=this.floatFrequencyDataLinear,i=0,s=e.length;i<s;i++)t+=this.filter[i]*e[i]*e[i];return this.energy=t,this.ready.energy=!0,t},this.monitor=function(){var t=this.getEnergy()-this.energy_offset;t>this.energy_threshold_pos?this.voiceTrend=this.voiceTrend+1>this.voiceTrendMax?this.voiceTrendMax:this.voiceTrend+1:t<-this.energy_threshold_neg?this.voiceTrend=this.voiceTrend-1<this.voiceTrendMin?this.voiceTrendMin:this.voiceTrend-1:this.voiceTrend>0?this.voiceTrend--:this.voiceTrend<0&&this.voiceTrend++;var e=!1,i=!1;this.voiceTrend>this.voiceTrendStart?e=!0:this.voiceTrend<this.voiceTrendEnd&&(i=!0);var s=t*this.iterationPeriod*this.options.energy_integration;return s>0||!i?this.energy_offset+=s:this.energy_offset+=10*s,this.energy_offset=this.energy_offset<0?0:this.energy_offset,this.energy_threshold_pos=this.energy_offset*this.options.energy_threshold_ratio_pos,this.energy_threshold_neg=this.energy_offset*this.options.energy_threshold_ratio_neg,e&&!this.vadState&&(this.vadState=!0,this.options.voice_start()),i&&this.vadState&&(this.vadState=!1,this.options.voice_stop()),t}};
+		let VAD=function(t){for(var e in this.options={fftSize:512,bufferLen:512,voice_stop:function(){},voice_start:function(){},smoothingTimeConstant:.99,energy_offset:1e-8,energy_threshold_ratio_pos:2,energy_threshold_ratio_neg:.5,energy_integration:1,filter:[{f:200,v:0},{f:2e3,v:1}],source:null,context:null},t)t.hasOwnProperty(e)&&(this.options[e]=t[e]);if(!this.options.source)throw Error("The options must specify a MediaStreamAudioSourceNode.");this.options.context=this.options.source.context,this.hertzPerBin=this.options.context.sampleRate/this.options.fftSize,this.iterationFrequency=this.options.context.sampleRate/this.options.bufferLen,this.iterationPeriod=1/this.iterationFrequency,this.setFilter=function(t){this.filter=[];for(var e=0,i=this.options.fftSize/2;e<i;e++){this.filter[e]=0;for(var s=0,o=t.length;s<o;s++)if(e*this.hertzPerBin<t[s].f){this.filter[e]=t[s].v;break}}},this.setFilter(this.options.filter),this.ready={},this.vadState=!1,this.energy_offset=this.options.energy_offset,this.energy_threshold_pos=this.energy_offset*this.options.energy_threshold_ratio_pos,this.energy_threshold_neg=this.energy_offset*this.options.energy_threshold_ratio_neg,this.voiceTrend=0,this.voiceTrendMax=10,this.voiceTrendMin=-10,this.voiceTrendStart=5,this.voiceTrendEnd=-5,this.analyser=this.options.context.createAnalyser(),this.analyser.smoothingTimeConstant=this.options.smoothingTimeConstant,this.analyser.fftSize=this.options.fftSize,this.floatFrequencyData=new Float32Array(this.analyser.frequencyBinCount),this.floatFrequencyDataLinear=new Float32Array(this.floatFrequencyData.length),this.options.source.connect(this.analyser),this.scriptProcessorNode=this.options.context.createScriptProcessor(this.options.bufferLen,1,1),this.scriptProcessorNode.connect(this.options.context.destination);var i=this;this.scriptProcessorNode.onaudioprocess=function(t){i.analyser.getFloatFrequencyData(i.floatFrequencyData),i.update(),i.monitor()},this.options.source.connect(this.scriptProcessorNode),this.update=function(){for(var t=this.floatFrequencyData,e=0,i=t.length;e<i;e++)this.floatFrequencyDataLinear[e]=Math.pow(10,t[e]/10);this.ready={}},this.getEnergy=function(){if(this.ready.energy)return this.energy;for(var t=0,e=this.floatFrequencyDataLinear,i=0,s=e.length;i<s;i++)t+=this.filter[i]*e[i]*e[i];return this.energy=t,this.ready.energy=!0,t},this.monitor=function(){var t=this.getEnergy()-this.energy_offset;t>this.energy_threshold_pos?this.voiceTrend=this.voiceTrend+1>this.voiceTrendMax?this.voiceTrendMax:this.voiceTrend+1:t<-this.energy_threshold_neg?this.voiceTrend=this.voiceTrend-1<this.voiceTrendMin?this.voiceTrendMin:this.voiceTrend-1:this.voiceTrend>0?this.voiceTrend--:this.voiceTrend<0&&this.voiceTrend++;var e=!1,i=!1;this.voiceTrend>this.voiceTrendStart?e=!0:this.voiceTrend<this.voiceTrendEnd&&(i=!0);var s=t*this.iterationPeriod*this.options.energy_integration;return s>0||!i?this.energy_offset+=s:this.energy_offset+=10*s,this.energy_offset=this.energy_offset<0?0:this.energy_offset,this.energy_threshold_pos=this.energy_offset*this.options.energy_threshold_ratio_pos,this.energy_threshold_neg=this.energy_offset*this.options.energy_threshold_ratio_neg,e&&!this.vadState&&(this.vadState=!0,this.options.voice_start()),i&&this.vadState&&(this.vadState=!1,this.options.voice_stop()),t}};
 
 		let audioBufferToWavBlob = function (audioBuffer) {
 			let writeWavString = function (view, offset, string) {
@@ -12579,6 +12585,10 @@ Current version: 142
 			let audioContext = new AudioContext({ sampleRate: 16000 });
 			audioContext.decodeAudioData(arrayBuffer, (buffer)=>{
 				onDone(buffer);
+			},(err)=>
+			{
+				let fakebuf = audioContext.createBuffer(1, 8, audioContext.sampleRate);
+				onDone(fakebuf);
 			});
 			}
 		}
@@ -12662,6 +12672,7 @@ Current version: 142
 				voice_stop: function () {
 					is_speaking = false;
 					let check_speak_counter = speaking_counter;
+					console.log("speech stopped");
 					setTimeout(() => {
 						if (voice_is_recording && !is_speaking && speaking_counter == check_speak_counter) {
 							//generate prerecorder blobs (prebuffer 1sec)
@@ -12681,6 +12692,7 @@ Current version: 142
 				voice_start: function () {
 					is_speaking = true;
 					++speaking_counter;
+					console.log("speech started");
 					if(ready_to_record())
 					{
 						if (recorder.state === "inactive") {
