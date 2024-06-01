@@ -10192,9 +10192,12 @@ Current version: 143
 				if (voice_is_recording && !voice_is_speaking && voice_speaking_counter == check_speak_counter) {
 					//generate prerecorder blobs (prebuffer 1sec)
 					preaudioblobs = [];
-					for(let i=0;i<preaudiobuffers.length;++i)
+					if(voice_typing_mode==1)
 					{
-						preaudioblobs.push(new Blob([preaudiobuffers[i]], { type: 'audio/webm' }));
+						for(let i=0;i<preaudiobuffers.length;++i)
+						{
+							preaudioblobs.push(new Blob([preaudiobuffers[i]], { type: 'audio/webm' }));
+						}
 					}
 					if (voicerecorder.state !== "inactive") {
 						voicerecorder.stop();
@@ -12675,7 +12678,7 @@ Current version: 143
 			if(preaudioblobs.length<2)
 			{
 				audioBlobToDecodedAudioBuffer(completeRecording,(buffer)=>{
-					let wavblob = audioBufferToWavBlob(finalbuf);
+					let wavblob = audioBufferToWavBlob(buffer);
 					audiodatareader.readAsDataURL(wavblob);
 				});
 			} else {
@@ -12714,7 +12717,7 @@ Current version: 143
 				if (voiceprerecorder.state !== "inactive") {
 					voiceprerecorder.stop();
 				}
-				if(ready_to_record()){
+				if(ready_to_record() && voice_typing_mode==1){ //only voice detect needs it
 					voiceprerecorder.start();
 				}
 			}, 500);
