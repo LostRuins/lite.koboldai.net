@@ -6856,6 +6856,7 @@ Current version: 143
 	function is_popup_open()
 	{
 		return !(
+			document.getElementById("inputboxcontainer").classList.contains("hidden") &&
 			document.getElementById("saveloadcontainer").classList.contains("hidden") &&
 			document.getElementById("newgamecontainer").classList.contains("hidden") &&
 			document.getElementById("yesnocontainer").classList.contains("hidden") &&
@@ -6881,6 +6882,7 @@ Current version: 143
 		document.getElementById("newgamecontainer").classList.add("hidden");
 		document.getElementById("yesnocontainer").classList.add("hidden");
 		document.getElementById("settingscontainer").classList.add("hidden");
+		document.getElementById("inputboxcontainer").classList.add("hidden");
 		document.getElementById("msgboxcontainer").classList.add("hidden");
 		document.getElementById("memorycontainer").classList.add("hidden");
 		document.getElementById("workercontainer").classList.add("hidden");
@@ -9704,6 +9706,22 @@ Current version: 143
 		}
 	}
 
+	function handle_escape_button(event)
+	{
+		if(is_popup_open())
+		{
+			var isEscape = false;
+			if ("key" in event) {
+				isEscape = (event.key === "Escape" || event.key === "Esc");
+			} else {
+				isEscape = (event.keyCode === 27);
+			}
+			if (isEscape) {
+				hide_popups();
+			}
+		}
+	}
+
 	function handle_typing(event) {
 		var event = event || window.event;
 		var charCode = event.keyCode || event.which;
@@ -10214,11 +10232,11 @@ Current version: 143
 		{
 			if(aesthetic_ui)
 			{
-				submit_generation();
+				chat_submit_generation();
 			}
 			else
 			{
-				chat_submit_generation();
+				submit_generation();
 			}
 		}
 	}
@@ -14072,7 +14090,7 @@ Current version: 143
 		}
 
 		//setup wi tab
-		backup_wi();
+		start_editing_wi();
 		update_wi();
 
 		populate_placeholder_tags();
@@ -14192,7 +14210,7 @@ Current version: 143
 	}
 
 	function toggle_wi_sk(idx) {
-		var ce = current_wi[idx];
+		var ce = pending_wi_obj[idx];
 		ce.selective = !ce.selective;
 		var tgt = document.getElementById("wiskt" + idx);
 		var tgt2 = document.getElementById("wikeysec" + idx);
@@ -14211,7 +14229,7 @@ Current version: 143
 	}
 
 	function toggle_wi_ck(idx) {
-		var ce = current_wi[idx];
+		var ce = pending_wi_obj[idx];
 		ce.constant = !ce.constant;
 		var tgt = document.getElementById("wickt" + idx);
 		if (ce.constant) {
@@ -14225,29 +14243,29 @@ Current version: 143
 
 	function del_wi(idx) {
 		save_wi();
-		var ce = current_wi[idx];
-		current_wi.splice(idx, 1);
+		var ce = pending_wi_obj[idx];
+		pending_wi_obj.splice(idx, 1);
 		update_wi();
 	}
 
 	function up_wi(idx) {
 		save_wi();
-		var ce = current_wi[idx];
-		if (idx > 0 && idx < current_wi.length) {
-			const temp = current_wi[idx - 1];
-			current_wi[idx - 1] = current_wi[idx];
-			current_wi[idx] = temp;
+		var ce = pending_wi_obj[idx];
+		if (idx > 0 && idx < pending_wi_obj.length) {
+			const temp = pending_wi_obj[idx - 1];
+			pending_wi_obj[idx - 1] = pending_wi_obj[idx];
+			pending_wi_obj[idx] = temp;
    		}
 		update_wi();
 	}
 
 	function down_wi(idx) {
 		save_wi();
-		var ce = current_wi[idx];
-		if (idx >= 0 && idx+1 < current_wi.length) {
-			const temp = current_wi[idx + 1];
-			current_wi[idx + 1] = current_wi[idx];
-			current_wi[idx] = temp;
+		var ce = pending_wi_obj[idx];
+		if (idx >= 0 && idx+1 < pending_wi_obj.length) {
+			const temp = pending_wi_obj[idx + 1];
+			pending_wi_obj[idx + 1] = pending_wi_obj[idx];
+			pending_wi_obj[idx] = temp;
    		}
 		update_wi();
 	}
@@ -14265,32 +14283,32 @@ Current version: 143
 			"constant": false,
 			"probability":100
 		};
-		current_wi.push(ne);
+		pending_wi_obj.push(ne);
 		update_wi();
 	}
 
 	function save_wi() {
-		for (var i = 0; i < current_wi.length; ++i) {
-			current_wi[i].key = document.getElementById("wikey" + i).value;
-			current_wi[i].keysecondary = document.getElementById("wikeysec" + i).value;
-			current_wi[i].keyanti = document.getElementById("wikeyanti" + i).value;
-			current_wi[i].content = document.getElementById("wival" + i).value;
+		for (var i = 0; i < pending_wi_obj.length; ++i) {
+			pending_wi_obj[i].key = document.getElementById("wikey" + i).value;
+			pending_wi_obj[i].keysecondary = document.getElementById("wikeysec" + i).value;
+			pending_wi_obj[i].keyanti = document.getElementById("wikeyanti" + i).value;
+			pending_wi_obj[i].content = document.getElementById("wival" + i).value;
 			let prb = document.getElementById("wirng" + i).value;
-			current_wi[i].probability = (prb?prb:100);
+			pending_wi_obj[i].probability = (prb?prb:100);
 		}
 		localsettings.case_sensitive_wi = (document.getElementById("case_sensitive_wi").checked?true:false);
 		wi_searchdepth = document.getElementById("wi_searchdepth").value;
 		wi_insertlocation = document.getElementById("wi_insertlocation").value;
 	}
 
-	let backup_wi_obj = [];
-	function revert_wi()
+	let pending_wi_obj = []; //only the pending copy is edited until committed
+	function commit_wi_changes()
 	{
-		current_wi = JSON.parse(JSON.stringify(backup_wi_obj));
+		current_wi = JSON.parse(JSON.stringify(pending_wi_obj));
 	}
-	function backup_wi()
+	function start_editing_wi()
 	{
-		backup_wi_obj = JSON.parse(JSON.stringify(current_wi)); //in case we need to reset
+		pending_wi_obj = JSON.parse(JSON.stringify(current_wi));
 	}
 
 	function wi_quick_search()
@@ -14305,8 +14323,8 @@ Current version: 143
 		let wilist = document.getElementById("wilist");
 		let qsval = document.getElementById("wiquicksearch").value;
 		let selectionhtml = `<table style="border-collapse: separate; border-spacing: 1.5pt;">`;
-		for (var i = 0; i < current_wi.length; ++i) {
-			var curr = current_wi[i];
+		for (var i = 0; i < pending_wi_obj.length; ++i) {
+			var curr = pending_wi_obj[i];
 			var winame = escapeHtml(curr.key);
 			var witxt = escapeHtml(curr.content);
 			var wisec = (curr.keysecondary?curr.keysecondary:"");
@@ -14348,7 +14366,7 @@ Current version: 143
 		</tr>
 		`;
 		}
-		if (current_wi.length == 0) {
+		if (pending_wi_obj.length == 0) {
 			selectionhtml = "<div class=\"aidgpopuplistheader anotelabel\">No world info.<br>Click [+Add] to add a new entry.</div>"
 		}
 
@@ -15156,7 +15174,7 @@ Current version: 143
 
 </head>
 
-<body id="outerbody" class="">
+<body id="outerbody" class="" onkeydown="handle_escape_button(event)">
 
 	<div id="maincontainer" class="adaptivecontainer maincontainer">
 		<div id="outerbodybg"></div>
@@ -16460,8 +16478,8 @@ Current version: 143
 			</div>
 
 			<div class="popupfooter">
-				<button type="button" class="btn btn-primary" onclick="confirm_memory();save_wi();render_gametext();hide_popups()">OK</button>
-				<button type="button" class="btn btn-primary" onclick="revert_wi();hide_popups()">Cancel</button>
+				<button type="button" class="btn btn-primary" onclick="confirm_memory();save_wi();commit_wi_changes();render_gametext();hide_popups()">OK</button>
+				<button type="button" class="btn btn-primary" onclick="hide_popups();">Cancel</button>
 			</div>
 		</div>
 	</div>
