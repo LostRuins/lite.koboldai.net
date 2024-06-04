@@ -7,7 +7,7 @@ Just copy this single static HTML file anywhere and open it in a browser, or fro
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 If you are submitting a pull request for Lite, PLEASE use the above repo, not the KoboldCpp one.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 144
+Current version: 145
 -Concedo
 -->
 
@@ -3624,6 +3624,7 @@ Current version: 144
 	const koboldcpp_truemaxctxlen_endpoint = "/api/extra/true_max_context_length";
 	const koboldcpp_preloadstory_endpoint = "/api/extra/preloadstory";
 	const koboldcpp_transcribe_endpoint = "/api/extra/transcribe";
+	const koboldcpp_tokenize_endpoint = "/api/extra/tokencount";
 
 	const oai_models_endpoint = "/models";
 	const oai_submit_endpoint = "/completions";
@@ -7003,22 +7004,52 @@ Current version: 144
 	{
 		let key = document.getElementById("newlogitbiasid").value;
 		let val = document.getElementById("newlogitbiasval").value;
+		if(document.getElementById("newlogitbiasstringtoggle").checked)
+		{
+			key = document.getElementById("newlogitbiasstring").value;
+		}
 		if(key && val && key.trim()!="" && val.trim()!="")
 		{
 			let old = document.getElementById("logitbiastxtarea").value;
-			try {
-				let dict = JSON.parse(old);
-				key = parseInt(key);
-				val = parseInt(val);
-				if(!isNaN(key) && !isNaN(val))
-				{
-					dict[key] = parseInt(val);
-					document.getElementById("logitbiastxtarea").value = JSON.stringify(dict,null,2);
-				}
-			} catch (e) {
-				msgbox("Your inputs or logit bias JSON dictionary was not correctly formatted!");
+			if(document.getElementById("newlogitbiasstringtoggle").checked)
+			{
+				kcpp_tokenize(key,(tokarr)=>{
+					try {
+						if(tokarr && tokarr.length>0 && !isNaN(val))
+						{
+							let dict = JSON.parse(old);
+							for(let x=0;x<tokarr.length;++x)
+							{
+								key = parseInt(tokarr[x]);
+								val = parseInt(val);
+								if (!isNaN(key) && key!=1) {
+									dict[key] = parseInt(val);
+								}
+							}
+							document.getElementById("logitbiastxtarea").value = JSON.stringify(dict, null, 2);
+						}
+					} catch (e) {
+						msgbox("Your inputs or logit bias JSON dictionary was not correctly formatted!");
+					}
+				});
 			}
+			else
+			{
+				try {
+					let dict = JSON.parse(old);
+					key = parseInt(key);
+					val = parseInt(val);
+					if (!isNaN(key) && !isNaN(val)) {
+						dict[key] = parseInt(val);
+						document.getElementById("logitbiastxtarea").value = JSON.stringify(dict, null, 2);
+					}
+				} catch (e) {
+					msgbox("Your inputs or logit bias JSON dictionary was not correctly formatted!");
+				}
+			}
+
 			document.getElementById("newlogitbiasid").value = "";
+			document.getElementById("newlogitbiasstring").value = "";
 			document.getElementById("newlogitbiasval").value = "";
 		}
 	}
@@ -12805,6 +12836,32 @@ Current version: 144
 			update_submit_button(false);
 		});
 	}
+	function kcpp_tokenize(prompt,onDone)
+	{
+		let payload = {
+			"prompt": prompt
+		};
+		fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_tokenize_endpoint), {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify(payload),
+		})
+		.then(x => x.json())
+		.then(resp => {
+			console.log(resp);
+			if(resp && resp.ids && resp.ids.length>0)
+			{
+				onDone(resp.ids);
+			} else {
+				onDone([]);
+			}
+		}).catch((error) => {
+			console.log("Tokenize Error: " + error);
+			onDone([]);
+		});
+	}
 
 	//clock speed is 500ms per tick
 	function poll_pending_response()
@@ -14100,13 +14157,34 @@ Current version: 144
 		{
 			document.getElementById("nologitbias").classList.add("hidden");
 			document.getElementById("notokenbans").classList.add("hidden");
+			if(is_using_kcpp_with_added_memory())
+			{
+				document.getElementById("newlogitbiasstringtogglesection").classList.remove("hidden");
+			}else{
+				document.getElementById("newlogitbiasstringtogglesection").classList.add("hidden");
+				document.getElementById("newlogitbiasstringtoggle").checked = false;
+			}
 		}
 		else
 		{
 			document.getElementById("nologitbias").classList.remove("hidden");
 			document.getElementById("notokenbans").classList.remove("hidden");
+			document.getElementById("newlogitbiasstringtogglesection").classList.add("hidden");
+			document.getElementById("newlogitbiasstringtoggle").checked = false;
 		}
+		toggle_logit_bias_string();
+	}
 
+	function toggle_logit_bias_string()
+	{
+		if(document.getElementById("newlogitbiasstringtoggle").checked)
+		{
+			document.getElementById("newlogitbiasstring").classList.remove("hidden");
+			document.getElementById("newlogitbiasid").classList.add("hidden");
+		}else{
+			document.getElementById("newlogitbiasstring").classList.add("hidden");
+			document.getElementById("newlogitbiasid").classList.remove("hidden");
+		}
 	}
 
 	function populate_regex_replacers()
@@ -16425,11 +16503,17 @@ Current version: 144
 				<div id="expandlogitbias" class="hidden">
 					<div class="color_red hidden" id="nologitbias">Logit bias may be unavailable.</div>
 					<div style="color:#ffffff;">Enter OpenAI-formatted logit bias dictionary. Each key is the integer token IDs and their values are the biases (-100.0 to 100.0). Leave blank to disable.<br><a href='https://platform.openai.com/docs/api-reference/chat/create#chat-create-logit_bias' target='_blank' class='color_blueurl'>Input is a JSON object, reference here.</a><br></div>
-					<textarea class="form-control" style="line-height:1.1;margin-bottom: 4px;padding:3px" id="logitbiastxtarea" placeholder="" rows="5"></textarea>
+					<textarea class="form-control" style="line-height:1.1;margin-bottom: 4px;padding:3px; resize: vertical;" id="logitbiastxtarea" placeholder="" rows="5"></textarea>
 					<div style="display: flex; column-gap: 4px; margin-bottom: 4px;">
+					<input style="padding:2px" class="form-control stopseqbox inlineinput hidden" inputmode="text" type="text" placeholder="Token String" value="" id="newlogitbiasstring">
 					<input style="padding:2px" class="form-control stopseqbox inlineinput" inputmode="numeric" type="text" placeholder="Token ID" value="" id="newlogitbiasid">
 					<input style="padding:2px" class="form-control stopseqbox inlineinput" inputmode="text" type="text" placeholder="Bias Value" value="" id="newlogitbiasval">
 					<button type="button" class="btn btn-primary" style="width:90px;padding:6px 6px;" onclick="add_logit_bias()">Add New</button>
+					</div>
+					<div class="settinglabel hidden" id="newlogitbiasstringtogglesection">
+						<div class="justifyleft settingsmall">Input Strings Instead of IDs (Uses KCPP Tokenizer) <span class="helpicon">?<span
+							class="helptext">If enabled, allows you to input strings instead of only token IDs, and tokenizes them for you.</span></span></div>
+						<input type="checkbox" id="newlogitbiasstringtoggle" onclick="toggle_logit_bias_string()">
 					</div>
 				</div>
 
