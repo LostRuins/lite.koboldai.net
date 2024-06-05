@@ -946,7 +946,7 @@ Current version: 145
 		.statusicon:hover .statustext,
 		.statusicon.statustoggled .statustext {
 			display: inline-block;
-			width: 250px;
+			width: 280px;
 			background-color: #1f2931;
 			color: #ffffff;
 			font-size: 11pt;
@@ -7022,7 +7022,7 @@ Current version: 145
 							{
 								key = parseInt(tokarr[x]);
 								val = parseInt(val);
-								if (!isNaN(key) && key!=1) {
+								if (!isNaN(key)) {
 									dict[key] = parseInt(val);
 								}
 							}
@@ -11075,6 +11075,26 @@ Current version: 145
 				}
 
 				if (document.getElementById("useoaichatcompl").checked) {
+					let mainoaibody = submit_payload.prompt; //can be string or array
+					if(insertAIVisionImages.length>0)
+					{
+						mainoaibody = [
+							{
+								"type": "text",
+								"text": mainoaibody
+							}
+						];
+						for(let i=0;i<insertAIVisionImages.length;++i)
+						{
+							let oaiimg = {
+								"type": "image_url",
+								"image_url": {
+									"url": ("data:image/jpeg;base64,"+insertAIVisionImages[i])
+								}
+							};
+							mainoaibody.push(oaiimg);
+						}
+					}
 					let myrole = (localsettings.saved_oai_role==2)?"system":(localsettings.saved_oai_role==1?"assistant":"user");
 					oai_payload.messages = [];
 					targetep = (custom_oai_endpoint + oai_submit_endpoint_turbo);
@@ -11083,7 +11103,7 @@ Current version: 145
 						addrole = ((addrole==2)?"system":(addrole==1?"assistant":"user"));
 						oai_payload.messages.push({ "role": addrole, "content": document.getElementById("jailbreakprompttext").value });
 					}
-					oai_payload.messages.push({ "role": myrole, "content": submit_payload.prompt });
+					oai_payload.messages.push({ "role": myrole, "content": mainoaibody });
 					if (document.getElementById("jailbreakprompt2") && document.getElementById("jailbreakprompt2").checked && document.getElementById("jailbreakprompttext2").value!="") {
 						let addrole = document.getElementById("jailbreakprompttext2role").value;
 						addrole = ((addrole==2)?"system":(addrole==1?"assistant":"user"));
@@ -11958,7 +11978,12 @@ Current version: 145
 			latest_orig_prompt = origprompt;
 			let hasllava = is_using_kcpp_with_llava();
 			let visionstatus = "";
-			if(savedmeta.visionmode==3)
+			if(savedmeta.visionmode==4)
+			{
+				let isoai = (custom_oai_key!="" && document.getElementById("useoaichatcompl").checked);
+				visionstatus = isoai?`<span class="color_green">OpenAI API (Conditional)</span>`:`<span class="color_yellow">Unsupported</span>`;
+			}
+			else if(savedmeta.visionmode==3)
 			{
 				visionstatus = ((!savedmeta.visionmode || savedmeta.visionmode==0)?`<span class="color_red">Inactive</span>`:(hasllava?`<span class="color_green">Active</span>`:`<span class="color_yellow">Unsupported</span>`));
 			}
@@ -11967,14 +11992,15 @@ Current version: 145
 				visionstatus = ((!savedmeta.visionmode || savedmeta.visionmode==0)?`<span class="color_red">Inactive</span>`:(savedmeta.desc?`<span class="color_green">Active</span>`:`<span class="color_yellow">Analyzing</span>`));
 			}
 
-			let togglebtn = `<select class="form-control" id="aivisionmode" style="display:inline;height:24px;width: 134px; padding: 2px; margin: 3px; font-size:12px;" onchange="toggle_ai_vision(\'`+imghash+`\')">
+			let togglebtn = `<select class="form-control" id="aivisionmode" style="display:inline;height:24px;width: 140px; padding: 2px; margin: 3px; font-size:12px;" onchange="toggle_ai_vision(\'`+imghash+`\')">
 								<option value="0">Disabled</option>
 								<option value="1">Interrogate (Horde)</option>
 								<option value="2">Interrogate (A1111)</option>
 								<option value="3">Multimodal (LLaVA)</option>
+								<option value="4">OpenAI Vision (API)</option>
 							</select>`;
 			document.getElementById("zoomedimgdesc").innerHTML = `
-			AI Vision: `+visionstatus+` <span class="helpicon">?<span class="helptext">This allows the AI to visually recognize this image and react to it. On KoboldCpp, LLaVA models can be used. Otherwise, uses Horde or Local A1111 for image interrogation if enabled.</span></span>
+			AI Vision: `+visionstatus+` <span class="helpicon">?<span class="helptext">Allows the AI to see and react to this image. On KoboldCpp, LLaVA models can be used. Horde or Local A1111 use image interrogation if enabled. For OpenAI API, only works with Vision Models like Gpt4o.</span></span>
 			`+togglebtn+`
 			<br><button type="button" class="btn btn-primary" style="width: 140px; padding: 2px; margin: 3px; font-size:12px;" onclick="show_orig_prompt()">View Original Prompt</button>
 			<button type="button" class="btn btn-primary" style="width: 110px; padding: 2px; margin: 3px; font-size:12px;" onclick="add_img2img()">Create Img2Img</button>
@@ -12839,7 +12865,8 @@ Current version: 145
 	function kcpp_tokenize(prompt,onDone)
 	{
 		let payload = {
-			"prompt": prompt
+			"prompt": prompt,
+			"special": false,
 		};
 		fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_tokenize_endpoint), {
 			method: 'POST',
@@ -13266,7 +13293,7 @@ Current version: 145
 						{
 							return "\n(Attached Image: " + foundmeta.desc + ")\n";
 						}
-						else if(foundmeta.visionmode==3)
+						else if(foundmeta.visionmode==3 || foundmeta.visionmode==4)
 						{
 							let parts = inner.split(',');
 							if (parts.length === 2 && parts[0].startsWith('data:image')) {
