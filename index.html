@@ -7,7 +7,7 @@ Just copy this single static HTML file anywhere and open it in a browser, or fro
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on KoboldAI Lite.
 If you are submitting a pull request for Lite, PLEASE use the above repo, not the KoboldCpp one.
 KoboldAI Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 146
+Current version: 147
 -Concedo
 -->
 
@@ -4890,12 +4890,19 @@ Current version: 146
 		},false,true);
 	}
 
-	function export_share_story(via_url) {
+	function export_share_story(sharetype) { //type 0=data, 1=url, 2=plaintext
 		let cstoryjson = "";
 
 		document.getElementById("sharecontainer").classList.remove("hidden");
 		document.getElementById("sharewarning").classList.add("hidden");
-		if(via_url)
+		if(sharetype==0) //base64 data
+		{
+			cstoryjson = generate_compressed_story(localsettings.save_images,localsettings.export_settings,localsettings.export_settings);
+			console.log("Export Len: " + cstoryjson.length);
+			document.getElementById("sharecontainertitle").innerText = "Share Story as TextData";
+			document.getElementById("sharestorytext").innerHTML = "<p>"+cstoryjson+"</p>";
+		}
+		else if(sharetype==1) //url share
 		{
 			cstoryjson = generate_compressed_story(false,localsettings.export_settings,false);
 			console.log("Export Len: " + cstoryjson.length);
@@ -4906,10 +4913,12 @@ Current version: 146
 
 			let fullurl = "https://lite.koboldai.net/?s=" + cstoryjson;
 			document.getElementById("sharestorytext").innerHTML = "<a href=\"" + fullurl + "\">" + fullurl + "</a>";
-		}else{
-			cstoryjson = generate_compressed_story(localsettings.save_images,localsettings.export_settings,localsettings.export_settings);
+		}
+		else
+		{
+			cstoryjson = share_plaintext();
 			console.log("Export Len: " + cstoryjson.length);
-			document.getElementById("sharecontainertitle").innerText = "Share Story as TextData";
+			document.getElementById("sharecontainertitle").innerText = "Share Story as Plaintext";
 			document.getElementById("sharestorytext").innerHTML = "<p>"+cstoryjson+"</p>";
 		}
 		document.getElementById("choosesharecontainer").classList.add("hidden");
@@ -5197,6 +5206,16 @@ Current version: 146
 		{
 			save_file();
 		}
+	}
+
+	function share_plaintext() //takes the current loaded story and generates a new plaintext file
+	{
+		let story = concat_gametext(true, "", "", "", false);
+		if(current_memory!="")
+		{
+			story = current_memory + "\n"+story;
+		}
+		return story;
 	}
 
 	function generate_savefile(save_images,export_settings,export_aesthetic_settings) //takes the current loaded story and generates a new savefile json object
@@ -16697,7 +16716,7 @@ Current version: 146
 
 	<div class="popupcontainer flex hidden" id="sharecontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup fixsize moderate">
+		<div class="nspopup fixsize higher">
 			<div class="popuptitlebar">
 				<div class="popuptitletext" id="sharecontainertitle">Share Story</div>
 			</div>
@@ -16869,10 +16888,13 @@ Current version: 146
 				<div class="popuptitletext">Share Story Import / Export</div>
 			</div>
 			<div class="aidgpopuplistheader anotelabel">
-				<button type="button" class="btn btn-primary bg_green" onclick="export_share_story(false)">Export Share as TextData</button>
+				<button type="button" class="btn btn-primary bg_green" onclick="export_share_story(0)">Export Share as TextData</button>
 			</div>
 			<div class="aidgpopuplistheader anotelabel">
-				<button type="button" class="btn btn-primary bg_green" onclick="export_share_story(true)">Export Share as Web URL</button>
+				<button type="button" class="btn btn-primary bg_green" onclick="export_share_story(1)">Export Share as Web URL</button>
+			</div>
+			<div class="aidgpopuplistheader anotelabel">
+				<button type="button" class="btn btn-primary bg_green" onclick="export_share_story(2)">Export Share as Plaintext</button>
 			</div>
 			<div class="aidgpopuplistheader anotelabel">
 				<button type="button" class="btn btn-primary" onclick="import_share_story()">Import Share from TextData</button>
