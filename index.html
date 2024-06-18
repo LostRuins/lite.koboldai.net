@@ -3682,9 +3682,9 @@ Current version: 147
 	//gametext_arr stores images inline, with the special format [<|p|id|p|>] or [<|d|id|d|>], which is either an ID for loaded image data, or an ID for pending requests
 	var gametext_arr = []; //array of texts currently displayed
 	var redo_arr = []; //array of texts that are in the redo stack
-	var retry_prev_text = "" ; //when we retry, save the last version in case they want to undo
+	var retry_prev_text = []; //when we retry, save the last 3 versions in case they want to undo
 	var retry_preserve_last = false; //if true, retrying does not delete any old text
-	var redo_prev_text = ""; //if we undo a retry, save a copy here so it can be reverted with redo
+	var redo_prev_text = []; //if we undo a retry, save a copy here so it can be reverted with redo
 	var pending_response_id = ""; //guid of response pending from horde server
 	var pending_response_horde = text_hordes[0]; //the url to poll for pending response from a v2 submit
 	var poll_in_progress = false; //are we currently waiting for a text generation
@@ -9551,9 +9551,9 @@ Current version: 147
 		gametext_arr = [];
 		redo_arr = [];
 		last_request_str = "No Requests Available";
-		retry_prev_text = "";
+		retry_prev_text = [];
 		retry_preserve_last = false;
-		redo_prev_text = "";
+		redo_prev_text = [];
 		nextgeneratedimagemilestone = generateimagesinterval;
 		pending_response_id = "";
 		synchro_polled_response = null;
@@ -10422,9 +10422,9 @@ Current version: 147
 				gametext_arr.push(newgen);
 			}
 			redo_arr = [];
-			retry_prev_text = "";
+			retry_prev_text = [];
 			retry_preserve_last = true; //initially set to true
-			redo_prev_text = "";
+			redo_prev_text = [];
 			document.getElementById("input_text").value = "";
 			pending_response_id = "-1";
 
@@ -13208,9 +13208,9 @@ Current version: 147
 				gametext_arr = [];
 				redo_arr = [];
 				last_reply_was_empty = false;
-				retry_prev_text = "";
+				retry_prev_text = [];
 				retry_preserve_last = false;
-				redo_prev_text = "";
+				redo_prev_text = [];
 
 				//stash images
 				gametext_elem.querySelectorAll('div.storyimgcenter,div.storyimgside,div.storyimgfloat').forEach(
@@ -14562,11 +14562,10 @@ Current version: 147
 			last_reply_was_empty = false;
 			while(gametext_arr.length > 0)
 			{
-				if(retry_prev_text!="")
+				if(retry_prev_text.length>0)
 				{
-					redo_prev_text = gametext_arr.pop();
-					gametext_arr.push(retry_prev_text);
-					retry_prev_text = "";
+					redo_prev_text.push(gametext_arr.pop());
+					gametext_arr.push(retry_prev_text.pop());
 				}
 				else
 				{
@@ -14588,11 +14587,10 @@ Current version: 147
 		if (!document.getElementById("btnsend").disabled && pending_response_id == "" && gametext_arr.length > 0) {
 			last_reply_was_empty = false;
 			retry_preserve_last = false;
-			if(retry_prev_text!="")
+			if(retry_prev_text.length>0)
 			{
-				redo_prev_text = gametext_arr.pop();
-				gametext_arr.push(retry_prev_text);
-				retry_prev_text = "";
+				redo_prev_text.push(gametext_arr.pop());
+				gametext_arr.push(retry_prev_text.pop());
 			}
 			else
 			{
@@ -14614,11 +14612,13 @@ Current version: 147
 			retry_preserve_last = false;
 			while(redo_arr.length > 0)
 			{
-				retry_prev_text = "";
 				let popped = redo_arr.pop();
 				gametext_arr.push(popped);
 			}
-			btn_redo();
+			while (redo_prev_text.length>0) {
+				retry_prev_text.push(gametext_arr.pop());
+				gametext_arr.push(redo_prev_text.pop());
+			}
 			render_gametext();
 		}
 
@@ -14632,17 +14632,15 @@ Current version: 147
 		if (!document.getElementById("btnsend").disabled && pending_response_id == "") {
 			if (redo_arr.length > 0) {
 				last_reply_was_empty = false;
-				retry_prev_text = "";
 				retry_preserve_last = false;
 				let popped = redo_arr.pop();
 				gametext_arr.push(popped);
 				render_gametext();
-			}else if (redo_prev_text != "") {
+			}else if (redo_prev_text.length>0) {
 				last_reply_was_empty = false;
-				retry_prev_text = gametext_arr.pop();
+				retry_prev_text.push(gametext_arr.pop());
 				retry_preserve_last = false;
-				gametext_arr.push(redo_prev_text);
-				redo_prev_text = "";
+				gametext_arr.push(redo_prev_text.pop());
 				render_gametext();
 			}
 		}
@@ -14655,15 +14653,20 @@ Current version: 147
 			let boxtextstash = document.getElementById("input_text").value;
 			document.getElementById("input_text").value = "";
 			let temp = gametext_arr[gametext_arr.length-1];
-			redo_prev_text = "";
-			retry_prev_text = "";
+			redo_prev_text = [];
 			if(!retry_preserve_last)
 			{
 				gametext_arr.pop();
 			}
 			retry_preserve_last = false;
+			let last_retry_stack_temp = retry_prev_text;
 			submit_generation();
-			retry_prev_text = temp;
+			retry_prev_text = last_retry_stack_temp;
+			retry_prev_text.push(temp);
+			if(retry_prev_text.length>2)
+			{
+				retry_prev_text.shift();
+			}
 			redo_arr = [];
 			document.getElementById("input_text").value = boxtextstash;
 		}
