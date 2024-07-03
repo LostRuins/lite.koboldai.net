@@ -1736,7 +1736,7 @@ Current version: 148
 		@media screen and (hover: hover) and (any-pointer: fine) /* no custom scrollbars on mobile */
 		{
 			::-webkit-scrollbar {
-			width: 5px;
+			width: 8px;
 			}
 			::-webkit-scrollbar-track {
 			background: transparent;
@@ -2054,6 +2054,49 @@ Current version: 148
 	{
 		height: calc(98vh - 248px);
 	}
+
+	.corpostyle
+	{
+		background-color: #ffffff;
+		height: calc(98vh - 140px);
+		overflow-x: hidden;
+		max-height: 100%;
+		width: 100%;
+		word-wrap: break-word;
+		padding: 10px;
+		overflow-y: auto;
+		font-size: 20px;
+		font-family: Inter, sans-serif;
+		tab-size: 4;
+		line-height: 35px;
+		color: rgb(55, 65, 81);
+		padding: 10px;
+	}
+	.corpostyleinner
+	{
+		max-width: 800px;
+		margin-left: auto;
+    	margin-right: auto;
+	}
+	.corpostyleitem
+	{
+		padding: 10px;
+		display: flex;
+	}
+	.corpoavatar
+	{
+		height:34px;
+		width:auto;
+		padding:4px;
+		margin-right:6px;
+		border-radius:50%;
+	}
+	.corpostyleitemheading
+	{
+		color: rgb(33, 33, 33);
+		font-weight: 600;
+	}
+
 
 	/**
 	* ==============================================
@@ -3832,10 +3875,10 @@ Current version: 148
 		prompt_for_savename: false,
 		case_sensitive_wi: false,
 		last_selected_preset: 0,
-		gui_type_story: 0, //0=standard, 1=messenger, 2=aesthetic
-		gui_type_adventure: 0, //0=standard, 1=messenger, 2=aesthetic
-		gui_type_chat: 1, //0=standard, 1=messenger, 2=aesthetic
-		gui_type_instruct: 0, //0=standard, 1=messenger, 2=aesthetic
+		gui_type_story: 0, //0=standard, 1=messenger, 2=aesthetic, 3=corpo
+		gui_type_adventure: 0, //0=standard, 1=messenger, 2=aesthetic, 3=corpo
+		gui_type_chat: 1, //0=standard, 1=messenger, 2=aesthetic, 3=corpo
+		gui_type_instruct: 0, //0=standard, 1=messenger, 2=aesthetic, 3=corpo
 		multiline_replies: true,
 		multiline_replies_adventure: true,
 		allow_continue_chat: false,
@@ -6418,6 +6461,7 @@ Current version: 148
 			if (temp_scenario.gui_type===1) { localsettings.gui_type_instruct = 1; }
 			else if(temp_scenario.gui_type===2) { localsettings.gui_type_instruct = 2; }
 			else if(temp_scenario.gui_type===0) { localsettings.gui_type_instruct = 0; }
+			else if(temp_scenario.gui_type===3) { localsettings.gui_type_instruct = 3; }
 
 			if (temp_scenario.instruct_has_markdown===true) {
 				localsettings.instruct_has_markdown = true;
@@ -6883,10 +6927,17 @@ Current version: 148
 	}
 	function is_aesthetic_ui()
 	{
-		return (localsettings.gui_type_story!=0 && localsettings.opmode==1)
-		||(localsettings.gui_type_adventure!=0 && localsettings.opmode==2)
-		||(localsettings.gui_type_chat!=0 && localsettings.opmode==3)
-		||(localsettings.gui_type_instruct!=0 && localsettings.opmode==4);
+		return ((localsettings.gui_type_story==1 || localsettings.gui_type_story==2) && localsettings.opmode==1)
+		||((localsettings.gui_type_adventure==1 || localsettings.gui_type_adventure==2) && localsettings.opmode==2)
+		||((localsettings.gui_type_chat==1 || localsettings.gui_type_chat==2) && localsettings.opmode==3)
+		||((localsettings.gui_type_instruct==1 || localsettings.gui_type_instruct==2) && localsettings.opmode==4);
+	}
+	function is_corpo_ui()
+	{
+		return (localsettings.gui_type_story==3 && localsettings.opmode==1)
+		||(localsettings.gui_type_adventure==3 && localsettings.opmode==2)
+		||(localsettings.gui_type_chat==3 && localsettings.opmode==3)
+		||(localsettings.gui_type_instruct==3 && localsettings.opmode==4);
 	}
 	function is_popup_open()
 	{
@@ -7785,7 +7836,7 @@ Current version: 148
 										if(localflag && has_password && !localmodekey)
 										{
 											console.log("Password protection detected. Prompting for password...");
-											inputBox("This KoboldCpp instance may be password protected.\nPlease input password:","Kobold API Key Required",localsettings.saved_kai_key,"(Input Kobold API Key)", ()=>{
+											inputBox("This KoboldCpp instance may be password protected.\nPlease input password:","API Key Required",localsettings.saved_kai_key,"(Input API Key)", ()=>{
 												let userinput = getInputBoxValue();
 												userinput = userinput.trim();
 												if (userinput != null && userinput!="") {
@@ -9037,7 +9088,7 @@ Current version: 148
 			localsettings.img_aspect = defaultsettings.img_aspect;
 		}
 
-		if(is_aesthetic_ui())
+		if(is_aesthetic_ui() || is_corpo_ui())
 		{
 			//kick out of edit mode
 			if(document.getElementById("allowediting"))
@@ -9252,6 +9303,7 @@ Current version: 148
 		document.getElementById('uipicker_classic').classList.remove('hidden');
 		document.getElementById('uipicker_messenger').classList.add('hidden');
 		document.getElementById('uipicker_aesthetic').classList.add('hidden');
+		document.getElementById('uipicker_corpo').classList.add('hidden');
 
 		if (document.getElementById('opmode').value == 1) {
 			document.getElementById('gui_type').value = localsettings.gui_type_story;
@@ -9276,6 +9328,7 @@ Current version: 148
 			document.getElementById('instructsection1').classList.remove('hidden');
 			document.getElementById('instructsection2').classList.remove('hidden');
 			document.getElementById('uipicker_aesthetic').classList.remove('hidden');
+			document.getElementById('uipicker_corpo').classList.remove('hidden');
 			toggle_include_chatnames();
 		}
 
@@ -13895,9 +13948,21 @@ Current version: 148
 		}
 
 		// Render onto enhanced chat interface if selected.
-		let isStyleApplicable = is_aesthetic_ui();
+		let isAestheticUiStyle = is_aesthetic_ui();
+		let isCorpoUiStyle = is_corpo_ui();
 
-		if (!inEditMode && isStyleApplicable)
+		if (!inEditMode && isCorpoUiStyle)
+		{
+			let textToRender = (gametext_arr.length == 0 ? document.getElementById("gametext").innerHTML : concat_gametext(false, "", "", "", true));
+			textToRender = replace_placeholders(textToRender,true);
+
+			document.getElementById("corpo_body").innerHTML = render_corpo_instruct(textToRender);
+
+			document.getElementById("corpointerface").classList.remove("hidden");
+			document.getElementById("enhancedchatinterface").classList.add("hidden");
+			document.getElementById("normalinterface").classList.add("hidden");
+		}
+		else if (!inEditMode && isAestheticUiStyle)
 		{
 			let textToRender = (gametext_arr.length == 0 ? document.getElementById("gametext").innerHTML : concat_gametext(false, "", "", "", true));
 			textToRender = replace_placeholders(textToRender,true);
@@ -13952,8 +14017,10 @@ Current version: 148
 
 			document.getElementById("enhancedchatinterface").classList.remove("hidden");
 			document.getElementById("normalinterface").classList.add("hidden");
+			document.getElementById("corpointerface").classList.add("hidden");
 		} else {
 			document.getElementById("enhancedchatinterface").classList.add("hidden");
+			document.getElementById("corpointerface").classList.add("hidden");
 			document.getElementById("normalinterface").classList.remove("hidden");
 		}
 
@@ -13978,7 +14045,12 @@ Current version: 148
 		}
 
 		let maincon = document.getElementById("maincontainer");
-		if(localsettings.viewport_width_mode==1) //clamped
+		if(is_corpo_ui() || localsettings.viewport_width_mode==3) //unlock
+		{
+			maincon.classList.remove("adaptivecontainer");
+			maincon.classList.remove("clampedcontainer");
+			maincon.classList.remove("bigclampedcontainer");
+		}else if(localsettings.viewport_width_mode==1) //clamped
 		{
 			maincon.classList.remove("adaptivecontainer");
 			maincon.classList.add("clampedcontainer");
@@ -13989,12 +14061,6 @@ Current version: 148
 			maincon.classList.remove("adaptivecontainer");
 			maincon.classList.remove("clampedcontainer");
 			maincon.classList.add("bigclampedcontainer");
-		}
-		else if(localsettings.viewport_width_mode==3) //unlock
-		{
-			maincon.classList.remove("adaptivecontainer");
-			maincon.classList.remove("clampedcontainer");
-			maincon.classList.remove("bigclampedcontainer");
 		}
 		else //adaptive
 		{
@@ -14007,6 +14073,138 @@ Current version: 148
 
 		idle_timer = 0;
 		document.getElementById("token-budget").innerText = last_token_budget;
+	}
+
+	function render_corpo_instruct(input)
+	{
+		var corpobody = document.getElementById("corpo_body");
+		if(!corpobody)
+		{
+			return "";
+		}
+
+		let newbodystr = "";
+		let myturnchat = false; //who is currently speaking?
+		let st = get_instruct_starttag(false);
+		let et = get_instruct_endtag(false);
+
+		let chatunits = []; //parse chat body into nice chat chunks
+
+		let combined_chunks = [];
+		let turnchunks = input.split(st);
+		let startoppo = true;
+		for(let i=0;i<turnchunks.length;++i)
+		{
+			let chnk = turnchunks[i];
+			if(chnk.trim().length==0)
+			{
+				if(i==0)
+				{
+					startoppo = false;
+				}
+				continue;
+			}
+			let turnchunks2 = chnk.split(et);
+			for(let j=0;j<turnchunks2.length;++j)
+			{
+				if(j==0)
+				{
+					if(startoppo)
+					{
+						startoppo = false;
+						combined_chunks.push("%AIPlaceholder%");
+					}
+					else
+					{
+						combined_chunks.push("%HumanPlaceholder%");
+					}
+
+					combined_chunks.push(turnchunks2[j]);
+				}
+				else
+				{
+					combined_chunks.push("%AIPlaceholder%");
+					combined_chunks.push(turnchunks2[j]);
+				}
+			}
+		}
+
+		for(let i=0;i<combined_chunks.length;++i)
+		{
+			let curr = combined_chunks[i];
+			if(curr=="%HumanPlaceholder%")
+			{
+				myturnchat = true;
+			}
+			else if(curr=="%AIPlaceholder%")
+			{
+				myturnchat = false;
+			}
+			else
+			{
+				if(curr.trim()!="")
+				{
+					chatunits.push({
+					msg:curr,
+					myturn:myturnchat});
+				}
+			}
+		}
+
+		let colormap = {}, colidx = 0;
+		for(var i=0;i<chatunits.length;++i)
+		{
+			let curr = chatunits[i];
+			let foundimg = "";
+			if(curr.msg && curr.msg!="")
+			{
+				//convert the msg into images
+				curr.msg = curr.msg.replace(/\[<\|p\|.+?\|p\|>\]/g, function (m) {
+					// m here means the whole matched string
+					let inner = m.substring(5, m.length - 5);
+					inner = render_image_html("", inner,false,true);
+					return inner;
+				});
+				curr.msg = curr.msg.replace(/\[<\|d\|.+?\|d\|>\]/g, function (m) {
+					// m here means the whole matched string
+					let inner = m.substring(5, m.length - 5);
+					inner = render_image_html(inner, "",false,true);
+					return inner;
+				});
+				curr.msg = curr.msg.replace(/\[<\|.+?\|>\]/g, ""); //remove normal comments too
+			}
+
+			// <span class="color_cyan">`
+			if(curr.myturn)
+			{
+				let namepart = "User";
+				newbodystr += `<div class="corpostyleitem">
+					<div><img src="`+human_square+`" class="corpoavatar"/></div>
+					<div>
+						<div class="corpostyleitemheading">`+namepart+`</div>
+						<div class="corpostyleitemcontent"><p>`+curr.msg+`</p></div>
+					</div>
+					</div>`;
+			}
+			else
+			{
+				let namepart = "KoboldAI";
+				newbodystr += `<div class="corpostyleitem">
+					<div><img src="`+niko_square+`" class="corpoavatar"/></div>
+					<div>
+						<div class="corpostyleitemheading">`+namepart+`</div>
+						<div class="corpostyleitemcontent"><p>`+curr.msg+`</p></div>
+					</div>
+					</div>`;
+			}
+
+		}
+		// if(synchro_pending_stream!="")
+		// {
+		// 	newbodystr += `<div class="corpostyleitem"><p>` + escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream) + `</p></div>`;
+		// }
+
+		return newbodystr;
 	}
 
 	function render_enhanced_chat(input)
@@ -15483,6 +15681,7 @@ Current version: 148
 				</div>
 			</div>
 		</div>
+
 		<div id="normalinterface">
 		<div id="maineditbody" class="layer-container">
 			<div class="layer-bottom gamescreenbgnormal normal_viewport_height" id="gamescreen">
@@ -15570,6 +15769,14 @@ Current version: 148
 				</div>
 
 				<div class="lastreq" id="lastreq2" style="padding-top: 2px; color:#999999"><span class="color_gray">KoboldAI Lite - A frontend for self hosted and third party API services.</span></div>
+			</div>
+		</div>
+
+		<div id="corpointerface" class="hidden">
+			<div class="corpostyle">
+				<div id="corpo_body" class="corpostyleinner">
+
+				</div>
 			</div>
 		</div>
 	</div>
@@ -15705,7 +15912,7 @@ Current version: 148
 				Localhost IPs require host mode enabled. You can use the remote address displayed in the <span class="color_orange" style="font-weight: bold;">remote-play.bat</span> window or <span class="color_orange" style="font-weight: bold;">colab window</span>, note that the model must be loaded first.<br><br>
 				<span class="color_green" style="font-weight: bold;">Please input URL of the KoboldAI instance.</span><br><br>
 				<input class="form-control" id="customkoboldendpoint" placeholder="https://sample-remote-address.trycloudflare.com" value="">
-				<input class="form-control" type="password" id="customkoboldkey" placeholder="Kobold API Key (Optional)" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
+				<input class="form-control" type="password" id="customkoboldkey" placeholder="KoboldAI API Key (Optional)" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
 				<div class="box flex flex-push-right">
 					<input type="checkbox" id="remoteconsolelog">
 					<div class="box-label" title="Will display outputs to the remote endpoint's console logs, useful for debugging.">Show Console Logging</div>
@@ -16086,6 +16293,7 @@ Current version: 148
 									<option id="uipicker_classic" value="0">Classic</option>
 									<option id="uipicker_messenger" value="1">Messenger</option>
 									<option id="uipicker_aesthetic" value="2">Aesthetic</option>
+									<option id="uipicker_corpo" value="3">Corpo</option>
 								</select>
 								<button type="button" class="btn btn-primary" id="btn_aesthetics" onclick="openAestheticUISettingsMenu()" style="height: 24px; padding: 0px 2px; margin: 0px 0px 0px 3px;">⚙️</button>
 							</div>
