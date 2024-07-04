@@ -2058,25 +2058,106 @@ Current version: 148
 	.corpostyle
 	{
 		background-color: #ffffff;
-		height: calc(98vh - 140px);
 		overflow-x: hidden;
 		max-height: 100%;
 		width: 100%;
 		word-wrap: break-word;
-		padding: 10px;
-		overflow-y: auto;
 		font-size: 20px;
 		font-family: Inter, sans-serif;
 		tab-size: 4;
 		line-height: 35px;
 		color: rgb(55, 65, 81);
-		padding: 10px;
+		display: flex;
+	}
+	.corpomainbtm
+	{
+		/* position: fixed;
+   		bottom: 16px; */
+	}
+	.corpo_chat_outer
+	{
+		display: inline-block;
+		width: calc(100% - 24px);
+		background: #f4f4f4aa none repeat scroll 0 0;
+		margin-top: 8px;
+		margin-bottom: 12px;
+		margin-left: 12px;
+		border-radius: 16px;
+		padding-left: 12px;
+		padding-right: 12px;
+		padding-top: 8px;
+        border: 1px solid #bbbbbbaa;
+	}
+	.corpo_chat_inner
+	{
+		width: 100%;
+		resize: none;
+		overflow-x:hidden;
+		background: #00000000 none repeat scroll 0 0;
+		border: medium none;
+		color: #0d0d0d;
+		font-size: 20px;
+		font-weight: 400;
+		outline:none;
+		line-height: 28px;
+	}
+	.corpoleftpanel
+	{
+		min-width:240px;
+		background-color: #f4f4f4;
+		padding-left: 8px;
+		padding-right: 8px;
+		transition: transform 0.3s ease;
+		height: calc(100vh - 68px);
+	}
+	.corporightpanel
+	{
+		width: 100%;
+		height: calc(100vh - 68px);
+		display: flex;
+    	flex-direction: column;
+	}
+	.corpo_leftpanel_close
+	{
+		display: none;
+	}
+	.corpo_leftpanel_open
+	{
+		display: none;
+	}
+	@media (max-width: 768px) {
+
+		.corpoleftpanel {
+			position: fixed;
+			left: 0;
+			top: 0;
+			height: 100%;
+			transform: translateX(-100%);
+		}
+
+		.corpoleftpanel.open {
+			transform: translateX(0);
+		}
+
+		.corpo_leftpanel_close {
+			display: block;
+		}
+
+		.corpo_leftpanel_open {
+			display: block;
+		}
+	}
+	.corpostylemain
+	{
+		overflow-y: auto;
 	}
 	.corpostyleinner
 	{
-		max-width: 800px;
+		max-width: 860px;
 		margin-left: auto;
     	margin-right: auto;
+		padding-left: 8px;
+		padding-right: 8px;
 	}
 	.corpostyleitem
 	{
@@ -14206,6 +14287,18 @@ Current version: 148
 
 		return newbodystr;
 	}
+	function show_corpo_leftpanel(open)
+	{
+		let panel = document.getElementById('corpo_leftpannel');
+		if(open)
+		{
+			panel.classList.add('open');
+		}
+		else
+		{
+			panel.classList.remove('open');
+		}
+	}
 
 	function render_enhanced_chat(input)
 	{
@@ -14367,11 +14460,11 @@ Current version: 148
 	function chat_resize_input()
 	{
 		//resize chat inp
-		let textarea = document.getElementById("cht_inp");
+		let textarea = is_corpo_ui()?document.getElementById("corpo_cht_inp"):document.getElementById("cht_inp");
+		let lengthtester = is_corpo_ui()?document.getElementById("corpo_cht_inp_lengthtester"):document.getElementById("cht_inp_lengthtester");
 
 		let textlines = textarea.value.split("\n");
 		let numberOfLineBreaks = textlines.length;
-		let lengthtester = document.getElementById("cht_inp_lengthtester");
 		for(let l=0;l<textlines.length;++l)
 		{
 			lengthtester.innerText = textlines[l];
@@ -14383,9 +14476,6 @@ Current version: 148
 		lengthtester.innerText = "";
 		numberOfLineBreaks = numberOfLineBreaks>5?5:numberOfLineBreaks;
 		textarea.rows = numberOfLineBreaks;
-
-		// textarea.style.height = "auto";
-		// textarea.style.height = textarea.scrollHeight + 3 + "px";
 	}
 	function chat_submit_generation()
 	{
@@ -15774,8 +15864,23 @@ Current version: 148
 
 		<div id="corpointerface" class="hidden">
 			<div class="corpostyle">
-				<div id="corpo_body" class="corpostyleinner">
-
+				<div id="corpo_leftpannel" class="corpoleftpanel">
+					<button class="corpo_leftpanel_close" onclick="show_corpo_leftpanel(false)">&times;</button>
+					<p>left panel</p>
+				</div>
+				<button class="corpo_leftpanel_open" onclick="show_corpo_leftpanel(true)">&#11166;</button>
+				<div class="corporightpanel">
+					<div class="corpostylemain">
+						<div id="corpo_body" class="corpostyleinner"></div>
+					</div>
+					<div class="corpomainbtm">
+						<div class="">
+						<div class="corpo_chat_outer">
+						<div class="corpo_chat_inner" id="corpo_cht_inp_lengthtester" style="white-space: nowrap; visibility: hidden; height: 0px; position:absolute; width: auto;"></div>
+						<textarea class="corpo_chat_inner" id="corpo_cht_inp" type="text" name="crpchtinp"  role="presentation" autocomplete="noppynop" spellcheck="true" rows="1" wrap="on" placeholder="Message KoboldAI" value="" oninput="update_submit_button();chat_resize_input();" onkeypress="return chat_handle_typing(event)"/></textarea>
+						</div>
+						</div>
+					</div>
 				</div>
 			</div>
 		</div>
