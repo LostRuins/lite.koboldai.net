@@ -5267,6 +5267,7 @@ Current version: 149
 
 	function save_file_button(use_existing_save=false) //for triggering an optional popup. if use save is true, assume temp obj is set
 	{
+		warn_on_quit = false;
 		const save_file = function()
 		{
 			if(!use_existing_save)
@@ -8294,6 +8295,7 @@ Current version: 149
 
 		const slotwrite = function()
 		{
+			warn_on_quit = false;
 			inputBox("Enter a label for this Browser Storage Slot data","Enter a label",savename,defaultsavename,()=>{
 				let userinput = getInputBoxValue();
 				if(userinput.trim()=="")
@@ -9846,6 +9848,7 @@ Current version: 149
 			regexreplace_data = [];
 			placeholder_tags_data = [];
 		}
+		warn_on_quit = false;
 		render_gametext(save); //necessary to trigger an autosave to wipe out current story in case they exit browser after newgame.
 	}
 
@@ -10015,6 +10018,16 @@ Current version: 149
 		}
 	}
 
+	var warn_on_quit = false;
+	function handle_quit()
+	{
+		if(warn_on_quit)
+		{
+			return "Unsaved changes will be lost!"; //the actual message will not be shown in new browsers
+		}
+		return undefined;
+	}
+
 	function handle_escape_button(event)
 	{
 		if(is_popup_open())
@@ -10034,6 +10047,7 @@ Current version: 149
 	function handle_typing(event) {
 		var event = event || window.event;
 		var charCode = event.keyCode || event.which;
+		warn_on_quit = true;
 
 		if (!event.shiftKey && (charCode == 13||(charCode == 10 && event.ctrlKey))) {
 			let willsubmit = (document.getElementById("entersubmit").checked ? true : false);
@@ -10567,8 +10581,9 @@ Current version: 149
 		}
 	}
 
-	function submit_generation() {
-
+	function submit_generation()
+	{
+		warn_on_quit = true;
 		let newgen = document.getElementById("input_text").value;
 
 		//apply regex transforms
@@ -13459,6 +13474,7 @@ Current version: 149
 		{
 			const isSupported = typeof window.getSelection !== "undefined";
 			if (isSupported) {
+				warn_on_quit = true;
 				const selection = window.getSelection();
 				if(selection.focusNode!=null && selection.focusNode.parentElement!=null
 				&& selection.focusNode.parentElement.classList.contains("txtchunk"))
@@ -14577,6 +14593,7 @@ Current version: 149
 	{
 		var event = event || window.event;
 		var charCode = event.keyCode || event.which;
+		warn_on_quit = true;
 
 		if (!event.shiftKey && charCode == 13) {
 			let willsubmit = (document.getElementById("entersubmit").checked ? true : false);
@@ -15056,6 +15073,7 @@ Current version: 149
 
 		console.log("Clear story");
 		if (!document.getElementById("btnsend").disabled && pending_response_id == "" && gametext_arr.length > 0) {
+			warn_on_quit = true;
 			last_reply_was_empty = false;
 			while(gametext_arr.length > 0)
 			{
@@ -15082,6 +15100,7 @@ Current version: 149
 	}
 	function btn_back() {
 		if (!document.getElementById("btnsend").disabled && pending_response_id == "" && gametext_arr.length > 0) {
+			warn_on_quit = true;
 			last_reply_was_empty = false;
 			retry_preserve_last = false;
 			if(retry_prev_text.length>0)
@@ -15105,6 +15124,7 @@ Current version: 149
 
 		console.log("Redo All story");
 		if (!document.getElementById("btnsend").disabled && pending_response_id == "" && redo_arr.length > 0) {
+			warn_on_quit = true;
 			last_reply_was_empty = false;
 			retry_preserve_last = false;
 			while(redo_arr.length > 0)
@@ -15127,6 +15147,7 @@ Current version: 149
 	}
 	function btn_redo() {
 		if (!document.getElementById("btnsend").disabled && pending_response_id == "") {
+			warn_on_quit = true;
 			if (redo_arr.length > 0) {
 				last_reply_was_empty = false;
 				retry_preserve_last = false;
@@ -15146,6 +15167,7 @@ Current version: 149
 	function btn_retry() {
 		if (!document.getElementById("btnsend").disabled && pending_response_id == "" && (gametext_arr.length > 1 ||
 		(gametext_arr.length > 0 && (current_memory != "" || current_anote != "")))) {
+			warn_on_quit = true;
 			last_reply_was_empty = false;
 			let boxtextstash = document.getElementById("input_text").value;
 			document.getElementById("input_text").value = "";
@@ -15851,7 +15873,7 @@ Current version: 149
 
 </head>
 
-<body id="outerbody" class="" onkeydown="handle_escape_button(event)">
+<body id="outerbody" class="" onkeydown="handle_escape_button(event)" onbeforeunload="return handle_quit()">
 
 	<div id="maincontainer" class="adaptivecontainer maincontainer">
 		<div id="outerbodybg"></div>
