@@ -4477,6 +4477,7 @@ Current version: 149
 		const foundScenario = urlParams.get('scenario');
 		const foundChub = urlParams.get('chub');
 		const foundPyg = urlParams.get('pyg');
+		const foundAicc = urlParams.get('aicc');
 
 		if (foundStory && foundStory != "") {
 			let safe_to_overwrite = (gametext_arr.length == 0 && current_memory == "" && current_anote == "" && current_wi.length == 0 && redo_arr.length == 0);
@@ -4506,6 +4507,11 @@ Current version: 149
 		} else if (foundPyg && foundPyg != "") {
 			display_scenarios();
 			get_pygchat_scenario(foundPyg);
+			//purge url params
+			window.history.replaceState(null, null, window.location.pathname);
+		} else if (foundAicc && foundAicc != "") {
+			display_scenarios();
+			get_aicc_scenario(foundAicc);
 			//purge url params
 			window.history.replaceState(null, null, window.location.pathname);
 		}
@@ -6297,6 +6303,106 @@ Current version: 149
 		}
 	}
 
+	function get_aicc_scenario(inputstr="")
+	{
+		const loadaicc = function(userinput)
+		{
+			if(userinput=="")
+			{
+				//pass
+			}
+			else
+			{
+
+				let useraw = false;
+				if (userinput.match(/aicharactercards\.com\//i) && userinput.match(/sdm_process_download/i))
+				{
+					useraw = true;
+				}
+				else {
+					userinput = userinput.split("#")[0].split("?")[0];
+					userinput = userinput.endsWith('/') ? userinput.slice(0, -1) : userinput;
+					if (userinput.match(/aicharactercards\.com\//i) || userinput.match(/AICC\//i)) {
+						// is a URL, extract the character name
+						let tmp = userinput.split("/");
+						if(tmp.length >= 2)
+						{
+							userinput = tmp[tmp.length-2] + "/" + tmp[tmp.length-1];
+						}
+					}
+				}
+
+				if(userinput!="")
+				{
+					temp_scenario = {
+						"title":"",
+						"desc": "",
+						"opmode":3,
+						"chatname": "User",
+						"chatopponent": "",
+						"gui_type":1,
+						"prefmodel1":chatmodels1,
+						"prefmodel2":chatmodels2,
+						"prompt":"",
+						"memory": "",
+						"authorsnote": "",
+						"worldinfo": [],
+					};
+
+					let finalurl = useraw?userinput:"https://aicharactercards.com/wp-json/pngapi/v1/image/"+userinput;
+					finalurl = apply_proxy_url(finalurl,true);
+					//try to obtain the full portrait image
+					fetch(finalurl, {
+						method: 'GET',
+						redirect: 'follow',
+						referrerPolicy: 'no-referrer',
+						})
+						.then(rb => {
+							if(rb.ok)
+							{
+								return rb.blob();
+							}else{
+								throw new Error('Cannot fetch tavern image');
+							}
+						})
+						.then(blob => {
+							preview_temp_scenario();
+
+							readTavernPngFromBlob(blob,(obj)=>{
+								load_temp_scenario_from_tavernobj(obj,true);
+							});
+
+							const objectURL = URL.createObjectURL(blob);
+							const compressedImg = compressImage(objectURL, (compressedImageURI, aspectratio)=>{
+								temp_scenario.image = compressedImageURI;
+								temp_scenario.image_aspect = aspectratio;
+								preview_temp_scenario();
+							}, true);
+						})
+						.catch(error => {
+							temp_scenario = null;
+							document.getElementById("scenariodesc").innerText = "Error: Selected scenario is invalid.";
+							console.log("Error: " + error);
+
+						});
+				} else {
+					temp_scenario = null;
+					document.getElementById("scenariodesc").innerText = "Error: User input is invalid\n\n Please ensure you have input a valid AICC URL or ID.";
+				}
+			}
+		}
+
+		if(inputstr=="")
+		{
+			inputBox("Enter aicharactercards.com prompt URL","Import from aicharactercards.com","","https://aicharactercards.com/character-cards/work-jobs/deffcolony/lara-lightland", ()=>{
+				let userinput = getInputBoxValue().trim();
+				loadaicc(userinput);
+			},false);
+		}else{
+			loadaicc(inputstr);
+		}
+	}
+
 	function get_chubai_scenario(chubstr="")
 	{
 		const loadchub = function(userinput)
@@ -6681,7 +6787,8 @@ Current version: 149
 
 		let scenarios = `<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_aetherroom_scenario()">Import from<br>aetherroom.club</button>`+
 		`<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_chubai_scenario()">Import from<br>characterhub.org / chub.ai</button>` +
-		`<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_pygchat_scenario()">Import from<br>pygmalion.chat</button>`;
+		`<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_pygchat_scenario()">Import from<br>pygmalion.chat</button>` +
+		`<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_aicc_scenario()">Import from<br>aicharactercards.com</button>`;
 		for(let i=0;i<scenario_db.length;++i)
 		{
 			let curr = scenario_db[i];
@@ -9221,7 +9328,7 @@ Current version: 149
                 break;
 			case "11": // Gemma 2
                 st = "<end_of_turn>\\n<start_of_turn>user\\n";
-                et = "<end_of_turn>\\n<start_of_turn>assistant\\n";
+                et = "<end_of_turn>\\n<start_of_turn>model\\n";
                 break;
 			default:
 				break;
