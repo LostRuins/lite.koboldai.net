@@ -2035,6 +2035,10 @@ Current version: 149
 		background-repeat: no-repeat;
     	background-position: 8px;
 		background-size: 28px;
+		overflow: hidden;
+    	text-overflow: ellipsis;
+		display: inline-block;
+		white-space: nowrap;
 	}
 	.corpo_leftpanel_btn:hover {
 		background: #dddddd;
@@ -3768,6 +3772,7 @@ Current version: 149
 	const ALLTALK_ID = 1001;
 	const HD_RES_PX = 512;
 	const NO_HD_RES_PX = 320;
+	const SAVE_SLOTS = 6;
 
 	//all configurable globals
 	var perfdata = null; //if it's null, we are not connected
@@ -4191,6 +4196,7 @@ Current version: 149
 					document.getElementById("enhancedchatinterface").classList.add("transparentbg");
 					document.getElementById("enhancedchatinterface_inner").classList.add("transparentbg");
 				}
+				populate_corpo_leftpanel();
 				loadok = true;
 			} else {
 				console.log("Skipped missing local save");
@@ -8261,7 +8267,7 @@ Current version: 149
 
 		try
 		{
-			for(let i=0;i<6;++i)
+			for(let i=0;i<SAVE_SLOTS;++i)
 			{
 				let testslot = localStorage.getItem(STORAGE_PREFIX + "slot_"+i+"_meta");
 				entry = `<div style="display:flex; height:42px;">
@@ -10023,6 +10029,7 @@ Current version: 149
 	{
 		if(warn_on_quit)
 		{
+			warn_on_quit = false;
 			return "Unsaved changes will be lost!"; //the actual message will not be shown in new browsers
 		}
 		return undefined;
@@ -14437,6 +14444,30 @@ Current version: 149
 
 		return newbodystr;
 	}
+
+	function populate_corpo_leftpanel()
+	{
+		let panel = document.getElementById('corpoleftpanelitems');
+		let panelitems = `
+		<div onclick="display_newgame();" class="corpo_leftpanel_btn" type="button" style="background-image: var(--img_nikosquare); padding-left: 44px;">New Chat</div>
+		<div onclick="" class="corpo_leftpanel_btn" type="button" style="background-image: var(--img_gear); padding-left: 44px;">Basic Settings</div>
+		`;
+
+		for(let i=0;i<SAVE_SLOTS;++i)
+		{
+			let testslot = localStorage.getItem(STORAGE_PREFIX + "slot_"+i+"_meta");
+			let entry = "";
+			if(testslot)
+			{
+				entry = `<div onclick="load_from_slot(`+i+`)" class="corpo_leftpanel_btn" type="button">`+testslot+`</div>`;
+			}
+
+			panelitems += entry;
+		}
+
+		panel.innerHTML = panelitems;
+	}
+
 	function show_corpo_leftpanel(open)
 	{
 		let panel = document.getElementById('corpo_leftpannel');
@@ -16026,10 +16057,8 @@ Current version: 149
 			<div class="corpostyle">
 				<div id="corpo_leftpannel" class="corpoleftpanel">
 					<button class="corpo_leftpanel_close" onclick="show_corpo_leftpanel(false)">&times;</button>
-					<p class="corpoleftpanelitems">
-						<div onclick="" class="corpo_leftpanel_btn" type="button" style="background-image: var(--img_nikosquare); padding-left: 44px;"> New Chat</div>
-						<div onclick="" class="corpo_leftpanel_btn" type="button" style="background-image: var(--img_gear); padding-left: 44px;">Basic Settings</div>
-						<div onclick="" class="corpo_leftpanel_btn" type="button">Slot 1</div>
+					<p id="corpoleftpanelitems" class="corpoleftpanelitems">
+
 					</p>
 				</div>
 				<button class="corpo_leftpanel_open" onclick="show_corpo_leftpanel(true)">&#11166;</button>
