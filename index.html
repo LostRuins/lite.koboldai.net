@@ -14410,7 +14410,6 @@ Current version: 149
 				{
 					chatunits.push({
 					msg:curr,
-					rawmsg:curr,
 					myturn:myturnchat});
 				}
 			}
@@ -14425,13 +14424,16 @@ Current version: 149
 	function corpo_edit_chunk_save()
 	{
 		let idx = corpo_editing_turn;
-		// let currctx = concat_gametext(false, "", "", "", true);
-		// textToRender = replace_placeholders(textToRender,true);
-		let chatunits = corpo_repack_history(input);
+		let currctx = concat_gametext(false, "", "", "", false);
+		currctx = replace_instruct_placeholders(currctx);
+		let chatunits = corpo_repack_history(currctx);
 		let textarea = document.getElementById("corpo_edit_inp");
+		let needsave = false;
 
-		if(idx < chatunits.length && textarea.value != chatunits[idx])
+		let existing_msg_compare = stash_image_placeholders(chatunits[idx].msg,false);
+		if(idx < chatunits.length && textarea.value != existing_msg_compare)
 		{
+			needsave = true;
 			gametext_arr = [];
 			redo_arr = [];
 			last_reply_was_empty = false;
@@ -14439,11 +14441,22 @@ Current version: 149
 			retry_preserve_last = false;
 			redo_prev_text = [];
 
+			let st = get_instruct_starttag(false);
+			let et = get_instruct_endtag(false);
+			let newtxt = textarea.value;
+			newtxt = unstash_image_placeholders(newtxt);
+
+			for(let i=0;i<chatunits.length;++i)
+			{
+				let chunk = (chatunits[i].myturn?st:et) + (i==idx?newtxt:chatunits[i].msg);
+				gametext_arr.push(chunk);
+			}
+
 			console.log("Merged corpo edit field. Parts:" + gametext_arr.length);
 		}
 
 		corpo_editing_turn = -1;
-		render_gametext(false);
+		render_gametext(needsave);
 	}
 
 	var corpo_editing_turn = -1;
@@ -14456,56 +14469,59 @@ Current version: 149
 		}
 
 		let newbodystr = "";
-		input = replace_placeholders(input,true);
+		input = replace_instruct_placeholders(input);
 		let chatunits = corpo_repack_history(input);
 
 		for(var i=0;i<chatunits.length;++i)
 		{
 			let curr = chatunits[i];
 			let foundimg = "";
-			if(curr.msg && curr.msg!="")
+			let processed_msg = curr.msg;
+			if(processed_msg && processed_msg!="")
 			{
-				let codeblockcount = (curr.msg.match(/```/g) || []).length;
+				processed_msg = replace_noninstruct_placeholders(processed_msg,true);
+				let codeblockcount = (processed_msg.match(/```/g) || []).length;
 				if(codeblockcount>0 && codeblockcount%2!=0 )
 				{
-					curr.msg += "```"; //force end code block
+					processed_msg += "```"; //force end code block
 				}
-				curr.msg = simpleMarkdown(curr.msg);
+				processed_msg = simpleMarkdown(processed_msg);
 
 				//convert the msg into images
-				curr.msg = curr.msg.replace(/\[<\|p\|.+?\|p\|>\]/g, function (m) {
+				processed_msg = processed_msg.replace(/\[<\|p\|.+?\|p\|>\]/g, function (m) {
 					// m here means the whole matched string
 					let inner = m.substring(5, m.length - 5);
 					inner = render_image_html("", inner,false,true);
 					return inner;
 				});
-				curr.msg = curr.msg.replace(/\[<\|d\|.+?\|d\|>\]/g, function (m) {
+				processed_msg = processed_msg.replace(/\[<\|d\|.+?\|d\|>\]/g, function (m) {
 					// m here means the whole matched string
 					let inner = m.substring(5, m.length - 5);
 					inner = render_image_html(inner, "",false,true);
 					return inner;
 				});
-				curr.msg = curr.msg.replace(/\[<\|.+?\|>\]/g, ""); //remove normal comments too
+				processed_msg = processed_msg.replace(/\[<\|.+?\|>\]/g, ""); //remove normal comments too
 			}
 
-			let namepart = (curr.myturn?"User":"KoboldAI");
-			let bodypart = (corpo_editing_turn==i?
-							`<div class="corpo_edit_outer">
-							<div class="corpo_edit_inner" id="corpo_edit_inp_lengthtester" style="white-space: nowrap; visibility: hidden; height: 0px; position:absolute; width: auto;"></div>
-							<textarea class="corpo_edit_inner" id="corpo_edit_inp" type="text" name="crpeditinp"  role="presentation" autocomplete="noppynop" spellcheck="true" rows="1" wrap="on" placeholder="Edit Message" value="" oninput="corpoedit_resize_input();"/>${stash_image_placeholders(curr.rawmsg,false)}</textarea>
-							</div>
-							<button type="button" class="btn btn-primary" style="margin:2px;float:right;" onclick="corpo_edit_chunk_start(-1)">Cancel</button>
-							<button type="button" class="btn btn-primary" style="margin:2px;float:right;" onclick="corpo_edit_chunk_save()">Save</button>`:
-							`<div class="corpostyleitemcontent">${curr.msg}</div>`);
+			let namepart = (curr.myturn ? "User" : "KoboldAI");
+			let bodypart = (corpo_editing_turn == i ?
+				`<div class="corpo_edit_outer">
+				<div class="corpo_edit_inner" id="corpo_edit_inp_lengthtester" style="white-space: nowrap; visibility: hidden; height: 0px; position:absolute; width: auto;"></div>
+				<textarea class="corpo_edit_inner" id="corpo_edit_inp" type="text" name="crpeditinp"  role="presentation" autocomplete="noppynop" spellcheck="true" rows="1" wrap="on" placeholder="Edit Message" value="" oninput="corpoedit_resize_input();"/>${stash_image_placeholders(curr.msg, false)}</textarea>
+				</div>
+				<button type="button" class="btn btn-primary" style="margin:2px;float:right;" onclick="corpo_edit_chunk_start(-1)">Cancel</button>
+				<button type="button" class="btn btn-primary" style="margin:2px;float:right;" onclick="corpo_edit_chunk_save()">Save</button>`:
+				`<div class="corpostyleitemcontent">${processed_msg}</div>`);
+			let chunkbtns = (corpo_editing_turn == i ? `` : `<div style="line-height: 1">
+				<button onclick="corpo_edit_chunk_start(${i})" class="corpo_hover_btn" type="button" style="background-image: var(--img_corpo_edit);"></button>` +
+				(curr.myturn ? `` : `<button onclick="" class="corpo_hover_btn" type="button" style="background-image: var(--img_corpo_retry);"></button>`)
+				+ `</div>`);
+
 			newbodystr += `<div class="corpostyleitem">
-				<div><img src="`+(curr.myturn?human_square:niko_square)+`" class="corpoavatar"/></div>
+				<div><img src="`+ (curr.myturn ? human_square : niko_square) + `" class="corpoavatar"/></div>
 				<div style="width:100%">
-					<div class="corpostyleitemheading">`+namepart+`</div>
-					`+bodypart+`
-					<div style="line-height: 1">
-					<button onclick="corpo_edit_chunk_start(${i})" class="corpo_hover_btn" type="button" style="background-image: var(--img_corpo_edit);"></button>` +
-					(curr.myturn?``:`<button onclick="" class="corpo_hover_btn" type="button" style="background-image: var(--img_corpo_retry);"></button>`)
-					+ `</div>
+				<div class="corpostyleitemheading">`+ namepart + `</div>
+				`+ bodypart + chunkbtns + `
 				</div>
 				</div>`;
 		}
@@ -14739,7 +14755,7 @@ Current version: 149
 				}
 			}
 			lengthtester.innerText = "";
-			numberOfLineBreaks = numberOfLineBreaks>5?5:numberOfLineBreaks;
+			numberOfLineBreaks = numberOfLineBreaks>12?12:numberOfLineBreaks;
 			textarea.rows = numberOfLineBreaks;
 		}
 	}
