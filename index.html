@@ -13460,7 +13460,10 @@ Current version indicated by LITEVER below.
 						pending_response_id = "";
 						poll_in_progress = false;
 						let resp = synchro_polled_response;
-						last_reply_was_empty = (resp=="" || resp.trim()=="");
+						if(!waiting_for_autosummary)
+						{
+							last_reply_was_empty = (resp=="" || resp.trim()=="");
+						}
 						if (resp != null && resp != "") {
 							let gentxt = resp;
 							let genworker = "Custom Endpoint";
@@ -13474,6 +13477,8 @@ Current version indicated by LITEVER below.
 							{
 								handle_incoming_text(gentxt, genworker, genmdl, genkudos);
 							}
+						}else{
+							retry_preserve_last = false;
 						}
 						synchro_polled_response = null;
 						last_stop_reason = "";
@@ -14494,19 +14499,37 @@ Current version indicated by LITEVER below.
 		}
 		return chatunits;
 	}
+
+	function corpo_chunk_prev()
+	{
+		let incomplete_resp = (synchro_pending_stream != "" || pending_response_id != "");
+		if (incomplete_resp) { return; }
+
+		if(retry_prev_text.length>0)
+		{
+			btn_back();
+		}
+	}
+	function corpo_chunk_next()
+	{
+		let incomplete_resp = (synchro_pending_stream != "" || pending_response_id != "");
+		if (incomplete_resp) { return; }
+
+		if (redo_prev_text.length > 0) {
+			btn_redo();
+		}
+	}
 	function corpo_retry_chunk(idx)
 	{
+		let incomplete_resp = (synchro_pending_stream != "" || pending_response_id != "");
+		if (incomplete_resp) { return; }
+
 		let currctx = concat_gametext(false, "", "", "", false);
 		currctx = replace_instruct_placeholders(currctx);
 		let chatunits = corpo_repack_history(currctx);
 		if(idx < chatunits.length)
 		{
 			gametext_arr = [];
-			redo_arr = [];
-			last_reply_was_empty = false;
-			retry_prev_text = [];
-			retry_preserve_last = false;
-			redo_prev_text = [];
 
 			let st = get_instruct_starttag(false);
 			let et = get_instruct_endtag(false);
@@ -14519,11 +14542,16 @@ Current version indicated by LITEVER below.
 			for(let i=0;i<=idx;++i)
 			{
 				let cont = chatunits[i].msg;
-				let chunk = (chatunits[i].myturn?st:et) + cont;
+				let chunk = cont;
+				if(i!=idx)
+				{
+					chunk = (chatunits[i].myturn?st:et) + chunk;
+				}
 				if(i==idx-1)
 				{
 					chunk += et;
 				}
+
 				gametext_arr.push(chunk);
 			}
 			corpo_editing_turn = -1;
@@ -14533,17 +14561,26 @@ Current version indicated by LITEVER below.
 	}
 	function corpo_edit_chunk_start(idx)
 	{
+		let incomplete_resp = (synchro_pending_stream != "" || pending_response_id != "");
+		if (incomplete_resp) { return; }
+
 		corpo_editing_turn = idx;
 		render_gametext(false);
 	}
 	function corpo_edit_chunk_delete()
 	{
+		let incomplete_resp = (synchro_pending_stream != "" || pending_response_id != "");
+		if (incomplete_resp) { return; }
+
 		let textarea = document.getElementById("corpo_edit_inp");
 		textarea.value = "";
 		corpo_edit_chunk_save();
 	}
 	function corpo_edit_chunk_save()
 	{
+		let incomplete_resp = (synchro_pending_stream != "" || pending_response_id != "");
+		if (incomplete_resp) { return; }
+
 		let idx = corpo_editing_turn;
 		let currctx = concat_gametext(false, "", "", "", false);
 		currctx = replace_instruct_placeholders(currctx);
@@ -14605,6 +14642,7 @@ Current version indicated by LITEVER below.
 		let newbodystr = "";
 		input = replace_instruct_placeholders(input);
 		let chatunits = corpo_repack_history(input);
+		let incomplete_resp = (synchro_pending_stream!="" || pending_response_id!="");
 
 		for(var i=0;i<chatunits.length;++i)
 		{
@@ -14648,11 +14686,14 @@ Current version indicated by LITEVER below.
 				<button type="button" class="btn btn-primary bg_red" style="margin:2px;float:left;" onclick="corpo_edit_chunk_delete()">Delete</button>`:
 				`<div class="corpostyleitemcontent">${processed_msg}</div>`);
 			let historical_btns = "";
-			if(!curr.myturn && i==chatunits.length-1)
+			if(!curr.myturn && i==chatunits.length-1 && !incomplete_resp)
 			{
-				historical_btns = `<button onclick="corpo_chunk_prev()" class="corpo_hover_btn" type="button" style="background-image: var(--img_corpo_left);"></button>`+
-				`<span class="corpo_btn_text">1 / 2</span>`+
-				`<button onclick="corpo_chunk_next()" class="corpo_hover_btn" type="button" style="background-image: var(--img_corpo_right);"></button>`;
+				if(retry_prev_text.length+redo_prev_text.length>0)
+				{
+					historical_btns = `<button onclick="corpo_chunk_prev()" class="corpo_hover_btn" type="button" style="background-image: var(--img_corpo_left);"></button>`+
+					`<span class="corpo_btn_text">${retry_prev_text.length+1} / ${retry_prev_text.length+redo_prev_text.length+1}</span>`+
+					`<button onclick="corpo_chunk_next()" class="corpo_hover_btn" type="button" style="background-image: var(--img_corpo_right);"></button>`;
+				}
 			}
 			let chunkbtns = (corpo_editing_turn == i ? `` : `<div style="line-height: 1">`+
 				historical_btns +
@@ -14668,7 +14709,7 @@ Current version indicated by LITEVER below.
 				</div>
 				</div>`;
 		}
-		if(synchro_pending_stream!="" || pending_response_id!="")
+		if(incomplete_resp)
 		{
 			let namepart = "KoboldAI";
 			let futuretext = (synchro_pending_stream!=""?(escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream)):"...");
