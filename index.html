@@ -14454,6 +14454,43 @@ Current version: 149
 		}
 		return chatunits;
 	}
+	function corpo_retry_chunk(idx)
+	{
+		let currctx = concat_gametext(false, "", "", "", false);
+		currctx = replace_instruct_placeholders(currctx);
+		let chatunits = corpo_repack_history(currctx);
+		if(idx < chatunits.length)
+		{
+			gametext_arr = [];
+			redo_arr = [];
+			last_reply_was_empty = false;
+			retry_prev_text = [];
+			retry_preserve_last = false;
+			redo_prev_text = [];
+
+			let st = get_instruct_starttag(false);
+			let et = get_instruct_endtag(false);
+			if(localsettings.placeholder_tags)
+			{
+				st = instructstartplaceholder;
+				et = instructendplaceholder;
+			}
+
+			for(let i=0;i<=idx;++i)
+			{
+				let cont = chatunits[i].msg;
+				let chunk = (chatunits[i].myturn?st:et) + cont;
+				if(i==idx-1)
+				{
+					chunk += et;
+				}
+				gametext_arr.push(chunk);
+			}
+			corpo_editing_turn = -1;
+			render_gametext(true);
+			btn_retry();
+		}
+	}
 	function corpo_edit_chunk_start(idx)
 	{
 		corpo_editing_turn = idx;
@@ -14503,6 +14540,10 @@ Current version: 149
 					let chunk = (chatunits[i].myturn?st:et) + cont;
 					gametext_arr.push(chunk);
 				}
+			}
+			if(gametext_arr.length>0)
+			{
+				gametext_arr[gametext_arr.length-1] += et;
 			}
 
 			console.log("Merged corpo edit field. Parts:" + gametext_arr.length);
@@ -14568,7 +14609,7 @@ Current version: 149
 				`<div class="corpostyleitemcontent">${processed_msg}</div>`);
 			let chunkbtns = (corpo_editing_turn == i ? `` : `<div style="line-height: 1">`+
 				`<button onclick="corpo_edit_chunk_start(${i})" class="corpo_hover_btn" type="button" style="background-image: var(--img_corpo_edit);"></button>`+
-				(curr.myturn ? `` : `<button onclick="" class="corpo_hover_btn" type="button" style="background-image: var(--img_corpo_retry);"></button>`)
+				(curr.myturn ? `` : `<button onclick="corpo_retry_chunk(${i})" class="corpo_hover_btn" type="button" style="background-image: var(--img_corpo_retry);"></button>`)
 				+ `</div>`);
 
 			newbodystr += `<div class="corpostyleitem">
