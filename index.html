@@ -83,6 +83,15 @@ Current version indicated by LITEVER below.
 			filter: invert(1);
 		}
 
+		.unselectable {
+			-webkit-touch-callout: none !important;
+			-webkit-user-select: none !important;
+			-khtml-user-select: none !important;
+			-moz-user-select: none !important;
+			-ms-user-select: none !important;
+			user-select: none !important;
+		}
+
 		.maincontainer {
 			padding-right: 4px;
 			padding-left: 4px;
@@ -3621,9 +3630,17 @@ Current version indicated by LITEVER below.
 		return words.length;
 	}
 
+	function copyMarkdownCode(btn)
+	{
+		const codeContainer = btn.parentElement.querySelector('pre code');
+		//selectElementContents(codeContainer);
+		navigator.clipboard.writeText(codeContainer.innerText);
+	}
+
 	function simpleMarkdown(text) {
 		const escapeHTML = (str) => str.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 		const highlightCode = (code) => {
+			let cpybtn = `<button class="unselectable" onclick="return copyMarkdownCode(this)" style="float:right;">Copy</button>`;
 			code = escapeHTML(code);
 			code = code.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 			code = code.replace(/\t/g, "   ");
@@ -3632,7 +3649,7 @@ Current version indicated by LITEVER below.
 			code = code.replace(/\s\/\/(.*)/gm, " <rem>//$1</rem>");
 			code = code.replace(/(\s?)(function|procedure|return|exit|if|then|else|end|loop|while|or|and|case|when)(\s)/gim, "$1<b>$2</b>$3");
 			code = code.replace(/(\s?)(var|let|const|=>|for|next|do|while|loop|continue|break|switch|try|catch|finally)(\s)/gim, "$1<b>$2</b>$3");
-			return `<pre><code>${code}</code></pre>`;
+			return `<pre>${cpybtn}<code>${code}</code></pre>`;
 		};
 		const convertMarkdownTableToHtml = (t) => {
 			let hsep = /^[\s]*\|(?:[\s]*[-:]+[-:|\s]*)+\|[\s]*$/gm;let l=/^[\s]*\|(.*)\|[\s]*$/gm,r=t.split(/\r?\n|\r/),e="<table class='tablelines'>";for(let o of r){let hs=o.match(hsep);if(hs){continue;}let d=o.match(l);if(d){let i=d[0].split("|").map(t=>t.trim());e+=`<tr class='tablelines'><td class='tablelines'>${i.join("</td><td class='tablelines'>")}</td></tr>`}}return e+"</table>"
