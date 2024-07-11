@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 150;
+	const LITEVER = 151;
 	const urlParams = new URLSearchParams(window.location.search);
 	const localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -210,6 +210,7 @@ Current version indicated by LITEVER below.
 		{
 			height: calc(75vh - 110px);
 			overflow-y: auto;
+			overflow-x: hidden;
 		}
 
 		body.connected .settingsmenu,
@@ -876,6 +877,7 @@ Current version indicated by LITEVER below.
 			background: #ffffff;
 			border: 1px solid white;
 			text-decoration: none;
+			/* position: relative; */
 		}
 
 		.helpicon:hover {
@@ -897,7 +899,11 @@ Current version indicated by LITEVER below.
 		}
 		@media (max-width: 680px) {
 			.helpicon:hover .helptext {
-				right: 0;
+				margin: 0 0 auto;
+				position: fixed;
+				top: 20%;
+				left: 50%;
+				transform: translate(-50%, -50%);
 			}
 		}
 
@@ -1115,6 +1121,11 @@ Current version indicated by LITEVER below.
 			border-bottom: 1px solid #12324f;
 		}
 		.settingitem.wide{
+			width: 100%;
+		}
+		.settingcell
+		{
+			padding: 4px;
 			width: 100%;
 		}
 
@@ -7419,7 +7430,7 @@ Current version indicated by LITEVER below.
 	function confirm_dynatemp()
 	{
 		document.getElementById("dynatempcontainer").classList.add("hidden");
-		document.getElementById("dynatemp_overview").innerText = ((document.getElementById("dynatemp_range").value>0||document.getElementById("smoothing_factor").value>0)?"ON":"OFF");
+		document.getElementById("dynatemp_overview").innerText = (document.getElementById("dynatemp_range").value>0?"ON":"OFF");
 	}
 	function show_dynatemp()
 	{
@@ -9123,10 +9134,10 @@ Current version indicated by LITEVER below.
 		document.getElementById("dynatemp_range").value = localsettings.dynatemp_range;
 		document.getElementById("dynatemp_exponent").value = localsettings.dynatemp_exponent;
 		document.getElementById("smoothing_factor").value = localsettings.smoothing_factor;
-		document.getElementById("dynatemp_overview").innerText = ((localsettings.dynatemp_range>0||localsettings.smoothing_factor>0)?"ON":"OFF");
+		document.getElementById("dynatemp_overview").innerText = (localsettings.dynatemp_range>0?"ON":"OFF");
 		document.getElementById("presence_penalty").value = localsettings.presence_penalty;
 		document.getElementById("sampler_seed").value = localsettings.sampler_seed;
-		document.getElementById("top_k").value = localsettings.top_k;
+		document.getElementById("top_k").value =  document.getElementById("top_k_slide").value = localsettings.top_k;
 		document.getElementById("top_a").value = localsettings.top_a;
 		document.getElementById("typ_s").value = localsettings.typ_s;
 		document.getElementById("tfs_s").value = localsettings.tfs_s;
@@ -9271,7 +9282,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("dynatemp_range").value = found.dynatemp_range;
 			document.getElementById("dynatemp_exponent").value = found.dynatemp_exponent;
 			document.getElementById("smoothing_factor").value = found.smoothing_factor;
-			document.getElementById("top_k").value = found.top_k;
+			document.getElementById("top_k").value = document.getElementById("top_k_slide").value = found.top_k;
 			document.getElementById("top_p").value = document.getElementById("top_p_slide").value = found.top_p;
 			document.getElementById("top_a").value = found.top_a;
 			document.getElementById("typ_s").value = found.typical;
@@ -9282,6 +9293,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("rep_pen_slope").value = found.rep_pen_slope;
 			document.getElementById("sampler_order").value = found.sampler_order.toString();
 			document.getElementById("presetsdesc").innerText = found.description;
+			document.getElementById("dynatemp_overview").innerText = (document.getElementById("dynatemp_range").value>0?"ON":"OFF");
 		}else{
 			document.getElementById("presetsdesc").innerText = "";
 		}
@@ -16965,12 +16977,10 @@ Current version indicated by LITEVER below.
 					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Context Size <span class="helpicon">?<span class="helptext">Maximum number of context tokens submitted to the AI. Must exceed max output tokens. Can be further increased by editing the textbox. Older models stop at 2048, newer ones can do 4096 or greater.</span></span></div>
-							<input inputmode="numeric" class="justifyright flex-push-right settingsmall widerinput" id="max_context_length"
-								value=1024 oninput="
+							<input inputmode="numeric" class="justifyright flex-push-right settingsmall widerinput" id="max_context_length" oninput="
 						   document.getElementById('max_context_length_slide').value = this.value;">
 						</div>
-						<div><input type="range" class="form-range airange" min="512" max="2048" step="8"
-								id="max_context_length_slide" oninput="
+						<div><input type="range" class="form-range airange" min="512" max="2048" step="8" id="max_context_length_slide" oninput="
 						   document.getElementById('max_context_length').value = this.value;"></div>
 						<div class="settingminmax">
 							<div class="justifyleft">512</div>
@@ -16986,12 +16996,10 @@ Current version indicated by LITEVER below.
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Max Output <span class="helpicon">?<span
 										class="helptext">Number of tokens the AI should generate. Higher numbers will take longer to generate.</span></span></div>
-							<input inputmode="numeric" class="justifyright flex-push-right settingsmall" id="max_length" value=80
-								oninput="
+							<input inputmode="numeric" class="justifyright flex-push-right settingsmall" id="max_length" oninput="
 						   document.getElementById('max_length_slide').value = this.value;">
 						</div>
-						<div><input type="range" class="form-range airange" min="16" max="512" step="2"
-								id="max_length_slide" oninput="
+						<div><input type="range" class="form-range airange" min="16" max="512" step="2"	id="max_length_slide" oninput="
 						   document.getElementById('max_length').value = this.value;"></div>
 						<div class="settingminmax">
 							<div class="justifyleft">16</div>
@@ -17010,8 +17018,7 @@ Current version indicated by LITEVER below.
 										may make text less sensible. Lower values will make text more predictable but
 										can become repetitious.</span></span></div>
 							<input inputmode="decimal" class="justifyright flex-push-right settingsmall" id="temperature" value=0.5
-								oninput="
-						   document.getElementById('temperature_slide').value = this.value;">
+								oninput="document.getElementById('temperature_slide').value = this.value;">
 						</div>
 						<div><input type="range" class="form-range airange" min="0.1" max="2" step="0.01"
 								id="temperature_slide" oninput="
@@ -17024,33 +17031,14 @@ Current version indicated by LITEVER below.
 
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Top p Sampling <span class="helpicon">?<span class="helptext">Used
-										to discard unlikely text in the sampling process. Lower values will make text
-										more predictable but can become repetitious. Set to 1 to deactivate it.</span></span></div>
-							<input inputmode="decimal" class="justifyright flex-push-right settingsmall" id="top_p" value=80 oninput="
-						   document.getElementById('top_p_slide').value = this.value;">
-						</div>
-						<div><input type="range" class="form-range airange" min="0" max="1" step="0.01" id="top_p_slide"
-								oninput="
-						   document.getElementById('top_p').value = this.value;"></div>
-						<div class="settingminmax">
-							<div class="justifyleft">0</div>
-							<div class="justifyright">1</div>
-						</div>
-					</div>
-
-					<div class="settingitem">
-						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Repetition Penalty <span class="helpicon">?<span
 										class="helptext">Used to penalize words that were already generated or belong to
 										the context (too high causes incoherence!).</span></span></div>
-							<input inputmode="decimal" class="justifyright flex-push-right settingsmall" id="rep_pen" value=80
-								oninput="
+							<input inputmode="decimal" class="justifyright flex-push-right settingsmall" id="rep_pen" oninput="
 						   document.getElementById('rep_pen_slide').value = this.value;">
 						</div>
 						<div><input type="range" class="form-range airange" min="1" max="2" step="0.01"
-								id="rep_pen_slide" oninput="
-						   document.getElementById('rep_pen').value = this.value;"></div>
+								id="rep_pen_slide" oninput="document.getElementById('rep_pen').value = this.value;"></div>
 						<div class="settingminmax">
 							<div class="justifyleft">1</div>
 							<div class="justifyright">2</div>
@@ -17059,48 +17047,97 @@ Current version indicated by LITEVER below.
 
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Advanced Sampler Config <span class="helpicon">?<span class="helptext">These settings control alternative samplers configurations. They are inactive by default, you usually do not need to change them.</span></span></div>
-							<table class="settingsmall text-center" style="border-spacing: 3px 2px;
-							border-collapse: separate;">
-								<tr>
-								  <th title="Top-K Sampling. 0 to Deactivate.">Top-K</th>
-								  <th title="Top-A Sampling. 0 to Deactivate.">Top-A</th>
-								  <th title="Typical Sampling. 1 to Deactivate.">Typ.</th>
-								  <th title="Tail-Free Sampling. 1 to Deactivate.">TFS</th>
-								</tr>
-								<tr>
-								<td><input class="" type="text" inputmode="decimal" placeholder="0" value="0"
-								id="top_k"></td>
-								<td><input class="" type="text" inputmode="decimal" placeholder="0" value="0"
-								id="top_a"></td>
-								<td><input class="" type="text" inputmode="decimal" placeholder="0" value="0"
-								id="typ_s"></td>
-								<td><input class="" type="text" inputmode="decimal" placeholder="0" value="0"
-								id="tfs_s"></td>
-								</tr>
-
-								<tr>
-								<th title="Sampler Seed. -1 to Deactivate.">Seed</th>
-								<th title="Min-P Sampling. 0 to Deactivate.">Min-P</th>
-								<th title="Presence Penalty. 0 to Deactivate.">PrPen.</th>
-								<th title="DynaTemp Configs. Range 0 to Deactivate.">DyTmp.</th>
-								</tr>
-								<tr>
-
-								<td><input class="" type="text" inputmode="decimal" placeholder="0" value="0"
-								id="sampler_seed"></td>
-								<td><input class="" type="text" inputmode="decimal" placeholder="0" value="0"
-								id="min_p"></td>
-								<td><input class="" type="text" inputmode="decimal" placeholder="0" value="0"
-								id="presence_penalty"></td>
-								<td><button type="button" class="btn btn-primary" style="padding:1px 3px;font-size:8px;" onclick="show_dynatemp()"><span id="dynatemp_overview">OFF</span></button></td>
-								</tr>
-
-
-							  </table>
-
+							<div class="justifyleft settingsmall">Top p Sampling <span class="helpicon">?<span class="helptext">Used
+										to discard unlikely text in a nucleus sampling process. Lower values will make text
+										more predictable but can become repetitious. Set to 1 to deactivate it.</span></span></div>
+							<input inputmode="decimal" class="justifyright flex-push-right settingsmall" id="top_p" oninput="
+						   document.getElementById('top_p_slide').value = this.value;">
+						</div>
+						<div><input type="range" class="form-range airange" min="0" max="1" step="0.01" id="top_p_slide"
+								oninput="document.getElementById('top_p').value = this.value;"></div>
+						<div class="settingminmax">
+							<div class="justifyleft">0</div>
+							<div class="justifyright">1</div>
 						</div>
 					</div>
+
+					<div class="settingitem">
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Top k Sampling <span class="helpicon">?<span class="helptext">Top-K Sampling. Discards all but the K most likely tokens. Set 0 to Deactivate.</span></span></div>
+							<input inputmode="decimal" class="justifyright flex-push-right settingsmall" id="top_k" oninput="
+						   document.getElementById('top_k_slide').value = this.value;">
+						</div>
+						<div><input type="range" class="form-range airange" min="0" max="100" step="1" id="top_k_slide"
+								oninput="document.getElementById('top_k').value = this.value;"></div>
+						<div class="settingminmax">
+							<div class="justifyleft">0</div>
+							<div class="justifyright">1</div>
+						</div>
+					</div>
+
+					<div class="settingitem wide">
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Advanced Sampler Config <span class="helpicon">?<span class="helptext">These settings control alternative samplers configurations. They are inactive by default, you usually do not need to change them.</span></span></div>
+						</div>
+						<div style="display:flex;width:100%;">
+							<div class="settinglabel settingcell">
+								<div title="Top-A Sampling. 0 to Deactivate." class="justifyleft settingsmall" style="width:100%">Top-A</div>
+								<div class="justifyleft settingsmall" style="width:100%">
+								<input class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="top_a"></div>
+							</div>
+							<div class="settinglabel settingcell">
+								<div title="Typical Sampling. 1 to Deactivate." class="justifyleft settingsmall" style="width:100%">Typical</div>
+								<div class="justifyleft settingsmall" style="width:100%">
+								<input class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="typ_s"></div>
+							</div>
+							<div class="settinglabel settingcell">
+								<div title="Tail-Free Sampling. 1 to Deactivate." class="justifyleft settingsmall" style="width:100%">TFS</div>
+								<div class="justifyleft settingsmall" style="width:100%">
+								<input class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="tfs_s"></div>
+							</div>
+							<div class="settinglabel settingcell">
+								<div title="Min-P Sampling. 0 to Deactivate." class="justifyleft settingsmall" style="width:100%">Min-P</div>
+								<div class="justifyleft settingsmall" style="width:100%">
+								<input class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="min_p"></div>
+							</div>
+							<div class="settinglabel settingcell">
+								<div title="Presence Penalty. 0 to Deactivate." class="justifyleft settingsmall" style="width:100%">Pr. Pen.</div>
+								<div class="justifyleft settingsmall" style="width:100%">
+								<input class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="presence_penalty"></div>
+							</div>
+						</div>
+						<div style="display:flex;width:100%;">
+							<div class="settinglabel settingcell">
+								<div title="Sampler Seed. -1 to Deactivate." class="justifyleft settingsmall" style="width:100%">Seed</div>
+								<div class="justifyleft settingsmall" style="width:100%">
+								<input class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="sampler_seed"></div>
+							</div>
+							<div class="settinglabel settingcell">
+								<div title="Repetition Penalty Range" class="justifyleft settingsmall" style="width:100%">Rp.Range</div>
+								<div class="justifyleft settingsmall" style="width:100%">
+								<input class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="rep_pen_range"></div>
+							</div>
+							<div class="settinglabel settingcell">
+								<div title="Repetition Penalty Slope" class="justifyleft settingsmall" style="width:100%">Rp.Slope</div>
+								<div class="justifyleft settingsmall" style="width:100%">
+								<input class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="rep_pen_slope"></div>
+							</div>
+							<div class="settinglabel settingcell">
+								<div title="Sampler Order" class="justifyleft settingsmall" style="width:100%">Smp.Order <span class="helpicon">?<span class="helptext">
+								The order by which all 7 samplers are applied, separated by commas. 0=top_k, 1=top_a, 2=top_p, 3=tfs, 4=typ, 5=temp, 6=rep_pen</span></span></div>
+								<div class="justifyleft settingsmall" style="width:100%">
+								<input class="settinglabel miniinput" type="text" placeholder="CSV" value="" id="sampler_order" title="Valid values are: 0=top_k, 1=top_a, 2=top_p, 3=tfs, 4=typ, 5=temp, 6=rep_pen" onblur="validate_samplers()"></div>
+							</div>
+							<div class="settinglabel settingcell">
+								<div title="DynaTemp Configs. Range 0 to Deactivate." class="justifyleft settingsmall" style="width:100%">DyTemp</div>
+								<div class="justifyleft settingsmall" style="width:100%">
+								<button type="button" class="btn btn-primary" style="padding:1px 3px;font-size:8px;" onclick="show_dynatemp()"><span id="dynatemp_overview">OFF</span></button>
+								</div>
+							</div>
+						</div>
+					</div>
+
+
 
 					<div class="settingitem">
 						<div class="settinglabel">
@@ -17128,31 +17165,13 @@ Current version indicated by LITEVER below.
 								</table>
 							</div>
 							<div id="mirounsupporteddiv" class="color_red" style="font-weight:bold;padding:3px;font-size:12px">Mirostat Not Supported</div>
-							<div class="settinglabel">
-								<div class="justifyleft settingsmall">User Mods <span class="helpicon">?<span class="helptext">Allows you to load third-party user created mods (caution).</span></span></div>
-								<button id="loadusermod" type="button" class="btn btn-primary" style="padding:2px 3px;margin-top:2px;font-size:11px;" onclick="apply_user_mod()">Apply User Mod</button>
-							</div>
+
 						</div>
 					</div>
 
 					<div class="settingitem">
 						<div class="settinglabel">
-							<table class="settingsmall text-center" style="border-spacing: 3px 2px;
-							border-collapse: separate;">
-								<tr>
-								  <th title="Repetition Penalty Range">RpRng.</th>
-								  <th title="Repetition Penalty Slope">RpSlp.</th>
-								  <th style="width:80px;">Smp.Order <span class="helpicon">?<span
-									class="helptext">The order by which all 7 samplers are applied, separated by commas. 0=top_k, 1=top_a, 2=top_p, 3=tfs, 4=typ, 5=temp, 6=rep_pen</span></span></th>
-								</tr>
-								<tr>
-								<td><input class="" type="text" placeholder="0" value="0"
-								id="rep_pen_range" title="Repetition Penalty Range"></td>
-								<td><input class="" type="text" placeholder="0" value="0"
-								id="rep_pen_slope" title="Repetition Penalty Slope"></td>
-								<td><input class="" type="text" placeholder="CSV" value="" id="sampler_order" style="width:70px;" title="Valid values are: 0=top_k, 1=top_a, 2=top_p, 3=tfs, 4=typ, 5=temp, 6=rep_pen" onblur="validate_samplers()"></td>
-								</tr>
-							  </table>
+
 						</div>
 
 					</div>
@@ -17457,6 +17476,10 @@ Current version indicated by LITEVER below.
 							<div class="justifyleft settingsmall">Run In Background <span class="helpicon">?<span
 								class="helptext">Prevents the browser from suspending KoboldAI Lite by playing a silent audio track. This setting cannot be saved.</span></span></div>
 						   <input type="checkbox" id="run_in_background" style="margin:0px 0px 0px auto;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">User Mods <span class="helpicon">?<span class="helptext">Allows you to load third-party user created mods (caution).</span></span></div>
+							<button id="loadusermod" type="button" class="btn btn-primary" style="padding:2px 3px;margin-top:2px;font-size:11px;margin:0px 0px 0px auto;" onclick="apply_user_mod()">Apply User Mod</button>
 						</div>
 					</div>
 
