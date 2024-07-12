@@ -208,7 +208,7 @@ Current version indicated by LITEVER below.
 
 		.settingsbody
 		{
-			height: calc(75vh - 110px);
+			height: calc(80vh - 100px);
 			overflow-y: auto;
 			overflow-x: hidden;
 		}
@@ -2162,6 +2162,7 @@ Current version indicated by LITEVER below.
 		padding: 8px;
 		padding-left: 0px;
 		float: right;
+		background-color: #00000000;
 	}
 	.corpo_leftpanel_open
 	{
@@ -2172,6 +2173,14 @@ Current version indicated by LITEVER below.
 	.corpo_leftpanel_open:hover
 	{
 		background: #dddddd;
+	}
+	body.darkmode .corpo_leftpanel_open
+	{
+		background: #333333;
+	}
+	body.darkmode .corpo_leftpanel_open:hover
+	{
+		background: #444444;
 	}
 	.corpo_arrow_right {
 		display: inline-block;
@@ -4087,6 +4096,7 @@ Current version indicated by LITEVER below.
 		invert_colors: false,
 		passed_ai_warning: false, //used to store AI safety panel acknowledgement state
 		entersubmit: true, //enter sends the prompt
+		darkmode: true,
 
 		max_context_length: (localflag?2048:1600),
 		max_length: 200,
@@ -4425,12 +4435,13 @@ Current version indicated by LITEVER below.
 					document.getElementById("enhancedchatinterface").classList.add("transparentbg");
 					document.getElementById("enhancedchatinterface_inner").classList.add("transparentbg");
 				}
-				populate_corpo_leftpanel();
 				loadok = true;
 			} else {
 				console.log("Skipped missing local save");
 				loadok = false;
 			}
+			populate_corpo_leftpanel();
+			update_toggle_theme(false); //load theme but dont save or toggle it
 
 		} catch (e) {
 			console.log("Discarded invalid local save: " + e);
@@ -9061,36 +9072,30 @@ Current version indicated by LITEVER below.
 	function display_settings_tab(tabidx)
 	{
 		current_settings_tab_idx = tabidx;
-		document.getElementById("settingsmenubasic_tab").classList.remove("active");
 		document.getElementById("settingsmenusamplers_tab").classList.remove("active");
 		document.getElementById("settingsmenuformat_tab").classList.remove("active");
 		document.getElementById("settingsmenumedia_tab").classList.remove("active");
 		document.getElementById("settingsmenuadvanced_tab").classList.remove("active");
 
-		document.getElementById("settingsmenubasic").classList.add("hidden");
 		document.getElementById("settingsmenusamplers").classList.add("hidden");
 		document.getElementById("settingsmenuformat").classList.add("hidden");
 		document.getElementById("settingsmenumedia").classList.add("hidden");
 		document.getElementById("settingsmenuadvanced").classList.add("hidden");
 
 		switch (tabidx) {
-			case 0: //basic
-				document.getElementById("settingsmenubasic").classList.remove("hidden");
-				document.getElementById("settingsmenubasic_tab").classList.add("active");
+			case 0: //format
+				document.getElementById("settingsmenuformat").classList.remove("hidden");
+				document.getElementById("settingsmenuformat_tab").classList.add("active");
 			break;
 			case 1: //samplers
 				document.getElementById("settingsmenusamplers").classList.remove("hidden");
 				document.getElementById("settingsmenusamplers_tab").classList.add("active");
 			break;
-			case 2: //format
-				document.getElementById("settingsmenuformat").classList.remove("hidden");
-				document.getElementById("settingsmenuformat_tab").classList.add("active");
-			break;
-			case 3: //media
+			case 2: //media
 				document.getElementById("settingsmenumedia").classList.remove("hidden");
 				document.getElementById("settingsmenumedia_tab").classList.add("active");
 			break;
-			case 4: //advanced
+			case 3: //advanced
 				document.getElementById("settingsmenuadvanced").classList.remove("hidden");
 				document.getElementById("settingsmenuadvanced_tab").classList.add("active");
 			break;
@@ -9715,10 +9720,10 @@ Current version indicated by LITEVER below.
 		else { document.getElementById('btn_aesthetics').classList.add('hidden'); }
 		switch(document.getElementById('gui_type').value)
 		{
-			case "0": document.getElementById("guitypedesc").innerText = "The classic Kobold Blue theme we know and love."; break;
+			case "0": document.getElementById("guitypedesc").innerText = "The classic Kobold Blue theme everyone loves."; break;
 			case "1": document.getElementById("guitypedesc").innerText = "A compact instant messenger styled chat theme."; break;
-			case "2": document.getElementById("guitypedesc").innerText = "Ultra customizable aesthetic theme, great for character cards."; break;
-			case "3": document.getElementById("guitypedesc").innerText = "A clean, minimalistic, corporate AI assistant theme."; break;
+			case "2": document.getElementById("guitypedesc").innerText = "Customizable aesthetic theme with character portraits."; break;
+			case "3": document.getElementById("guitypedesc").innerText = "Clean, minimalistic, corporate AI assistant theme."; break;
 			default: document.getElementById("guitypedesc").innerText = ""; break;
 		}
 	}
@@ -9727,10 +9732,10 @@ Current version indicated by LITEVER below.
 
 		switch(document.getElementById('opmode').value)
 		{
-			case "1": document.getElementById("opmodedesc").innerText = "Let the AI continue writing a story or text."; break;
-			case "2": document.getElementById("opmodedesc").innerText = "Participate in a co-written, turn-based interactive adventure."; break;
-			case "3": document.getElementById("opmodedesc").innerText = "Take turns roleplaying with a virtual chatbot AI."; break;
-			case "4": document.getElementById("opmodedesc").innerText = "Give the AI instructions, ask questions, or perform tasks."; break;
+			case "1": document.getElementById("opmodedesc").innerText = "Let the AI co-write a story."; break;
+			case "2": document.getElementById("opmodedesc").innerText = "Participate in turn-based interactive adventures."; break;
+			case "3": document.getElementById("opmodedesc").innerText = "Roleplay with a virtual chatbot AI."; break;
+			case "4": document.getElementById("opmodedesc").innerText = "Give the AI instructions, questions, or do tasks."; break;
 			default: document.getElementById("opmodedesc").innerText = ""; break;
 		}
 
@@ -10106,6 +10111,7 @@ Current version indicated by LITEVER below.
 		}
 		warn_on_quit = false;
 		show_corpo_leftpanel(false);
+		update_toggle_theme(false); //load theme but dont save or toggle it
 		render_gametext(save); //necessary to trigger an autosave to wipe out current story in case they exit browser after newgame.
 	}
 
@@ -14875,9 +14881,22 @@ Current version indicated by LITEVER below.
 		return newbodystr;
 	}
 
-	function btn_theme()
+	function update_toggle_theme(toggle=false)
 	{
-		document.body.classList.toggle('darkmode');
+		if(toggle)
+		{
+			localsettings.darkmode = !localsettings.darkmode;
+			autosave();
+		}
+
+		if(localsettings.darkmode)
+		{
+			document.body.classList.add('darkmode');
+		}
+		else
+		{
+			document.body.classList.remove('darkmode');
+		}
 
 	}
 
@@ -14888,7 +14907,7 @@ Current version indicated by LITEVER below.
 		<div onclick="display_newgame();" class="corpo_leftpanel_btn" type="button" style="background-image: var(--img_nikosquare); padding-left: 44px;">New Chat</div>
 		<div onclick="btn_memory()" class="corpo_leftpanel_btn" type="button" style="background-image: var(--img_gear); padding-left: 44px;">Context</div>
 		<div onclick="btn_editmode()" class="corpo_leftpanel_btn" type="button" style="background-image: var(--img_corpo_edit); padding-left: 44px;">Raw Editor</div>
-		<div onclick="btn_theme()" class="corpo_leftpanel_btn" type="button" style="background-image: var(--img_corpo_theme); padding-left: 44px;">Theme</div>
+		<div onclick="update_toggle_theme(true)" class="corpo_leftpanel_btn" type="button" style="background-image: var(--img_corpo_theme); padding-left: 44px;">Light / Dark Theme</div>
 		<div style="padding:2px;font-size:14px;margin-left:8px;font-weight:600;line-height:1.1;margin-top:20px">Quick Slot Load</div>
 		`;
 
@@ -16371,7 +16390,7 @@ Current version indicated by LITEVER below.
 
 </head>
 
-<body id="outerbody" class="" onkeydown="handle_escape_button(event)" onbeforeunload="return handle_quit()">
+<body id="outerbody" class="darkmode" onkeydown="handle_escape_button(event)" onbeforeunload="return handle_quit()">
 
 	<div id="maincontainer" class="adaptivecontainer maincontainer">
 		<div id="outerbodybg"></div>
@@ -16915,51 +16934,177 @@ Current version indicated by LITEVER below.
 
 	<div class="popupcontainer flex hidden" id="settingscontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup flexsize" style="margin-top: 10vh; background-color:#102840">
+		<div class="nspopup flexsize" style="margin-top: 7vh; background-color:#102840">
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Settings</div>
 			</div>
 			<div><ul class="nav nav-tabs settingsnav">
-				<li id="settingsmenubasic_tab" class="active"><a class="" href="#" onclick="display_settings_tab(0)">UI Mode</a></li>
+				<li id="settingsmenuformat_tab" class="active"><a class="" href="#" onclick="display_settings_tab(0)">Format</a></li>
 				<li id="settingsmenusamplers_tab" ><a class="" href="#" onclick="display_settings_tab(1)">Samplers</a></li>
-				<li id="settingsmenuformat_tab" ><a class="" href="#" onclick="display_settings_tab(2)">Format</a></li>
-				<li id="settingsmenumedia_tab" ><a class="" href="#" onclick="display_settings_tab(3)">Media</a></li>
-				<li id="settingsmenuadvanced_tab" ><a class="" href="#" onclick="display_settings_tab(4)">Advanced</a></li>
+				<li id="settingsmenumedia_tab" ><a class="" href="#" onclick="display_settings_tab(2)">Media</a></li>
+				<li id="settingsmenuadvanced_tab" ><a class="" href="#" onclick="display_settings_tab(3)">Advanced</a></li>
 			</ul></div>
 
 			<div class="aidgpopuplistheader settingsbody">
 
-				<!--basic settings menu-->
-				<div id="settingsmenubasic" class="settingsmenu" onchange="setting_tweaked()">
-
-					<div class="settingitem wide">
+				<!-- format settings menu -->
+				<div id="settingsmenuformat" class="settingsmenu hidden" onchange="setting_tweaked()">
+					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Usage Mode <span class="helpicon">?<span class="helptext">Story Mode is best for novel style writing. Adventure Mode is best for Interactive Fiction RPGs. Chat Mode is best for chat conversations with the AI. Instruct mode is for giving the AI ChatGPT styled tasks.</span></span></div>
-							<select class="form-control" id="opmode" style="height:28px;padding:0;margin:0px 0 0;width:calc(100% - 60px);" onchange="toggle_opmode()">
+							<select class="form-control" id="opmode" style="height:26px;padding:0;margin:0px 0 0;width:calc(100%);" onchange="toggle_opmode()">
 								<option value="4">Instruct Mode</option>
 								<option value="1">Story Mode</option>
 								<option value="2">Adventure Mode</option>
 								<option value="3">Chat Mode</option>
 							</select>
-							<button type="button" class="btn btn-primary" onclick="display_settings_tab(2)" style="border-color: #bbbbbb; padding:0px 8px; margin: 0px 0px 0px 3px;">Setup</button>
 							<div id="opmodedesc" class="settingsdesctxt"></div>
 						</div>
-
-
-						<div id="uipicker" class="settinglabel" style="padding-top: 8px;">
+					</div>
+					<div class="settingitem">
+						<div id="uipicker" class="settinglabel">
 							<div class="justifyleft settingsmall" title="">UI Style Select <span class="helpicon">?<span class="helptext">Select your preferred UI style, which affects text formatting and display. Some UIs are only available for specific modes.</span></span></div>
-							<select class="form-control" id="gui_type" style="height:28px;padding:0;margin:0px 0 0;" onchange="toggle_uistyle()">
+							<select class="form-control" id="gui_type" style="height:26px;padding:0;margin:0px 0 0;" onchange="toggle_uistyle()">
 								<option id="uipicker_classic" value="0">Classic Theme</option>
 								<option id="uipicker_messenger" value="1">Messenger Theme</option>
 								<option id="uipicker_aesthetic" value="2">Aesthetic Theme</option>
 								<option id="uipicker_corpo" value="3">Corpo Theme</option>
 							</select>
-							<button type="button" class="btn btn-primary" id="btn_aesthetics" onclick="openAestheticUISettingsMenu()" style="border-color: #bbbbbb; width:100%; height:30px; padding:0px 8px; margin: 3px 0 3px 0;">⚙️ Customize UI</button>
+							<button type="button" class="btn btn-primary" id="btn_aesthetics" onclick="openAestheticUISettingsMenu()" style="border-color: #bbbbbb; width:100%; height:30px; padding:0px 8px; margin: 3px 0 3px 0;">⚙️ Customize</button>
 							<div id="guitypedesc" class="settingsdesctxt"></div>
+						</div>
+					</div>
+
+					<div class="settingitem wide">
+						<div class="settinglabel">
+							<div id="instructsection_basic" class="settinglabel" style="width:100%">
+								<div class="justifyleft settingsmall">Instruct Tag Preset <span class="helpicon">?<span class="helptext">Quickly select between common instruct tag formats. Different models are trained with different tags.</span></span></div>
+								<select class="form-control" id="instruct_tag_format" style="height:26px;padding:0;margin:0px 0 0;width:100%" onchange="toggle_instruct_tag_format()">
+								</select>
+							</div>
+						</div>
+					</div>
+
+					<div class="settingitem wide">
+						<div class="settinglabel">
+							<div class="settinglabel" style="width:100%">
+								<div class="justifyleft settingsmall" style="width:100%">Instruct Tag Format <span class="helpicon">?<span class="helptext">Specify the exact text formatting used for instruct mode.</span></span></div>
+							</div>
+							<div class="justifyleft" style="display: flex; width: 100%; font-size: 12px; margin:2px">
+								<div style="width:100px">System Tag <span class="helpicon">?<span class="helptext">The sequence to start the system prompt</span></span></div>
+								<input class="settinglabel miniinput" style="width:calc(100% - 100px)" type="text" placeholder="(Unused)" value="" id="instruct_systag" onchange="edit_instruct_tag_format()">
+							</div>
+							<div class="justifyleft" style="display: flex; width: 100%; font-size: 12px; margin:2px">
+								<div style="width:100px">Sys. Prompt <span class="helpicon">?<span class="helptext">A fixed system message sent at the very start to guide the AI behavior. Usually NOT needed</span></span></div>
+								<input class="settinglabel miniinput" style="width:calc(100% - 100px)" type="text" placeholder="(Unused)" value="" id="instruct_sysprompt" onchange="edit_instruct_tag_format()">
+							</div>
+							<div class="justifyleft" style="display: flex; width: 100%; font-size: 12px; margin:2px">
+								<div style="width:100px">User Tag <span class="helpicon">?<span class="helptext">The sequence to start an instruction prompt</span></span></div>
+								<input class="settinglabel miniinput" style="width:calc(100% - 100px)" type="text" placeholder="\\n### Instruction:\\n" value="" id="instruct_starttag" onchange="edit_instruct_tag_format()" title="The sequence to start an instruction prompt">
+							</div>
+							<div class="justifyleft" style="display: flex; width: 100%; font-size: 12px; margin:2px">
+								<div style="width:100px">Assistant Tag <span class="helpicon">?<span class="helptext">The sequence to start an assistant response</span></span></div>
+								<input class="settinglabel miniinput" style="width:calc(100% - 100px)" type="text" placeholder="\\n### Response:\\n" value="" id="instruct_endtag" onchange="edit_instruct_tag_format()" title="The sequence to end an instruction prompt">
+							</div>
 						</div>
 
 					</div>
 
+					<div class="settingitem wide">
+						<div class="settinglabel" style="padding-top: 3px;">
+							<div style="display:flex;width:100%;">
+								<div class="settinglabel settingcell" style="padding-bottom:0px">
+									<div  class="justifyleft settingsmall" style="width:100%">Your Name <span class="helpicon">?<span class="helptext">The name the AI will see you as</span></span></div>
+								</div>
+								<div class="settinglabel settingcell" style="padding-bottom:0px">
+									<div class="justifyleft settingsmall" style="width:100%">AI Name <span class="helpicon">?<span class="helptext">Name of the person(s) you want to chat with. Multiple opponents can be specified, creating a group chat, separate their names using multiple lines.</span></span></div>
+								</div>
+							</div>
+							<div style="display:flex;width:100%;">
+								<div class="settinglabel settingcell">
+									<div class="justifyleft settingsmall" style="width:100%">
+									<input class="settinglabel miniinput" style="height:18px;" type="text" placeholder="(Enter Name)" value="" id="chatname" title="The name that you will be chatting as">
+									</div>
+								</div>
+								<div class="settinglabel settingcell">
+									<div class="justifyleft settingsmall" style="width:100%">
+									<textarea class="settinglabel miniinput" style="resize: none;overflow:hidden;" id="chatopponent" placeholder="(Auto)" rows="1" wrap="off" title="The name of the person you want to chat with" oninput="handle_bot_name_input()" onchange="handle_bot_name_onchange()"></textarea>
+									</div>
+								</div>
+							</div>
+						</div>
+						<div class="settinglabel" style="width:100%">
+							<button type="button" class="btn btn-primary" style="padding:2px 4px;margin:2px;margin-left:auto;font-size:11px;" onclick="add_another_participant()">Add Another Participant</button>
+						</div>
+					</div>
+
+					<div class="settingitem">
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Multiline Replies <span class="helpicon">?<span
+							class="helptext">Whether to allow multiple lines in AI responses (Chat/Adventure). Disable this if the AI starts generating rubbish.</span></span> </div>
+							<input type="checkbox" id="multiline_replies" style="margin:0px 0px 0px auto;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Continue Bot Replies <span class="helpicon">?<span
+							class="helptext">Allow incomplete AI chat mode replies, which can be continued by pressing submit again. Not recommended for newbies.</span></span></div>
+							<input type="checkbox" id="allow_continue_chat" style="margin:0px 0px 0px auto;">
+						</div>
+					</div>
+
+					<div class="settingitem">
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Chat PrePrompt <span class="helpicon">?<span
+								class="helptext">Modifies the context, injecting tokens to improve chat quality for new chats.</span></span> </div>
+							<input type="checkbox" id="chat_context_mod" style="margin:0px 0px 0px auto;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Adventure PrePrompt <span class="helpicon">?<span
+								class="helptext">Modifies the context, injecting tokens to improve adventure quality for new adventures.</span></span> </div>
+							<input type="checkbox" id="adventure_context_mod" style="margin:0px 0px 0px auto;">
+						</div>
+					</div>
+
+					<div class="settingitem">
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Enable Markdown <span class="helpicon">?<span
+								class="helptext">Allows the UI to use markdown formatting such as quotes and code blocks.</span></span></div>
+								<input type="checkbox" id="instruct_has_markdown" style="margin:0px 0px 0px auto;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="">Trim Sentences <span class="helpicon">?<span
+								class="helptext">Trims incomplete sentences in AI output.</span></span></div>
+							<input type="checkbox" id="trimsentences" style="margin:0px 0px 0px auto;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="">Trim Whitespace <span class="helpicon">?<span
+								class="helptext">Removes trailing whitespace in AI output.</span></span></div>
+							<input type="checkbox" id="trimwhitespace" style="margin:0px 0px 0px auto;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="">Compress Newlines <span class="helpicon">?<span
+								class="helptext">Compresses multiple newlines into one newline in AI output.</span></span></div>
+							<input type="checkbox" id="compressnewlines" style="margin:0px 0px 0px auto;">
+						</div>
+					</div>
+
+					<div class="settingitem">
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Inject Timestamps <span class="helpicon">?<span
+								class="helptext">Injects timestamps into context (Chat/Instruct), allowing the AI to have a sense of time.</span></span></div>
+							<input type="checkbox" id="inject_timestamps" style="margin:0px 0px 0px auto;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Inject ChatNames <span class="helpicon">?<span
+								class="helptext">Appends chat names after every instruct tag, a hybrid chat mode.</span></span></div>
+							<input type="checkbox" id="inject_chatnames_instruct" style="margin:0px 0px 0px auto;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Assistant Jailbreak <span class="helpicon">?<span
+								class="helptext">Automatically injects a jailbreak message after every instruct query, to make the AI more likely to obey you.</span></span></div>
+							<input type="checkbox" id="inject_jailbreak_instruct" style="margin:0px 0px 0px auto;">
+						</div>
+
+					</div>
 				</div>
 
 				<!-- sampler settings menu-->
@@ -16967,7 +17112,7 @@ Current version indicated by LITEVER below.
 					<div class="settingitem wide">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Sampler Preset <span class="helpicon">?<span class="helptext">Pick from an easy selection of curated generation presets, or configure your own.</span></span></div>
-							<select class="form-control" id="samplerpresets" style="height:28px;padding:0;margin:0px 0 0; width:100%;" onchange="toggle_preset()">
+							<select class="form-control" id="samplerpresets" style="height:26px;padding:0;margin:0px 0 0; width:100%;" onchange="toggle_preset()">
 								<option value="1" title="Select a Preset">[Default]</option>
 							</select>
 						</div>
@@ -17047,7 +17192,7 @@ Current version indicated by LITEVER below.
 
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Top p Sampling <span class="helpicon">?<span class="helptext">Used
+							<div class="justifyleft settingsmall">Top-P Sampling <span class="helpicon">?<span class="helptext">Used
 										to discard unlikely text in a nucleus sampling process. Lower values will make text
 										more predictable but can become repetitious. Set to 1 to deactivate it.</span></span></div>
 							<input inputmode="decimal" class="justifyright flex-push-right settingsmall" id="top_p" oninput="
@@ -17063,7 +17208,7 @@ Current version indicated by LITEVER below.
 
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Top k Sampling <span class="helpicon">?<span class="helptext">Top-K Sampling. Discards all but the K most likely tokens. Set 0 to Deactivate.</span></span></div>
+							<div class="justifyleft settingsmall">Top-K Sampling <span class="helpicon">?<span class="helptext">Top-K Sampling. Discards all but the K most likely tokens. Set 0 to Deactivate.</span></span></div>
 							<input inputmode="decimal" class="justifyright flex-push-right settingsmall" id="top_k" oninput="
 						   document.getElementById('top_k_slide').value = this.value;">
 						</div>
@@ -17123,67 +17268,65 @@ Current version indicated by LITEVER below.
 								<input class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="rep_pen_slope"></div>
 							</div>
 							<div class="settinglabel settingcell">
-								<div title="Sampler Order" class="justifyleft settingsmall" style="width:100%">Smp.Order <span class="helpicon">?<span class="helptext">
-								The order by which all 7 samplers are applied, separated by commas. 0=top_k, 1=top_a, 2=top_p, 3=tfs, 4=typ, 5=temp, 6=rep_pen</span></span></div>
+								<div title="Smoothing Factor" class="justifyleft settingsmall" style="width:100%">Smooth.F</div>
 								<div class="justifyleft settingsmall" style="width:100%">
-								<input class="settinglabel miniinput" type="text" placeholder="CSV" value="" id="sampler_order" title="Valid values are: 0=top_k, 1=top_a, 2=top_p, 3=tfs, 4=typ, 5=temp, 6=rep_pen" onblur="validate_samplers()"></div>
+								<input class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="smoothing_factor"></div>
 							</div>
 							<div class="settinglabel settingcell">
 								<div title="DynaTemp Configs. Range 0 to Deactivate." class="justifyleft settingsmall" style="width:100%">DyTemp</div>
 								<div class="justifyleft settingsmall" style="width:100%">
-								<button type="button" class="btn btn-primary" style="padding:1px 3px;font-size:8px;" onclick="show_dynatemp()"><span id="dynatemp_overview">OFF</span></button>
+								<button type="button" class="btn btn-primary" style="padding:2px 4px;font-size:9px;" onclick="show_dynatemp()"><span id="dynatemp_overview">OFF</span></button>
 								</div>
 							</div>
 						</div>
-					</div>
-
-
-
-					<div class="settingitem">
-						<div class="settinglabel">
-
-							<div class="justifyleft settingsmall">Mirostat (If supported) <span class="helpicon">?<span class="helptext">Replaces your samplers with mirostat, an alternative sampling method. May not be available depending on backend, not supported on Horde.</span></span></div>
-							<div id="mirosupporteddiv">
-								<table class="settingsmall text-center" style="border-spacing: 3px 2px;
-								border-collapse: separate;">
-									<tr>
-									<th title="Mirostat Type 0/1/2">Mode</th>
-									<th title="Mirostat Tau Value">Tau</th>
-									<th title="Mirostat Eta Value">Eta</th>
-									</tr>
-									<tr>
-									<td><select style="padding:1px; height:auto; width: 27px; appearance: none; font-size: 7pt;" class="form-control" id="miro_type">
-										<option value="0">Off</option>
-										<option value="1">1</option>
-										<option value="2">2</option>
-									</select></td>
-									<td><input class="" type="text" placeholder="0.0" value="0.0"
-									id="miro_tau"></td>
-									<td><input class="" type="text" placeholder="0.0" value="0.0"
-									id="miro_eta"></td>
-									</tr>
-								</table>
+						<div style="display:flex;width:100%;">
+							<div class="settinglabel settingcell">
+								<div title="Mirostat" class="justifyleft settingsmall" style="width:100%">Mirostat <span class="helpicon">?<span class="helptext">
+									Replaces your samplers with mirostat, an alternative sampling method. May not be available depending on backend, not supported on Horde.</span></span></div>
+									<div class="justifyleft settingsmall" style="width:100%">
+									<div id="mirosupporteddiv" style="display:flex;">
+										<div class="settinglabel settingcell">
+											<div title="Mirostat Type 0/1/2" class="justifyleft settingsmall" style="width:100%">Mode</div>
+											<div class="justifyleft settingsmall" style="width:100%">
+											<select style="padding:1px; height:auto; appearance: none; font-size: 7pt;" class="form-control" id="miro_type">
+												<option value="0">Off</option>
+												<option value="1">1</option>
+												<option value="2">2</option>
+											</select>
+											</div>
+										</div>
+										<div class="settinglabel settingcell">
+											<div title="Mirostat Tau Value" class="justifyleft settingsmall" style="width:100%">Tau</div>
+											<div class="justifyleft settingsmall" style="width:100%">
+											<input class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0.0" value="0.0" id="miro_tau"></div>
+										</div>
+										<div class="settinglabel settingcell">
+											<div title="Mirostat Eta Value" class="justifyleft settingsmall" style="width:100%">Eta</div>
+											<div class="justifyleft settingsmall" style="width:100%">
+											<input class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0.0" value="0.0" id="miro_eta"></div>
+										</div>
+									</div>
+									<div id="mirounsupporteddiv" class="color_red" style="font-weight:bold;padding:3px;font-size:12px">Mirostat Not Supported</div>
+									</div>
 							</div>
-							<div id="mirounsupporteddiv" class="color_red" style="font-weight:bold;padding:3px;font-size:12px">Mirostat Not Supported</div>
-
+							<div class="settinglabel settingcell">
+								<div title="Grammar" class="justifyleft settingsmall" style="width:100%">Grammar <span class="helpicon">?<span class="helptext">
+									Grammar Sampling (KCPP) - Allows you to constrain output to fit specific structures. Resets grammar state every generation unless Retain is checked.</span></span></div>
+								<div class="justifyleft settingsmall" style="width:100%;display:flex; height: 25px;">
+									<button id="setgrammar" type="button" class="btn btn-primary" style="padding:2px 3px;margin-top:2px;font-size:11px;" onclick="selectGrammar()">GBNF</button>
+									<div class="settingsmall" style="padding:2px 3px;margin-left:2px;margin-top:6px;" title="Do not reset grammar on generate. May not work with multiple users.">Retain </div>
+									   <input type="checkbox" id="grammar_retain_state" style="padding:2px 3px;margin-top:8px;height: max-content;">
+								</div>
+							</div>
+							<div class="settinglabel settingcell">
+								<div title="Sampler Order" class="justifyleft settingsmall" style="width:100%">Smp.Order <span class="helpicon">?<span class="helptext">
+								The order by which all 7 samplers are applied, separated by commas. 0=top_k, 1=top_a, 2=top_p, 3=tfs, 4=typ, 5=temp, 6=rep_pen</span></span></div>
+								<div class="justifyleft settingsmall" style="width:100%; height: 25px;">
+								<input class="settinglabel miniinput" type="text" placeholder="CSV" value="" id="sampler_order" title="Valid values are: 0=top_k, 1=top_a, 2=top_p, 3=tfs, 4=typ, 5=temp, 6=rep_pen" onblur="validate_samplers()"></div>
+							</div>
 						</div>
 					</div>
 
-					<div class="settingitem">
-						<div class="settinglabel">
-
-						</div>
-
-					</div>
-
-					<div class="settingitem">
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Additional Configs <span class="helpicon">?<span class="helptext">Grammar Sampling (KCPP) - Allows you to constrain output to fit specific structures. Resets grammar state every generation unless Retain is checked.</span></span></div>
-							<button id="setgrammar" type="button" class="btn btn-primary" style="padding:2px 3px;margin-top:2px;font-size:11px;" onclick="selectGrammar()">Set Grammar</button>
-							<div class="settingsmall" style="padding:2px 3px;margin-top:4px;" title="Do not reset grammar on generate. May not work with multiple users.">Retain </div>
-						   	<input type="checkbox" id="grammar_retain_state" style="padding:2px 3px;margin-top:6px;height: max-content;">
-						</div>
-					</div>
 
 					<div class="settingitem">
 						<div class="settinglabel">
@@ -17200,122 +17343,6 @@ Current version indicated by LITEVER below.
 
 				</div>
 
-				<!-- format settings menu -->
-				<div id="settingsmenuformat" class="settingsmenu hidden" onchange="setting_tweaked()">
-					<div class="settingitem wide">
-						<div class="settinglabel">
-							<div id="instructsection_basic" class="settinglabel" style="width:100%">
-								<div class="justifyleft settingsmall">Instruct Tag Preset <span class="helpicon">?<span class="helptext">Quickly select between common instruct tag formats. Different models are trained with different tags.</span></span></div>
-								<select class="form-control" id="instruct_tag_format" style="height:28px;padding:0;margin:0px 0 0;width:100%" onchange="toggle_instruct_tag_format()">
-								</select>
-							</div>
-						</div>
-					</div>
-
-					<div class="settingitem wide">
-						<div class="settinglabel" style="padding-top: 3px;">
-
-							<div class="justifyleft settingsmall" style="width:100%">Instruct Tag Format <span class="helpicon">?<span class="helptext">Specify the exact text formatting used for instruct mode.</span></span></div>
-
-							<div class="justifyleft settingsmall">Sys. Seq.<span class="helpicon">?<span class="helptext">The sequence to start the system prompt</span></span></div>
-							<div class="justifyleft settingsmall"><input class="settinglabel miniinput" type="text" placeholder="(Optional)" value="" id="instruct_systag" onchange="edit_instruct_tag_format()"></div>
-							Sys. Prompt<span class="helpicon">?<span class="helptext">A fixed system message sent at the very start to guide the AI behavior. Usually NOT needed.</span></span>
-							<input class="settinglabel miniinput" type="text" placeholder="(Optional)" value="" id="instruct_sysprompt" onchange="edit_instruct_tag_format()">
-
-
-
-							Start Seq.<span class="helpicon">?<span class="helptext">The sequence to start an instruction prompt</span></span>
-							<input class="settinglabel miniinput" type="text" placeholder="\\n### Instruction:\\n" value="" id="instruct_starttag" onchange="edit_instruct_tag_format()" title="The sequence to start an instruction prompt">
-							End Seq.<span class="helpicon">?<span class="helptext">The sequence to end an instruction prompt</span></span>
-							<input class="settinglabel miniinput" type="text" placeholder="\\n### Response:\\n" value="" id="instruct_endtag" onchange="edit_instruct_tag_format()" title="The sequence to end an instruction prompt">
-
-
-						</div>
-					</div>
-					<div class="settingitem wide">
-						<div class="settinglabel" style="padding-top: 3px;">
-							<table class="settingsmall text-center" style="border-spacing: 4px 2px;	border-collapse: separate;">
-								<tr>
-								<th>Your Name</th>
-								<th>AI Name <span class="helpicon">?<span class="helptext">Name of the person(s) you want to chat with. Multiple opponents can be specified, creating a group chat, separate their names using multiple lines.</span></span></th>
-								</tr>
-								<tr>
-								<td style="vertical-align: top;"><input class="settinglabel miniinput" style="height:18px;" type="text" placeholder="(Enter Name)" value="" id="chatname" title="The name that you will be chatting as"></td>
-								<td style="vertical-align: top;"><textarea class="settinglabel miniinput" style="resize: none;overflow:hidden;" id="chatopponent" placeholder="(Auto)" rows="1" wrap="off" title="The name of the person you want to chat with" oninput="handle_bot_name_input()" onchange="handle_bot_name_onchange()"></textarea></td>
-								</tr>
-							</table>
-						</div>
-						<button type="button" class="btn btn-primary" style="padding:2px 3px;margin-top:2px;font-size:11px;" onclick="add_another_participant()">Add Another Participant</button>
-					</div>
-
-					<div class="settingitem">
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Multiline Replies <span class="helpicon">?<span
-							class="helptext">Whether to allow multiple lines in AI responses (Chat/Adventure). Disable this if the AI starts generating rubbish.</span></span> </div>
-							<input type="checkbox" id="multiline_replies" style="margin:0px 0px 0px auto;">
-						</div>
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Continue Bot Replies <span class="helpicon">?<span
-							class="helptext">Allow incomplete AI chat mode replies, which can be continued by pressing submit again. Not recommended for newbies.</span></span></div>
-							<input type="checkbox" id="allow_continue_chat" style="margin:0px 0px 0px auto;">
-						</div>
-					</div>
-
-					<div class="settingitem">
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Chat PrePrompt <span class="helpicon">?<span
-								class="helptext">Modifies the context, injecting tokens to improve chat quality for new chats.</span></span> </div>
-							<input type="checkbox" id="chat_context_mod" style="margin:0px 0px 0px auto;">
-						</div>
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Adventure PrePrompt <span class="helpicon">?<span
-								class="helptext">Modifies the context, injecting tokens to improve adventure quality for new adventures.</span></span> </div>
-							<input type="checkbox" id="adventure_context_mod" style="margin:0px 0px 0px auto;">
-						</div>
-					</div>
-
-					<div class="settingitem">
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Enable Markdown <span class="helpicon">?<span
-								class="helptext">Allows the UI to use markdown formatting such as quotes and code blocks.</span></span></div>
-								<input type="checkbox" id="instruct_has_markdown" style="margin:0px 0px 0px auto;">
-						</div>
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="">Trim Sentences <span class="helpicon">?<span
-								class="helptext">Trims incomplete sentences in AI output.</span></span></div>
-						   <input type="checkbox" id="trimsentences" style="margin:0px 0px 0px auto;">
-						</div>
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="">Trim Whitespace <span class="helpicon">?<span
-								class="helptext">Removes trailing whitespace in AI output.</span></span></div>
-						   <input type="checkbox" id="trimwhitespace" style="margin:0px 0px 0px auto;">
-						</div>
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="">Compress Newlines <span class="helpicon">?<span
-								class="helptext">Compresses multiple newlines into one newline in AI output.</span></span></div>
-						   <input type="checkbox" id="compressnewlines" style="margin:0px 0px 0px auto;">
-						</div>
-					</div>
-
-					<div class="settingitem">
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Inject Timestamps <span class="helpicon">?<span
-								class="helptext">Injects timestamps into context (Chat/Instruct), allowing the AI to have a sense of time.</span></span></div>
-							<input type="checkbox" id="inject_timestamps" style="margin:0px 0px 0px auto;">
-						</div>
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Inject ChatNames <span class="helpicon">?<span
-								class="helptext">Appends chat names after every instruct tag, a hybrid chat mode.</span></span></div>
-							<input type="checkbox" id="inject_chatnames_instruct" style="margin:0px 0px 0px auto;">
-						</div>
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Assistant Jailbreak <span class="helpicon">?<span
-								class="helptext">Automatically injects a jailbreak message after every instruct query, to make the AI more likely to obey you.</span></span></div>
-							<input type="checkbox" id="inject_jailbreak_instruct" style="margin:0px 0px 0px auto;">
-						</div>
-
-					</div>
-				</div>
 
 				<!-- media settings menu-->
 				<div id="settingsmenumedia" class="settingsmenu hidden" onchange="setting_tweaked()">
@@ -17827,11 +17854,6 @@ Current version indicated by LITEVER below.
 				<div class="justifyleft" style="padding:4px">DynaTemp-Exponent:</div>
 				<input type="text" oninput="preview_dynatemp(false)" inputmode="decimal" id="dynatemp_exponent" style="width:60px" >
 			</div>
-			<div class="inlinelabel">
-				<div class="justifyleft" style="padding:4px">Smoothing-Factor:</div>
-				<input type="text" oninput="preview_dynatemp(false)" inputmode="decimal" id="smoothing_factor" style="width:60px" >
-			</div>
-
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="confirm_dynatemp()">Ok</button>
 			</div>
