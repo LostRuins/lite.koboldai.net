@@ -1126,7 +1126,7 @@ Current version indicated by LITEVER below.
 		}
 		.settingcell
 		{
-			padding: 4px;
+			padding: 3px;
 			width: 100%;
 		}
 
@@ -4121,6 +4121,10 @@ Current version indicated by LITEVER below.
 		miro_type: 0,
 		miro_tau: 5.0,
 		miro_eta: 0.1,
+		dry_multiplier: 0.0,
+		dry_base: 1.75,
+		dry_allowed_length: 2,
+		dry_sequence_breakers: ["\n", ":", "\"", "*"],
 		sampler_order: [6, 0, 1, 3, 4, 2, 5],
 	};
 
@@ -5140,6 +5144,10 @@ Current version indicated by LITEVER below.
 	function is_using_kcpp_with_whisper()
 	{
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.66") >= 0 && koboldcpp_has_whisper);
+	}
+	function is_using_kcpp_with_dry()
+	{
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.70") >= 0);
 	}
 
 
@@ -7470,6 +7478,17 @@ Current version indicated by LITEVER below.
 		},false,true);
 	}
 
+	var pendingsequencebreakers = [];
+	function setDryBreakers()
+	{
+		let breakersString = pendingsequencebreakers.map((x) => x.replace("\n", "\\n")).join("\n")
+		inputBox("Enter each sequence breaker on a separate line.\nUse \\n for a newline token.\n","Set DRY Sequence Breakers",breakersString,"",()=>{
+			let userinput = getInputBoxValue();
+			pendingsequencebreakers = userinput.split("\n").filter(Boolean).map((x) => x.replace("\\n", "\n"));
+			console.log("Sequence breakers: " + pendingsequencebreakers.map((x) => x.replace("\n", "\\n")));
+		},false,true);
+	}
+
 	function expand_tokens_section(targetid)
 	{
 		let tablist = ["expandregexreplace","expandtokenbans","expandlogitbias","expandplaceholdertags"];
@@ -9139,6 +9158,9 @@ Current version indicated by LITEVER below.
 		document.getElementById("miro_type").value = localsettings.miro_type;
 		document.getElementById("miro_tau").value = localsettings.miro_tau;
 		document.getElementById("miro_eta").value = localsettings.miro_eta;
+		document.getElementById("dry_multiplier").value = localsettings.dry_multiplier;
+		document.getElementById("dry_base").value = localsettings.dry_base;
+		document.getElementById("dry_allowed_length").value = localsettings.dry_allowed_length;
 
 		if(is_using_kcpp_with_mirostat())
 		{
@@ -9150,6 +9172,18 @@ Current version indicated by LITEVER below.
 			document.getElementById("mirosupporteddiv").classList.add("hidden");
 			document.getElementById("mirounsupporteddiv").classList.remove("hidden");
 		}
+
+		if(is_using_kcpp_with_dry())
+		{
+			document.getElementById("drysupporteddiv").classList.remove("hidden");
+			document.getElementById("dryunsupporteddiv").classList.add("hidden");
+		}
+		else
+		{
+			document.getElementById("drysupporteddiv").classList.add("hidden");
+			document.getElementById("dryunsupporteddiv").classList.remove("hidden");
+		}
+		pendingsequencebreakers = localsettings.dry_sequence_breakers;
 
 		document.getElementById("setgrammar").disabled = !is_using_kcpp_with_grammar();
 		document.getElementById("voice_typing_mode").disabled = !is_using_kcpp_with_whisper();
@@ -9283,6 +9317,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("typ_s").value = found.typical;
 			document.getElementById("tfs_s").value = found.tfs;
 			document.getElementById("miro_type").value = 0;
+			document.getElementById("dry_multiplier").value = 0;
 			document.getElementById("rep_pen").value = document.getElementById("rep_pen_slide").value = found.rep_pen;
 			document.getElementById("rep_pen_range").value = found.rep_pen_range;
 			document.getElementById("rep_pen_slope").value = found.rep_pen_slope;
@@ -9505,6 +9540,10 @@ Current version indicated by LITEVER below.
 		localsettings.miro_type = document.getElementById("miro_type").value;
 		localsettings.miro_tau = document.getElementById("miro_tau").value;
 		localsettings.miro_eta = document.getElementById("miro_eta").value;
+		localsettings.dry_multiplier = document.getElementById("dry_multiplier").value;
+		localsettings.dry_base = document.getElementById("dry_base").value;
+		localsettings.dry_allowed_length = document.getElementById("dry_allowed_length").value;
+		localsettings.dry_sequence_breakers = pendingsequencebreakers;
 
 		localsettings.speech_synth = document.getElementById("ttsselect").value;
 		localsettings.xtts_voice = document.getElementById("xtts_voices").value;
@@ -9586,6 +9625,9 @@ Current version indicated by LITEVER below.
 		localsettings.miro_type = cleannum(localsettings.miro_type, 0, 2);
 		localsettings.miro_tau = cleannum(localsettings.miro_tau, 0, 30);
 		localsettings.miro_eta = cleannum(localsettings.miro_eta, 0, 10);
+		localsettings.dry_multiplier = cleannum(localsettings.dry_multiplier, 0.0, 100.0);
+		localsettings.dry_base = cleannum(localsettings.dry_base, 0.0, 8.0);
+		localsettings.dry_allowed_length = cleannum(Math.floor(localsettings.dry_allowed_length), 0, 100);
 		localsettings.sampler_seed = cleannum(localsettings.sampler_seed, -1, 999999);
 		toggle_invert_colors();
 
@@ -11581,6 +11623,13 @@ Current version indicated by LITEVER below.
 			submit_payload.params.smoothing_factor = localsettings.smoothing_factor;
 			submit_payload.params.banned_tokens = get_token_bans();
 			submit_payload.params.render_special = localsettings.render_special_tags;
+		}
+		if((custom_kobold_endpoint != "" && is_using_kcpp_with_dry()))
+		{
+			submit_payload.params.dry_multiplier = localsettings.dry_multiplier;
+			submit_payload.params.dry_base = localsettings.dry_base;
+			submit_payload.params.dry_allowed_length = localsettings.dry_allowed_length;
+			submit_payload.params.dry_sequence_breakers = JSON.parse(JSON.stringify(localsettings.dry_sequence_breakers));
 		}
 		//presence pen and logit bias for OAI and newer kcpp
 		if((custom_kobold_endpoint != "" && is_using_kcpp_with_mirostat()) || custom_oai_endpoint!="")
@@ -17281,6 +17330,26 @@ Current version indicated by LITEVER below.
 								</div>
 							</div>
 						</div>
+
+						<div style="display:flex;width:100%;">
+							<div class="settinglabel settingcell">
+								<div class="justifyleft settingsmall" title="">EOS Token Ban <span class="helpicon">?<span
+									class="helptext">Allow the End-Of-Stream (EOS) token and potentially other restricted special tokens to be generated.</span></span></div>
+									<select style="padding:1px; height:auto; margin:0px 0px 0px auto;" class="form-control" id="eos_ban_mode">
+									<option value="0">Auto</option>
+									<option value="1">Unban</option>
+									<option value="2">Ban</option>
+									<option value="3">Bypass</option>
+								</select>
+							</div>
+							<div class="settinglabel settingcell">
+								<div title="Sampler Order" class="justifyleft settingsmall" style="width:100%">Sampler Order <span class="helpicon">?<span class="helptext">
+								The order by which all 7 samplers are applied, separated by commas. 0=top_k, 1=top_a, 2=top_p, 3=tfs, 4=typ, 5=temp, 6=rep_pen</span></span></div>
+								<div class="justifyleft settingsmall" style="width:100%;">
+								<input class="settinglabel miniinput" type="text" placeholder="CSV" value="" id="sampler_order" title="Valid values are: 0=top_k, 1=top_a, 2=top_p, 3=tfs, 4=typ, 5=temp, 6=rep_pen" onblur="validate_samplers()"></div>
+							</div>
+						</div>
+
 						<div style="display:flex;width:100%;">
 							<div class="settinglabel settingcell">
 								<div title="Mirostat" class="justifyleft settingsmall" style="width:100%">Mirostat <span class="helpicon">?<span class="helptext">
@@ -17311,38 +17380,47 @@ Current version indicated by LITEVER below.
 									<div id="mirounsupporteddiv" class="color_red" style="font-weight:bold;padding:3px;font-size:12px">Mirostat Not Supported</div>
 									</div>
 							</div>
+
+							<div class="settinglabel settingcell">
+								<div class="justifyleft settingsmall">DRY (If supported) <span class="helpicon">?<span class="helptext">An advanced multi-token repetition penalty. May not be available depending on backend, not supported on Horde.</span></span></div>
+								<div id="drysupporteddiv">
+								<div style="display:flex">
+									<div class="settinglabel settingcell">
+										<div title="DRY Multiplier" class="justifyleft settingsmall" style="width:100%">Mult.</div>
+										<div class="justifyleft settingsmall" style="width:100%">
+										<input class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0.0" value="0.0" id="dry_multiplier"></div>
+									</div>
+									<div class="settinglabel settingcell">
+										<div title="DRY Base Value" class="justifyleft settingsmall" style="width:100%">Base</div>
+										<div class="justifyleft settingsmall" style="width:100%">
+										<input class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0.0" value="0.0" id="dry_base"></div>
+									</div>
+									<div class="settinglabel settingcell">
+										<div title="DRY Allowed Length" class="justifyleft settingsmall" style="width:100%">A.Len</div>
+										<div class="justifyleft settingsmall" style="width:100%">
+										<input class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0.0" value="0.0" id="dry_allowed_length"></div>
+									</div>
+								</div>
+								<button id="setbreakers" type="button" class="btn btn-primary" style="width:100%; padding:2px 3px;margin-top:2px;font-size:11px;" onclick="setDryBreakers()">Seq. Breaks</button>
+								</div>
+								<div id="dryunsupporteddiv" class="color_red" style="font-weight:bold;padding:3px;font-size:12px">DRY Not Supported</div>
+							</div>
+
+
 							<div class="settinglabel settingcell">
 								<div title="Grammar" class="justifyleft settingsmall" style="width:100%">Grammar <span class="helpicon">?<span class="helptext">
 									Grammar Sampling (KCPP) - Allows you to constrain output to fit specific structures. Resets grammar state every generation unless Retain is checked.</span></span></div>
-								<div class="justifyleft settingsmall" style="width:100%;display:flex; height: 25px;">
+								<div class="justifyleft settingsmall" style="height: 30px;width:100%;display: flex;">
 									<button id="setgrammar" type="button" class="btn btn-primary" style="padding:2px 3px;margin-top:2px;font-size:11px;" onclick="selectGrammar()">GBNF</button>
+									<div style="display:flex;">
 									<div class="settingsmall" style="padding:2px 3px;margin-left:2px;margin-top:6px;" title="Do not reset grammar on generate. May not work with multiple users.">Retain </div>
-									   <input type="checkbox" id="grammar_retain_state" style="padding:2px 3px;margin-top:8px;height: max-content;">
+									<input type="checkbox" id="grammar_retain_state" style="padding:2px 3px;margin-top:8px;height: max-content;">
+									</div>
 								</div>
 							</div>
-							<div class="settinglabel settingcell">
-								<div title="Sampler Order" class="justifyleft settingsmall" style="width:100%">Smp.Order <span class="helpicon">?<span class="helptext">
-								The order by which all 7 samplers are applied, separated by commas. 0=top_k, 1=top_a, 2=top_p, 3=tfs, 4=typ, 5=temp, 6=rep_pen</span></span></div>
-								<div class="justifyleft settingsmall" style="width:100%; height: 25px;">
-								<input class="settinglabel miniinput" type="text" placeholder="CSV" value="" id="sampler_order" title="Valid values are: 0=top_k, 1=top_a, 2=top_p, 3=tfs, 4=typ, 5=temp, 6=rep_pen" onblur="validate_samplers()"></div>
-							</div>
+
 						</div>
 					</div>
-
-
-					<div class="settingitem">
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="">EOS Token Ban <span class="helpicon">?<span
-								class="helptext">Allow the End-Of-Stream (EOS) token and potentially other restricted special tokens to be generated.</span></span></div>
-						<select style="padding:1px; height:auto; margin:0px 0px 0px auto;" class="form-control" id="eos_ban_mode">
-								<option value="0">Auto</option>
-								<option value="1">Unban</option>
-								<option value="2">Ban</option>
-								<option value="3">Bypass</option>
-							</select>
-						</div>
-					</div>
-
 				</div>
 
 
