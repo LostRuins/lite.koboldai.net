@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 153;
+	const LITEVER = 156;
 	const urlParams = new URLSearchParams(window.location.search);
 	const localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3764,9 +3764,9 @@ Current version indicated by LITEVER below.
 			.replace(/<\/[ou]l\>\n\n<[ou]l\>/gm, "\n")
 			.replace(/<\/[ou]l\>\n<[ou]l\>/g, "")
 			.replace(/<\/li><\/ul><ul><li>/gm, "</li><li>")
-			.replace(/\*\*\*(\w.*?[^\\])\*\*\*/gm, "<b><em>$1</em></b>")
-			.replace(/\*\*(\w.*?[^\\])\*\*/gm, "<b>$1</b>")
-			.replace(/\*(\w.*?[^\\])\*/gm, "<em>$1</em>")
+			.replace(/\*\*\*([^\s*].*?[^\\])\*\*\*/gm, "<b><em>$1</em></b>")
+			.replace(/\*\*([^\s*].*?[^\\])\*\*/gm, "<b>$1</b>")
+			.replace(/\*([^\s*].*?[^\\])\*/gm, "<em>$1</em>")
 			.replace(/___(\w.*?[^\\])___/gm, "<b><em>$1</em></b>")
 			.replace(/__(\w.*?[^\\])__/gm, "<u>$1</u>")
 			.replace(/~~(\w.*?)~~/gm, "<del>$1</del>")
@@ -3999,6 +3999,7 @@ Current version indicated by LITEVER below.
 	var synchro_pending_stream = ""; //used for token pseduo streaming for kobold api only
 	var waiting_for_autosummary = false;
 	var italics_regex = new RegExp(/\*(\S[^*]+\S)\*/g); //the fallback regex
+	var bold_regex = new RegExp(/\*\*(\S[^*]+\S)\*\*/g); //the fallback regex
 	var temp_scenario = null;
 	var last_token_budget = ""; //to display token limits
 	var last_known_filename = "saved_story.json";
@@ -4319,6 +4320,8 @@ Current version indicated by LITEVER below.
 			// Test if lookahead is supported, enhance italics regex if so
 			let improved_italics = new RegExp("\\*(?!\\s)(.+?)(?<!\\s)\\*","g");
 			italics_regex = improved_italics;
+			let improved_bold = new RegExp("\\*\\*(?!\\s)(.+?)(?<!\\s)\\*\\*","g");
+			bold_regex = improved_bold;
 		} catch (e) {
 			console.log('Lookaheads are not supported in this environment.');
 		}
@@ -4778,8 +4781,7 @@ Current version indicated by LITEVER below.
 		const foundAicc = urlParams.get('aicc');
 
 		if (foundStory && foundStory != "") {
-			let safe_to_overwrite = (gametext_arr.length == 0 && current_memory == "" && current_anote == "" && current_wi.length == 0 && redo_arr.length == 0);
-			if (localsettings.persist_session && !safe_to_overwrite) {
+			if (localsettings.persist_session && !safe_to_overwrite()) {
 				import_compressed_story_prompt_overwrite(foundStory);
 			} else {
 				import_compressed_story(foundStory, false);
@@ -5838,6 +5840,11 @@ Current version indicated by LITEVER below.
 
 		};
 		reader.readAsText(selectedFile);
+	}
+
+	function safe_to_overwrite()
+	{
+		return (gametext_arr.length == 0 && current_memory == "" && current_anote == "" && current_wi.length == 0 && redo_arr.length == 0);
 	}
 
 	function kai_json_load(storyobj, force_load_settngs)
@@ -6926,7 +6933,7 @@ Current version indicated by LITEVER below.
 
 		render_gametext(true);
 	}
-	function togglescenarioallownsfw()
+	function togglescenarioautopick()
 	{
 		if(localflag)
 		{
@@ -6936,12 +6943,6 @@ Current version indicated by LITEVER below.
 		{
 			if (selected_models.length == 0) {
 				document.getElementById("scenarioautopickai").checked = true;
-			}
-			let scenarioautopickai = document.getElementById("scenarioautopickai").checked ? true : false;
-			if (scenarioautopickai) {
-				document.getElementById("scenarioallownsfwbox").classList.remove("hidden");
-			} else {
-				document.getElementById("scenarioallownsfwbox").classList.add("hidden");
 			}
 		}
 	}
@@ -6982,7 +6983,6 @@ Current version indicated by LITEVER below.
 			hide_popups();
 			//assign model if necessary
 			let scenarioautopickai = document.getElementById("scenarioautopickai").checked?true:false;
-			let scenarioallownsfw = document.getElementById("scenarioallownsfw").checked?true:false;
 
 			if(selected_models.length == 0 && !is_using_custom_ep())
 			{
@@ -6998,7 +6998,6 @@ Current version indicated by LITEVER below.
 					}
 					else
 					{
-						let nsfwmodels = ["erebus","shinen","horni","litv2","lit-6b","spicyboros","mlewd","mxlewd"];
 						selected_models = [];
 						for (var i = 0; i < mdls.length; ++i) {
 							let skipignored = false;
@@ -7014,19 +7013,7 @@ Current version indicated by LITEVER below.
 								for (var j = 0; j < temp_scenario.prefmodel1.length; ++j) {
 									if (mdls[i].name.trim().toLowerCase().includes(temp_scenario.prefmodel1[j].trim().toLowerCase()) ||
 										temp_scenario.prefmodel1[j].trim().toLowerCase().includes(mdls[i].name.trim().toLowerCase())) {
-
-										let allow = true;
-										if (!scenarioallownsfw) {
-											for (var k = 0; k < nsfwmodels.length; ++k) {
-												if (mdls[i].name.trim().toLowerCase().includes(nsfwmodels[k])) {
-													allow = false;
-													break;
-												}
-											}
-										}
-										if (allow) {
-											selected_models.push(mdls[i]);
-										}
+										selected_models.push(mdls[i]);
 									}
 								}
 							}
@@ -7050,18 +7037,7 @@ Current version indicated by LITEVER below.
 									for (var j = 0; j < temp_scenario.prefmodel2.length; ++j) {
 										if (mdls[i].name.trim().toLowerCase().includes(temp_scenario.prefmodel2[j].trim().toLowerCase()) ||
 											temp_scenario.prefmodel2[j].trim().toLowerCase().includes(mdls[i].name.trim().toLowerCase())) {
-											let allow = true;
-											if (!scenarioallownsfw) {
-												for (var k = 0; k < nsfwmodels.length; ++k) {
-													if (mdls[i].name.trim().toLowerCase().includes(nsfwmodels[k])) {
-														allow = false;
-														break;
-													}
-												}
-											}
-											if (allow) {
-												selected_models.push(mdls[i]);
-											}
+											selected_models.push(mdls[i]);
 										}
 									}
 								}
@@ -7104,7 +7080,7 @@ Current version indicated by LITEVER below.
 
 		document.getElementById("scenariogrid").innerHTML = scenarios;
 		document.getElementById("scenariodesc").innerText = "No Scenario Selected";
-		togglescenarioallownsfw();
+		togglescenarioautopick();
 	}
 
 	function scenario_search()
@@ -8220,6 +8196,8 @@ Current version indicated by LITEVER below.
 										koboldcpp_has_vision = (data.vision?true:false);
 										koboldcpp_has_whisper = (data.transcribe?true:false);
 										let has_password = (data.protected?true:false);
+										let has_txt2img = (data.txt2img?true:false);
+										let no_model = (mdlname=="inactive");
 
 										//also check against kcpp's max true context length
 										fetch(apply_proxy_url(desiredkoboldendpoint + koboldcpp_truemaxctxlen_endpoint),
@@ -8235,10 +8213,10 @@ Current version indicated by LITEVER below.
 											{
 												document.getElementById("max_context_length_slide").max = ep_maxctx;
 												document.getElementById("max_context_length_slide_label").innerText = ep_maxctx;
-												if(localflag && localsettings.max_context_length==2048 && ep_maxctx>2048)
-												{
-													localsettings.max_context_length = ep_maxctx;
-												}
+											}
+											if(localflag && localsettings.max_context_length==2048 && ep_maxctx>2048)
+											{
+												localsettings.max_context_length = ep_maxctx;
 											}
 										}).catch(error => {
 											console.log("Failed to get true max ctx: " + error);
@@ -8256,8 +8234,7 @@ Current version indicated by LITEVER below.
 											let is_kai = !(tmpstory.prompt==null);
 											if(is_kai)
 											{
-												let safe_to_overwrite = (gametext_arr.length == 0 && current_memory == "" && current_anote == "" && current_wi.length == 0 && redo_arr.length == 0);
-												if (localsettings.persist_session && !safe_to_overwrite) {
+												if (localsettings.persist_session && !safe_to_overwrite()) {
 													console.log("Preload story: Unsafe to overwrite");
 												} else {
 													kai_json_load(tmpstory, false);
@@ -8311,6 +8288,13 @@ Current version indicated by LITEVER below.
 													custom_kobold_key = document.getElementById("customkoboldkey").value = localmodekey = localsettings.saved_kai_key = userinput.trim();
 												}
 											},false,false,true);
+										}
+										else if(localflag && has_txt2img && no_model && safe_to_overwrite())
+										{
+											msgboxYesNo("This KoboldCpp instance seems to be running an Image Generation model without any Text Generation model loaded.\n\nWould you like to launch StableUI (Dedicated Image Generation WebUI bundled with KoboldCpp)?\n\nIf unsure, select 'No'.","Launch StableUI?", ()=>{
+												go_to_stableui();
+											},()=>{
+											});
 										}
 
 									}else{
@@ -15133,6 +15117,7 @@ Current version indicated by LITEVER below.
 			let foundimg = "";
 			if(curr.msg && curr.msg!="")
 			{
+				curr.msg = curr.msg.replace(bold_regex,"<b style='opacity:0.7'>$1</b>");
 				curr.msg = curr.msg.replace(italics_regex,"<em style='opacity:0.7'>$1</em>");
 				//convert the msg into images
 				curr.msg = curr.msg.replace(/\[<\|p\|.+?\|p\|>\]/g, function (m) {
@@ -16363,6 +16348,7 @@ Current version indicated by LITEVER below.
 				let styleRole = aestheticInstructUISettings.use_uniform_colors ? 'uniform' : role;					// Uniform role is preferred if it's active on the settings.
 				newbodystr = newbodystr.replace(new RegExp(`${contextDict[`${role}Open`]}([^]*?)${contextDict.closeTag}`, 'g'), (match, p) => {
 					let replacedText = match.replace(/<[^>]*>/g, (htmlPart) => { internalHTMLparts.push(htmlPart); return `<internal_html_${internalHTMLparts.length - 1}>`; });
+					replacedText = replacedText.replace(bold_regex, wrapperSpan(styleRole, 'action')); 		// Apply the actions style to *actions*.
 					replacedText = replacedText.replace(italics_regex, wrapperSpan(styleRole, 'action')); 		// Apply the actions style to *actions*.
 					replacedText = replacedText.replace(/“(.*?)”/g, wrapperSpan(styleRole, 'speech')); 	// Apply the speech style to "speech".
 					replacedText = replacedText.replace(/&quot;(.*?)&quot;/g, wrapperSpan(styleRole, 'speech')); 	// Apply the speech style to "speech".
@@ -16497,7 +16483,7 @@ Current version indicated by LITEVER below.
 			<div id="menuitems">
 				<div class="navcontainer">
 					<nav class="navbar" id="navbar">
-						<button class="navbar-toggler" type="button" onclick="toggleTopNav()">
+						<button title="Main Menu Options" class="navbar-toggler mainnav" type="button" onclick="toggleTopNav()">
 							<span class="navbar-button-bar"></span>
 							<span class="navbar-button-bar"></span>
 							<span class="navbar-button-bar"></span>
@@ -16640,12 +16626,12 @@ Current version indicated by LITEVER below.
 		<div id="corpointerface" class="hidden">
 			<div class="corpostyle">
 				<div id="corpo_leftpannel" class="corpoleftpanel">
-					<button title="Hide Corpo Side Panel" class="corpo_leftpanel_close" onclick="show_corpo_leftpanel(false)">&times;</button>
+					<button title="Hide Corpo Side Panel" class="corpo_leftpanel_close mainnav" onclick="show_corpo_leftpanel(false)">&times;</button>
 					<p id="corpoleftpanelitems" class="corpoleftpanelitems">
 
 					</p>
 				</div>
-				<button title="Show Corpo Side Panel" class="corpo_leftpanel_open" onclick="show_corpo_leftpanel(true)"><div class="corpo_arrow_right"></div></button>
+				<button title="Show Corpo Side Panel" class="corpo_leftpanel_open mainnav" onclick="show_corpo_leftpanel(true)"><div class="corpo_arrow_right"></div></button>
 				<div class="corporightpanel">
 					<div id="corpostylemain" class="corpostylemain">
 						<div id="corpo_body" class="corpostyleinner"></div>
@@ -16688,13 +16674,8 @@ Current version indicated by LITEVER below.
 					Automatically select AI model <span class="helpicon">?
 						<span class="helptext">This option picks a suitable AI model based on the selected scenario. If no text model is currently selected, an appropriate one will be automatically picked for you.</span>
 					</span>
-					<input type="checkbox" id="scenarioautopickai" onchange="togglescenarioallownsfw()" checked>
-					<span id="scenarioallownsfwbox"><br>
-						Allow NSFW Models <span class="helpicon">?
-							<span class="helptext">If disabled, NSFW only models like Erebus will never be selected</span>
-						</span>
-						<input title="Allow NSFW Models" type="checkbox" id="scenarioallownsfw" checked>
-					</span>
+					<input type="checkbox" id="scenarioautopickai" onchange="togglescenarioautopick()" checked>
+
 				</div>
 
 				<div id="scenariogrid" class="justifyleft anotelabel scenariogrid">
@@ -17221,7 +17202,7 @@ Current version indicated by LITEVER below.
 							<input title="Context Size" inputmode="numeric" class="justifyright flex-push-right settingsmall widerinput" id="max_context_length" oninput="
 						   document.getElementById('max_context_length_slide').value = this.value;">
 						</div>
-						<div><input type="range" class="form-range airange" min="512" max="2048" step="8" id="max_context_length_slide" oninput="
+						<div><input title="Context Size Slider" type="range" class="form-range airange" min="512" max="2048" step="8" id="max_context_length_slide" oninput="
 						   document.getElementById('max_context_length').value = this.value;"></div>
 						<div class="settingminmax">
 							<div class="justifyleft">512</div>
@@ -17240,7 +17221,7 @@ Current version indicated by LITEVER below.
 							<input title="Max Output" inputmode="numeric" class="justifyright flex-push-right settingsmall" id="max_length" oninput="
 						   document.getElementById('max_length_slide').value = this.value;">
 						</div>
-						<div><input type="range" class="form-range airange" min="16" max="512" step="2"	id="max_length_slide" oninput="
+						<div><input title="Max Output Slider" type="range" class="form-range airange" min="16" max="512" step="2"	id="max_length_slide" oninput="
 						   document.getElementById('max_length').value = this.value;"></div>
 						<div class="settingminmax">
 							<div class="justifyleft">16</div>
@@ -17261,7 +17242,7 @@ Current version indicated by LITEVER below.
 							<input title="Temperature" inputmode="decimal" class="justifyright flex-push-right settingsmall" id="temperature" value=0.5
 								oninput="document.getElementById('temperature_slide').value = this.value;">
 						</div>
-						<div><input type="range" class="form-range airange" min="0.1" max="2" step="0.01"
+						<div><input title="Temperature Slider" type="range" class="form-range airange" min="0.1" max="2" step="0.01"
 								id="temperature_slide" oninput="
 						   document.getElementById('temperature').value = this.value;"></div>
 						<div class="settingminmax">
@@ -17278,7 +17259,7 @@ Current version indicated by LITEVER below.
 							<input title="Repetition Penalty" inputmode="decimal" class="justifyright flex-push-right settingsmall" id="rep_pen" oninput="
 						   document.getElementById('rep_pen_slide').value = this.value;">
 						</div>
-						<div><input type="range" class="form-range airange" min="1" max="2" step="0.01"
+						<div><input title="Repetition Penalty Slider" type="range" class="form-range airange" min="1" max="2" step="0.01"
 								id="rep_pen_slide" oninput="document.getElementById('rep_pen').value = this.value;"></div>
 						<div class="settingminmax">
 							<div class="justifyleft">1</div>
@@ -17294,7 +17275,7 @@ Current version indicated by LITEVER below.
 							<input title="Top-P Sampling" inputmode="decimal" class="justifyright flex-push-right settingsmall" id="top_p" oninput="
 						   document.getElementById('top_p_slide').value = this.value;">
 						</div>
-						<div><input type="range" class="form-range airange" min="0" max="1" step="0.01" id="top_p_slide"
+						<div><input title="Top-P Sampling Slider" type="range" class="form-range airange" min="0" max="1" step="0.01" id="top_p_slide"
 								oninput="document.getElementById('top_p').value = this.value;"></div>
 						<div class="settingminmax">
 							<div class="justifyleft">0</div>
@@ -17308,7 +17289,7 @@ Current version indicated by LITEVER below.
 							<input title="Top-K Sampling"inputmode="decimal" class="justifyright flex-push-right settingsmall" id="top_k" oninput="
 						   document.getElementById('top_k_slide').value = this.value;">
 						</div>
-						<div><input type="range" class="form-range airange" min="0" max="100" step="1" id="top_k_slide"
+						<div><input title="Top-K Sampling Slider" type="range" class="form-range airange" min="0" max="100" step="1" id="top_k_slide"
 								oninput="document.getElementById('top_k').value = this.value;"></div>
 						<div class="settingminmax">
 							<div class="justifyleft">0</div>
@@ -17527,7 +17508,7 @@ Current version indicated by LITEVER below.
 
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall" style="width: 100%;">TTS <span class="helpicon">?<span class="helptext">Enable Text-To-Speech to have your story automatically read to you.</span></span></div>
+							<div class="justifyleft settingsmall" style="width: 100%;">Text To Speech <span class="helpicon">?<span class="helptext">Enable Text-To-Speech to have your story automatically read to you.</span></span></div>
 							<select title="Text To Speech" class="form-control" id="ttsselect" style="font-size:12px;height:20px;padding:0;margin:0px 0 0;width:calc(100% - 35px);" onchange="toggle_tts_mode()">
 							</select>
 							<button id="test_tts" type="button" class="bg_green btn btn-primary" style="height:20px; width:30px; padding:2px 3px;font-size:11px; margin-left: 2px;" onclick="test_tts()">Test</button>
@@ -17558,9 +17539,10 @@ Current version indicated by LITEVER below.
 						   <input title="Notify On Done" type="checkbox" id="notify_on" style="margin:0px 0px 0px auto;">
 						</div>
 
-						<div class="settinglabel" style="margin-top: 8px;">
-							<div class="justifyleft settingsmall">Speech Control <span class="helpicon">?<span class="helptext">Requires KoboldCpp with Whisper model loaded. Enables Speech-To-Text voice input. Automatically listens for speech in 'On' mode (Voice Detection), or use Push-To-Talk (PTT).</span></span></div>
-							<select title="Speech Control Mode" style="padding:1px; height:auto; font-size: 8pt;" class="form-control" id="voice_typing_mode">
+
+						<div class="settinglabel" style="border-top: 1px solid #12324f; margin-top: 4px;">
+							<div class="justifyleft settingsmall" style="margin-top: 4px;">Voice Input <span class="helpicon">?<span class="helptext">Requires KoboldCpp with Whisper model loaded. Enables Speech-To-Text voice input. Automatically listens for speech in 'On' mode (Voice Detection), or use Push-To-Talk (PTT).</span></span></div>
+							<select title="Speech To Text Mode" style="padding:1px; height:auto; font-size: 8pt;" class="form-control" id="voice_typing_mode">
 								<option value="0">Off</option>
 								<option value="1">Detect Voice</option>
 								<option value="2">Push-To-Talk</option>
