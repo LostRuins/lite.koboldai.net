@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 156;
+	const LITEVER = 157;
 	const urlParams = new URLSearchParams(window.location.search);
 	const localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -11635,7 +11635,7 @@ Current version indicated by LITEVER below.
 		console.log(submit_payload);
 
 		//preprocess to add extra fields
-		if((custom_kobold_endpoint != "" && is_using_kcpp_with_mirostat()))
+		if(custom_kobold_endpoint != "" && is_using_kcpp_with_mirostat())
 		{
 			if(localsettings.miro_type>0)
 			{
@@ -11652,7 +11652,7 @@ Current version indicated by LITEVER below.
 			submit_payload.params.banned_tokens = get_token_bans();
 			submit_payload.params.render_special = localsettings.render_special_tags;
 		}
-		if((custom_kobold_endpoint != "" && is_using_kcpp_with_dry()))
+		if(custom_kobold_endpoint != "" && is_using_kcpp_with_dry() && localsettings.dry_multiplier > 0)
 		{
 			submit_payload.params.dry_multiplier = localsettings.dry_multiplier;
 			submit_payload.params.dry_base = localsettings.dry_base;
@@ -14914,6 +14914,18 @@ Current version indicated by LITEVER below.
 			}
 
 			let namepart = (curr.myturn ? "User" : "KoboldAI");
+			//advanced name replacement
+			if(localsettings.inject_chatnames_instruct && localsettings.instruct_has_markdown)
+			{
+				let person = (curr.myturn ? localsettings.chatname : localsettings.chatopponent);
+				let prefix = person + ": ";
+				if(processed_msg.startsWith(prefix))
+				{
+					namepart = person;
+					processed_msg = processed_msg.slice(prefix.length);
+				}
+			}
+
 			let bodypart = (corpo_editing_turn == i ?
 				`<div class="corpo_edit_outer">
 				<div class="corpo_edit_inner" id="corpo_edit_inp_lengthtester" style="white-space: nowrap; visibility: hidden; height: 0px; position:absolute; width: auto;"></div>
