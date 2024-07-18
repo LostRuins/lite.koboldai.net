@@ -6166,7 +6166,7 @@ Current version indicated by LITEVER below.
 	}
 	function load_tavern_obj(obj)
 	{
-		let load_tav_obj_confirm = function(usechatmode)
+		let load_tav_obj_confirm = async function(usechatmode)
 		{
 			console.log("Loading tavern obj");
 			if(obj.spec=="chara_card_v2" && obj.data!=null)
@@ -6179,7 +6179,31 @@ Current version indicated by LITEVER below.
 			memory += obj.personality?("\nPersonality: "+obj.personality):"";
 			let scenario = obj.scenario?obj.scenario:"";
 			let examplemsg = obj.mes_example?obj.mes_example:"";
-			let greeting = obj.first_mes?obj.first_mes:"";
+			
+			//let greeting = obj.first_mes?obj.first_mes:"";
+			let bufGreetings = []
+			bufGreetings = bufGreetings.concat(obj.alternate_greetings?obj.alternate_greetings:null);
+			bufGreetings = bufGreetings.concat(obj.first_mes?obj.first_mes:"");
+			let greeting = bufGreetings[Math.floor(Math.random() * bufGreetings.length)];
+			if (bufGreetings.length > 1) {
+				let bufMsg = "<p>Message Number 0 to " + (bufGreetings.length-1) + "</p>"
+				for (it in bufGreetings) {
+					bufMsg += "<p>" + it + ") " + bufGreetings[it].substr(0, 70) + "</p>"
+				}
+				
+				await new Promise((resolve) => {
+					let bufMsgBoxDone = false;
+					inputBox(bufMsg,"Choose Greeting Message","0","Number 0 to " + (bufGreetings.length-1), ()=>{
+						try {
+							let userinput = getInputBoxValue();
+							greeting = bufGreetings[parseInt(userinput)]
+						} finally {
+							resolve("done")
+						}
+					}, true);
+				})
+			}
+			
 			let sysprompt = obj.system_prompt?obj.system_prompt:"";
 
 			//post process
