@@ -6168,45 +6168,57 @@ Current version indicated by LITEVER below.
 	}
 	function load_tavern_obj(obj)
 	{
-		let load_tav_obj_confirm = async function(usechatmode)
+		let selectedgreeting = "";
+		let load_tav_obj_confirm_p1 = function(usechatmode) // need second input for alt greeting
 		{
-			console.log("Loading tavern obj");
 			if(obj.spec=="chara_card_v2" && obj.data!=null)
 			{
 				obj = obj.data;
 			}
+			selectedgreeting = obj.first_mes?obj.first_mes:"";
+
+			if(selectedgreeting == "" && obj.alternate_greetings && obj.alternate_greetings.length==1)
+			{
+				selectedgreeting = obj.alternate_greetings[0]?obj.alternate_greetings[0]:"";
+			}
+			else if(localsettings.import_tavern_prompt && obj.alternate_greetings && obj.alternate_greetings.length>0)
+			{
+				let bufGreetings = [];
+				if(obj.first_mes)
+				{
+					bufGreetings.push(obj.first_mes);
+				}
+				bufGreetings = bufGreetings.concat(obj.alternate_greetings);
+				bufGreetings = bufGreetings.slice(0,16);
+				let bufMsg = "<p><b><u>Select Greeting Message</u></b></p>"
+				for (it in bufGreetings) {
+					bufMsg += it + ") " + bufGreetings[it].substr(0, 64) + "...<br>"
+				}
+
+				inputBox(bufMsg,"Choose Greeting Message","","Number 0 to " + (bufGreetings.length-1), ()=>{
+					let userinput = getInputBoxValue();
+					userinput = parseInt(userinput);
+					userinput = cleannum(userinput,0,bufGreetings.length-1);
+					selectedgreeting = bufGreetings[userinput];
+					load_tav_obj_confirm_p2(usechatmode);
+				}, true);
+
+			} else {
+				load_tav_obj_confirm_p2(usechatmode);
+			}
+		};
+
+		let load_tav_obj_confirm_p2 = function(usechatmode)
+		{
+			console.log("Loading tavern obj");
 			let chatopponent = obj.name?obj.name:defaultchatopponent;
 			let myname = ((localsettings.chatname && localsettings.chatname!="")?localsettings.chatname:"User");
 			let memory = obj.description?("Persona: "+obj.description):"";
 			memory += obj.personality?("\nPersonality: "+obj.personality):"";
 			let scenario = obj.scenario?obj.scenario:"";
 			let examplemsg = obj.mes_example?obj.mes_example:"";
-			
-			//let greeting = obj.first_mes?obj.first_mes:"";
-			let bufGreetings = []
-			bufGreetings = bufGreetings.concat(obj.alternate_greetings?obj.alternate_greetings:null);
-			bufGreetings = bufGreetings.concat(obj.first_mes?obj.first_mes:"");
-			let greeting = bufGreetings[Math.floor(Math.random() * bufGreetings.length)];
-			if (bufGreetings.length > 1) {
-				let bufMsg = "<p>Message Number 0 to " + (bufGreetings.length-1) + "</p>"
-				for (it in bufGreetings) {
-					bufMsg += "<p>" + it + ") " + bufGreetings[it].substr(0, 70) + "</p>"
-				}
-				
-				await new Promise((resolve) => {
-					let bufMsgBoxDone = false;
-					inputBox(bufMsg,"Choose Greeting Message","0","Number 0 to " + (bufGreetings.length-1), ()=>{
-						try {
-							let userinput = getInputBoxValue();
-							greeting = bufGreetings[parseInt(userinput)]
-						} finally {
-							resolve("done")
-						}
-					}, true);
-				})
-			}
-			
 			let sysprompt = obj.system_prompt?obj.system_prompt:"";
+			let greeting = selectedgreeting;
 
 			//post process
 			if(scenario!="")
@@ -6268,14 +6280,14 @@ Current version indicated by LITEVER below.
 		if(localsettings.import_tavern_prompt)
 		{
 			msgboxYesNo("Import Character Card in Instruct Mode?\n\nYes = Instruct Mode Used\nNo = Chat Mode Used\n\nIf unsure, select 'No'.","Import Tavern Card", ()=>{
-				load_tav_obj_confirm(false);
+				load_tav_obj_confirm_p1(false);
 			},()=>{
-				load_tav_obj_confirm(true);
+				load_tav_obj_confirm_p1(true);
 			});
 		}
 		else
 		{
-			load_tav_obj_confirm(true);
+			load_tav_obj_confirm_p1(true);
 		}
 	}
 	function load_ooba_obj(obj)
@@ -18446,7 +18458,7 @@ Current version indicated by LITEVER below.
 
 	<div class="popupcontainer flex hidden" id="inputboxcontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup flexsize">
+		<div class="nspopup flexsize moderate">
 			<div class="popuptitlebar">
 				<div class="popuptitletext" id="inputboxcontainertitle"></div>
 			</div>
