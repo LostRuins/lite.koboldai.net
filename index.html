@@ -4084,6 +4084,8 @@ Current version indicated by LITEVER below.
 		notify_on: false,
 		narrate_both_sides: false,
 		narrate_only_dialog: false,
+		voice_end_delay: 300,
+		tts_speed: 1.0,
 		image_styles: "",
 		image_negprompt: "",
 		grammar:"",
@@ -9300,6 +9302,8 @@ Current version indicated by LITEVER below.
 		document.getElementById("no_escape_html").checked = no_escape_html;
 		document.getElementById("narrate_both_sides").checked = localsettings.narrate_both_sides;
 		document.getElementById("narrate_only_dialog").checked = localsettings.narrate_only_dialog;
+		document.getElementById("tts_speed").value = localsettings.tts_speed;
+		document.getElementById("voice_end_delay").value = localsettings.voice_end_delay;
 		toggle_opmode();
 
 		//sd models display
@@ -9583,6 +9587,8 @@ Current version indicated by LITEVER below.
 		no_escape_html = (document.getElementById("no_escape_html").checked?true:false);
 		localsettings.narrate_both_sides = (document.getElementById("narrate_both_sides").checked?true:false);
 		localsettings.narrate_only_dialog = (document.getElementById("narrate_only_dialog").checked?true:false);
+		localsettings.tts_speed = document.getElementById("tts_speed").value;
+		localsettings.voice_end_delay = document.getElementById("voice_end_delay").value;
 		localsettings.auto_ctxlen = (document.getElementById("auto_ctxlen").checked ? true : false);
 		localsettings.auto_genamt = (document.getElementById("auto_genamt").checked ? true : false);
 
@@ -9629,6 +9635,18 @@ Current version indicated by LITEVER below.
 				document.getElementById("allowediting").checked = false;
 				toggle_editable();
 			}
+		}
+
+		if (isNaN(localsettings.tts_speed)) {
+			localsettings.tts_speed = defaultsettings.tts_speed;
+		} else {
+			localsettings.tts_speed = cleannum(localsettings.tts_speed, 0.1, 4);
+		}
+
+		if (isNaN(localsettings.voice_end_delay)) {
+			localsettings.voice_end_delay = defaultsettings.voice_end_delay;
+		} else {
+			localsettings.voice_end_delay = cleannum(localsettings.voice_end_delay, 50, 5000);
 		}
 
 		//validate samplers, if fail, reset to default
@@ -10728,9 +10746,11 @@ Current version indicated by LITEVER below.
 			return;
 		}
 		let ssval = localsettings.speech_synth;
+		let ssrate = localsettings.tts_speed;
 		if(speech_synth_override!=null)
 		{
 			ssval = speech_synth_override;
+			ssrate = document.getElementById("tts_speed").value;
 		}
 		if(localsettings.narrate_only_dialog)
 		{
@@ -10847,6 +10867,7 @@ Current version indicated by LITEVER below.
 			if ('speechSynthesis' in window) {
 				let utterance = new window.SpeechSynthesisUtterance(text);
 				utterance.voice = window.speechSynthesis.getVoices()[ssval - 1];
+				utterance.rate = ssrate;
 				window.speechSynthesis.speak(utterance);
 				utterance.onend = function(event) {
 					update_submit_button(false);
@@ -10879,7 +10900,7 @@ Current version indicated by LITEVER below.
 	}
 	function ptt_end()
 	{
-		var voice_end_delay = document.getElementById("voice_end_delay").value;
+		var voice_end_delay = localsettings.voice_end_delay;
 		if(voice_typing_mode>0)
 		{
 			voice_is_speaking = false;
@@ -17622,6 +17643,10 @@ Current version indicated by LITEVER below.
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall"  title="Show notification when generation is complete">Notify on Done </div>
 						   <input title="Notify On Done" type="checkbox" id="notify_on" style="margin:0px 0px 0px auto;">
+						</div>
+						<div class="inlinelabel" style="font-size: 11px;">
+							<div class="justifyleft">Browser TTS Speed: </div>
+							<input title="Browser Narration Speed" type="text" inputmode="decimal" value="1" id="tts_speed" style="width:40px">
 						</div>
 
 
