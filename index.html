@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 158;
+	const LITEVER = 159;
 	const urlParams = new URLSearchParams(window.location.search);
 	const localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -11322,7 +11322,12 @@ Current version indicated by LITEVER below.
 							if (localsettings.inject_timestamps) {
 								pending_context_preinjection += " ";
 							}
-							pending_context_preinjection += localsettings.chatopponent + ":";
+							let coarr = localsettings.chatopponent.split("||$||");
+							coarr = coarr.filter(x=>(x&&x!=""));
+							coarr = coarr.filter(x=>(!groupchat_removals.includes(x)));
+							coarr = coarr.map(x=>x.trim());
+							let co = coarr[Math.floor(Math.random()*coarr.length)];
+							pending_context_preinjection += co + ":";
 						}
 					}
 
@@ -11650,9 +11655,16 @@ Current version indicated by LITEVER below.
 				{
 					seqs.push(localsettings.chatname + "\:");
 				}
-				if(localsettings.chatopponent!="" && !localsettings.chatopponent.includes("||$||"))
+				if(localsettings.chatopponent!="")
 				{
-					seqs.push(localsettings.chatopponent + "\:");
+					let m_opps = localsettings.chatopponent.split("||$||");
+					for(let i=0;i<m_opps.length;++i)
+					{
+						if(m_opps[i] && m_opps[i].trim()!="")
+						{
+							seqs.push(m_opps[i] + "\:");
+						}
+					}
 				}
 			}
 		}
@@ -14427,9 +14439,16 @@ Current version indicated by LITEVER below.
 				if(localsettings.inject_chatnames_instruct && localsettings.instruct_has_markdown)
 				{
 					let m_name = localsettings.chatname + ": ";
-					let m_opp = localsettings.chatopponent + ": ";
 					fulltxt = replaceAll(fulltxt, m_name, `<b>` + escapeHtml(m_name) + `</b>`);
-					fulltxt = replaceAll(fulltxt, m_opp, `<b>` + escapeHtml(m_opp) + `</b>`);
+					let m_opps = localsettings.chatopponent.split("||$||");
+					for(let i=0;i<m_opps.length;++i)
+					{
+						if(m_opps[i] && m_opps[i].trim()!="")
+						{
+							let m_opp = m_opps[i] + ": ";
+							fulltxt = replaceAll(fulltxt, m_opp, `<b>` + escapeHtml(m_opp) + `</b>`);
+						}
+					}
 				}
 			}else{
 				fulltxt = replaceAll(fulltxt, get_instruct_starttag(true), `%SclStg%`+escapeHtml(get_instruct_starttag(true))+`%SpnEtg%`);
@@ -15055,12 +15074,33 @@ Current version indicated by LITEVER below.
 			}
 			else if(localsettings.inject_chatnames_instruct && localsettings.instruct_has_markdown)
 			{
-				let person = (curr.myturn ? localsettings.chatname : localsettings.chatopponent);
-				let prefix = person + ": ";
-				if(processed_msg.startsWith(prefix))
+				let validprefixes = [];
+				if(curr.myturn)
 				{
-					namepart = person;
-					processed_msg = processed_msg.slice(prefix.length);
+					validprefixes.push(localsettings.chatname);
+				}
+				else
+				{
+					let m_opps = localsettings.chatopponent.split("||$||");
+					for(let i=0;i<m_opps.length;++i)
+					{
+						if(m_opps[i] && m_opps[i].trim()!="")
+						{
+							validprefixes.push(m_opps[i]);
+						}
+					}
+				}
+
+				for(let i=0;i<validprefixes.length;++i)
+				{
+					let person = validprefixes[i];
+					let prefix = person + ": ";
+					if(processed_msg.startsWith(prefix))
+					{
+						namepart = person;
+						processed_msg = processed_msg.slice(prefix.length);
+						break;
+					}
 				}
 			}
 
@@ -16473,9 +16513,17 @@ Current version indicated by LITEVER below.
 		if(localsettings.opmode==4 && localsettings.inject_chatnames_instruct && localsettings.chatname!="" && localsettings.chatopponent!="")
 		{
 			let m_name = localsettings.chatname + ": ";
-			let m_opp = localsettings.chatopponent + ": ";
 			input = replaceAll(input, m_name, `<p class='aui_nametag'>` + escapeHtml(localsettings.chatname) + `</p>`);
-			input = replaceAll(input, m_opp, `<p class='aui_nametag'>` + escapeHtml(localsettings.chatopponent) + `</p>`);
+
+			let m_opps = localsettings.chatopponent.split("||$||");
+			for(let i=0;i<m_opps.length;++i)
+			{
+				if(m_opps[i] && m_opps[i].trim()!="")
+				{
+					let m_opp = m_opps[i] + ": ";
+					input = replaceAll(input, m_opp, `<p class='aui_nametag'>` + escapeHtml(m_opps[i]) + `</p>`);
+				}
+			}
 		}
 
 		let portraitsStyling = // Also, implement portraits as css classes. Now chat entries can reuse them instead of recreating them.
