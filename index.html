@@ -4166,6 +4166,9 @@ Current version indicated by LITEVER below.
 		dry_allowed_length: 2,
 		dry_sequence_breakers: ["\n", ":", "\"", "*"],
 		sampler_order: [6, 0, 1, 3, 4, 2, 5],
+		memsnippet_enabled: false, // Memory snippets off by default
+		memsnippet_numOfSnippets: 3, // Number of snippets to include defaults to 3
+		memsnippet_minSignificance: 0.01, // Must have the bare minimum of significance to be included
 	};
 
 	var defaultsettings = JSON.parse(JSON.stringify(localsettings));
@@ -10286,6 +10289,9 @@ Current version indicated by LITEVER below.
 			logitbiasdict = {};
 			wi_searchdepth = 0;
 			wi_insertlocation = 0;
+			localsettings.memsnippet_enabled = false;
+			localsettings.memsnippet_numOfSnippets = 3;
+			localsettings.memsnippet_minSignificance = 0.01;
 			current_anotetemplate = "[Author's note: <|>]";
 			regexreplace_data = [];
 			placeholder_tags_data = [];
@@ -11036,6 +11042,27 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	function getMaxAllowedCharacters(content, amountToTrimForContext)
+	{			
+		//this is a hack since we dont have a proper tokenizer, but we can estimate 1 token per 3 characters
+		let chars_per_token = 3.0;
+		
+		//we try to detect attempts at coding which tokenize poorly. This usually happens when the average word length is high.
+		let avgwordlen = (1.0 + content.length) / (1.0 + countWords(content));
+		if (avgwordlen >= 7.8) {
+			chars_per_token = 2.7;
+		}
+		if (current_memory == null || current_memory.trim() == "") {
+			//if there is no memory, then we can be a lot of lenient with the character counts since the backend will truncate excess anyway
+			chars_per_token = 4.8;
+		}
+		if (is_using_kcpp_with_added_memory()) //easily handle overflow
+		{
+			chars_per_token = 6;
+		}
+		return Math.max(1, Math.floor(amountToTrimForContext * chars_per_token) - 12);
+	}
+
 	function submit_generation()
 	{
 		warn_on_quit = true;
@@ -11208,24 +11235,7 @@ Current version indicated by LITEVER below.
 			let truncated_context = concat_gametext(true, "","","",false,true); //no need to truncate if memory is empty
 			truncated_context = truncated_context.replace(/\xA0/g,' '); //replace non breaking space nbsp
 
-			//this is a hack since we dont have a proper tokenizer, but we can estimate 1 token per 3 characters
-			let chars_per_token = 3.0;
-			//we try to detect attempts at coding which tokenize poorly. This usually happens when the average word length is high.
-			let avgwordlen = (1.0+truncated_context.length)/(1.0+countWords(truncated_context));
-			if(avgwordlen>=7.8)
-			{
-				chars_per_token = 2.7;
-			}
-			if (current_memory == null || current_memory.trim() == "")
-			{
-				//if there is no memory, then we can be a lot of lenient with the character counts since the backend will truncate excess anyway
-				chars_per_token = 4.8;
-			}
-			if(is_using_kcpp_with_added_memory()) //easily handle overflow
-			{
-				chars_per_token = 6;
-			}
-			let max_allowed_characters = Math.max(1, Math.floor((maxctxlen-maxgenamt) * chars_per_token) - 12);
+			let max_allowed_characters = getMaxAllowedCharacters(truncated_context, (maxctxlen - maxgenamt))
 
 			//for adventure mode, inject hidden context, even more if there's nothing in memory
 			if (localsettings.opmode == 2  && localsettings.adventure_context_mod)
@@ -11514,6 +11524,24 @@ Current version indicated by LITEVER below.
 				//if there's no authors note at all, don't include the template
 				truncated_anote = "";
 			}
+
+			// [LTM][START]
+			if (localsettings.memsnippet_enabled)
+			{
+				// Finds the relevant memory fragments, formats them in a similar way to an authors note and inserts them before WI
+				let ltmSnippets = SimilarityUtils.getMemForLastResponse(localsettings.memsnippet_numOfSnippets, localsettings.memsnippet_minSignificance, (maxctxlen - maxgenamt))
+				if (ltmSnippets.length === 0)
+				{
+					console.log("No memory fragments found either as history is too short or no relevant content found")
+				}
+				else
+				{
+					console.log("Memory fragments", ltmSnippets)
+					let ltmContent = ltmSnippets.map(snippet => snippet.snippet).join("|")
+					wistr = `\n\n[Chat history: ${ltmContent}]\n\n` + wistr
+				}
+			}
+			// [LTM][END]
 
 			if(wi_insertlocation>0)
 			{
@@ -14495,7 +14523,7 @@ Current version indicated by LITEVER below.
 						if(m_opps[i] && m_opps[i].trim()!="")
 						{
 							let m_opp = m_opps[i] + ": ";
-							fulltxt = replaceAll(fulltxt, m_opp, `<b>` + escapeHtml(m_opp) + `</b>`);
+					fulltxt = replaceAll(fulltxt, m_opp, `<b>` + escapeHtml(m_opp) + `</b>`);
 						}
 					}
 				}
@@ -15559,9 +15587,12 @@ Current version indicated by LITEVER below.
 		document.getElementById("memory_tab").classList.remove("active");
 		document.getElementById("wi_tab").classList.remove("active");
 		document.getElementById("token_tab").classList.remove("active");
+		document.getElementById("memsnippet_tab").classList.remove("active");
 		document.getElementById("memory_tab_container").classList.add("hidden");
 		document.getElementById("wi_tab_container").classList.add("hidden");
 		document.getElementById("token_tab_container").classList.add("hidden");
+		document.getElementById("memsnippet_tab_container").classList.add("hidden");
+
 		switch (newtab) {
 			case 0:
 				document.getElementById("memory_tab").classList.add("active");
@@ -15572,6 +15603,10 @@ Current version indicated by LITEVER below.
 				document.getElementById("wi_tab_container").classList.remove("hidden");
 				break;
 			case 2:
+				document.getElementById("memsnippet_tab").classList.add("active");
+				document.getElementById("memsnippet_tab_container").classList.remove("hidden");
+				break;
+			case 3:
 				document.getElementById("token_tab").classList.add("active");
 				document.getElementById("token_tab_container").classList.remove("hidden");
 				break;
@@ -15607,6 +15642,8 @@ Current version indicated by LITEVER below.
 		//setup wi tab
 		start_editing_wi();
 		update_wi();
+
+		load_memsnippet();
 
 		populate_placeholder_tags();
 		populate_regex_replacers();
@@ -15910,6 +15947,26 @@ Current version indicated by LITEVER below.
 		wilist.innerHTML = selectionhtml;
 		document.getElementById("wi_searchdepth").value = wi_searchdepth;
 		document.getElementById("wi_insertlocation").value = wi_insertlocation;
+	}
+
+	function load_memsnippet() {
+		document.getElementById("memsnippet_enabled").checked = localsettings.memsnippet_enabled;
+		document.getElementById("memsnippet_numOfSnippets").value = localsettings.memsnippet_numOfSnippets;
+		document.getElementById("memsnippet_minSignificance").value = localsettings.memsnippet_minSignificance;
+	}
+
+	function save_memsnippet() {
+		localsettings.memsnippet_enabled = (document.getElementById("memsnippet_enabled").checked ? true : false);
+		localsettings.memsnippet_numOfSnippets = document.getElementById("memsnippet_numOfSnippets").value;
+		localsettings.memsnippet_minSignificance = document.getElementById("memsnippet_minSignificance").value;
+	}
+
+	function validateMemInput(input)
+	{
+		let notValid = !input?.validity?.valid;
+		document.getElementById("memoryOkButton").disabled = notValid;
+		document.getElementById("memoryOkButton").title = notValid ? `${input.title}: ${input.validationMessage}` : "";
+		input.reportValidity();
 	}
 
 	var backLongPressTimer = null;
@@ -18039,7 +18096,8 @@ Current version indicated by LITEVER below.
 			<div><ul class="nav nav-tabs settingsnav">
 				<li id="memory_tab" class="active"><a class="" href="#" onclick="display_memory_tab(0)">Memory</a></li>
 				<li id="wi_tab"><a class="" href="#" onclick="display_memory_tab(1)">World Info</a></li>
-				<li id="token_tab"><a class="" href="#" onclick="display_memory_tab(2)">Tokens</a></li>
+				<li id="memsnippet_tab"><a class="" href="#" onclick="display_memory_tab(2)">Memory Snippet</a></li>
+				<li id="token_tab"><a class="" href="#" onclick="display_memory_tab(3)">Tokens</a></li>
 			  </ul></div>
 
 			<div class="memtabcontainer" id="memory_tab_container">
@@ -18122,6 +18180,25 @@ Current version indicated by LITEVER below.
 				</div>
 			</div>
 
+			<!-- Memory snippets -->
+			<div class="memtabcontainer" id="memsnippet_tab_container">
+				<div class="settinglabel" style="padding: 4px;">
+					<div class="justifyleft settingsmall" title="Controls whether automatic snippets from memory are included based on the last user and AI prompt.">Enable memory snippets </div>
+				<input title="Enable memory snippets" type="checkbox" id="memsnippet_enabled" style="margin:0px 0 0;">
+				</div>
+
+				<div class="settinglabel" style="padding: 4px;">
+					<div class="justifyleft settingsmall">Amount of memory snippets to include <span class="helpicon">?<span class="helptext">Controls
+								how many snippets of text from the memory are included based on the automatic search</span></span></div>
+					<input title="Amount of memory snippets to include" class="settinglabel miniinput" style="height:16px;padding:0px;margin:0px 4px 0; width:90px;font-size:10px;" type="number" min="1" max="5" step="1" pattern="\d+" placeholder="Number of snippets" value="" id="memsnippet_numOfSnippets" oninput="validateMemInput(this);">
+				</div>
+				<div class="settinglabel" style="padding: 4px;">
+					<div class="justifyleft settingsmall">Minimum significance required for inclusion <span class="helpicon">?<span class="helptext">Controls
+								the minimum threshold for snippets to be included based on the automatic search, ranging from 0 (any significance) to 1, which is a high degree of significance</span></span></div>
+					<input title="Minimum significance required for inclusion" class="settinglabel miniinput" style="height:16px;padding:0px;margin:0px 4px 0; width:90px;font-size:10px;" type="number" min="0" max="1" step="0.01" pattern="\d\.\d{1,2}" placeholder="Minimum significance" value="" id="memsnippet_minSignificance" oninput="validateMemInput(this);">
+				</div>
+			</div>
+
 			<div class="memtabcontainer" id="token_tab_container">
 				<div class="justifyleft settinglabel">Extra Stopping Sequences <span class="helpicon">?<span
 					class="helptext">Triggers the text generator to stop generating early if this sequence appears, in addition to default stop sequences. If you want multiple sequences, separate them with the following delimiter: ||$||</span></span></div>
@@ -18197,7 +18274,7 @@ Current version indicated by LITEVER below.
 			</div>
 
 			<div class="popupfooter">
-				<button type="button" class="btn btn-primary" onclick="confirm_memory();save_wi();commit_wi_changes();render_gametext();hide_popups()">OK</button>
+				<button type="button" class="btn btn-primary" onclick="confirm_memory();save_wi();commit_wi_changes();save_memsnippet();render_gametext();hide_popups()" id="memoryOkButton">OK</button>
 				<button type="button" class="btn btn-primary" onclick="hide_popups();">Cancel</button>
 			</div>
 		</div>
@@ -18653,5 +18730,714 @@ else
 	console.log("service workers API not available");
 }
 </script>
+
+<!-- [LTM][START] -->
+
+<!-- Natural.js extracted functions -->
+<!-- Code is taken from here: https://github.com/NaturalNode/natural/ -->
+<!-- Docs can be found here: https://naturalnode.github.io/natural/tfidf.html -->
+<!-- The code snippets I believe are under the MIT license-->
+<!-- This code has been modified slightly to initialise some global imports, replace calls to _.js with alternative functions, and minor changes under "// MOD:"-->
+<script>
+	
+	class Tokenizer {
+		trim(array) {
+			while (array[array.length - 1] === '') { array.pop() }
+
+			while (array[0] === '') { array.shift() }
+
+			return array
+		}
+	}
+
+
+	class RegexpTokenizer extends Tokenizer {
+		constructor(opts) {
+			super(opts)
+			const options = opts || {}
+			this._pattern = options.pattern || this._pattern
+			this.discardEmpty = options.discardEmpty || true
+
+			// Match and split on GAPS not the actual WORDS
+			this._gaps = options.gaps
+
+			if (this._gaps === undefined) {
+				this._gaps = true
+			}
+		}
+
+		without(results, ...removals)
+		{
+			return results.filter(elem => removals.indexOf(elem) == -1)
+		}
+
+		tokenize(s) {
+			let results
+
+			if (this._gaps) {
+				results = s.split(this._pattern)
+				return (this.discardEmpty) ? this.without(results, '', ' ') : results
+			} else {
+				return s.match(this._pattern)
+			}
+		}
+	}
+
+	/***
+	 * A tokenizer that divides a text into sequences of alphabetic and
+	 * non-alphabetic characters.  E.g.:
+	 *
+	 *      >>> WordTokenizer().tokenize("She said 'hello'.")
+	 *      ['She', 'said', 'hello']
+	 *
+	 */
+	class WordTokenizer extends RegexpTokenizer {
+		constructor(options) {
+			super(options)
+			this._pattern = /[^A-Za-zА-Яа-я0-9_]+/
+		}
+	}
+
+	let tokenizer = new WordTokenizer();
+
+	// a list of commonly used words that have little meaning and can be excluded
+	// from analysis.
+	const stopwords = [
+		'about', 'above', 'after', 'again', 'all', 'also', 'am', 'an', 'and', 'another',
+		'any', 'are', 'as', 'at', 'be', 'because', 'been', 'before', 'being', 'below',
+		'between', 'both', 'but', 'by', 'came', 'can', 'cannot', 'come', 'could', 'did',
+		'do', 'does', 'doing', 'during', 'each', 'few', 'for', 'from', 'further', 'get',
+		'got', 'has', 'had', 'he', 'have', 'her', 'here', 'him', 'himself', 'his', 'how',
+		'if', 'in', 'into', 'is', 'it', 'its', 'itself', 'like', 'make', 'many', 'me',
+		'might', 'more', 'most', 'much', 'must', 'my', 'myself', 'never', 'now', 'of', 'on',
+		'only', 'or', 'other', 'our', 'ours', 'ourselves', 'out', 'over', 'own',
+		'said', 'same', 'see', 'she', 'should', 'since', 'so', 'some', 'still', 'such', 'take', 'than',
+		'that', 'the', 'their', 'theirs', 'them', 'themselves', 'then', 'there', 'these', 'they',
+		'this', 'those', 'through', 'to', 'too', 'under', 'until', 'up', 'very', 'was',
+		'way', 'we', 'well', 'were', 'what', 'where', 'when', 'which', 'while', 'who',
+		'whom', 'with', 'would', 'why', 'you', 'your', 'yours', 'yourself',
+		'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+		'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '$', '1',
+		'2', '3', '4', '5', '6', '7', '8', '9', '0', '_']
+		
+	
+	// Returns a frequency map of word to frequency
+	// Key is the document key and stored in the map that is returned as __keys
+	function buildDocument(text, key) {
+		let stopOut
+
+		if (typeof text === 'string') {
+			text = tokenizer.tokenize(text.toLowerCase())
+			stopOut = true
+		} else if (!Array.isArray(text)) {
+			stopOut = false
+			return text
+		}
+
+		return text.reduce(function (document, term) {
+			// next line solves https://github.com/NaturalNode/natural/issues/119
+			if (typeof document[term] === 'function') {
+				document[term] = 0
+			}
+			if (!stopOut || stopwords.indexOf(term) < 0) {
+				document[term] = (document[term] ? document[term] + 1 : 1)
+			}
+			return document
+		}, { __key: key })
+	}
+
+	function documentHasTerm(term, document) {
+		return document[term] && document[term] > 0
+	}
+
+	// backwards compatibility for < node 0.10
+	function isEncoding(encoding) {
+		if (typeof Buffer.isEncoding !== 'undefined') { return Buffer.isEncoding(encoding) }
+		switch ((encoding + '').toLowerCase()) {
+			case 'hex':
+			case 'utf8':
+			case 'utf-8':
+			case 'ascii':
+			case 'binary':
+			case 'base64':
+			case 'ucs2':
+			case 'ucs-2':
+			case 'utf16le':
+			case 'utf-16le':
+			case 'raw':
+				return true
+		}
+		return false
+	}
+
+	class TfIdf {
+		constructor(deserialized) {
+			if (deserialized) {
+				this.documents = deserialized.documents
+			} else {
+				this.documents = []
+			}
+			this._idfCache = {}
+		}
+
+		static tf(term, document) {
+			return document[term] ? document[term] : 0
+		}
+
+		// Returns the inverse document frequency of the term
+		// If force is true the cache will be invalidated and recomputed
+		idf(term, force) {
+			// Lookup the term in the New term-IDF caching,
+			// this will cut search times down exponentially on large document sets.
+			// if (this._idfCache[term] && this._idfCache.hasOwnProperty(term) && force !== true) { return this._idfCache[term] }
+			if (this._idfCache[term] && force !== true) {
+				return this._idfCache[term]
+			}
+
+			// Count the number of documents that contain the term
+			const docsWithTerm = this.documents.reduce(function (count, document) {
+				return count + (documentHasTerm(term, document) ? 1 : 0)
+			}, 0)
+
+			// Compute the inverse document frequency
+			const idf = 1 + Math.log((this.documents.length) / (1 + docsWithTerm))
+
+			// Add the idf to the term cache and return it
+			this._idfCache[term] = idf
+			return idf
+		}
+
+		// If restoreCache is set to true, all terms idf scores currently cached will be recomputed.
+		// Otherwise, the cache will just be wiped clean
+		addDocument(document, key, restoreCache) {
+			// MOD: Addition of original doc for reference / reinsertion
+			let doc = buildDocument(document, key);
+			doc.originalRef = document;
+			this.documents.push(doc)
+
+			// make sure the cache is invalidated when new documents arrive
+			if (restoreCache === true) {
+				for (const term in this._idfCache) {
+					// invoking idf with the force option set will
+					// force a recomputation of the idf, and it will
+					// automatically refresh the cache value.
+					this.idf(term, true)
+				}
+			} else {
+				// this._idfCache = {}
+				// so that we do not have trouble with terms that match property names
+				this._idfCache = Object.create(null)
+			}
+		}
+
+		// Remove a document from the corpus
+		// Returns true if the document was found
+		// Returns false if the document was not found
+		removeDocument(key) {
+			// Find the document
+			const index = this.documents.findIndex(function (document) {
+				return document.__key === key
+			})
+			// If found, remove it
+			if (index > -1) {
+				this.documents.splice(index, 1)
+				// Invalidate the cache
+				this._idfCache = Object.create(null)
+				return true
+			}
+
+			return false
+		}
+
+		tfidf(terms, d) {
+			const _this = this
+
+			if (!Array.isArray(terms)) {
+				terms = tokenizer.tokenize(terms.toString().toLowerCase())
+			}
+
+			return terms.reduce(function (value, term) {
+				let idf = _this.idf(term)
+				idf = idf === Infinity ? 0 : idf
+				return value + (TfIdf.tf(term, _this.documents[d]) * idf)
+			}, 0.0)
+		}
+
+		listTerms(d) {
+			const terms = []
+			const _this = this
+			for (const term in this.documents[d]) {
+				if (this.documents[d]) {
+					if (term !== '__key') {
+						terms.push({
+							term,
+							tf: TfIdf.tf(term, _this.documents[d]),
+							idf: _this.idf(term),
+							tfidf: _this.tfidf([term], d)
+						})
+					}
+				}
+			}
+
+			return terms.sort(function (x, y) { return y.tfidf - x.tfidf })
+		}
+
+		tfidfs(terms, callback) {
+			const tfidfs = new Array(this.documents.length)
+
+			for (let i = 0; i < this.documents.length; i++) {
+				tfidfs[i] = this.tfidf(terms, i)
+
+				if (callback) { callback(i, tfidfs[i], this.documents[i].__key) }
+			}
+
+			return tfidfs
+		}
+	}
+</script>
+
+<!-- LTM similarity comparitors -->
+<script>
+
+	/**
+	 * Basic structure of a Similarity Comparitor - This does not work by itself
+	 */
+	class SimilarityComparitor {
+		/**
+		 * Determines if you split based on paragraphs or instruct / user turns
+		 */
+		_splitAsParagraphs
+		/**
+		 * Amount to trim from the history which is the context
+		 */
+		_amountToTrimForContext
+		/**
+		 * Max length of search term
+		 */
+		_maxLengthOfSearchString
+
+		constructor(amountToTrimForContext, splitAsParagraphs = true, maxLengthOfSearchString = 5000) {
+			this._amountToTrimForContext = amountToTrimForContext
+			this._splitAsParagraphs = splitAsParagraphs
+			this._maxLengthOfSearchString = maxLengthOfSearchString
+		}
+
+		/**
+		 * Cleans up / removes special tags used in lite
+		 */
+		_cleanupSpecialTags(text) {
+			return text.replace(/\{\{\[INPUT\]\}\}/g, "").replace(/\{\{\[OUTPUT\]\}\}/g, "")
+		}
+
+		/**
+		 * Checks if words in a are found in b, as a percentage of how many are present
+		 */
+		comparitor(a, b) {
+			throw new Exception("Not implemented")
+		}
+
+		/**
+		 * Compares a single message to another one
+		 */
+		compareSingle(currentMessage, historyMessage) {
+			return this.keywordSimilarities(currentMessage, historyMessage)
+		}
+
+		/**
+		 * Compares a single message across the entire history (or memories)
+		 */
+		compareSeries(currentMessage, ...history) {
+			let comparisons = history.map(historyMessage => {
+				return { snippet: historyMessage, match: this.compareSingle(currentMessage, historyMessage) }
+			});
+			comparisons.sort((a, b) => {
+				return a.match > b.match ? -1 : 1
+			});
+			return comparisons;
+		}
+
+		/**
+		 * Compares a single message across the entire history, with the amount of values to return (like a top N) and a minimum similarity as a percentage
+		 */
+		compareAndGetTopNWithCull(currentMessage, valuesToReturn, similarity, ...history) {
+			let comparisonsSorted = this.compareSeries(currentMessage, ...history);
+			if (!!similarity) {
+				let comparisonsToReturn = []
+				for (let i = 0; i < comparisonsSorted.length; i++) {
+					if (comparisonsSorted[i].match < similarity) {
+						break;
+					}
+					comparisonsToReturn.push(comparisonsSorted[i])
+				}
+				comparisonsSorted = comparisonsToReturn;
+			}
+			return comparisonsSorted.filter((elem, pos, arr) => arr.findIndex(elemIn => elemIn.snippet === elem.snippet) === pos).slice(0, valuesToReturn);
+		}
+
+		/**
+		 * Compares a single message across the entire history, with the amount of values to return (like a top N)
+		 */
+		compareAndGetTopN(currentMessage, valuesToReturn, ...history) {
+			return this.compareAndGetTopNWithCull(currentMessage, valuesToReturn, undefined, ...history);
+		}
+
+		/**
+		 * Should not be used - only for internal use with the function getParagraphsFromHistory
+		 */
+		_currentContextCache
+		_gameTextCache
+		_lastResponseCache
+		_paragraphsCache
+		
+		/**
+		 * Gets a static copy of the entire game text
+		 */
+		getAllGameText() {
+			if (this._gameTextCache === undefined)
+			{
+				let gameText = concat_gametext().replace(/\xA0/g, ' ').trim()
+				let maxAllowedCharacters = getMaxAllowedCharacters(gameText, this._amountToTrimForContext);
+				if (gameText.length > maxAllowedCharacters)
+				{
+					this._currentContextCache = gameText.substring(gameText.length - maxAllowedCharacters)
+					this._gameTextCache = gameText.substring(0, gameText.length - maxAllowedCharacters)
+				}
+				else
+				{
+					console.log("History too short to enable memory fragments")
+					this._gameTextCache = ""
+					this._currentContextCache = ""
+				}
+			}
+			return this._gameTextCache;
+		}
+
+		/**
+		 * Gets the current context
+		 */
+		getCurrentContext()
+		{
+			this.getAllGameText()
+			return this._currentContextCache
+		}
+
+		/**
+		 * Escapes a string to a regex supported format
+		 */
+		_escapeRegExp(stringToEscape) 
+		{
+			return stringToEscape.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
+		}
+
+		/**
+		 * Gets the last response from the AI and yourself
+		 */
+		getLastResponse() {
+			let getRegexForChatAndInstruct = (startTag, endTag) => {
+				return new RegExp(`(${this._escapeRegExp(endTag)}(.(?!${this._escapeRegExp(endTag)}))*)(\s*${this._escapeRegExp(endTag)}\s*){0,1}$|((?<!${this._escapeRegExp(startTag.replace(/\\n/g, ""))}).)*?(\s*(${this._escapeRegExp(endTag)})\s*){0,1}$`, "gs")
+			}
+
+			if (this._lastResponseCache === undefined) {
+				let gameText = this.getCurrentContext(), matcher, result = ""
+
+				if (gameText.length === 0) {
+					this._lastResponseCache = "";
+				}
+				else
+				{
+					try
+					{
+						if (gameText.length > this._maxLengthOfSearchString) {
+							gameText = gameText.substring(gameText.length - this._maxLengthOfSearchString, gameText.length)
+						}
+						gameText = replace_instruct_placeholders(gameText)
+
+						if (localsettings.opmode === "1") {
+							console.log("Story mode")
+							matcher = /(\n{2,}[^\n]*){1,2}$/gs
+							result = matcher.exec(gameText)
+							result = (result !== null && result.length > 0) ? result[0] : ""
+						}
+						else if (localsettings.opmode == "2") {
+							console.log("Adventure mode")
+							matcher = /(.(?<!>[^\n]*))*\>(.(?!\>))*$/gs
+							result = matcher.exec(gameText)
+							result = (result !== null && result.length > 0) ? result[0] : ""
+						}
+						else if (localsettings.opmode == "3") {
+							console.log("Chat mode")
+							matcher = getRegexForChatAndInstruct(`${localsettings.chatname}:`, `${localsettings.chatopponent}:`)
+							result = matcher.exec(gameText)
+							result = (result !== null && result.length > 0) ? result[0] : ""
+						}
+						else if (localsettings.opmode == "4") {
+							console.log("Instruct mode")
+							matcher = getRegexForChatAndInstruct(localsettings.instruct_starttag, localsettings.instruct_endtag)
+							result = matcher.exec(gameText)
+							result = (result !== null && result.length > 0) ? result[0] : ""
+						}
+					}
+					catch (e)
+					{
+						console.log("Error during parsing of last response - Defaulting to last two errors", e)
+					}
+
+					// If none found use story matcher and get a paragraph or two (should really default to users last response)
+					if (result === "") {
+						result = gametext_arr.slice(-2).join("\n\n")
+					}
+					console.log(`Last response from AI and User: ${result}`)
+
+					this._lastResponseCache = this._cleanupSpecialTags(result).trim()
+				}
+			}
+
+			return this._lastResponseCache
+		}
+
+		/**
+		 * Gets the paragraphs from the current history
+		 */
+		getParagraphsFromHistory() {
+			if (this._paragraphsCache === undefined)
+			{
+				
+				if (this.getAllGameText().length === 0)
+				{
+					this._paragraphsCache = [];
+				}
+				else
+				{
+					if (this._splitAsParagraphs) {
+						this._paragraphsCache = replaceAll(this._cleanupSpecialTags(this.getAllGameText()), this.getLastResponse(), "").replace(/\n\n/g, "\n").split(/\n/g).filter(s => !!s)
+					}
+					else {
+						this._paragraphsCache = gametext_arr.map(this._cleanupSpecialTags).slice(0, -2).filter(s => !!s)
+					}
+				}
+			}
+			return this._paragraphsCache;
+		}
+
+		/**
+		 * Compare message against all the paragraphs in memory, with the amount of values to return (like a top N)
+		 */
+		getTopNFromParagraphs(currentMessage, valuesToReturn) {
+			return this.compareAndGetTopN(currentMessage, valuesToReturn, ...this.getParagraphsFromHistory());
+		}
+
+		/**
+		 * Compare message against all the paragraphs in memory, with the amount of values to return (like a top N) and a minimum similarity as a percentage
+		 */
+		getTopNAndCullFromParagraphs(currentMessage, valuesToReturn, minRelevance) {
+			return this.compareAndGetTopNWithCull(currentMessage, valuesToReturn, minRelevance, ...this.getParagraphsFromHistory());
+		}
+	}
+
+	/**
+	 * Tf-Idf similarity comparitor based on https://en.wikipedia.org/wiki/Tf%E2%80%93idf
+	 * Uses the comparitor provided by NaturalNode/Natural.js as the base
+	 */
+	class TfIdfSimilarityComparitor extends SimilarityComparitor {
+		/**
+		 * Tf-Idf implementation provided by Natural.js with slight modifications
+		 */
+		_tfidf = new TfIdf();
+
+		/**
+		 * On initialisation, add all paragraphs in history as documents
+		 */
+		constructor(_amountToTrimForContext) {
+			super(_amountToTrimForContext)
+			this.getParagraphsFromHistory().map(paragraph => this._tfidf.addDocument(paragraph))
+		}
+
+		/**
+		 * Compares the provided message against all documents currently loaded in the comparitor
+		 */
+		_tfIdfComparison(currentMessage) {
+			let comparisons = []
+			this._tfidf.tfidfs(currentMessage, (docPos, measure) => {
+				comparisons.push({ snippet: this._tfidf.documents[docPos].originalRef, match: measure })
+			})
+			// Rescale by score to give a percentage vs the max
+			let maxScore = Math.max(...comparisons.map(elem => elem.match))
+			if (maxScore > 0) {
+				comparisons.forEach(elem => elem.match /= maxScore)
+			}
+			return comparisons;
+		}
+
+		/**
+		 * Modifies the series method to return the comparisons from the Natural.js comparitor
+		 */
+		compareSeries(currentMessage, ...historyMessages) {
+			let comparisons = this._tfIdfComparison(currentMessage)
+			comparisons.sort((a, b) => {
+				return a.match > b.match ? -1 : 1
+			});
+			return comparisons;
+		}
+	}
+
+	/**
+	 * A comparitor combining a Tf-Idf while sorting by the longest snippets of the same significance
+	 * 
+	 * Not really successful, seems to be similar to Tf-Idf alone but with slower performance
+	 */
+	class CombiSimilarityComparitor extends TfIdfSimilarityComparitor {
+		/**
+		 * Modified method to include an additional snippet length comparison as a tie breaker if the Tf-Idf returns the same
+		 */
+		compareSeries(currentMessage, ...historyMessages) {
+			let comparisons = super.compareSeries(currentMessage, ...historyMessages)
+			comparisons.sort((a, b) => {
+				if (a.match === b.match) {
+					return a.snippet.length > b.snippet.length ? -1 : 1
+				}
+				return 0
+			});
+			return comparisons;
+		}
+	}
+</script>
+
+<!-- LTM utils to make usage easier -->
+<script>
+	/**
+	 * Performance benchmarking class (times and prints out durations and number of invocations)
+	 */
+	class PerformanceTimer {
+		_internalTimers = {}
+
+		/**
+		 * Starts a timer under the provided timer name
+		 */
+		start(internalName = "default") {
+			if (this._internalTimers[internalName] === undefined) {
+				this._internalTimers[internalName] = { invocations: 0 }
+			}
+			this._internalTimers[internalName].start = new Date()
+		}
+
+		/**
+		 * Stops the timer and stores the new average duration, also incrementing the invocation count
+		 */
+		stop(internalName = "default") {
+			if (this._internalTimers[internalName] === undefined) {
+				return
+			}
+			let duration = new Date() - this._internalTimers[internalName].start
+			if (this._internalTimers[internalName].duration === undefined) {
+				this._internalTimers[internalName].duration = duration
+			}
+			else {
+				this._internalTimers[internalName].duration = (this._internalTimers[internalName].duration + duration) / 2
+			}
+			this._internalTimers[internalName].invocations += 1
+		}
+
+		/**
+		 * Prints all the timers and their details
+		 */
+		print() {
+			for (let timer in this._internalTimers) {
+				console.log(`Timer ${timer}: ${this._internalTimers[timer].invocations} invocations with an average of ${this._internalTimers[timer].duration}ms duration`)
+			}
+		}
+	}
+
+	/**
+	 * Static utility methods for similarity comparisons
+	 */
+	class SimilarityUtils {
+		/**
+		 * Compare message using all the current comparitors, timing how long each takes and printing the results
+		 */
+		static compareSimilarityFunction(currentMessage, valuesToReturn = 3, minRelevance = 0.01, amountToTrimForContext = 0) {
+			let similarityComparitors = [new TfIdfSimilarityComparitor(amountToTrimForContext), new CombiSimilarityComparitor(amountToTrimForContext)];
+			let timer = new PerformanceTimer()
+			similarityComparitors.forEach(similarityComparitor => {
+				let comparitorType = similarityComparitor.constructor.name
+				timer.start(comparitorType)
+				let results = similarityComparitor.getTopNAndCullFromParagraphs(currentMessage, valuesToReturn, minRelevance)
+				timer.stop(comparitorType)
+				console.log(`Results for: ${comparitorType}`, results)
+			})
+			timer.print()
+		}
+
+		/**
+		 * Gets the last response from the AI and yourself
+		 */
+		static getLastResponse()
+		{
+			return new SimilarityComparitor().getLastResponse()
+		}
+
+		/**
+		 * Compare the last response using all the current comparitors and print the results
+		 */
+		static compareLastResponse() {
+			this.compareSimilarityFunction(this.getLastResponse())
+		}
+
+		/**
+		 * Get the most relevant snippets from memory based on the last response
+		 */
+		static getMemForLastResponse(valuesToReturn = 3, minRelevance = 0.01, amountToTrimForContext = 0) {
+			let comparitor = new TfIdfSimilarityComparitor(amountToTrimForContext)
+			if (comparitor.getLastResponse() !== "") {
+				let timer = new PerformanceTimer()
+				timer.start("MemRetrieval")
+				let results = comparitor.getTopNAndCullFromParagraphs(comparitor.getLastResponse(), valuesToReturn, minRelevance)
+				timer.stop("MemRetrieval")
+				timer.print()
+				return results
+			}
+			return [];
+		}
+
+		/**
+		 * Get the most relevant snippets from memory based on the provided text
+		 */
+		static getMemForText(text, valuesToReturn = 3, minRelevance = 0.01, amountToTrimForContext = 0) {
+			let comparitor = new TfIdfSimilarityComparitor(amountToTrimForContext)
+			if (text !== "")
+			{
+				let timer = new PerformanceTimer()
+				timer.start("MemRetrieval")
+				let results = comparitor.getTopNAndCullFromParagraphs(text, valuesToReturn, minRelevance)
+				timer.stop("MemRetrieval")
+				timer.print()
+				return results
+			}
+			return [];
+		}
+	}
+</script>
+
+<script>
+	/**
+	 * Example method calls on the SimilarityComparitor classes
+	 */
+
+	// compareSeries("Hello world", "Hello wald", "Hallo world!", "Why me?!?")
+	// compareAndGetTopN("Hello world", 5, "Hello wald", "Hallo world!", "Why me?!?")
+	// getTopNFromParagraphs("tales of ancient times", 3)
+	// getTopNAndCullFromParagraphs("tales of ancient times", 3, 0.01)
+
+	/**
+	 * Example method calls on the Utils class
+	 */
+	// SimilarityUtils.compareSimilarityFunction("tales of ancient times")
+	// SimilarityUtils.compareSimilarityFunction("Who is Captain Adair")
+	// SimilarityUtils.compareLastResponse()
+	// SimilarityUtils.getMemForLastResponse()
+	// SimilarityUtils.getMemForText("Auvri")
+</script>
+
+
+<!-- [LTM][END] -->
 
 </html>
