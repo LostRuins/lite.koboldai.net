@@ -7875,34 +7875,49 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	function get_oai_model_dropdown()
+	{
+		let ddval = document.getElementById("customapidropdown").value;
+		switch(ddval)
+		{
+			case 3:
+				return document.getElementById("custom_openrouter_model");
+			case 7:
+				return document.getElementById("custom_mistralai_model");
+			default:
+				return document.getElementById("custom_oai_model");
+		}
+	}
+	function ep_should_always_use_chat_completions()
+	{
+		let epchoice = document.getElementById("customapidropdown").value;
+		return (epchoice==3 || epchoice==7);
+	}
+
 	function select_custom_oai_model()
 	{
-		let isOpenrouter = (document.getElementById("customapidropdown").value==3);
-		let isMistralai = (document.getElementById("customapidropdown").value==7);
 		inputBox("Enter custom model name","Custom Model Name",localsettings.saved_oai_custommodel,"", ()=>{
 			let coai = getInputBoxValue().trim();
-			let dropdown = (isMistralai?document.getElementById("custom_mistralai_model"):(isOpenrouter?document.getElementById("custom_openrouter_model"):document.getElementById("custom_oai_model")));
-			let mdlopt = (isMistralai?document.getElementById("custom_mistralai_model_option"):(isOpenrouter?"custom_openrouter_model_option":"custom_oai_model_option"));
+			let dropdown = get_oai_model_dropdown();
+			var mdlopt = dropdown.querySelector('option.custom_model_option');
 			if(coai!="")
 			{
-				document.getElementById(mdlopt).value = coai;
-				document.getElementById(mdlopt).innerText = coai;
-				document.getElementById(mdlopt).style.display = "";
+				mdlopt.value = coai;
+				mdlopt.innerText = coai;
+				mdlopt.style.display = "";
 				dropdown.selectedIndex = dropdown.options.length - 1;
 			}
-			oai_model_change(isOpenrouter||isMistralai);
+			oai_model_change(ep_should_always_use_chat_completions());
 		},false);
 	}
 	function oai_model_change(autotoggle_check = false)
 	{
-		let isOpenrouter = (document.getElementById("customapidropdown").value==3);
-		let isMistralai = (document.getElementById("customapidropdown").value==7);
-		let dropdown = (isMistralai?document.getElementById("custom_mistralai_model"):(isOpenrouter?document.getElementById("custom_openrouter_model"):document.getElementById("custom_oai_model")));
+		let dropdown = get_oai_model_dropdown();
 		let non_completions = (dropdown.value.includes("davinci-002") || dropdown.value.includes("text-davinci-003") || dropdown.value.includes("text-davinci-002")
 		|| dropdown.value.includes("text-davinci-001") || dropdown.value.includes("gpt-3.5-turbo-instruct") || dropdown.value == "davinci");
 		if(autotoggle_check)
 		{
-			if(isMistralai || isOpenrouter || dropdown.selectedIndex==dropdown.options.length-1)
+			if(ep_should_always_use_chat_completions() || dropdown.selectedIndex==dropdown.options.length-1)
 			{
 				document.getElementById("useoaichatcompl").checked = true;
 			} else {
@@ -7958,8 +7973,7 @@ Current version indicated by LITEVER below.
 			if (!data.error && data.data && data.data.length > 0)
 			{
 				let isOpenrouter = (document.getElementById("customapidropdown").value==3);
-				let isMistralai = (document.getElementById("customapidropdown").value==7);
-				let dropdown = (isMistralai?document.getElementById("custom_mistralai_model"):(isOpenrouter?document.getElementById("custom_openrouter_model"):document.getElementById("custom_oai_model")));
+				let dropdown = get_oai_model_dropdown();
 				var lastOption = dropdown.lastElementChild;
 				for (var i = dropdown.options.length - 1; i >= 0; i--) {
 					var option = dropdown.options[i];
@@ -8065,7 +8079,7 @@ Current version indicated by LITEVER below.
 				document.getElementById("custom_oai_key").value = localsettings.saved_mistralai_key;
 				document.getElementById("custom_oai_endpoint").value = default_mistralai_base;
 			}
-			else
+			else //openrouter supports autofetch
 			{
 				document.getElementById("oaidesc").classList.add("hidden");
 				document.getElementById("openrouterdesc").classList.remove("hidden");
@@ -8084,7 +8098,7 @@ Current version indicated by LITEVER below.
 					}
 				}
 			}
-			oai_model_change(epchoice==3 || epchoice==7 || force_autotoggle_chatcompl);
+			oai_model_change(ep_should_always_use_chat_completions() || force_autotoggle_chatcompl);
 			toggleoaichatcompl();
 		}
 		else if(epchoice==4)
@@ -8480,9 +8494,7 @@ Current version indicated by LITEVER below.
 				}
 				localsettings.saved_oai_role = document.getElementById("oairoledropdown").value;
 				localsettings.saved_oai_jailbreak2 = document.getElementById("jailbreakprompttext2").value;
-				let isOpenrouter = (document.getElementById("customapidropdown").value==3);
-				let isMistralai = (document.getElementById("customapidropdown").value==7);
-				let dropdown = (isMistralai?document.getElementById("custom_mistralai_model"):(isOpenrouter?document.getElementById("custom_openrouter_model"):document.getElementById("custom_oai_model")));
+				let dropdown = get_oai_model_dropdown();
 				custom_oai_model = dropdown.value.trim();
 				localsettings.saved_oai_custommodel = custom_oai_model;
 				selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": custom_oai_model, "count": 1 }];
@@ -17069,7 +17081,7 @@ Current version indicated by LITEVER below.
 					<option value="gpt-4-turbo">gpt-4-turbo</option>
 					<option value="gpt-4o">gpt-4o</option>
 					<option value="gpt-4-32k">gpt-4-32k</option>
-					<option style="display:none;" id="custom_oai_model_option" value="custom">[Custom]</option>
+					<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
 				</select>
 				<select style="padding:4px;display:inline;width:calc(100% - 220px)" class="form-control hidden" id="custom_openrouter_model" onchange="oai_model_change(true)">
 					<option value="openai/gpt-3.5-turbo">openai/gpt-3.5-turbo</option>
@@ -17079,7 +17091,7 @@ Current version indicated by LITEVER below.
 					<option value="gryphe/mythomax-l2-13b">gryphe/mythomax-l2-13b</option>
 					<option value="huggingfaceh4/zephyr-7b-beta">huggingfaceh4/zephyr-7b-beta</option>
 					<option value="anthropic/claude-2">anthropic/claude-2</option>
-					<option style="display:none;" id="custom_openrouter_model_option" value="custom">[Custom]</option>
+					<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
 				</select>
 				<select style="padding:4px;display:inline;width:calc(100% - 220px)" class="form-control hidden" id="custom_mistralai_model" onchange="oai_model_change(true)">
 					<option value="open-mistral-7b">open-mistral-7b</option>
@@ -17089,7 +17101,7 @@ Current version indicated by LITEVER below.
 					<option value="open-mixtral-8x22b">open-mixtral-8x22b</option>
 					<option value="mistral-medium">mistral-medium</option>
 					<option value="mistral-large-latest">mistral-large-latest</option>
-					<option style="display:none;" id="custom_mistralai_model_option" value="custom">[Custom]</option>
+					<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
 				</select>
 				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaifetchlist" onclick="oai_fetch_models()">Fetch List</button>
 				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaiusecustom" onclick="select_custom_oai_model()">Use Custom</button>
