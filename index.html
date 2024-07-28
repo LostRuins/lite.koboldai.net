@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 159;
+	const LITEVER = 160;
 	const urlParams = new URLSearchParams(window.location.search);
 	const localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3540,6 +3540,170 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	function oai_api_sync_req(targetep,oai_payload,oaiheaders)
+	{
+		fetch(targetep, {
+			method: 'POST',
+			headers: oaiheaders,
+			body: JSON.stringify(oai_payload),
+			referrerPolicy: 'no-referrer',
+		})
+		.then((response) => response.json())
+		.then((data) => {
+			console.log("sync finished response: " + JSON.stringify(data));
+			if (custom_oai_key != "" && data.choices != null && data.choices.length > 0) {
+				let dch = data.choices[0];
+				if (dch.text) {
+					synchro_polled_response = dch.text;
+				}
+				else if (dch.message) {
+					synchro_polled_response = dch.message.content;
+
+					if(localsettings.opmode==1 && gametext_arr.length>0 && synchro_polled_response!="")
+					{
+						synchro_polled_response = cleanup_story_completion(synchro_polled_response);
+					}
+				}
+				else {
+					console.error("Error, unknown OAI response");
+					clear_poll_flags();
+					render_gametext();
+					msgbox("Error, unknown OAI response");
+				}
+			}
+			else {
+				//error occurred, maybe captcha failed
+				console.error("error occurred in OAI generation");
+				clear_poll_flags();
+				render_gametext();
+				msgbox("Error occurred during text generation: " + formatError(data));
+			}
+		})
+		.catch((error) => {
+			console.error('Error:', error);
+			clear_poll_flags();
+			render_gametext();
+			msgbox("Error while submitting prompt: " + error);
+		});
+	}
+
+	function oai_api_stream_sse(sub_endpt,submit_payload,submit_headers)
+	{
+		synchro_pending_stream = "";
+		let reqOpt =
+		{method: 'POST',
+		headers: submit_headers,
+		body: JSON.stringify(submit_payload)};
+		if(globalabortcontroller)
+		{
+			reqOpt.signal = globalabortcontroller.signal;
+		}
+		fetch(sub_endpt, reqOpt)
+		.then(x => {
+			if(x.ok)
+			{
+				return x;
+			}else{
+				return x.text().then(errdat => {
+					throw new Error('Error while SSE streaming: ' + errdat);
+					return null;
+				}).catch(err => {
+					throw new Error('Error while SSE streaming: ' + (x.statusText) + '\n' + err);
+					return null;
+				});
+			}
+		})
+		.then(resp => {
+			resp.body
+			.pipeThrough(new TextDecoderStream())
+			.pipeThrough(new TransformStream({
+				start(ctrl) {
+					ctrl.buf = '';
+				},
+				transform(chunk, ctrl) {
+					ctrl.buf += chunk;
+					let evs = [];
+					let m;
+					while ((m = /^data: (.*)\n\n/m.exec(ctrl.buf)) !== null) {
+						try{evs.push({data: JSON.parse(m[1])});} catch (e) {}
+						ctrl.buf = ctrl.buf.substring(m.index + m[0].length);
+					}
+					if (evs.length) {
+						ctrl.enqueue(evs);
+					}
+				}
+			}))
+			.pipeTo(new WritableStream({
+				write(chunk) {
+					let was_empty = (synchro_pending_stream=="");
+					//cut stream if aborted
+					if(pending_response_id && pending_response_id != "-1" && pending_response_id != "")
+					{
+						for (let event of chunk) {
+							if (event.data && event.data.choices && event.data.choices.length>0) {
+								if(event.data.choices[0].text)
+								{
+									synchro_pending_stream += event.data.choices[0].text;
+								}else if(event.data.choices[0].delta && event.data.choices[0].delta.content)
+								{
+									synchro_pending_stream += event.data.choices[0].delta.content;
+								}
+
+								if(event.data.choices[0].finish_reason=="stop")
+								{
+									last_stop_reason = "stop";
+								}
+							}
+						}
+					}
+					if(was_empty && synchro_pending_stream!="")
+					{
+						render_gametext(false);
+					}
+					else
+					{
+						update_pending_stream_displays();
+					}
+				},
+				close() { //end of stream
+					synchro_polled_response = synchro_pending_stream;
+					let need_clean_output = (synchro_polled_response!="" && localsettings.opmode==1 && gametext_arr.length>0 && document.getElementById("useoaichatcompl").checked);
+					if(need_clean_output)
+					{
+						synchro_polled_response = cleanup_story_completion(synchro_polled_response);
+					}
+					synchro_pending_stream = "";
+					poll_pending_response();
+					//handle gen failures
+					if(resp.status==503)
+					{
+						msgbox("Error while submitting prompt: Server appears to be busy.");
+					}
+				},
+				abort(error) {
+					console.error('Error:', error);
+					if(error.name!="AbortError") //aborts are silent. slightly diff logic
+					{
+						flush_streaming_text();
+						msgbox("Error while submitting prompt: " + error);
+					}
+					clear_poll_flags();
+					render_gametext();
+				},
+			}));
+		})
+		.catch((error) => {
+			console.error('Error:', error);
+			if(error.name!="AbortError") //aborts are silent. slightly diff logic
+			{
+				flush_streaming_text();
+				msgbox("Error while submitting prompt: " + error);
+			}
+			clear_poll_flags();
+			render_gametext();
+		});
+	}
+
 	function kobold_api_stream_sse(sub_endpt,submit_payload)
 	{
 		synchro_pending_stream = "";
@@ -3572,7 +3736,7 @@ Current version indicated by LITEVER below.
 					ctrl.buf += chunk;
 					let evs = [];
 					let m;
-					while ((m = /^event: (.*)\ndata: (.*)\n\n/.exec(ctrl.buf)) !== null) {
+					while ((m = /^event: (.*)\ndata: (.*)\n\n/m.exec(ctrl.buf)) !== null) {
 						evs.push({event: m[1], data: JSON.parse(m[2])});
 						ctrl.buf = ctrl.buf.substring(m.index + m[0].length);
 					}
@@ -5152,19 +5316,21 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	function is_browser_supports_sse()
+	{
+		return (self.TransformStream!=null && self.TextDecoderStream!=null && self.WritableStream!=null);
+	}
 	function is_using_custom_ep()
 	{
 		return (custom_oai_key!=""||custom_kobold_endpoint!=""||custom_claude_key!=""||custom_palm_key!=""||custom_cohere_key!="");
 	}
-
 	function is_using_kcpp_with_streaming()
 	{
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.30") >= 0);
 	}
 	function is_using_kcpp_with_sse() //need 1.39 for multibyte fix
 	{
-		let browsersupported = (self.TransformStream!=null && self.TextDecoderStream!=null && self.WritableStream!=null);
-		return (browsersupported && custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.40") >= 0);
+		return (is_browser_supports_sse() && custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.40") >= 0);
 	}
 	function is_using_kcpp_with_mirostat()
 	{
@@ -7880,9 +8046,9 @@ Current version indicated by LITEVER below.
 		let ddval = document.getElementById("customapidropdown").value;
 		switch(ddval)
 		{
-			case 3:
+			case "3":
 				return document.getElementById("custom_openrouter_model");
-			case 7:
+			case "7":
 				return document.getElementById("custom_mistralai_model");
 			default:
 				return document.getElementById("custom_oai_model");
@@ -11750,15 +11916,36 @@ Current version indicated by LITEVER below.
 
 	function cleanup_story_completion(resp)
 	{
-		if(!gametext_arr[gametext_arr.length-1].endsWith(" ") && !gametext_arr[gametext_arr.length-1].endsWith("\n"))
+		if(gametext_arr.length>0)
 		{
-			if(/^\.\.\.[a-zA-Z0-9]/.test(resp))
+			//fix duplicate sentences
+			const sentenceEndings = /[.!?]/g;
+			let lastsentences = gametext_arr[gametext_arr.length-1].split(sentenceEndings);
+			lastsentences = lastsentences.map(lastsentences => lastsentences.trim()); //remove whitespace
+    		lastsentences = lastsentences.filter(lastsentences => lastsentences.length > 0);
+			if(lastsentences.length>0)
 			{
-				resp = resp.slice(3);
+				let lastsentence = lastsentences[lastsentences.length - 1];
+				if(lastsentence.length>10 && resp.trim().startsWith(lastsentence)) //only match if its long enough and matches verbatim
+				{
+					let foundindex = resp.indexOf(lastsentence);
+					if (foundindex !== -1 && foundindex<5) {
+						resp = resp.substring(foundindex+lastsentence.length); //remove duplicated part
+					}
+				}
 			}
-			if (/^[^!\"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~ \t\r\n\f\v]/.test(resp)) // List of common punctuation and whitespace
+
+			//fix response lacking space
+			if(!gametext_arr[gametext_arr.length-1].endsWith(" ") && !gametext_arr[gametext_arr.length-1].endsWith("\n"))
 			{
-				resp = " "+resp;
+				if(/^\.\.\.[a-zA-Z0-9]/.test(resp))
+				{
+					resp = resp.slice(3);
+				}
+				if (/^[^!\"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~ \t\r\n\f\v]/.test(resp)) // List of common punctuation and whitespace
+				{
+					resp = " "+resp;
+				}
 			}
 		}
 		return resp;
@@ -11957,49 +12144,15 @@ Current version indicated by LITEVER below.
 					oaiheaders["HTTP-Referer"] = "https://lite.koboldai.net";
 				}
 
-				fetch(targetep, {
-					method: 'POST',
-					headers: oaiheaders,
-					body: JSON.stringify(oai_payload),
-					referrerPolicy: 'no-referrer',
-				})
-					.then((response) => response.json())
-					.then((data) => {
-						console.log("sync finished response: " + JSON.stringify(data));
-						if (custom_oai_key != "" && data.choices != null && data.choices.length > 0) {
-							let dch = data.choices[0];
-							if (dch.text) {
-								synchro_polled_response = dch.text;
-							}
-							else if (dch.message) {
-								synchro_polled_response = dch.message.content;
-
-								if(localsettings.opmode==1 && gametext_arr.length>0 && synchro_polled_response!="")
-								{
-									synchro_polled_response = cleanup_story_completion(synchro_polled_response);
-								}
-							}
-							else {
-								console.error("Error, unknown OAI response");
-								clear_poll_flags();
-								render_gametext();
-								msgbox("Error, unknown OAI response");
-							}
-						}
-						else {
-							//error occurred, maybe captcha failed
-							console.error("error occurred in OAI generation");
-							clear_poll_flags();
-							render_gametext();
-							msgbox("Error occurred during text generation: " + formatError(data));
-						}
-					})
-					.catch((error) => {
-						console.error('Error:', error);
-						clear_poll_flags();
-						render_gametext();
-						msgbox("Error while submitting prompt: " + error);
-					});
+				if(is_browser_supports_sse() && document.getElementById("oaistreaming").checked)
+				{
+					oai_payload.stream = true;
+					oai_api_stream_sse(targetep,oai_payload,oaiheaders);
+				}
+				else
+				{
+					oai_api_sync_req(targetep,oai_payload,oaiheaders);
+				}
 			}
 			else if (custom_claude_key != "")//handle for Claude
 			{
@@ -17105,11 +17258,14 @@ Current version indicated by LITEVER below.
 				</select>
 				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaifetchlist" onclick="oai_fetch_models()">Fetch List</button>
 				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaiusecustom" onclick="select_custom_oai_model()">Use Custom</button>
-				<input type="checkbox" id="oaiaddversion" onchange="" checked>
-				<div class="box-label" title="Add endpoint version">Add Endpoint Version</div>
-				<input type="checkbox" id="useoaichatcompl" onchange="toggleoaichatcompl()">
-				<div class="box-label" id="useoaichatcompllabel">Use ChatCompletions API</div>
-
+				<div style="display:inline-flex">
+					<div><input type="checkbox" id="oaiaddversion" title="Add Endpoint Version Number" onchange="" checked>
+					<div class="box-label">Add Version Num</div></div>
+					<div><input type="checkbox" id="oaistreaming" title="Enable SSE Streaming" onchange="">
+					<div class="box-label">Streaming</div></div>
+					<div><input type="checkbox" id="useoaichatcompl" title="Use ChatCompletions API" onchange="toggleoaichatcompl()">
+					<div class="box-label" id="useoaichatcompllabel">ChatCompletions API</div></div>
+				</div>
 				<span id="useoaichatcomplbox" class="hidden" onload="toggleoaichatcompl();">
 					<br>
 					Main Message Role:
