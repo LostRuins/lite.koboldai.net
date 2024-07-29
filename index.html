@@ -3384,10 +3384,7 @@ Current version indicated by LITEVER below.
 		let is_local = false;
 
 		if (url) {
-			is_local = (url.toLowerCase().includes("localhost") ||
-				url.toLowerCase().includes("127.0.0.1") ||
-				url.toLowerCase().includes("192.168.") ||
-				!url.toLowerCase().includes("."));
+			is_local = is_local_url(url);
 		}
 
 		if ((uses_cors_proxy||proxy_by_default) && !is_local) {
@@ -5314,6 +5311,17 @@ Current version indicated by LITEVER below.
 		for (var k in objToImport) {
 			existingObj[k] = objToImport[k];
 		}
+	}
+
+	function is_local_url(target_url)
+	{
+		let is_local = (target_url.toLowerCase().includes("localhost")
+						|| target_url.toLowerCase().includes("127.0.0.1")
+						|| target_url.toLowerCase().includes("192.168.")
+						|| target_url.toLowerCase().includes("10.0.0.")
+						|| target_url.toLowerCase().includes("://10.0.")
+						|| !target_url.toLowerCase().includes(".")); //hostname without dots cannot be wan accessible
+		return is_local;
 	}
 
 	function is_browser_supports_sse()
@@ -8100,6 +8108,11 @@ Current version indicated by LITEVER below.
 		{
 			desired_oai_ep = desired_oai_ep.slice(0, -1);
 		}
+		if(!desired_oai_ep.includes("://")) //user did not add http/https
+		{
+			let is_local = is_local_url(desired_oai_ep);
+			desired_oai_ep = (is_local?"http://":"https://") + desired_oai_ep;
+		}
 		if (document.getElementById("oaiaddversion").checked)
 		{
 			if(desired_oai_ep!="" && desired_oai_ep.length > 4 && !desired_oai_ep.slice(-4).toLowerCase().includes("/v") && !desired_oai_ep.toLowerCase().includes("/v1/")) {
@@ -8355,6 +8368,11 @@ Current version indicated by LITEVER below.
 				{
 					desiredkoboldendpoint = desiredkoboldendpoint.split("/api")[0];
 				}
+				if(!desiredkoboldendpoint.includes("://")) //user did not add http/https
+				{
+					let is_local = is_local_url(desiredkoboldendpoint);
+					desiredkoboldendpoint = (is_local?"http://":"https://") + desiredkoboldendpoint;
+				}
 
 				let urls1 = [
 					apply_proxy_url(desiredkoboldendpoint + kobold_custom_mdl_endpoint),
@@ -8575,10 +8593,7 @@ Current version indicated by LITEVER below.
 						//if it still fails, then show error
 						console.log("Error: " + error);
 
-						let is_local = (custom_kobold_endpoint.toLowerCase().includes("localhost")
-							|| custom_kobold_endpoint.toLowerCase().includes("127.0.0.1")
-							|| custom_kobold_endpoint.toLowerCase().includes("192.168.")
-							|| !custom_kobold_endpoint.toLowerCase().includes(".")); //hostname without dots cannot be wan accessible
+						let is_local = is_local_url(custom_kobold_endpoint);
 
 						if (uses_cors_proxy || is_local) {
 							if(is_local && sublocalpathname!="")
@@ -8624,6 +8639,11 @@ Current version indicated by LITEVER below.
 			if(desired_oai_ep!="" && desired_oai_ep.slice(-1)=="/")
 			{
 				desired_oai_ep = desired_oai_ep.slice(0, -1);
+			}
+			if(!desired_oai_ep.includes("://")) //user did not add http/https
+			{
+				let is_local = is_local_url(desired_oai_ep);
+				desired_oai_ep = (is_local?"http://":"https://") + desired_oai_ep;
 			}
 			if (document.getElementById("oaiaddversion").checked)
 			{
