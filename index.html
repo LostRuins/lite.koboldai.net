@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 161;
+	const LITEVER = 162;
 	const urlParams = new URLSearchParams(window.location.search);
 	const localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -4188,6 +4188,7 @@ Current version indicated by LITEVER below.
 	var localmodekey = "";
 	var kobold_endpoint_version = ""; //used to track problematic versions to avoid sending extra fields
 	var koboldcpp_version = ""; //detect if we are using koboldcpp
+	var koboldcpp_version_obj = {};
 	var koboldcpp_has_vision = false;
 	var last_request_str = "No Requests Available"; //full context of last submitted request
 	var lastcheckgenkey = ""; //for checking polled-streaming unique id when generating in kcpp
@@ -4242,6 +4243,7 @@ Current version indicated by LITEVER below.
 		trimwhitespace: false, //trim trailing whitespace
 		compressnewlines: false, //compress multiple newlines
 		eos_ban_mode: 0, //allow the EOS token when using locally 0=auto,1=unban,2=ban,3=bypass
+		token_count_multiplier: 100, //100 means 1x
 		opmode: 4, //what mode are we in? 1=story, 2=adventure, 3=chat, 4=instruct
 		adventure_is_action: false, //in adventure mode, determine story or action
 		adventure_context_mod: true, //extra injection for adventure mode
@@ -8477,6 +8479,7 @@ Current version indicated by LITEVER below.
 								.then(data => {
 									if(data && data!="" && data.version && data.version!="")
 									{
+										koboldcpp_version_obj = data;
 										koboldcpp_version = data.version;
 										console.log("KoboldCpp Detected: " + koboldcpp_version);
 										document.getElementById("connectstatus").innerHTML = (`<span style='cursor: pointer;' onclick='fetch_koboldcpp_perf()'>KoboldCpp ${koboldcpp_version}</a>`);
@@ -9014,7 +9017,20 @@ Current version indicated by LITEVER below.
 			console.log(resp);
 			if(resp)
 			{
-				perfs = `Server is Online\n`;
+				let perfs = "";
+				if(koboldcpp_version_obj)
+				{
+					for (let key in koboldcpp_version_obj) {
+						if (koboldcpp_version_obj.hasOwnProperty(key)) {
+							let val = koboldcpp_version_obj[key];
+							if (typeof val === 'number' && !Number.isInteger(val)) {
+								val = val.toFixed(2);
+							}
+							perfs += (perfs==""?``:`\n`);
+							perfs += `${key}: ${val}`;
+						}
+					}
+				}
 				for (let key in resp) {
 					if (resp.hasOwnProperty(key)) {
 						let val = resp[key];
@@ -9024,7 +9040,11 @@ Current version indicated by LITEVER below.
 						perfs += `\n${key}: ${val}`;
 					}
 				}
+
+
 				msgbox(perfs,"KoboldCpp Server Status");
+			}else{
+				msgbox("KoboldCpp Server Error","KoboldCpp Server Status");
 			}
 		}).catch((error) => {
 			console.log("Perf Error: " + error);
@@ -9508,6 +9528,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("dry_multiplier").value = localsettings.dry_multiplier;
 		document.getElementById("dry_base").value = localsettings.dry_base;
 		document.getElementById("dry_allowed_length").value = localsettings.dry_allowed_length;
+		document.getElementById("token_count_multiplier").value = localsettings.token_count_multiplier;
 
 		if(is_using_kcpp_with_mirostat())
 		{
@@ -9895,6 +9916,7 @@ Current version indicated by LITEVER below.
 		localsettings.dry_base = document.getElementById("dry_base").value;
 		localsettings.dry_allowed_length = document.getElementById("dry_allowed_length").value;
 		localsettings.dry_sequence_breakers = pendingsequencebreakers;
+		localsettings.token_count_multiplier = document.getElementById("token_count_multiplier").value;
 
 		localsettings.speech_synth = document.getElementById("ttsselect").value;
 		localsettings.xtts_voice = document.getElementById("xtts_voices").value;
@@ -9994,6 +10016,7 @@ Current version indicated by LITEVER below.
 		localsettings.dry_base = cleannum(localsettings.dry_base, 0.0, 8.0);
 		localsettings.dry_allowed_length = cleannum(Math.floor(localsettings.dry_allowed_length), 0, 100);
 		localsettings.sampler_seed = cleannum(localsettings.sampler_seed, -1, 999999);
+		localsettings.token_count_multiplier = cleannum(localsettings.token_count_multiplier, 70, 130);
 		toggle_invert_colors();
 
 		voice_typing_mode = document.getElementById("voice_typing_mode").value;
@@ -11457,6 +11480,7 @@ Current version indicated by LITEVER below.
 			{
 				chars_per_token = 6;
 			}
+			chars_per_token = chars_per_token * (localsettings.token_count_multiplier*0.01);
 			let max_allowed_characters = Math.max(1, Math.floor((maxctxlen-maxgenamt) * chars_per_token) - 12);
 
 			//for adventure mode, inject hidden context, even more if there's nothing in memory
@@ -17864,6 +17888,19 @@ Current version indicated by LITEVER below.
 									<option value="1">Unban</option>
 									<option value="2">Ban</option>
 									<option value="3">Bypass</option>
+								</select>
+							</div>
+							<div class="settinglabel settingcell">
+								<div class="justifyleft settingsmall">Token Limit Multiplier <span class="helpicon">?<span
+									class="helptext">Adds a multiplier to token estimations, useful if token counts are inaccurate. Influences text truncation. Higher values increases token allowance.</span></span></div>
+									<select title="Token Limit Multiplier" style="padding:1px; height:auto; margin:0px 0px 0px auto;" class="form-control" id="token_count_multiplier">
+									<option value="70">0.7x</option>
+									<option value="80">0.8x</option>
+									<option value="90">0.9x</option>
+									<option value="100">1.0x</option>
+									<option value="110">1.1x</option>
+									<option value="120">1.2x</option>
+									<option value="130">1.3x</option>
 								</select>
 							</div>
 							<div class="settinglabel settingcell">
