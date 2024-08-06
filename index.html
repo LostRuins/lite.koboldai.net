@@ -4330,6 +4330,9 @@ Current version indicated by LITEVER below.
 		memsnippet_enabled: false, // Memory snippets off by default
 		memsnippet_numOfSnippets: 3, // Number of snippets to include defaults to 3
 		memsnippet_minSignificance: 0.01, // Must have the bare minimum of significance to be included
+		memsnippet_searchRange: 300, // Tokens to include in search
+		memsnippet_chunkSize: 600, // Size of memory chunks / snippets
+		memsnippet_chunkOverlap: 200 // Overlap between chunks
 	};
 
 	var defaultsettings = JSON.parse(JSON.stringify(localsettings));
@@ -10497,6 +10500,9 @@ Current version indicated by LITEVER below.
 			localsettings.memsnippet_enabled = false;
 			localsettings.memsnippet_numOfSnippets = 3;
 			localsettings.memsnippet_minSignificance = 0.01;
+			localsettings.memsnippet_searchRange = 300;
+			localsettings.memsnippet_chunkSize = 600;
+			localsettings.memsnippet_chunkOverlap = 200;
 			current_anotetemplate = "[Author's note: <|>]";
 			regexreplace_data = [];
 			placeholder_tags_data = [];
@@ -16148,17 +16154,38 @@ Current version indicated by LITEVER below.
 		document.getElementById("memsnippet_enabled").checked = localsettings.memsnippet_enabled;
 		document.getElementById("memsnippet_numOfSnippets").value = localsettings.memsnippet_numOfSnippets;
 		document.getElementById("memsnippet_minSignificance").value = localsettings.memsnippet_minSignificance;
+		document.getElementById("memsnippet_searchRange").value = localsettings.memsnippet_searchRange;
+		document.getElementById("memsnippet_chunkSize").value = localsettings.memsnippet_chunkSize;
+		document.getElementById("memsnippet_chunkOverlap").value = localsettings.memsnippet_chunkOverlap;
 	}
 
 	function save_memsnippet() {
 		localsettings.memsnippet_enabled = (document.getElementById("memsnippet_enabled").checked ? true : false);
-		localsettings.memsnippet_numOfSnippets = document.getElementById("memsnippet_numOfSnippets").value;
-		localsettings.memsnippet_minSignificance = document.getElementById("memsnippet_minSignificance").value;
+		localsettings.memsnippet_numOfSnippets = parseInt(document.getElementById("memsnippet_numOfSnippets").value);
+		localsettings.memsnippet_minSignificance = parseFloat(document.getElementById("memsnippet_minSignificance").value);
+		localsettings.memsnippet_searchRange = parseInt(document.getElementById("memsnippet_searchRange").value);
+		localsettings.memsnippet_chunkSize = parseInt(document.getElementById("memsnippet_chunkSize").value);
+		localsettings.memsnippet_chunkOverlap = parseInt(document.getElementById("memsnippet_chunkOverlap").value);
 	}
 
-	function validateMemInput(input)
-	{
-		let notValid = !input?.validity?.valid;
+	function validateMemInput(input) {
+		const chunkInputs = ["memsnippet_chunkOverlap", "memsnippet_chunkSize"]
+
+		let notValid
+		if (chunkInputs.includes(input.id))
+		{
+			notValid = parseInt(document.getElementById("memsnippet_chunkOverlap").value) >= parseInt(document.getElementById("memsnippet_chunkSize").value);
+			if (notValid)
+			{
+				chunkInputs.map(id => document.getElementById(id)).forEach(elem => elem.setCustomValidity("Chunk overlap cannot be greater than chunk size"))
+			}
+			else
+			{
+				chunkInputs.map(id => document.getElementById(id)).forEach(elem => elem.setCustomValidity(""))
+			}
+		}
+		notValid = !input?.validity?.valid;
+
 		document.getElementById("memoryOkButton").disabled = notValid;
 		document.getElementById("memoryOkButton").title = notValid ? `${input.title}: ${input.validationMessage}` : "";
 		input.reportValidity();
@@ -18381,19 +18408,61 @@ Current version indicated by LITEVER below.
 			<!-- Memory snippets -->
 			<div class="memtabcontainer" id="memsnippet_tab_container">
 				<div class="settinglabel" style="padding: 4px;">
-					<div class="justifyleft settingsmall" title="Controls whether automatic snippets from memory are included based on the last user and AI prompt.">Enable memory snippets </div>
-				<input title="Enable memory snippets" type="checkbox" id="memsnippet_enabled" style="margin:0px 0 0;">
+					<div class="justifyleft settingsmall"
+						title="Controls whether automatic snippets from memory are included based on the last user and AI prompt.">
+						Enable memory snippets </div>
+					<input title="Enable memory snippets" type="checkbox" id="memsnippet_enabled"
+						style="margin:0px 0 0;">
 				</div>
 
 				<div class="settinglabel" style="padding: 4px;">
-					<div class="justifyleft settingsmall">Amount of memory snippets to include <span class="helpicon">?<span class="helptext">Controls
-								how many snippets of text from the memory are included based on the automatic search</span></span></div>
-					<input title="Amount of memory snippets to include" class="settinglabel miniinput" style="height:16px;padding:0px;margin:0px 4px 0; width:90px;font-size:10px;" type="number" min="1" max="5" step="1" pattern="\d+" placeholder="Number of snippets" value="" id="memsnippet_numOfSnippets" oninput="validateMemInput(this);">
+					<div class="justifyleft settingsmall">Amount of memory snippets to include <span
+							class="helpicon">?<span class="helptext">Controls
+								how many snippets of text from the memory are included based on the automatic
+								search</span></span></div>
+					<input title="Amount of memory snippets to include" class="settinglabel miniinput"
+						style="height:16px;padding:0px;margin:0px 4px 0; width:90px;font-size:10px;" type="number"
+						min="1" max="5" step="1" pattern="\d+" placeholder="Number of snippets" value=""
+						id="memsnippet_numOfSnippets" oninput="validateMemInput(this);">
 				</div>
 				<div class="settinglabel" style="padding: 4px;">
-					<div class="justifyleft settingsmall">Minimum significance required for inclusion <span class="helpicon">?<span class="helptext">Controls
-								the minimum threshold for snippets to be included based on the automatic search, ranging from 0 (any significance) to 1, which is a high degree of significance</span></span></div>
-					<input title="Minimum significance required for inclusion" class="settinglabel miniinput" style="height:16px;padding:0px;margin:0px 4px 0; width:90px;font-size:10px;" type="number" min="0" max="1" step="0.01" pattern="\d\.\d{1,2}" placeholder="Minimum significance" value="" id="memsnippet_minSignificance" oninput="validateMemInput(this);">
+					<div class="justifyleft settingsmall">Minimum significance required for inclusion <span
+							class="helpicon">?<span class="helptext">Controls 
+								the minimum threshold for snippets to be included based on the automatic search, ranging
+								from 0 (any significance) to 1, which is a high degree of significance</span></span>
+					</div>
+					<input title="Minimum significance required for inclusion" class="settinglabel miniinput"
+						style="height:16px;padding:0px;margin:0px 4px 0; width:90px;font-size:10px;" type="number"
+						min="0" max="1" step="0.01" pattern="\d\.\d{1,2}" placeholder="Minimum significance" value=""
+						id="memsnippet_minSignificance" oninput="validateMemInput(this);">
+				</div>
+                <div class="settinglabel" style="padding: 4px;">
+					<div class="justifyleft settingsmall">Amount of text to search by<span
+							class="helpicon">?<span class="helptext">Controls
+								the amount of text used to search, essentially the last n characters</span></span>
+					</div>
+					<input title="Amount of text to search by" class="settinglabel miniinput"
+						style="height:16px;padding:0px;margin:0px 4px 0; width:90px;font-size:10px;" type="number"
+						min="1" max="500" step="1" pattern="\d+" placeholder="Amount of text to search by" value=""
+						id="memsnippet_searchRange" oninput="validateMemInput(this);">
+				</div>
+                <div class="settinglabel" style="padding: 4px;">
+					<div class="justifyleft settingsmall">Chunk size <span
+							class="helpicon">?<span class="helptext">Controls the size of each snippet being searched for</span></span>
+					</div>
+					<input title="Chunk size" class="settinglabel miniinput"
+						style="height:16px;padding:0px;margin:0px 4px 0; width:90px;font-size:10px;" type="number"
+						min="1" max="1000" step="1" pattern="\d+" placeholder="Chunk size" value=""
+						id="memsnippet_chunkSize" oninput="validateMemInput(this);">
+				</div>
+                <div class="settinglabel" style="padding: 4px;">
+					<div class="justifyleft settingsmall">Chunk overlap <span
+							class="helpicon">?<span class="helptext">Controls the amount of overlap between each snippet, helping to reduce issues of contextual understanding</span></span>
+					</div>
+					<input title="Chunk overlap" class="settinglabel miniinput"
+						style="height:16px;padding:0px;margin:0px 4px 0; width:90px;font-size:10px;" type="number"
+						min="1" max="500" step="1" pattern="\d+" placeholder="Chunk overlap" value=""
+						id="memsnippet_chunkOverlap" oninput="validateMemInput(this);">
 				</div>
 			</div>
 
@@ -18968,7 +19037,8 @@ else
 		'whom', 'with', 'would', 'why', 'you', 'your', 'yours', 'yourself',
 		'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
 		'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '$', '1',
-		'2', '3', '4', '5', '6', '7', '8', '9', '0', '_'
+		'2', '3', '4', '5', '6', '7', '8', '9', '0', '_',
+		'll', 're'
 	]
 
 
@@ -18998,7 +19068,7 @@ else
 		 */
 		_chunkOverlap
 
-		constructor(amountToTrimForContext, maxLengthOfSearchString = 400, chunkSplitSize = 600, chunkOverlap = 200) {
+		constructor(amountToTrimForContext, maxLengthOfSearchString = localsettings.memsnippet_searchRange, chunkSplitSize = localsettings.memsnippet_chunkSize, chunkOverlap = localsettings.memsnippet_chunkOverlap) {
 			this._amountToTrimForContext = amountToTrimForContext
 			this._maxLengthOfSearchString = maxLengthOfSearchString
 			this._chunkSplitSize = chunkSplitSize
@@ -19151,7 +19221,7 @@ else
 						tempLog.push({ nextPos: startLoc, snippet: currentSnippet })
 						i++
 					}
-					// console.log(tempLog)
+					console.debug("Memory chunks", tempLog)
 					this._paragraphsCache = this._paragraphsCache.map(c => c.replace(/\n\n/g, "\n")).filter(s => !!s)
 				}
 			}
@@ -19188,7 +19258,10 @@ else
 			storeFields: ['category', "snippet"], // fields to return with search results
 			searchOptions: {
 				fuzzy: 0.2,
-				processTerm: (term, _fieldName) => stopwords.includes(term) ? null : MiniSearch.getDefault("processTerm")(term)
+			},
+			processTerm: (term, _fieldName) => {
+				let processedTerm = stopwords.includes(term.toLowerCase()) ? false : MiniSearch.getDefault("processTerm")(term)
+				return processedTerm
 			}
 		})
 
@@ -19224,11 +19297,9 @@ else
 		/**
 		 * Splits message into defined number of segments based on boundaries
 		 */
-		getSegments(currentMessage, segments)
-		{
+		getSegments(currentMessage, segments) {
 			let searchSections = [], splitSectionLength = Math.floor(currentMessage.length / segments), currentStartPos = 0;
-			for (let i = 0; i < segments; i++)
-			{
+			for (let i = 0; i < segments; i++) {
 				// Splits by length and boundary
 				let endPos = i === segments - 1 ? currentMessage.length : currentStartPos + splitSectionLength
 				let segText = currentMessage.substring(currentStartPos, endPos);
@@ -19245,19 +19316,24 @@ else
 			return searchSections
 		}
 
+		_clone(obj)
+		{
+			return JSON.parse(JSON.stringify(obj))
+		}
+
 		/**
 		 * Modifies the series method to return the comparisons from Minisearch
 		 */
 		compareSeries(currentMessage, ...historyMessages) {
 			// Split into segments with different strengths assigned (later segments have more importance)
-			let searchSections = this.getSegments(currentMessage, Math.floor(currentMessage.length / 100))
+			let searchSections = this.getSegments(currentMessage, Math.ceil(currentMessage.length / 100))
+			console.debug("Search sections", searchSections)
 
 			// Searches for results based on splits roughly every 100 characters
 			let sectionResults = searchSections.map((entry) => {
 				let term = entry.term, strength = entry.strength;
 				let docs = this._miniSearch.search(term)
-				if (docs.length === 0)
-				{
+				if (docs.length === 0) {
 					return []
 				}
 				let maxScore = docs[0].score
@@ -19266,21 +19342,21 @@ else
 					return doc
 				}).slice(0, this._sectionMaxResults)
 			}).flat()
+			console.debug("Section results", this._clone(sectionResults))
 
 			// Adds scores together across results to form a summary
 			let sectionSummary = sectionResults.reduce((docs, doc) => {
 				const existingDoc = docs.find((c) => c.id === doc.id);
-				if (existingDoc) 
-				{
+				if (existingDoc) {
 					existingDoc.score += doc.score
-				} 
-				else 
-				{
+				}
+				else {
 					docs.push(doc);
 				}
 
 				return docs;
 			}, []);
+			console.debug("Section summary", this._clone(sectionSummary))
 
 			// Maps to the more simple standard output structure and sort by total score
 			let comparisons = sectionSummary.map(doc => {
@@ -19291,6 +19367,7 @@ else
 			}).sort((a, b) => {
 				return a.match > b.match ? -1 : 1
 			});
+			console.debug("Comparisons", this._clone(comparisons))
 
 			// Scales each score by max score to get a proportional match relevance
 			if (comparisons.length === 0) {
@@ -19362,7 +19439,7 @@ else
 				timer.start(comparitorType)
 				let results = similarityComparitor.getTopNAndCullFromParagraphs(currentMessage, valuesToReturn, minRelevance)
 				timer.stop(comparitorType)
-				
+
 				console.log(`Results for: ${currentMessage} - ${comparitorType}\n-----\n`)
 				results.forEach(r => console.log(`${r.match}: ${r.snippet}`))
 				console.log("\n-----\n\n")
