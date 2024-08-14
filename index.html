@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 163;
+	const LITEVER = 164;
 	const urlParams = new URLSearchParams(window.location.search);
 	const localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -5945,7 +5945,7 @@ Current version indicated by LITEVER below.
 			try {
 				let new_loaded_storyobj = JSON.parse(text);
 				//we don't want to fiddle with the file as its very complex. only handle the parts we are interested in, and just leave the rest untouched.
-				if (new_loaded_storyobj.prompt != null && !new_loaded_storyobj.scenarioVersion) {
+				if (is_kai_json(new_loaded_storyobj) && !new_loaded_storyobj.scenarioVersion) {
 					//quick sanity check. if prompt does not exist, this is not a KAI save.
 					kai_json_load(new_loaded_storyobj,false);
 					if (selectedFilename && selectedFilename != "") {
@@ -6041,6 +6041,12 @@ Current version indicated by LITEVER below.
 	function safe_to_overwrite()
 	{
 		return (gametext_arr.length == 0 && current_memory == "" && current_anote == "" && current_wi.length == 0 && redo_arr.length == 0);
+	}
+
+	function is_kai_json(obj)
+	{
+		let is_kai = (!(tmpstory.prompt==null) || tmpstory.savedsettings!=null);
+		return is_kai;
 	}
 
 	function kai_json_load(storyobj, force_load_settngs)
@@ -6151,7 +6157,7 @@ Current version indicated by LITEVER below.
 				}
 			} else {
 				//v2 load
-				if(storyobj.prompt!="")
+				if(storyobj.prompt != "")
 				{
 					gametext_arr.push(storyobj.prompt);
 				}
@@ -6517,7 +6523,7 @@ Current version indicated by LITEVER below.
 	{
 		console.log("Loading nai obj");
 		restart_new_game(false);
-		if(obj.prompt!="")
+		if(obj.prompt != "")
 		{
 			gametext_arr.push(obj.prompt);
 		}
@@ -8521,8 +8527,7 @@ Current version indicated by LITEVER below.
 										.then(response => response.json())
 										.then(values5 => {
 											let tmpstory = values5;
-											let is_kai = !(tmpstory.prompt==null);
-											if(is_kai)
+											if(is_kai_json(tmpstory))
 											{
 												if (localsettings.persist_session && !safe_to_overwrite()) {
 													console.log("Preload story: Unsafe to overwrite");
