@@ -2293,6 +2293,7 @@ Current version indicated by LITEVER below.
 		padding:4px;
 		margin-right:6px;
 		border-radius:50%;
+		cursor:pointer;
 	}
 	.corpostyleitemheading
 	{
@@ -15314,6 +15315,22 @@ Current version indicated by LITEVER below.
 		render_gametext(needsave);
 	}
 
+	var cosmetic_corpo_ai_nick = "KoboldAI";
+	function corpo_click_avatar()
+	{
+		inputBox("Set Cosmetic AI Nickname\n(This is purely cosmetic and does not affect responses, and is not saved).","Set Cosmetic AI Nickname",cosmetic_corpo_ai_nick,"Set Cosmetic AI Nickname", ()=>{
+			let userinput = getInputBoxValue();
+			userinput = userinput.trim();
+			if (userinput != null && userinput!="") {
+				cosmetic_corpo_ai_nick = userinput;
+			}else
+			{
+				cosmetic_corpo_ai_nick = "KoboldAI";
+			}
+			render_gametext(false);
+		},false,false,false);
+	}
+
 	var corpo_editing_turn = -1;
 	function render_corpo_ui(input)
 	{
@@ -15368,7 +15385,7 @@ Current version indicated by LITEVER below.
 				processed_msg = processed_msg.replace(/\[<\|.+?\|>\]/g, ""); //remove normal comments too
 			}
 
-			let namepart = (curr.myturn ? "User" : "KoboldAI");
+			let namepart = (curr.myturn ? "User" : cosmetic_corpo_ai_nick);
 			//advanced name replacement
 			if(localsettings.opmode==3 && curr.name) //chat mode
 			{
@@ -15432,7 +15449,7 @@ Current version indicated by LITEVER below.
 				+ `</div>`);
 
 			newbodystr += `<div class="corpostyleitem">
-				<div><img src="`+ (curr.myturn ? human_square : niko_square) + `" class="corpoavatar"/></div>
+				<div><img ${(curr.myturn ? "" : `onclick="corpo_click_avatar()"`)} src="${(curr.myturn ? human_square : niko_square)}" class="corpoavatar"/></div>
 				<div style="width:100%">
 				<div class="corpostyleitemheading">`+ namepart + `</div>
 				`+ bodypart + chunkbtns + `
@@ -15441,7 +15458,7 @@ Current version indicated by LITEVER below.
 		}
 		if(incomplete_resp)
 		{
-			let namepart = "KoboldAI";
+			let namepart = cosmetic_corpo_ai_nick;
 			let futuretext = (synchro_pending_stream!=""?(escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream)):"...");
 			if(localsettings.opmode==3)
 			{
@@ -16862,6 +16879,10 @@ Current version indicated by LITEVER below.
 					replacedText = replacedText.replace(italics_regex, wrapperSpan(styleRole, 'action')); 		// Apply the actions style to *actions*.
 					replacedText = replacedText.replace(/“(.*?)”/g, wrapperSpan(styleRole, 'speech')); 	// Apply the speech style to "speech".
 					replacedText = replacedText.replace(/&quot;(.*?)&quot;/g, wrapperSpan(styleRole, 'speech')); 	// Apply the speech style to "speech".
+					if(localsettings.opmode==4)
+					{
+						replacedText = replacedText.replace(/!\[(.*?)\]\((.*?)\)/gm, '<img alt="$1" src="$2" />'); //very simple inline images
+					}
 					return replacedText;
 				});
 			}
