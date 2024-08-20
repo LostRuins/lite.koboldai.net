@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 166;
+	const LITEVER = 167;
 	const urlParams = new URLSearchParams(window.location.search);
 	const localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -733,6 +733,9 @@ Current version indicated by LITEVER below.
 		}
 		.color_gray {
 			color: #9b9b9b;
+		}
+		.color_lightgray {
+			color: #bbbbbb;
 		}
 		.color_red {
 			color: #ff7967;
@@ -4294,7 +4297,8 @@ Current version indicated by LITEVER below.
 		img_autogen: false,
 		img_allownsfw: true,
 		img_cfgscale: 7,
-		img_allowhd: false,
+		img_allowhd: true,
+		img_crop: false,
 		img_img2imgstr: 0.6,
 		img_steps: 20,
 		img_sampler: "Euler a",
@@ -9676,6 +9680,7 @@ Current version indicated by LITEVER below.
 
 		document.getElementById("tokenstreammode").value = localsettings.tokenstreammode;
 		document.getElementById("img_allowhd").checked = localsettings.img_allowhd;
+		document.getElementById("img_crop").checked = localsettings.img_crop;
 		document.getElementById("img_autogen").checked = localsettings.img_autogen;
 		document.getElementById("save_images").checked = localsettings.save_images;
 		document.getElementById("save_remote_images").checked = localsettings.save_remote_images;
@@ -9963,6 +9968,7 @@ Current version indicated by LITEVER below.
 		localsettings.image_negprompt = document.getElementById("negpromptinput").value;
 		localsettings.grammar = pendinggrammar;
 		localsettings.tokenstreammode = document.getElementById("tokenstreammode").value;
+		localsettings.img_crop = (document.getElementById("img_crop").checked ? true : false);
 		localsettings.img_allowhd = (document.getElementById("img_allowhd").checked ? true : false);
 		localsettings.img_autogen = (document.getElementById("img_autogen").checked ? true : false);
 		localsettings.save_images = (document.getElementById("save_images").checked ? true : false);
@@ -13618,7 +13624,7 @@ Current version indicated by LITEVER below.
 		}
 	}
 
-	function compressImage(inputDataUri, onDone, isJpeg=true, fixedSize=true, maxSize=NO_HD_RES_PX, quality = 0.35, forceCrop=false) {
+	function compressImage(inputDataUri, onDone, isJpeg=true, fixedSize=true, maxSize=NO_HD_RES_PX, quality = 0.35, forceAspect=false) {
 		let img = document.createElement('img');
 		let wantedWidth = maxSize;
 		let wantedHeight = maxSize;
@@ -13652,7 +13658,7 @@ Current version indicated by LITEVER below.
 			canvas.height = wantedHeight;
 
 			// We resize the image with the canvas method
-			if(forceCrop)
+			if(forceAspect)
 			{
 				let minsizeW = Math.min(origW, origH);
 				let minsizeH = Math.min(origW, origH);
@@ -13678,9 +13684,26 @@ Current version indicated by LITEVER below.
 					canvas.height = wantedHeight = maxSize;
 				}
 
-				let mx = (origW - minsizeW) / 2;
-				let my = (origH - minsizeH) / 2;
-				ctx.drawImage(this, mx, my, minsizeW, minsizeH, 0, 0, wantedWidth, wantedHeight);
+				let newWidth, newHeight, mx, my;
+				if (wantedWidth / wantedHeight > aspectratio) {
+					newHeight = wantedHeight;
+					newWidth = wantedHeight * aspectratio;
+				} else {
+					newWidth = wantedWidth;
+					newHeight = wantedWidth / aspectratio;
+				}
+
+				if (localsettings.img_crop) {
+					mx = (origW - minsizeW) / 2;
+					my = (origH - minsizeH) / 2;
+					ctx.drawImage(this, mx, my, minsizeW, minsizeH, 0, 0, wantedWidth, wantedHeight);
+				} else {
+					mx = (wantedWidth - newWidth) / 2;
+					my = (wantedHeight - newHeight) / 2;
+					ctx.fillStyle = "black";
+					ctx.fillRect(0, 0, wantedWidth, wantedHeight);
+					ctx.drawImage(this, mx, my, newWidth, newHeight);
+				}
 			}else{
 				ctx.drawImage(this, 0, 0, wantedWidth, wantedHeight);
 			}
@@ -14251,16 +14274,25 @@ Current version indicated by LITEVER below.
 			if (isSupported) {
 				warn_on_quit = true;
 				const selection = window.getSelection();
-				if(selection.focusNode!=null && selection.focusNode.parentElement!=null
-				&& selection.focusNode.parentElement.classList.contains("txtchunk"))
+				let foundparent = null;
+				if (selection.focusNode != null && selection.focusNode.parentElement != null
+					&& selection.focusNode.parentElement.classList.contains("txtchunk")) {
+					foundparent = selection.focusNode.parentElement;
+				} else if (selection.focusNode != null && selection.focusNode.parentElement != null
+					&& selection.focusNode.parentElement.parentElement != null
+					&& selection.focusNode.parentElement.parentElement.classList.contains("txtchunk")) {
+					//double nested
+					foundparent = selection.focusNode.parentElement.parentElement;
+				}
+				if (foundparent)
 				{
-					if(prev_hl_chunk!=null)
-					{
+					if (prev_hl_chunk != null) {
 						prev_hl_chunk.classList.remove("hlchunk");
 					}
-					prev_hl_chunk = selection.focusNode.parentElement;
+					prev_hl_chunk = foundparent;
 					prev_hl_chunk.classList.add("hlchunk");
 				}
+
 				idle_timer = 0;
 			}
 		}
@@ -14488,7 +14520,7 @@ Current version indicated by LITEVER below.
 			fulltxt = fulltxt.replace(/\[<\|d\|.+?\|d\|>\]/g, stripimg_replace_str);
 
 			//always filter comments - new format
-			fulltxt = fulltxt.replace(/\[<\|.+?\|>\]/g, ""); //remove normal comments too
+			fulltxt = fulltxt.replace(/\[<\|[\s\S]+?\|>\]/g, ""); //remove normal comments too
 
 		}
 		return fulltxt;
@@ -15409,7 +15441,7 @@ Current version indicated by LITEVER below.
 					inner = render_image_html(inner, "",false,true);
 					return inner;
 				});
-				processed_msg = processed_msg.replace(/\[<\|.+?\|>\]/g, ""); //remove normal comments too
+				processed_msg = processed_msg.replace(/\[<\|[\s\S]+?\|>\]/g, ""); //remove normal comments too
 			}
 
 			let namepart = (curr.myturn ? "User" : cosmetic_corpo_ai_nick);
@@ -15600,7 +15632,7 @@ Current version indicated by LITEVER below.
 		for(var i=0;i<input.length;++i)
 		{
 			let tempfullsearchable = input[i]; //strip out images
-			let txtwithnoimages = tempfullsearchable.replace(/\[<\|.+?\|>\]/g, "");
+			let txtwithnoimages = tempfullsearchable.replace(/\[<\|[\s\S]+?\|>\]/g, "");
 			var foundopponent = txtwithnoimages.match(othernamesregex);
 			var foundself = txtwithnoimages.match(mynameregex);
 
@@ -15689,7 +15721,7 @@ Current version indicated by LITEVER below.
 					inner = render_image_html(inner, "",false,true);
 					return inner;
 				});
-				curr.msg = curr.msg.replace(/\[<\|.+?\|>\]/g, ""); //remove normal comments too
+				curr.msg = curr.msg.replace(/\[<\|[\s\S]+?\|>\]/g, ""); //remove normal comments too
 
 
 			}
@@ -18217,6 +18249,12 @@ Current version indicated by LITEVER below.
 									<span class="helptext">This option will result in larger save files which may be slower. Changing this setting only applies to NEW images.</span>
 								</span>: </div>
 								<input title="Save Higher-Res Images" type="checkbox" id="img_allowhd" style="margin:0px 0 0;">
+							</div>
+							<div class="inlinelabel">
+								<div class="justifyleft" style="padding:4px">Crop Images <span class="helpicon">?
+									<span class="helptext">If enabled, oversized imported images will be cropped to fit. If disabled, images will be letterboxed instead.</span>
+								</span>: </div>
+								<input title="Crop Images" type="checkbox" id="img_crop" style="margin:0px 0 0;">
 							</div>
 						</div>
 					</div>
