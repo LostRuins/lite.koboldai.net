@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 168;
+	const LITEVER = 169;
 	const urlParams = new URLSearchParams(window.location.search);
 	const localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -209,7 +209,7 @@ Current version indicated by LITEVER below.
 
 		.settingsbody
 		{
-			height: calc(82vh - 100px);
+			height: calc(86vh - 94px);
 			overflow-y: auto;
 			overflow-x: hidden;
 		}
@@ -4353,6 +4353,8 @@ Current version indicated by LITEVER below.
 		dry_base: 1.75,
 		dry_allowed_length: 2,
 		dry_sequence_breakers: ["\n", ":", "\"", "*"],
+		xtc_threshold: 0.2,
+		xtc_probability: 0.0,
 		sampler_order: [6, 0, 1, 3, 4, 2, 5],
 	};
 
@@ -5390,6 +5392,10 @@ Current version indicated by LITEVER below.
 	function is_using_kcpp_with_dry()
 	{
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.70") >= 0);
+	}
+	function is_using_kcpp_with_xtc()
+	{
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.74") >= 0);
 	}
 
 
@@ -9557,6 +9563,8 @@ Current version indicated by LITEVER below.
 		document.getElementById("miro_tau").value = localsettings.miro_tau;
 		document.getElementById("miro_eta").value = localsettings.miro_eta;
 		document.getElementById("dry_multiplier").value = localsettings.dry_multiplier;
+		document.getElementById("xtc_threshold").value = localsettings.xtc_threshold;
+		document.getElementById("xtc_probability").value = localsettings.xtc_probability;
 		document.getElementById("dry_base").value = localsettings.dry_base;
 		document.getElementById("dry_allowed_length").value = localsettings.dry_allowed_length;
 		document.getElementById("token_count_multiplier").value = localsettings.token_count_multiplier;
@@ -9581,6 +9589,17 @@ Current version indicated by LITEVER below.
 		{
 			document.getElementById("drysupporteddiv").classList.add("hidden");
 			document.getElementById("dryunsupporteddiv").classList.remove("hidden");
+		}
+
+		if(is_using_kcpp_with_xtc())
+		{
+			document.getElementById("xtcsupporteddiv").classList.remove("hidden");
+			document.getElementById("xtcunsupporteddiv").classList.add("hidden");
+		}
+		else
+		{
+			document.getElementById("xtcsupporteddiv").classList.add("hidden");
+			document.getElementById("xtcunsupporteddiv").classList.remove("hidden");
 		}
 		pendingsequencebreakers = localsettings.dry_sequence_breakers;
 
@@ -9721,6 +9740,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("tfs_s").value = found.tfs;
 			document.getElementById("miro_type").value = 0;
 			document.getElementById("dry_multiplier").value = 0;
+			document.getElementById("xtc_probability").value = 0;
 			document.getElementById("rep_pen").value = document.getElementById("rep_pen_slide").value = found.rep_pen;
 			document.getElementById("rep_pen_range").value = found.rep_pen_range;
 			document.getElementById("rep_pen_slope").value = found.rep_pen_slope;
@@ -9808,6 +9828,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("tfs_s").value != found.tfs ||
 			document.getElementById("miro_type").value != 0 ||
 			document.getElementById("dry_multiplier").value != 0 ||
+			document.getElementById("xtc_probability").value != 0 ||
 			document.getElementById("rep_pen").value !=  found.rep_pen ||
 			document.getElementById("rep_pen_range").value != found.rep_pen_range ||
 			document.getElementById("rep_pen_slope").value != found.rep_pen_slope ||
@@ -9950,6 +9971,8 @@ Current version indicated by LITEVER below.
 		localsettings.dry_base = document.getElementById("dry_base").value;
 		localsettings.dry_allowed_length = document.getElementById("dry_allowed_length").value;
 		localsettings.dry_sequence_breakers = pendingsequencebreakers;
+		localsettings.xtc_threshold = document.getElementById("xtc_threshold").value;
+		localsettings.xtc_probability = document.getElementById("xtc_probability").value;
 		localsettings.token_count_multiplier = document.getElementById("token_count_multiplier").value;
 
 		localsettings.speech_synth = document.getElementById("ttsselect").value;
@@ -10050,6 +10073,8 @@ Current version indicated by LITEVER below.
 		localsettings.dry_multiplier = cleannum(localsettings.dry_multiplier, 0.0, 100.0);
 		localsettings.dry_base = cleannum(localsettings.dry_base, 0.0, 8.0);
 		localsettings.dry_allowed_length = cleannum(Math.floor(localsettings.dry_allowed_length), 0, 100);
+		localsettings.xtc_probability = cleannum(localsettings.xtc_probability, 0.0, 1.0);
+		localsettings.xtc_threshold = cleannum(localsettings.xtc_threshold, 0.0, 1.0);
 		localsettings.sampler_seed = cleannum(localsettings.sampler_seed, -1, 999999);
 		localsettings.token_count_multiplier = cleannum(localsettings.token_count_multiplier, 70, 130);
 		toggle_invert_colors();
@@ -12098,6 +12123,13 @@ Current version indicated by LITEVER below.
 			submit_payload.params.dry_penalty_last_n = localsettings.rep_pen_range;
 			submit_payload.params.dry_sequence_breakers = JSON.parse(JSON.stringify(localsettings.dry_sequence_breakers));
 		}
+
+		if(custom_kobold_endpoint != "" && is_using_kcpp_with_xtc() && localsettings.xtc_probability > 0)
+		{
+			submit_payload.params.xtc_threshold = localsettings.xtc_threshold;
+			submit_payload.params.xtc_probability = localsettings.xtc_probability;
+		}
+
 		//presence pen and logit bias for OAI and newer kcpp
 		if((custom_kobold_endpoint != "" && is_using_kcpp_with_mirostat()) || custom_oai_endpoint!="")
 		{
@@ -17639,7 +17671,7 @@ Current version indicated by LITEVER below.
 
 	<div class="popupcontainer flex hidden" id="settingscontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup flexsize" style="margin-top: 6vh; background-color:#102840">
+		<div class="nspopup flexsize" style="margin-top: 4vh; background-color:#102840">
 			<div class="popuptitlebar">
 				<div class="popuptitletext" title="Settings Menu">Settings</div>
 			</div>
@@ -18075,7 +18107,28 @@ Current version indicated by LITEVER below.
 								<div id="dryunsupporteddiv" class="color_red" style="font-weight:bold;padding:3px;font-size:12px">DRY Not Supported</div>
 							</div>
 
+							<div class="settinglabel settingcell">
+								<div title="XTC" class="justifyleft settingsmall" style="width:100%">XTC <span class="helpicon">?<span class="helptext">
+									Enables Exclude Top Choices (XTC) Sampling. May not be available depending on backend, not supported on Horde.</span></span></div>
+									<div class="justifyleft settingsmall" style="width:100%">
+									<div id="xtcsupporteddiv" style="display:flex;">
+										<div class="settinglabel settingcell">
+											<div title="XTC Threshold" class="justifyleft settingsmall" style="width:100%">Threshold</div>
+											<div class="justifyleft settingsmall" style="width:100%">
+											<input title="XTC Threshold" class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0.0" value="0.0" id="xtc_threshold"></div>
+										</div>
+										<div class="settinglabel settingcell">
+											<div title="XTC Probability" class="justifyleft settingsmall" style="width:100%">Probability</div>
+											<div class="justifyleft settingsmall" style="width:100%">
+											<input title="XTC Probability" class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0.0" value="0.0" id="xtc_probability"></div>
+										</div>
+									</div>
+									<div id="xtcunsupporteddiv" class="color_red" style="font-weight:bold;padding:3px;font-size:12px">XTC Not Supported</div>
+									</div>
+							</div>
+						</div>
 
+						<div style="display:flex;width:100%;">
 							<div class="settinglabel settingcell">
 								<div title="Grammar" class="justifyleft settingsmall" style="width:100%">Grammar <span class="helpicon">?<span class="helptext">
 									Grammar Sampling (KCPP) - Allows you to constrain output to fit specific structures. Resets grammar state every generation unless Retain is checked.</span></span></div>
@@ -18087,7 +18140,6 @@ Current version indicated by LITEVER below.
 									</div>
 								</div>
 							</div>
-
 						</div>
 					</div>
 				</div>
