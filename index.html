@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 169;
+	const LITEVER = 170;
 	const urlParams = new URLSearchParams(window.location.search);
 	const localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -11018,10 +11018,52 @@ Current version indicated by LITEVER below.
 	}
 
 
+	var dragdropimgsetup = false;
 	function add_img_btn_paste()
 	{
 		document.getElementById("addimgcontainer").classList.add("hidden");
 		document.getElementById("pasteimgcontainer").classList.remove("hidden");
+
+		if(!dragdropimgsetup)
+		{
+			const dropZone = document.getElementById('pasteimgwin');
+			const onDropFn = function(e){
+				e.preventDefault();
+				e.stopPropagation();
+
+				let draggedData = e.dataTransfer;
+				let files = draggedData.files;
+
+				console.log(files);
+				if (files.length > 0 && files[0] != null && files[0].name && files[0].name != "") {
+					const file = files[0];
+					const reader = new FileReader();
+					reader.onload = function(img) {
+						let origImg = img.target.result;
+						self_upload_img(origImg);
+					}
+					reader.readAsDataURL(file);
+					document.getElementById("pasteimgcontainer").classList.add("hidden");
+				}
+			}
+
+			dropZone.addEventListener(
+				"dragover",
+				(e) => {
+					e.preventDefault();
+					e.stopPropagation();
+				},
+				false
+			);
+			dropZone.addEventListener(
+				"drop",
+				(e) => {
+					onDropFn(e);
+				},
+				false
+			);
+			dragdropimgsetup = true;
+		}
 	}
 
 	function add_img_btn_upload()
