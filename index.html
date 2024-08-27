@@ -14,7 +14,7 @@ Current version indicated by LITEVER below.
 <script>
 	const LITEVER = 171;
 	const urlParams = new URLSearchParams(window.location.search);
-	const localflag = urlParams.get('local');
+	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
 </script>
 
@@ -4547,6 +4547,23 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	function restore_endpoint_dropdowns()
+	{
+		var cep = document.getElementById("customapidropdown");
+		var cephide = document.getElementById("unusedcustomapidropdown");
+
+		//remove all unwanted options from the endpoint dropdown in case it is used
+		for (var i = cep.options.length - 1; i >= 0; i--) {
+			cep.remove(i);
+		}
+		for (var i = 0; i < cephide.options.length; ++i) {
+			var newOption = document.createElement("option");
+			newOption.value = cephide.options[i].value;
+			newOption.text = cephide.options[i].text;
+			cep.add(newOption);
+		}
+	}
+
 	//attempt to load settings
 	function init() {
 
@@ -4568,6 +4585,17 @@ Current version indicated by LITEVER below.
 
 		//disable debug log if not local
 		let dbgmode = urlParams.get('dbg');
+
+		//duplicate endpoint dropdown array for backup
+		var cep = document.getElementById("customapidropdown");
+		var cephide = document.getElementById("unusedcustomapidropdown");
+		var cepoptions = cep.options;
+		for (var i = 0; i < cepoptions.length; ++i) {
+			var newOption = document.createElement("option");
+			newOption.value = cepoptions[i].value;
+			newOption.text = cepoptions[i].text;
+			cephide.add(newOption);
+		}
 
 		if (localflag)
 		{
@@ -4617,8 +4645,6 @@ Current version indicated by LITEVER below.
 			}
 
 			//remove all unwanted options from the endpoint dropdown in case it is used
-			var cep = document.getElementById("customapidropdown");
-            var cepoptions = cep.options;
             for (var i = cepoptions.length - 1; i >= 0; i--) {
                 if (cepoptions[i].value !== "1" && cepoptions[i].value !== "2") {
                     cep.remove(i);
@@ -8624,7 +8650,15 @@ Current version indicated by LITEVER below.
 										}
 										else if(localflag && no_txt_model && !has_txt2img && !koboldcpp_has_vision && !koboldcpp_has_whisper)
 										{
-											msgbox("This KoboldCpp instance has no models loaded. You can still use the WebUI to edit or view existing stories.<br><br>You can also <a href='#' class='color_blueurl' onclick='hide_popups();display_endpoint_container();'>connect to an external service</a> instead","No Models Loaded",true);
+											msgboxYesNo("This KoboldCpp instance has no models loaded. You can still use the WebUI to edit or view existing stories.<br><br>Would you like to connect to an external API service?","No Models Loaded",
+											()=>{
+												localflag = false;
+												hide_popups();
+												restore_endpoint_dropdowns();
+												document.getElementById("customapidropdown").value = "1";
+												render_gametext(false);
+												display_endpoint_container();
+											},()=>{},true);
 										}
 
 									}else{
@@ -17404,6 +17438,7 @@ Current version indicated by LITEVER below.
 				<div class="popuptitletext">Select your AI provider</div>
 			</div>
 			<div style="padding: 4px;">
+			<select id="unusedcustomapidropdown" style="display: none;"></select>
 			<select title="Select your AI provider" style="padding:4px;" class="form-control" id="customapidropdown" onchange="customapi_dropdown(true)">
 				<option value="0">AI Horde</option>
 				<option value="1">KoboldAI Remote API</option>
