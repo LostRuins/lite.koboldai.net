@@ -6251,7 +6251,7 @@ Current version indicated by LITEVER below.
 					let ll = Math.min(pat.length,rep.length)
 					for(let i=0;i<ll;++i)
 					{
-						regexreplace_data.push({"p":pat[i],"r":rep[i],"b":false});
+						regexreplace_data.push({"p":pat[i],"r":rep[i],"b":false,"d":false});
 					}
 				}
 				if (storyobj.regexreplace_data) {
@@ -10485,6 +10485,7 @@ Current version indicated by LITEVER below.
 			let box1 = document.getElementById("regexreplace_pattern"+i);
 			let box2 = document.getElementById("regexreplace_replacement"+i);
 			let bw = document.getElementById("regexreplace_bothways"+i).checked;
+			let disponly = document.getElementById("regexreplace_displayonly"+i).checked;
 			if(!box1 || !box2)
 			{
 				break;
@@ -10500,7 +10501,7 @@ Current version indicated by LITEVER below.
 
 			if(v1)
 			{
-				regexreplace_data.push({"p":v1,"r":v2,"b":bw});
+				regexreplace_data.push({"p":v1,"r":v2,"b":bw,"d":disponly});
 			}
 		}
 
@@ -10838,6 +10839,24 @@ Current version indicated by LITEVER below.
 		{
 			inputtxt = replace_instruct_placeholders(inputtxt);
 			inputtxt = replace_noninstruct_placeholders(inputtxt,escape);
+		}
+		return inputtxt;
+	}
+
+	function apply_display_only_regex(inputtxt)
+	{
+		//apply regex transforms
+		if(regexreplace_data && regexreplace_data.length>0)
+		{
+			for(let i=0;i<regexreplace_data.length;++i)
+			{
+				if(regexreplace_data[i].d && regexreplace_data[i].p!="")
+				{
+					let escapedpat = escapeHtml(regexreplace_data[i].p);
+					let pat = new RegExp(escapedpat, "gm");
+					inputtxt = inputtxt.replace(pat, regexreplace_data[i].r);
+				}
+			}
 		}
 		return inputtxt;
 	}
@@ -11536,7 +11555,7 @@ Current version indicated by LITEVER below.
 		{
 			for(let i=0;i<regexreplace_data.length;++i)
 			{
-				if(regexreplace_data[i].b && regexreplace_data[i].p!="")
+				if(regexreplace_data[i].b && !(regexreplace_data[i].d) && regexreplace_data[i].p!="")
 				{
 					let pat = new RegExp(regexreplace_data[i].p, "gm");
 					newgen = newgen.replace(pat, regexreplace_data[i].r);
@@ -13456,7 +13475,7 @@ Current version indicated by LITEVER below.
 		{
 			for(let i=0;i<regexreplace_data.length;++i)
 			{
-				if(regexreplace_data[i].p!="")
+				if(regexreplace_data[i].p!="" && !(regexreplace_data[i].d))
 				{
 					let pat = new RegExp(regexreplace_data[i].p, "gm");
 					gentxt = gentxt.replace(pat, regexreplace_data[i].r);
@@ -14969,6 +14988,7 @@ Current version indicated by LITEVER below.
 				fulltxt = concat_gametext(false, "", "%SpnStg%", "%SpnEtg%",true);
 			} else {
 				fulltxt = concat_gametext(false, "", "", "",true);
+				fulltxt = apply_display_only_regex(fulltxt);
 				fulltxt = replace_placeholders(fulltxt,true);
 			}
 
@@ -15212,6 +15232,7 @@ Current version indicated by LITEVER below.
 		else if (!inEditMode && isAestheticUiStyle)
 		{
 			let textToRender = (gametext_arr.length == 0 ? document.getElementById("gametext").innerHTML : concat_gametext(false, "", "", "", true));
+			textToRender = apply_display_only_regex(textToRender);
 			textToRender = replace_placeholders(textToRender,true);
 
 			if(localsettings.opmode==3 && localsettings.gui_type_chat==1)
@@ -15628,6 +15649,7 @@ Current version indicated by LITEVER below.
 			let processed_msg = curr.msg;
 			if(processed_msg && processed_msg!="")
 			{
+				processed_msg = apply_display_only_regex(processed_msg);
 				processed_msg = replace_noninstruct_placeholders(processed_msg,true);
 				let codeblockcount = (processed_msg.match(/```/g) || []).length;
 				if(codeblockcount>0 && codeblockcount%2!=0 )
@@ -16201,6 +16223,7 @@ Current version indicated by LITEVER below.
 		<th>Pattern <span class="helpicon">?<span class="helptext">The regex pattern to match against any incoming text. Leave blank to disable.</span></span></th>
 		<th>Replacement <span class="helpicon">?<span class="helptext">The string to replace matches with. Capture groups are allowed (e.g. $1). To remove all matches, leave this blank.</span></span></th>
 		<th>Both Ways <span class="helpicon">?<span class="helptext">If enabled, regex applies for both inputs and outputs, otherwise output only.</span></span></th>
+		<th>Display Only <span class="helpicon">?<span class="helptext">If enabled, regex replacements only affect displayed text without modifying context.</span></span></th>
 		</tr>`;
 		let regextable = document.getElementById("regex_replace_table");
 
@@ -16211,6 +16234,7 @@ Current version indicated by LITEVER below.
 			<td><input class="settinglabel miniinput" type="text" placeholder="(Inactive)" value="" id="regexreplace_pattern${i}"></td>
 			<td><input class="settinglabel miniinput" type="text" placeholder="(Remove)" value="" id="regexreplace_replacement${i}"></td>
 			<td><input type="checkbox" id="regexreplace_bothways${i}" style="margin:0px 0 0;"></td>
+			<td><input type="checkbox" id="regexreplace_displayonly${i}" style="margin:0px 0 0;"></td>
 			</tr>
 			`;
 		}
@@ -16222,18 +16246,21 @@ Current version indicated by LITEVER below.
 			let a1 = document.getElementById("regexreplace_pattern"+i);
 			let a2 = document.getElementById("regexreplace_replacement"+i);
 			let a3 = document.getElementById("regexreplace_bothways"+i);
-			if(a1 && a2 && a3)
+			let a4 = document.getElementById("regexreplace_displayonly"+i);
+			if(a1 && a2 && a3 && a4)
 			{
 				if(i<regexreplace_data.length)
 				{
 					a1.value = regexreplace_data[i].p;
 					a2.value = regexreplace_data[i].r;
 					a3.checked = (regexreplace_data[i].b?true:false);
+					a4.checked = (regexreplace_data[i].d?true:false);
 				}
 				else
 				{
 					a1.value = a2.value = "";
 					a3.checked = false;
+					a4.checked = false;
 				}
 			}
 		}
