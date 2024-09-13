@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 175;
+	const LITEVER = 176;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3997,22 +3997,29 @@ Current version indicated by LITEVER below.
 			.replace(/<http(.*?)\>/gm, '<a href="http$1">http$1</a>')
 			.replace(/\[(.*?)\]\(\)/gm, '<a href="$1">$1</a>')
 			.replace(/\[(.*?)\]\((.*?)\)/gm, '<a href="$2">$1</a>')
+
 			.replace(/^[\*+-][ .](.*)/gm, "<ul><li>$1</li></ul>")
 			.replace(/\%SpcEtg\%(\d\d?)[.](.*)([\n]?)/gm, "\%SpcEtg\%\n$1.$2\n")
 			.replace(/(^\d\d?[ .] .*)\%SpcStg\%/gm, "$1\n\%SpcTemp\%") //fix misalign
-			.replace(/^\d\d?[ .] (.*)([\n]??)/gm, "<ol><li>$1</li></ol>")
+			.replace(/^(\d\d?)[ .] (.*)([\n]??)/gm, function(match, p1, p2) {
+				return `<ol start="${p1}"><li>${p2}</li></ol>`;
+			})
 			.replace(/\n\%SpcTemp\%/gm, "\%SpcStg\%") //fix misalign
-			.replace(/<\/li><\/ol>\n\s*?\n<ol><li>/gm, "</li>\n<li>")
-			.replace(/<\/li><\/ol>\s*?<ol><li>/gm, "</li><li>")
-			.replace(/<\/[ou]l><li>(.*\%SpcStg\%.*\%SpcEtg\%.*)<\/li><\/[ou]l\>/gm,"$1")
+			.replace(/<\/li><\/ol>\n\s*?\n<ol start="\d+"><li>/gm, "</li>\n<li>")
+			.replace(/<\/li><\/ol>\s*?<ol start="\d+"><li>/gm, "</li><li>")
+			.replace(/<\/ul><li>(.*\%SpcStg\%.*\%SpcEtg\%.*)<\/li><\/ul>/gm,"$1")
+			.replace(/<\/ol><li>(.*\%SpcStg\%.*\%SpcEtg\%.*)<\/li><\/ol>/gm,"$1")
 			.replace(/^\s{2,6}[\*+-][ .](.*)/gm, "<ul><ul><li>$1</li></ul></ul>")
-			.replace(/^\s{2,6}\d[ .](.*)/gm, "<ul><ol><li>$1</li></ol></ul>")
-			.replace(/<\/ul\>\n\n<ul\>/gm, "\n")
-			.replace(/<\/ol\>\n\n<ol\>/gm, "\n")
-			.replace(/<\/ol\>\n<ol\>/g, "")
-			.replace(/<\/ul\>\n<ul\>/g, "")
+			.replace(/^\s{2,6}(\d)[ .](.*)/gm, function(match, p1, p2) {
+				return `<ul><ol start="${p1}"><li>${p2}</li></ol></ul>`;
+			})
+			.replace(/<\/ul>\n\n<ul>/gm, "\n")
+			.replace(/<\/ol>\n\n<ol start="\d+">/gm, "\n")
+			.replace(/<\/ol>\n<ol start="\d+">/g, "")
+			.replace(/<\/ul>\n<ul>/g, "")
 			.replace(/<\/li><\/ul>\n\s*?\n<ul><li>/gm, "</li>\n<li>")
 			.replace(/<\/li><\/ul>\s*?<ul><li>/gm, "</li><li>")
+
 			.replace(/\*\*\*([^\s*].*?[^\\])\*\*\*/gm, "<b><em>$1</em></b>")
 			.replace(/\*\*([^\s*].*?[^\\])\*\*/gm, "<b>$1</b>")
 			.replace(/\*([^\s*].*?[^\\])\*/gm, "<em>$1</em>")
@@ -12199,10 +12206,6 @@ Current version indicated by LITEVER below.
 			let st = get_instruct_starttag(true);
 			let et = get_instruct_endtag(true);
 			seqs = [st, et];
-			if(localsettings.fix_alpaca_leak && st.toLowerCase().includes("### instruction"))
-			{
-				seqs.push("\n### ");
-			}
 			if(localsettings.inject_chatnames_instruct)
 			{
 				if(localsettings.chatname!="")
@@ -13487,6 +13490,21 @@ Current version indicated by LITEVER below.
 
 		//do a second pass, this time removing the actual stop token
 		gentxt = trim_extra_stop_seqs(gentxt,false);
+
+		//fix alpaca leakage
+		if(localsettings.fix_alpaca_leak && get_instruct_starttag(true).toLowerCase().includes("### instruction"))
+		{
+			let matches = gentxt.match(/\n### (.+?):/g);
+			for(let m in matches)
+			{
+				let foundStop = gentxt.indexOf(matches[m]);
+				if (foundStop != -1)
+				{
+					//trim the gentxt
+					gentxt = gentxt.substr(0,foundStop);
+				}
+			}
+		}
 
 		//apply regex transform
 		if(regexreplace_data && regexreplace_data.length>0)
