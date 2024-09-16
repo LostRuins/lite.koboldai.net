@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 176;
+	const LITEVER = 177;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -8230,6 +8230,8 @@ Current version indicated by LITEVER below.
 			if(ep_should_always_use_chat_completions() || dropdown.selectedIndex==dropdown.options.length-1)
 			{
 				document.getElementById("useoaichatcompl").checked = true;
+			} else if (document.getElementById("custom_oai_endpoint").value.toLowerCase().includes("featherless.ai")) {
+				document.getElementById("useoaichatcompl").checked = false; //use completions for a better experience
 			} else {
 				document.getElementById("useoaichatcompl").checked = !non_completions;
 			}
@@ -8240,21 +8242,7 @@ Current version indicated by LITEVER below.
 	{
 		let desired_oai_key = document.getElementById("custom_oai_key").value.trim();
 		let desired_oai_ep = document.getElementById("custom_oai_endpoint").value.trim();
-		if(desired_oai_ep!="" && desired_oai_ep.slice(-1)=="/")
-		{
-			desired_oai_ep = desired_oai_ep.slice(0, -1);
-		}
-		if(!desired_oai_ep.includes("://")) //user did not add http/https
-		{
-			let is_local = is_local_url(desired_oai_ep);
-			desired_oai_ep = (is_local?"http://":"https://") + desired_oai_ep;
-		}
-		if (document.getElementById("oaiaddversion").checked)
-		{
-			if(desired_oai_ep!="" && desired_oai_ep.length > 4 && !desired_oai_ep.slice(-4).toLowerCase().includes("/v") && !desired_oai_ep.toLowerCase().includes("/v1/")) {
-				desired_oai_ep = desired_oai_ep + "/v1";
-			}
-		}
+		desired_oai_ep = transform_oai_ep(desired_oai_ep);
 
 		let oaiheaders = {
 			'Authorization': 'Bearer '+desired_oai_key,
@@ -8340,6 +8328,24 @@ Current version indicated by LITEVER below.
 	}
 
 	let openrouter_fetch_attempted = false;
+	let oai_custom_fetch_attempted = false;
+	function try_fetch_oai_models_auto()
+	{
+		//only for apis that don't gate the model list
+		if (document.getElementById("custom_oai_endpoint").value!="" &&
+		document.getElementById("custom_oai_endpoint").value.toLowerCase().includes("featherless.ai"))
+		{
+			if(!oai_custom_fetch_attempted)
+			{
+				oai_custom_fetch_attempted = true;
+				let dropdown = document.getElementById("custom_oai_model");
+				if(dropdown.options.length < 40)
+				{
+					oai_fetch_models(); //autofetch models
+				}
+			}
+		}
+	}
 	function customapi_dropdown(force_autotoggle_chatcompl = false)
 	{
 		let epchoice = document.getElementById("customapidropdown").value;
@@ -8384,6 +8390,7 @@ Current version indicated by LITEVER below.
 				} else {
 					document.getElementById("custom_oai_endpoint").value = (localsettings.saved_oai_addr ? localsettings.saved_oai_addr : default_oai_base);
 				}
+				try_fetch_oai_models_auto();
 			}
 			else if(epchoice==7)
 			{
@@ -8471,6 +8478,31 @@ Current version indicated by LITEVER below.
 				});
 			}
 		}
+	}
+
+	function transform_oai_ep(desired_oai_ep)
+	{
+		if(desired_oai_ep!="" && desired_oai_ep.slice(-1)=="/")
+		{
+			desired_oai_ep = desired_oai_ep.slice(0, -1);
+		}
+		if(!desired_oai_ep.includes("://")) //user did not add http/https
+		{
+			let is_local = is_local_url(desired_oai_ep);
+			desired_oai_ep = (is_local?"http://":"https://") + desired_oai_ep;
+		}
+		if (document.getElementById("oaiaddversion").checked)
+		{
+			if(desired_oai_ep!="" && desired_oai_ep.length > 4 && !desired_oai_ep.slice(-4).toLowerCase().includes("/v") && !desired_oai_ep.toLowerCase().includes("/v1/")) {
+				desired_oai_ep = desired_oai_ep + "/v1";
+			}
+		}
+		//fix common url typos if detected
+		if(desired_oai_ep!="" && desired_oai_ep.toLowerCase().startsWith("https://featherless.ai"))
+		{
+			desired_oai_ep = desired_oai_ep.replace("https://featherless.ai","https://api.featherless.ai")
+		}
+		return desired_oai_ep;
 	}
 
 	function connect_custom_endpoint()
@@ -8788,21 +8820,8 @@ Current version indicated by LITEVER below.
 				desired_oai_ep = document.getElementById("custom_oai_endpoint").value = default_oai_base;
 			}
 
-			if(desired_oai_ep!="" && desired_oai_ep.slice(-1)=="/")
-			{
-				desired_oai_ep = desired_oai_ep.slice(0, -1);
-			}
-			if(!desired_oai_ep.includes("://")) //user did not add http/https
-			{
-				let is_local = is_local_url(desired_oai_ep);
-				desired_oai_ep = (is_local?"http://":"https://") + desired_oai_ep;
-			}
-			if (document.getElementById("oaiaddversion").checked)
-			{
-				if(desired_oai_ep!="" && desired_oai_ep.length > 4 && !desired_oai_ep.slice(-4).toLowerCase().includes("/v") && !desired_oai_ep.toLowerCase().includes("/v1/")) {
-					desired_oai_ep = desired_oai_ep + "/v1";
-				}
-			}
+			desired_oai_ep = transform_oai_ep(desired_oai_ep);
+
 			if(desired_oai_key!="" && desired_oai_ep!="")
 			{
 				dismiss_endpoint_container();
@@ -12420,6 +12439,16 @@ Current version indicated by LITEVER below.
 				{
 					//mistral api does not support presence pen
 					oai_payload.presence_penalty = scaled_rep_pen;
+				}
+				if(targetep.toLowerCase().includes("featherless.ai"))
+				{
+					//featherless api supports additional fields, include them
+					oai_payload.top_k = (submit_payload.params.top_k<1?300:submit_payload.params.top_k);
+					oai_payload.min_p = localsettings.min_p;
+					if(submit_payload.params.sampler_seed>=1)
+					{
+						oai_payload.seed = submit_payload.params.sampler_seed;
+					}
 				}
 				if(submit_payload.params.logit_bias && JSON.stringify(submit_payload.params.logit_bias) != '{}')
 				{
@@ -17709,7 +17738,7 @@ Current version indicated by LITEVER below.
 				<span class="color_green" style="font-weight: bold;">Please input MistralAI Key.</span><br><br>
 				</span>
 
-				<input class="form-control" type="text" id="custom_oai_endpoint" placeholder="OpenAI API URL" value="">
+				<input class="form-control" type="text" id="custom_oai_endpoint" placeholder="OpenAI API URL" value="" onblur="try_fetch_oai_models_auto()">
 				<input class="form-control" type="password" id="custom_oai_key" placeholder="OpenAI API Key (Required)" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
 				Model Choice:<br>
 				<select style="padding:4px;display:inline;width:calc(100% - 220px)" class="form-control" id="custom_oai_model" onchange="oai_model_change(true)">
