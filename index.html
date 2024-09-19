@@ -4172,6 +4172,7 @@ Current version indicated by LITEVER below.
 	const oai_submit_endpoint_turbo = "/chat/completions";
 
 	const default_oai_image_endpoint = "/images/generations";
+	const default_oai_tts_endpoint = "/audio/speech";
 
 	const claude_submit_endpoint = "/complete";
 	const claude_submit_endpoint_v3 = "/messages";
@@ -4212,6 +4213,7 @@ Current version indicated by LITEVER below.
 
 	const XTTS_ID = 1000;
 	const ALLTALK_ID = 1001;
+	const OAI_TTS_ID = 1002;
 	const HD_RES_PX = 512;
 	const NO_HD_RES_PX = 320;
 	const SAVE_SLOTS = 6;
@@ -4310,6 +4312,8 @@ Current version indicated by LITEVER below.
 		saved_oai_addr: default_oai_base, //do not ever share this in save files!
 		saved_dalle_key: "",
 		saved_dalle_url: (default_oai_base + "/v1" + default_oai_image_endpoint),
+		saved_oai_tts_key: "",
+		saved_oai_tts_url: (default_oai_base + "/v1" + default_oai_tts_endpoint),
 		saved_openrouter_key: "",
 		saved_mistralai_key: "",
 		saved_claude_key: "", //do not ever share this in save files!
@@ -5346,6 +5350,29 @@ Current version indicated by LITEVER below.
 		},false);
 	}
 
+	function set_oai_tts_key()
+	{
+		inputBox("Enter OpenAI Compatible TTS API Key","OpenAI Compatible TTS API Key",localsettings.saved_oai_tts_key,"Input OpenAI Compatible TTS API Key", ()=>{
+			let userinput = getInputBoxValue();
+			userinput = userinput.trim();
+			if (userinput != null && userinput!="") {
+				localsettings.saved_oai_tts_key = userinput.trim();
+			}
+		},false,false,true);
+	}
+	function set_oai_tts_url()
+	{
+		inputBox("Enter OpenAI Compatible TTS API URL","OpenAI Compatible TTS API URL",localsettings.saved_oai_tts_url,"Input OpenAI Compatible TTS API URL", ()=>{
+			let userinput = getInputBoxValue();
+			userinput = userinput.trim();
+			if (userinput != null && userinput!="") {
+				localsettings.saved_oai_tts_url = userinput.trim();
+			}else{
+				localsettings.saved_oai_tts_url = (default_oai_base + "/v1" + default_oai_tts_endpoint);
+			}
+		},false);
+	}
+
 	function generate_dalle_image(req_payload, onImagesDone)
 	{
 		//split the prompt
@@ -6367,6 +6394,8 @@ Current version indicated by LITEVER below.
 					let tmp_oai2 = localsettings.saved_oai_addr;
 					let tmp_oai3 = localsettings.saved_dalle_key;
 					let tmp_oai4 = localsettings.saved_dalle_url;
+					let tmp_oai5 = localsettings.saved_oai_tts_key;
+					let tmp_oai6 = localsettings.saved_oai_tts_url;
 					let tmp_or1 = localsettings.saved_openrouter_key;
 					let tmp_mai = localsettings.saved_mistralai_key;
 					let tmp_claude1 = localsettings.saved_claude_key;
@@ -6403,6 +6432,8 @@ Current version indicated by LITEVER below.
 					localsettings.saved_oai_addr = tmp_oai2;
 					localsettings.saved_dalle_key = tmp_oai3;
 					localsettings.saved_dalle_url = tmp_oai4;
+					localsettings.saved_oai_tts_key = tmp_oai5;
+					localsettings.saved_oai_tts_url = tmp_oai6;
 					localsettings.saved_openrouter_key = tmp_or1;
 					localsettings.saved_mistralai_key = tmp_mai;
 					localsettings.saved_claude_key = tmp_claude1;
@@ -8857,6 +8888,8 @@ Current version indicated by LITEVER below.
 					localsettings.saved_oai_addr = custom_oai_endpoint;
 					localsettings.saved_dalle_key = custom_oai_key;
 					localsettings.saved_dalle_url = custom_oai_endpoint + default_oai_image_endpoint;
+					localsettings.saved_oai_tts_key = custom_oai_key;
+					localsettings.saved_oai_tts_url = custom_oai_endpoint + default_oai_tts_endpoint;
 				}
 				else if(epchoice==7)
 				{
@@ -9822,6 +9855,7 @@ Current version indicated by LITEVER below.
 		var ttshtml = "<option value=\"0\">Disabled</option>";
 		ttshtml += "<option value=\"1000\">XTTS API Server</option>";
 		ttshtml += "<option value=\"1001\">AllTalk API Server</option>";
+		ttshtml += "<option value=\"1002\">OpenAI-Compat. API Server</option>";
 		if ('speechSynthesis' in window) {
 			let voices = window.speechSynthesis.getVoices();
 			console.log("speech synth available: " + voices.length);
@@ -11348,12 +11382,16 @@ Current version indicated by LITEVER below.
 
 	function toggle_tts_mode()
 	{
+		document.getElementById("xtts_container").classList.add("hidden");
+		document.getElementById("oai_tts_container").classList.add("hidden");
 		if(document.getElementById("ttsselect").value==XTTS_ID || document.getElementById("ttsselect").value==ALLTALK_ID)
 		{
 			document.getElementById("xtts_container").classList.remove("hidden");
 			fetch_xtts_voices(true, document.getElementById("ttsselect").value==XTTS_ID);
-		}else{
-			document.getElementById("xtts_container").classList.add("hidden");
+		}
+		else if(document.getElementById("ttsselect").value==OAI_TTS_ID)
+		{
+			document.getElementById("oai_tts_container").classList.remove("hidden");
 		}
 	}
 	function set_xtts_url()
@@ -11421,13 +11459,53 @@ Current version indicated by LITEVER below.
 			}
 		}
 
-		if(ssval==XTTS_ID || ssval==ALLTALK_ID) //xtts api server
+		if(ssval==XTTS_ID || ssval==ALLTALK_ID || ssval==OAI_TTS_ID) //xtts api server
 		{
-			if(xtts_is_connected)
-			{
-				let is_xtts = (ssval==XTTS_ID);
-				const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+			let is_xtts = (ssval==XTTS_ID);
+			let is_oai_tts = (ssval==OAI_TTS_ID);
+			const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
+			if(is_oai_tts)
+			{
+				let payload =
+				{
+					"model": document.getElementById("oai_tts_model").value,
+					"input": text,
+					"voice": document.getElementById("oai_tts_voice").value
+				};
+				let oaiheaders = {
+					'Content-Type': 'application/json',
+					'Authorization': 'Bearer ' + localsettings.saved_oai_tts_key
+				};
+				fetch(localsettings.saved_oai_tts_url, {
+					method: 'POST',
+					headers: oaiheaders,
+					body: JSON.stringify(payload),
+				})
+				.then(response => response.arrayBuffer())
+				.then(data => {
+					return audioContext.decodeAudioData(data);
+				})
+				.then(decodedData => {
+					const playSound = audioContext.createBufferSource();
+					playSound.buffer = decodedData;
+					playSound.connect(audioContext.destination);
+					xtts_is_playing = true;
+					update_submit_button(false);
+					playSound.start(audioContext.currentTime);
+					playSound.onended = function() {
+						setTimeout(() => {
+							xtts_is_playing = false;
+							update_submit_button(false);
+							console.log("Audio finished playing");
+						},300);
+					};
+				}).catch((error) => {
+					console.log("XTTS Speak Error: " + error);
+				});
+			}
+			else if(xtts_is_connected)
+			{
 				if(is_xtts)
 				{
 					let xtts_payload = {
@@ -18566,6 +18644,14 @@ Current version indicated by LITEVER below.
 								<option value="female_calm" selected>female_calm</option><option value="female">female</option><option value="male">male</option>
 								</select></td>
 								</tr><tr style="font-size:12px;padding:2px;margin:0px 0 0;"><td>Language </td><td><input class="settinglabel miniinput" type="text" value="EN" id="xtts_lang" style="margin-left:3px; height:18px; width: 40px; padding: 2px;"></td></tr>
+								</table>
+							</div>
+							<div id="oai_tts_container" class="settinglabel hidden">
+								<table width="100%"><tr>
+								<td><button type="button" class="btn btn-primary" style="width:100%; padding:2px 3px;margin-top:2px;font-size:11px;" onclick="set_oai_tts_url()">Set URL</button></td>
+								<td><button type="button" class="btn btn-primary" style="width:100%; padding:2px 3px;margin-top:2px;font-size:11px;" onclick="set_oai_tts_key()">Set Key</button></td>
+								</tr><tr style="font-size:12px;padding:2px;margin:0px 0 0;"><td>TTS Model </td><td><input class="settinglabel miniinput" type="text" value="tts-1" id="oai_tts_model" style="margin-left:3px; height:18px; width: 55px; padding: 2px;"></td>
+								</tr><tr style="font-size:12px;padding:2px;margin:0px 0 0;"><td>TTS Voice </td><td><input class="settinglabel miniinput" type="text" value="alloy" id="oai_tts_voice" style="margin-left:3px; height:18px; width: 55px; padding: 2px;"></td></tr>
 								</table>
 							</div>
 						</div>
