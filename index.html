@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 177;
+	const LITEVER = 178;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -254,6 +254,10 @@ Current version indicated by LITEVER below.
 			word-wrap: break-word;
 			padding: 10px;
 			overflow-y: auto;
+		}
+		#gametext img {
+			max-width: 100%;
+			height: auto;
 		}
 		.txtchunk, ai_context_koboldlite_internal, #gametext, .chat_received_withd_msg p,.chat_sent_msg p {
 			white-space: pre-wrap;
@@ -1955,6 +1959,10 @@ Current version indicated by LITEVER below.
 	.chat_msg_history {
 		overflow-y: auto;
 	}
+	.chat_msg_history img {
+		max-width: 100%;
+		height: auto;
+	}
 	.normal_viewport_height
 	{
 		height: calc(98vh - 240px);
@@ -2351,6 +2359,10 @@ Current version indicated by LITEVER below.
 	.corpostyleitemcontent
 	{
 		white-space: pre-wrap;
+	}
+	.corpostyleitemcontent img {
+		max-width: 100%;
+		height: auto;
 	}
 	.corpolastreq
 	{
@@ -6538,6 +6550,22 @@ Current version indicated by LITEVER below.
 		}
 		return loadedwi;
 	}
+
+	var tempAltGreetings = [];
+	function click_more_alt_greeting(idx) {
+		if (tempAltGreetings.length > idx) {
+			msgboxYesNo(tempAltGreetings[idx].substr(0, 512) + "...\n\nUse This Greeting?", "Use Greeting " + idx +"?",()=>{
+				//this is an ugly hack
+				if(onInputboxOk)
+				{
+					document.getElementById("inputboxcontainerinput").value = idx;
+					onInputboxOk();
+				}
+			},()=>{});
+		} else {
+			console.log("ERROR ALT GREETING NOT FOUND");
+		}
+	}
 	function load_tavern_obj(obj)
 	{
 		let selectedgreeting = "";
@@ -6555,23 +6583,23 @@ Current version indicated by LITEVER below.
 			}
 			else if(localsettings.import_tavern_prompt && obj.alternate_greetings && obj.alternate_greetings.length>0)
 			{
-				let bufGreetings = [];
+				tempAltGreetings = [];
 				if(obj.first_mes)
 				{
-					bufGreetings.push(obj.first_mes);
+					tempAltGreetings.push(obj.first_mes);
 				}
-				bufGreetings = bufGreetings.concat(obj.alternate_greetings);
-				bufGreetings = bufGreetings.slice(0,16);
+				tempAltGreetings = tempAltGreetings.concat(obj.alternate_greetings);
+				tempAltGreetings = tempAltGreetings.slice(0,16);
 				let bufMsg = "<p><b><u>Select Greeting Message</u></b></p>"
-				for (it in bufGreetings) {
-					bufMsg += it + ") " + bufGreetings[it].substr(0, 64) + "...<br>"
+				for (it in tempAltGreetings) {
+					bufMsg += it + ") " + tempAltGreetings[it].substr(0, 64) + `...<a href="#" onclick="click_more_alt_greeting(${it})">(more)</a><br>`
 				}
 
-				inputBox(bufMsg,"Choose Greeting Message","","Number 0 to " + (bufGreetings.length-1), ()=>{
+				inputBox(bufMsg,"Choose Greeting Message","","Number 0 to " + (tempAltGreetings.length-1), ()=>{
 					let userinput = getInputBoxValue();
 					userinput = parseInt(userinput);
-					userinput = cleannum(userinput,0,bufGreetings.length-1);
-					selectedgreeting = bufGreetings[userinput];
+					userinput = cleannum(userinput,0,tempAltGreetings.length-1);
+					selectedgreeting = tempAltGreetings[userinput];
 					load_tav_obj_confirm_p2(usechatmode);
 				}, true);
 
@@ -7185,7 +7213,7 @@ Current version indicated by LITEVER below.
 						}
 					})
 					.then(data => {
-						if(data) //if cai fetch was successul
+						if(data) //if cai fetch was successful
 						{
 							console.log(data);
 							let botname = data.name?data.name:"Bot";
@@ -19439,22 +19467,6 @@ Current version indicated by LITEVER below.
 		</div>
 	</div>
 
-	<div class="popupcontainer flex hidden" id="yesnocontainer">
-		<div class="popupbg flex"></div>
-		<div class="nspopup flexsizevsmall">
-			<div class="popuptitlebar">
-				<div class="popuptitletext" id="yesnocontainertitle"></div>
-			</div>
-			<div class="aidgpopuplistheader anotelabel" id="yesnocontainertext">
-			</div>
-			<div class="aidgpopuplistheader anotelabel hidden" id="yesnocontainercheckboxdiv"><span style="vertical-align: middle; margin:4px" id="yesnocontainercheckboxtext"></span><input type="checkbox" id="yesnocontainercheckbox" style=" vertical-align: top;" checked></div>
-			<div class="popupfooter">
-				<button type="button" class="btn btn-primary" onclick="onYesFn()">Yes</button>
-				<button type="button" class="btn btn-primary" onclick="onNoFn()">No</button>
-			</div>
-		</div>
-	</div>
-
 	<div class="popupcontainer flex hidden" id="inputboxcontainer">
 		<div class="popupbg flex"></div>
 		<div class="nspopup flexsize moderate">
@@ -19471,6 +19483,22 @@ Current version indicated by LITEVER below.
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="onInputboxOk()">OK</button>
 				<button type="button" id="inputboxcancel" class="btn btn-primary hidden" onclick="onInputboxCancel()">Cancel</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="yesnocontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup flexsizevsmall">
+			<div class="popuptitlebar">
+				<div class="popuptitletext" id="yesnocontainertitle"></div>
+			</div>
+			<div class="aidgpopuplistheader anotelabel" id="yesnocontainertext">
+			</div>
+			<div class="aidgpopuplistheader anotelabel hidden" id="yesnocontainercheckboxdiv"><span style="vertical-align: middle; margin:4px" id="yesnocontainercheckboxtext"></span><input type="checkbox" id="yesnocontainercheckbox" style=" vertical-align: top;" checked></div>
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="onYesFn()">Yes</button>
+				<button type="button" class="btn btn-primary" onclick="onNoFn()">No</button>
 			</div>
 		</div>
 	</div>
