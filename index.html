@@ -7089,7 +7089,7 @@ Current version indicated by LITEVER below.
 					});
 				}else{
 					temp_scenario = null;
-					document.getElementById("scenariodesc").innerText = "Error: User input is invalid\n\n Please ensure you have input a valid Pygmalion.Chat UUID.";
+					document.getElementById("scenariodesc").innerText = "Error: User input is invalid\n\n Please ensure you have input a valid Pygmalion.Chat UUID or URL.";
 				}
 			}
 		}
@@ -7311,6 +7311,62 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	function character_creator()
+	{
+		hide_popups();
+		document.getElementById("charcreator_name").value = document.getElementById("charcreator_persona").value = document.getElementById("charcreator_scenario").value = document.getElementById("charcreator_greeting").value = "";
+		document.getElementById("charactercreator").classList.remove("hidden");
+		tempAestheticInstructUISettings = deepCopyAestheticSettings(aestheticInstructUISettings);
+		character_creator_updateimg();
+	}
+	function character_creator_updateimg()
+	{
+		document.getElementById("charcreator_avatar").style.backgroundImage = `url(` + (aestheticInstructUISettings.AI_portrait != "default" ? aestheticInstructUISettings.AI_portrait : niko_square) + `)`;
+	}
+	function character_creator_done(confirm)
+	{
+		if (!confirm)
+		{
+			aestheticInstructUISettings = deepCopyAestheticSettings(tempAestheticInstructUISettings);
+			updateUIFromData();
+		}
+		else
+		{
+			let chatopponent = document.getElementById("charcreator_name").value;
+			chatopponent = chatopponent?chatopponent:"Bot";
+
+			let persona = document.getElementById("charcreator_persona").value;
+			let scenario = document.getElementById("charcreator_scenario").value;
+			scenario = scenario?scenario:"";
+			let memory = persona?("{{char}} Persona: "+persona):"";
+			let greeting = document.getElementById("charcreator_greeting").value;
+			greeting = greeting?greeting:"Hello there!";
+			if(scenario!="")
+			{
+				scenario = "\n[Scenario: "+scenario+"]";
+			}
+			let combinedmem = memory + scenario;
+			greeting = "\n{{char}}: "+ greeting;
+			restart_new_game(false);
+
+			gametext_arr = [];
+			if(!localsettings.placeholder_tags) //do a one-time replace instead
+			{
+				greeting = replace_placeholders(greeting, false, true);
+				combinedmem = replace_placeholders(combinedmem, false, true);
+			}
+			gametext_arr.push(greeting);
+			if (combinedmem != "") {
+				current_memory = combinedmem;
+			}
+			localsettings.opmode = 3;
+			localsettings.gui_type_chat = 2;
+			localsettings.chatopponent = chatopponent;
+			render_gametext();
+		}
+		tempAestheticInstructUISettings = null;
+		hide_popups();
+	}
 
 	function click_scenario(idx)
 	{
@@ -7561,7 +7617,8 @@ Current version indicated by LITEVER below.
 		let scenarios = `<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_aetherroom_scenario()">Import from<br>aetherroom.club</button>`+
 		`<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_chubai_scenario()">Import from<br>characterhub.org / chub.ai</button>` +
 		`<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_pygchat_scenario()">Import from<br>pygmalion.chat</button>` +
-		`<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_aicc_scenario()">Import from<br>aicharactercards.com</button>`;
+		`<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_aicc_scenario()">Import from<br>aicharactercards.com</button>` +
+		`<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="character_creator()">New Character Creator</button>`;
 		for(let i=0;i<scenario_db.length;++i)
 		{
 			let curr = scenario_db[i];
@@ -7882,6 +7939,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("sharecontainer").classList.contains("hidden") &&
 			document.getElementById("customendpointcontainer").classList.contains("hidden") &&
 			document.getElementById("quickstartcontainer").classList.contains("hidden") &&
+			document.getElementById("charactercreator").classList.contains("hidden") &&
 			document.getElementById("zoomedimgcontainer").classList.contains("hidden") &&
 			document.getElementById("groupselectcontainer").classList.contains("hidden") &&
 			document.getElementById("addimgcontainer").classList.contains("hidden") &&
@@ -7915,6 +7973,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("sharecontainer").classList.add("hidden");
 		document.getElementById("customendpointcontainer").classList.add("hidden");
 		document.getElementById("quickstartcontainer").classList.add("hidden");
+		document.getElementById("charactercreator").classList.add("hidden");
 		document.getElementById("zoomedimgcontainer").classList.add("hidden");
 		document.getElementById("groupselectcontainer").classList.add("hidden");
 		document.getElementById("addimgcontainer").classList.add("hidden");
@@ -17161,6 +17220,37 @@ Current version indicated by LITEVER below.
 	let aestheticInstructUISettings = new AestheticInstructUISettings();
 	let tempAestheticInstructUISettings = null; // These exist to act as backup when customizing, to revert when pressing the 'Cancel' button.
 
+	function selectAvatarImage(isSelfPortrait)
+	{
+		let finput = document.getElementById('portraitFileInput');
+		finput.click();
+		finput.onchange = (event) => {
+			if (event.target.files.length > 0 && event.target.files[0]) {
+				const file = event.target.files[0];
+				const reader = new FileReader();
+				reader.onload = function(img) {
+					compressImage(img.target.result, loadCompressedImage, true);
+					function loadCompressedImage(compressedImageURI, aspectratio) {
+
+						if(isSelfPortrait)
+						{
+							aestheticInstructUISettings.you_portrait = compressedImageURI;
+							document.getElementById('portrait_ratio_you').value = aspectratio.toFixed(2);
+						}
+						else
+						{
+							aestheticInstructUISettings.AI_portrait = compressedImageURI;
+							document.getElementById('portrait_ratio_AI').value = aspectratio.toFixed(2);
+						}
+						refreshPreview(true);
+					}
+				}
+				reader.readAsDataURL(file);
+			}
+			finput.value = "";
+		};
+	}
+
 	function initializeInstructUIFunctionality() {
 
 		// Initialize foregroundColorPickers and backgroundColorPickers.
@@ -17222,33 +17312,7 @@ Current version indicated by LITEVER below.
 		// Initialize functionality for the portrait pickers.
 		document.querySelectorAll('#you-portrait, #AI-portrait').forEach(element => {
 		element.addEventListener('click', (e) => {
-			let finput = document.getElementById('portraitFileInput');
-			finput.click();
-			finput.onchange = (event) => {
-				if (event.target.files.length > 0 && event.target.files[0]) {
-					const file = event.target.files[0];
-					const reader = new FileReader();
-					reader.onload = function(img) {
-						compressImage(img.target.result, loadCompressedImage, true);
-						function loadCompressedImage(compressedImageURI, aspectratio) {
-							let isSelfPortrait = (element.id=="you-portrait");
-							if(isSelfPortrait)
-							{
-								aestheticInstructUISettings.you_portrait = compressedImageURI;
-								document.getElementById('portrait_ratio_you').value = aspectratio.toFixed(2);
-							}
-							else
-							{
-								aestheticInstructUISettings.AI_portrait = compressedImageURI;
-								document.getElementById('portrait_ratio_AI').value = aspectratio.toFixed(2);
-							}
-							refreshPreview(true);
-						}
-					}
-					reader.readAsDataURL(file);
-				}
-				finput.value = "";
-			};
+			selectAvatarImage(element.id=="you-portrait");
 		});
 		element.addEventListener('mouseover', () => element.style.cursor = "pointer");
 		});
@@ -17299,6 +17363,7 @@ Current version indicated by LITEVER below.
 		if (updateFromUI) { updateDataFromUI(); }
 		updateUIFromData();
 		updateTextPreview();
+		character_creator_updateimg();
 	}
 
 	function updateDataFromUI() {
@@ -17903,6 +17968,46 @@ Current version indicated by LITEVER below.
 					<button type="button" class="btn btn-primary" id=""
 						onclick="hide_popups()">Cancel</button>
 				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer hidden flex" id="charactercreator">
+		<div class="popupbg flex"></div>
+		<div class="nspopup flexsize higher">
+			<div class="popuptitlebar">
+				<div class="popuptitletext">Roleplay Character Creator</div>
+			</div>
+			<div class="aidgpopuplistheader anotelabel">
+				This tool is an easy way to create your own roleplay characters.<br>Alternatively, you can <a href="#" class="color_blueurl" onclick="hide_popups();document.getElementById('loadfileinput').click()"><b>click here to import an existing Tavern Character Card</b></a>.<br><br>
+
+				<div class="inlinelabel">
+					<div class="justifyleft" style="padding:4px">Character Name: </div>
+					<input title="Character Name" style="width:calc(100% - 136px);" type="text" placeholder="Enter Bot's Name (e.g. Arthur Green)" value="" id="charcreator_name">
+				</div>
+				<div class="inlinelabel">
+					<div class="justifyleft" style="padding:4px">Character Avatar: </div>
+					<button type="button" class="btn btn-primary" style="padding:2px 4px;margin:2px;" onclick="selectAvatarImage(false)">Select Image</button>
+					<div id="charcreator_avatar" style="background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; width: 32px; height:32px; border-radius:100rem; background-clip: content-box; margin: 4px 4px; border:none;"></div>
+				</div>
+				<div class="inlinelabel">
+					<div class="justifyleft" style="padding:4px">Character Persona: </div>
+					<input title="Character Persona" style="width:calc(100% - 136px);" type="text" placeholder="Describe this character (e.g. 25yo Male Elf, Brave, Chatty)" value="" id="charcreator_persona">
+				</div>
+				<div class="inlinelabel">
+					<div class="justifyleft" style="padding:4px">Describe Scenario: </div>
+					<input title="Describe Scenario" style="width:calc(100% - 136px);" type="text" placeholder="Describe the scenario (e.g. A fireside chat at the spooky campsite)" value="" id="charcreator_scenario">
+				</div>
+				<div class="inlinelabel">
+					<div class="justifyleft" style="padding:4px">Character Greeting: </div>
+					<input title="Character Greeting" style="width:calc(100% - 136px);" type="text" placeholder="First message greeting (e.g. Hello, traveller!)" value="" id="charcreator_greeting">
+				</div>
+
+				After creating your character, you can edit it further at any time in the 'Context' memory window.
+			</div>
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="character_creator_done(true);">Confirm</button>
+				<button type="button" class="btn btn-primary" onclick="character_creator_done(false);">Cancel</button>
 			</div>
 		</div>
 	</div>
