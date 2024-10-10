@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 179;
+	const LITEVER = 180;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -4258,7 +4258,6 @@ Current version indicated by LITEVER below.
 	var current_anotetemplate = "[Author\'s note: <|>]";
 	var extrastopseq = "";
 	var tokenbans = "";
-	var phrasebans = "";
 	var anote_strength = 320; //distance from end
 	var newlineaftermemory = true;
 	var current_wi = []; //each item stores a wi object.
@@ -6093,7 +6092,6 @@ Current version indicated by LITEVER below.
 		//extra unofficial fields for the story
 		new_save_storyobj.extrastopseq = extrastopseq;
 		new_save_storyobj.tokenbans = tokenbans;
-		new_save_storyobj.phrasebans = phrasebans;
 		new_save_storyobj.anotestr = anote_strength;
 		new_save_storyobj.wisearchdepth = wi_searchdepth;
 		new_save_storyobj.wiinsertlocation = wi_insertlocation;
@@ -6285,7 +6283,6 @@ Current version indicated by LITEVER below.
 			let old_current_wi = current_wi;
 			let old_extrastopseq = extrastopseq;
 			let old_tokenbans = tokenbans;
-			let old_phrasebans = phrasebans;
 			let old_notes = personal_notes;
 			let old_regexreplace_data = regexreplace_data;
 			let old_placeholder_tags_data = placeholder_tags_data;
@@ -6344,10 +6341,6 @@ Current version indicated by LITEVER below.
 				if(storyobj.tokenbans)
 				{
 					tokenbans = storyobj.tokenbans;
-				}
-				if(storyobj.phrasebans)
-				{
-					phrasebans = storyobj.phrasebans;
 				}
 				if (storyobj.anotestr) {
 					anote_strength = storyobj.anotestr;
@@ -6446,7 +6439,6 @@ Current version indicated by LITEVER below.
 					extrastopseq = old_extrastopseq;
 					regexreplace_data = old_regexreplace_data;
 					tokenbans = old_tokenbans;
-					phrasebans = old_phrasebans;
 					placeholder_tags_data = old_placeholder_tags_data;
 				}
 
@@ -8063,7 +8055,7 @@ Current version indicated by LITEVER below.
 
 	function expand_tokens_section(targetid)
 	{
-		let tablist = ["expandregexreplace","expandtokenbans","expandphrasebans","expandlogitbias","expandplaceholdertags"];
+		let tablist = ["expandregexreplace","expandtokenbans","expandlogitbias","expandplaceholdertags"];
 
 		for(let i=0;i<tablist.length;++i)
 		{
@@ -8159,7 +8151,7 @@ Current version indicated by LITEVER below.
 
 	function add_token_ban()
 	{
-		inputBox("Enter a token substring to be banned. ALL matching tokens will be removed.\nFor example adding 'ice' will also ban 'nice' and 'rice', assuming they are individual tokens.","Add Banned Token Substring","","Enter a Token Substring",()=>{
+		inputBox("Enter a string to be banned (e.g. Slop text to remove). If it's generated, the AI will try something else. Work for both individual words or long phrases, not case-sensitive. All substring matches will be prevented.\nFor example adding 'ice bag' will also ban 'nice bag' and 'rice bag'.","Add Banned String","","Enter String To Ban",()=>{
 			let userinput = getInputBoxValue();
 			if(userinput.trim()!="")
 			{
@@ -8170,23 +8162,6 @@ Current version indicated by LITEVER below.
 				}
 				ov += userinput.trim();
 				document.getElementById("tokenbans").value = ov;
-			}
-		},false);
-	}
-
-	function add_phrase_ban()
-	{
-		inputBox("Enter a string to be banned (e.g. Slop text to remove). If it's generated, the AI backtracks and tries something else.","Add Banned Phrase String","","Enter String To Ban",()=>{
-			let userinput = getInputBoxValue();
-			if(userinput.trim()!="")
-			{
-				let ov = document.getElementById("phrasebans").value;
-				if(ov!="")
-				{
-					ov += "||$||";
-				}
-				ov += userinput.trim();
-				document.getElementById("phrasebans").value = ov;
 			}
 		},false);
 	}
@@ -10726,7 +10701,6 @@ Current version indicated by LITEVER below.
 		anote_strength = document.getElementById("anote_strength").value;
 		extrastopseq = document.getElementById("extrastopseq").value;
 		tokenbans = document.getElementById("tokenbans").value;
-		phrasebans = document.getElementById("phrasebans").value;
 		newlineaftermemory = (document.getElementById("newlineaftermemory").checked?true:false);
 		try
 		{
@@ -10995,7 +10969,6 @@ Current version indicated by LITEVER below.
 			current_wi = [];
 			extrastopseq = "";
 			tokenbans = "";
-			phrasebans = "";
 			anote_strength = 320;
 			logitbiasdict = {};
 			wi_searchdepth = 0;
@@ -12561,24 +12534,6 @@ Current version indicated by LITEVER below.
 		return seqs;
 	}
 
-	function get_phrase_bans()
-	{
-		let seqs = [];
-		if (phrasebans != "") {
-			let rep = replaceAll(phrasebans, "\\n", "\n");
-			let srep = rep.split("||$||");
-			if (srep.length > 0 && !seqs) {
-				seqs = [];
-			}
-			for (let i = 0; i < srep.length; ++i) {
-				if (srep[i] && srep[i] != "") {
-					seqs.push(srep[i]);
-				}
-			}
-		}
-		return seqs;
-	}
-
 	function cleanup_story_completion(resp)
 	{
 		if(gametext_arr.length>0)
@@ -12636,7 +12591,6 @@ Current version indicated by LITEVER below.
 			submit_payload.params.dynatemp_exponent = localsettings.dynatemp_exponent;
 			submit_payload.params.smoothing_factor = localsettings.smoothing_factor;
 			submit_payload.params.banned_tokens = get_token_bans();
-			submit_payload.params.banned_phrases = get_phrase_bans();
 			submit_payload.params.render_special = localsettings.render_special_tags;
 		}
 		if(custom_kobold_endpoint != "" && is_using_kcpp_with_dry() && localsettings.dry_multiplier > 0)
@@ -16541,7 +16495,6 @@ Current version indicated by LITEVER below.
 		document.getElementById("anote_strength").value = anote_strength;
 		document.getElementById("extrastopseq").value = extrastopseq;
 		document.getElementById("tokenbans").value = tokenbans;
-		document.getElementById("phrasebans").value = phrasebans;
 		document.getElementById("newlineaftermemory").checked = (newlineaftermemory?true:false);
 		document.getElementById("logitbiastxtarea").value = JSON.stringify(logitbiasdict,null,2);
 
@@ -16565,7 +16518,6 @@ Current version indicated by LITEVER below.
 		{
 			document.getElementById("nologitbias").classList.add("hidden");
 			document.getElementById("notokenbans").classList.add("hidden");
-			document.getElementById("nophrasebans").classList.add("hidden");
 			if(is_using_kcpp_with_added_memory())
 			{
 				document.getElementById("newlogitbiasstringtogglesection").classList.remove("hidden");
@@ -16578,7 +16530,6 @@ Current version indicated by LITEVER below.
 		{
 			document.getElementById("nologitbias").classList.remove("hidden");
 			document.getElementById("notokenbans").classList.remove("hidden");
-			document.getElementById("nophrasebans").classList.remove("hidden");
 			document.getElementById("newlogitbiasstringtogglesection").classList.add("hidden");
 			document.getElementById("newlogitbiasstringtoggle").checked = false;
 		}
@@ -19305,29 +19256,16 @@ Current version indicated by LITEVER below.
 					</div>
 				</div>
 
-				<div style="padding:3px;" class="justifyleft settinglabel">Token Filter <span class="helpicon">?<span
-					class="helptext">Outright removal for ANY tokens containing a specific substring from model vocab. If you want multiple sequences, separate them with the following delimiter: ||$||</span></span>
-					<button type="button" title="Token Filter" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('expandtokenbans')">Expand Section</button>
+				<div style="padding:3px;" class="justifyleft settinglabel">Phrase / Word Ban (Anti-Slop) <span class="helpicon">?<span
+					class="helptext">Prevents specific words or phrases from being generated, either modifying model vocab or by backtracking and regenerating when they appear. If you want multiple sequences, separate them with the following delimiter: ||$||</span></span>
+					<button type="button" title="Phrase / Token Ban (Anti-Slop)" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('expandtokenbans')">Expand Section</button>
 				</div>
 				<div id="expandtokenbans" class="hidden">
-					<div class="color_red hidden" id="notokenbans">Token filter may be unavailable.</div>
-					<div style="color:#ffffff;">Outright removal for ANY tokens containing a specific substring from model vocab. If you want multiple sequences, separate them with the following delimiter: ||$||<br><em>Note: If you're trying to ban a specific token ID, you should use Logit Bias instead!</em><br></div>
+					<div class="color_red hidden" id="notokenbans">Phrase banning may be unavailable.</div>
+					<div style="color:#ffffff;">Prevents specific words or phrases from being generated, either modifying model vocab or by backtracking and regenerating when they appear. If you want multiple sequences, separate them with the following delimiter: ||$||<br><em>Note: If you're trying to ban a specific token by ID, you should use Logit Bias instead!</em><br></div>
 					<div style="display: flex; column-gap: 4px; margin-bottom: 4px;">
 					<input class="form-control stopseqbox inlineinput" type="text" placeholder="None" value="" id="tokenbans">
 					<button type="button" class="btn btn-primary" style="width:90px;padding:6px 6px;" onclick="add_token_ban()">Add New</button>
-					</div>
-				</div>
-
-				<div style="padding:3px;" class="justifyleft settinglabel">Phrase Ban (Anti-Slop) <span class="helpicon">?<span
-					class="helptext">Prevents specific phrases from being generated by backtracking and regenerating when they appear. If you want multiple sequences, separate them with the following delimiter: ||$||</span></span>
-					<button type="button" title="Phrase Ban (Anti-Slop)" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('expandphrasebans')">Expand Section</button>
-				</div>
-				<div id="expandphrasebans" class="hidden">
-					<div class="color_red hidden" id="nophrasebans">Phrase Ban (Anti-Slop) may be unavailable.</div>
-					<div style="color:#ffffff;">Prevents specific phrases from being generated by backtracking and regenerating when they appear. If you want multiple sequences, separate them with the following delimiter: ||$||<br></div>
-					<div style="display: flex; column-gap: 4px; margin-bottom: 4px;">
-					<input class="form-control stopseqbox inlineinput" type="text" placeholder="None" value="" id="phrasebans">
-					<button type="button" class="btn btn-primary" style="width:90px;padding:6px 6px;" onclick="add_phrase_ban()">Add New</button>
 					</div>
 				</div>
 
