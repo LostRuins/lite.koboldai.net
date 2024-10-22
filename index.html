@@ -4244,6 +4244,11 @@ Current version indicated by LITEVER below.
 	const a1111_img2img_endpoint = "/sdapi/v1/img2img";
 	const a1111_interrogate_endpoint = "/sdapi/v1/interrogate";
 
+	const comfy_models_endpoint = "/models/checkpoints";
+	const comfy_generate_endpoint = "/prompt";
+	const comfy_history_endpoint = "/history";
+	const comfy_results_endpoint = "/view?filename=";
+
 	const xtts_gen_endpoint = "/tts_to_audio/";
 	const xtts_voices_endpoint = "/speakers_list";
 	const alltalk_gen_endpoint = "/api/tts-generate";
@@ -4262,6 +4267,7 @@ Current version indicated by LITEVER below.
 	const default_a1111_base = "http://localhost:7860";
 	const default_xtts_base = " http://localhost:8020";
 	const default_alltalk_base = "http://localhost:7851";
+	const default_comfy_base = "http://localhost:8188";
 
 	const XTTS_ID = 1000;
 	const ALLTALK_ID = 1001;
@@ -4385,10 +4391,11 @@ Current version indicated by LITEVER below.
 		saved_oai_custommodel: "", //customized oai custom model
 		saved_oai_role: 0, //0=user,1=assistant,2=system
 		saved_a1111_url: default_a1111_base,
+		saved_comfy_url: default_comfy_base,
 		saved_xtts_url: default_xtts_base,
 		saved_alltalk_url: default_alltalk_base,
 		prev_custom_endpoint_type: 0, //show a reconnect box to custom endpoint if needed. 0 is horde, otherwise its dropdown value+1
-		generate_images_mode: (localflag?0:1), //0=off, 1=horde, 2=a1111, 3=dalle
+		generate_images_mode: (localflag?0:1), //0=off, 1=horde, 2=a1111, 3=dalle, 4=comfy
 
 		autoscroll: true, //automatically scroll to bottom on render
 		printer_view: false, //automatically scroll to bottom on render
@@ -5144,7 +5151,10 @@ Current version indicated by LITEVER below.
 		{
 			connect_to_a1111(true);
 		}
-
+		else if(localsettings.generate_images_mode==4)
+		{
+			connect_to_comfyui(true);
+		}
 		if(!initial_fetched_kudos && localsettings.my_api_key!=defaultsettings.my_api_key)
 		{
 			document.getElementById("apikey").value = localsettings.my_api_key;
@@ -5290,6 +5300,137 @@ Current version indicated by LITEVER below.
 		});
 	}
 
+	var comfyui_is_connected = false;
+	function connect_to_comfyui(silent=false)
+    {
+		console.log("Attempt ComfyUI Connection...");
+		//establish initial connection to a1111 api
+		fetch(localsettings.saved_comfy_url + comfy_models_endpoint)
+		.then(x => x.json())
+		.then(modelsdata => {
+
+			if (modelsdata == null || modelsdata.length == 0) {
+				msgbox("Invalid data received or no models found. Is ComfyUI running at the url " + localsettings.saved_comfy_url + " ?\n\nIt must be launched with the flag --enable-cors-header '*' to enable API access");
+			} else {
+				let current_loaded_model = modelsdata[0];
+				//repopulate our model list
+				let dropdown = document.getElementById("generate_images_comfy_model");
+				let selectionhtml = ``;
+				for (var i = 0; i < modelsdata.length; ++i) {
+					selectionhtml += `<option value="` + modelsdata[i] + `" `+(current_loaded_model==modelsdata[i]?"selected":"")+`>`+modelsdata[i]+`</option>`;
+				}
+				dropdown.innerHTML = selectionhtml;
+				comfyui_is_connected = true;
+			}
+		}).catch((error) => {
+			if(!silent)
+			{
+				msgbox("ComfyUI Connect Error: " + error+"\nPlease make sure ComfyUI is running at "+localsettings.saved_comfy_url+" and properly configured!\n\nIt must be launched with the flag --enable-cors-header '*' to enable API access\n");
+			}
+			comfyui_is_connected = false;
+		});
+	}
+
+	function generate_comfy_image(req_payload)
+	{
+		let splits = req_payload.prompt.split("###");
+		let prompt = splits[0].trim();
+		let negprompt = (splits.length > 1 ? splits[1] : "");
+
+		let genimg_payload = {
+			"prompt": {
+				"3": {
+					"class_type": "KSampler",
+					"inputs": {
+						"cfg": req_payload.params.cfg_scale,
+						"denoise": 1,
+						"latent_image": ["5", 0],
+						"model": ["4", 0],
+						"negative": ["7", 0],
+						"positive": ["6", 0],
+						"sampler_name": "euler",
+						"scheduler": "normal",
+						"seed": Math.floor(Math.random() * 99999999),
+						"steps": req_payload.params.steps
+					}
+				},
+				"4": {
+					"class_type": "CheckpointLoaderSimple",
+					"inputs": {
+						"ckpt_name": req_payload.models[0]
+					}
+				},
+				"5": {
+					"class_type": "EmptyLatentImage",
+					"inputs": {
+						"batch_size": 1,
+						"height": req_payload.params.height,
+						"width": req_payload.params.width
+					}
+				},
+				"6": {
+					"class_type": "CLIPTextEncode",
+					"inputs": {
+						"clip": ["4", 1],
+						"text": prompt
+					}
+				},
+				"7": {
+					"class_type": "CLIPTextEncode",
+					"inputs": {
+						"clip": ["4", 1],
+						"text": negprompt
+					}
+				},
+				"8": {
+					"class_type": "VAEDecode",
+					"inputs": {
+						"samples": ["3", 0],
+						"vae": ["4", 2]
+					}
+				},
+				"9": {
+					"class_type": "SaveImage",
+					"inputs": {
+						"filename_prefix": "kliteimg",
+						"images": ["8", 0]
+					}
+				}
+			}
+		};
+
+		let gen_endpoint = localsettings.saved_comfy_url + comfy_generate_endpoint;
+		console.log(genimg_payload);
+
+		fetch(gen_endpoint, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify(genimg_payload),
+		})
+		.then(x => x.json())
+		.then(resp => {
+			console.log(resp);
+			if(resp.prompt_id)
+			{
+				let imgid = resp.prompt_id.toString();
+				let nimgtag = "[<|p|" + imgid + "|p|>]";
+				gametext_arr.push(nimgtag);
+				image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:prompt, poll_category:2 };
+				image_db[imgid].aspect = (req_payload.params.width>req_payload.params.height?2:(req_payload.params.width<req_payload.params.height?1:0));
+				image_db[imgid].imsource = 0; //0=generated,1=uploaded
+			}else{
+				console.log("Generation Error!");
+				msgbox("Image Generation Failed!\n\nPlease make sure ComfyUI is running and properly configured!\n\nIt must be launched with the flag --enable-cors-header '*' to enable API access\n");
+			}
+
+		}).catch((error) => {
+			console.log("Generation Error: " + error);
+			msgbox("Image Generation Failed!\n\nPlease make sure ComfyUI is running and properly configured!\n\nIt must be launched with the flag --enable-cors-header '*' to enable API access\n");
+		});
+	}
+
 	function generate_a1111_image(req_payload, onImagesDone)
 	{
 		//split the prompt
@@ -5393,6 +5534,26 @@ Current version indicated by LITEVER below.
 			if (userinput != null && userinput!="") {
 				localsettings.saved_a1111_url = userinput.trim();
 				connect_to_a1111(false);
+			}
+		},false);
+	}
+
+	function set_comfy_endpoint()
+	{
+		inputBox("Enter ComfyUI API endpoint","ComfyUI Endpoint Selection",localsettings.saved_comfy_url,"Input ComfyUI API URL", ()=>{
+			let userinput = getInputBoxValue();
+			userinput = userinput.trim();
+			if(userinput!="" && userinput.slice(-1)=="/")
+			{
+				userinput = userinput.slice(0, -1);
+			}
+			if(userinput=="")
+			{
+				userinput = default_comfy_base;
+			}
+			if (userinput != null && userinput!="") {
+				localsettings.saved_comfy_url = userinput.trim();
+				connect_to_comfyui(false);
 			}
 		},false);
 	}
@@ -6500,6 +6661,7 @@ Current version indicated by LITEVER below.
 					let tmp_kai = localsettings.saved_kai_addr;
 					let tmp_kai2 = localsettings.saved_kai_key;
 					let tmp_a1111 = localsettings.saved_a1111_url;
+					let tmp_comfy = localsettings.saved_comfy_url;
 					let tmp_xtts = localsettings.saved_xtts_url;
 					let tmp_imggen = localsettings.generate_images_mode;
 
@@ -6539,6 +6701,7 @@ Current version indicated by LITEVER below.
 					localsettings.saved_kai_addr = tmp_kai;
 					localsettings.saved_kai_key = tmp_kai2;
 					localsettings.saved_a1111_url = tmp_a1111;
+					localsettings.saved_comfy_url = tmp_comfy;
 					localsettings.saved_xtts_url = tmp_xtts;
 					localsettings.generate_images_mode = tmp_imggen;
 
@@ -10541,15 +10704,12 @@ Current version indicated by LITEVER below.
 
 	function toggle_generate_images_mode(silent=false)
 	{
-		if(document.getElementById("generate_images_mode").value==0)
-		{
-			document.getElementById("generate_images_model_container").classList.add("hidden");
-			document.getElementById("generate_images_dalle_container").classList.add("hidden");
-			document.getElementById("generate_images_local_model_container").classList.add("hidden");
-		}else if(document.getElementById("generate_images_mode").value==1){
+		document.getElementById("generate_images_model_container").classList.add("hidden");
+		document.getElementById("generate_images_dalle_container").classList.add("hidden");
+		document.getElementById("generate_images_local_model_container").classList.add("hidden");
+		document.getElementById("generate_images_comfy_container").classList.add("hidden");
+		if(document.getElementById("generate_images_mode").value==1){
 			document.getElementById("generate_images_model_container").classList.remove("hidden");
-			document.getElementById("generate_images_dalle_container").classList.add("hidden");
-			document.getElementById("generate_images_local_model_container").classList.add("hidden");
 			if(!image_models_fetched)
 			{
 				//doing it this way will be more buggy,
@@ -10559,14 +10719,13 @@ Current version indicated by LITEVER below.
 				});
 			}
 		}else if(document.getElementById("generate_images_mode").value==2){
-			document.getElementById("generate_images_model_container").classList.add("hidden");
-			document.getElementById("generate_images_dalle_container").classList.add("hidden");
 			document.getElementById("generate_images_local_model_container").classList.remove("hidden");
 			connect_to_a1111(silent);
 		}else if(document.getElementById("generate_images_mode").value==3){
-			document.getElementById("generate_images_model_container").classList.add("hidden");
 			document.getElementById("generate_images_dalle_container").classList.remove("hidden");
-			document.getElementById("generate_images_local_model_container").classList.add("hidden");
+		}else if(document.getElementById("generate_images_mode").value==4){
+			document.getElementById("generate_images_comfy_container").classList.remove("hidden");
+			connect_to_comfyui(silent);
 		}
 	}
 
@@ -11410,7 +11569,7 @@ Current version indicated by LITEVER below.
 		let imgid = "selfuploadimg"+(Math.floor(10000 + Math.random() * 90000)).toString();
 		let nimgtag = "[<|p|" + imgid + "|p|>]";
 		gametext_arr.push(nimgtag);
-		image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:"", local:true };
+		image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:"", poll_category:0 };
 		image_db[imgid].aspect = 0;
 		image_db[imgid].imsource = 1; //0=generated,1=uploaded
 		let imgres = localsettings.img_allowhd?HD_RES_PX:NO_HD_RES_PX;
@@ -13438,7 +13597,7 @@ Current version indicated by LITEVER below.
 					//for now, append the new image directly into the gtarr
 					let nimgtag = "[<|p|" + data.id + "|p|>]";
 					gametext_arr.push(nimgtag);
-					image_db[data.id] = { done: false, queue: "Starting", result: "", prompt:sentence, local:false };
+					image_db[data.id] = { done: false, queue: "Starting", result: "", prompt:sentence, poll_category:1 };
 					image_db[data.id].aspect = (iwidth>iheight?2:(iwidth<iheight?1:0));
 					image_db[data.id].imsource = 0; //0=generated,1=uploaded
 					console.log("New image queued " + nimgtag);
@@ -13460,7 +13619,7 @@ Current version indicated by LITEVER below.
 			let imgid = "A1111img"+(Math.floor(10000 + Math.random() * 90000)).toString();
 			let nimgtag = "[<|p|" + imgid + "|p|>]";
 			gametext_arr.push(nimgtag);
-			image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:sentence, local:true };
+			image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:sentence, poll_category:0 };
 			image_db[imgid].aspect = (iwidth>iheight?2:(iwidth<iheight?1:0));
 			image_db[imgid].imsource = 0; //0=generated,1=uploaded
 			generate_a1111_image(genimg_payload,(outputimg)=>{
@@ -13490,7 +13649,7 @@ Current version indicated by LITEVER below.
 				let imgid = "DALLEimg"+(Math.floor(10000 + Math.random() * 90000)).toString();
 				let nimgtag = "[<|p|" + imgid + "|p|>]";
 				gametext_arr.push(nimgtag);
-				image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:sentence, local:true };
+				image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:sentence, poll_category:0 };
 				image_db[imgid].aspect = 0;
 				image_db[imgid].imsource = 0; //0=generated,1=uploaded
 				generate_dalle_image(genimg_payload,(outputimg)=>{
@@ -13509,6 +13668,12 @@ Current version indicated by LITEVER below.
 					}
 				});
 			}
+		}
+		else if(localsettings.generate_images_mode==4) //comfyui
+		{
+			let desired_model = document.getElementById("generate_images_comfy_model").value;
+			genimg_payload.models = [desired_model];
+			generate_comfy_image(genimg_payload);
 		}
 	}
 
@@ -13574,7 +13739,7 @@ Current version indicated by LITEVER below.
 			.then((data) => {
 				console.log('interrogate img result:', data);
 				if (data.id && data.id != "") {
-					interrogation_db[data.id] = { done: false, result: "", imghash:imghash, local:false };
+					interrogation_db[data.id] = { done: false, result: "", imghash:imghash, poll_category:1 };
 					console.log("New interrogate queued: " + data.id);
 				}
 				else {
@@ -14083,7 +14248,7 @@ Current version indicated by LITEVER below.
 		console.log("polling for pending interrogations " + imagecount);
 		for (let key in interrogation_db) {
 			let img = interrogation_db[key];
-			if (img.done == false && !img.local) {
+			if (img.done == false && img.poll_category==1) {
 				//call check
 				fetch(stablehorde_output_interrogate_endpoint + "/" + key)
 					.then(x => x.json())
@@ -14136,7 +14301,7 @@ Current version indicated by LITEVER below.
 		console.log("polling for pending images " + imagecount);
 		for (let key in image_db) {
 			let img = image_db[key];
-			if (img.done == false && !img.local) {
+			if (img.done == false && img.poll_category==1) {
 				//call check
 				fetch(stablehorde_poll_endpoint + "/" + key)
 					.then(x => x.json())
@@ -14185,6 +14350,52 @@ Current version indicated by LITEVER below.
 						msgbox("Image poll error: " + error);
 						delete image_db[key];
 					});
+			}
+			else if (img.done == false && img.poll_category==2)
+			{
+				//comfyui polling
+				fetch(localsettings.saved_comfy_url + comfy_history_endpoint + "/" + key, {
+					method: 'GET',
+					headers: {
+						'Content-Type': 'application/json',
+					}
+				})
+				.then(x => x.json())
+				.then(resp2 => {
+					console.log(resp2);
+					if(resp2 && resp2[key] && resp2[key].status && resp2[key].status.completed)
+					{
+						img.done = true;
+						let finalfilename = resp2[key].outputs["9"].images[0].filename;
+						//fetch final image
+						fetch(localsettings.saved_comfy_url + comfy_results_endpoint + finalfilename)
+						.then((response) => {
+							return response.blob(); // Convert the response into a Blob
+						})
+						.then((finalimg) => {
+							console.log('finalimg recv for ' + key);
+							const reader = new FileReader();
+							reader.onloadend = () => {
+								img.queue = 0;
+								let origImg = reader.result;
+								let imgres = localsettings.img_allowhd?HD_RES_PX:NO_HD_RES_PX;
+								compressImage(origImg, (newDataUri) => {
+									img.result = newDataUri;
+								}, true, false, imgres,0.35,false);
+							};
+							reader.readAsDataURL(finalimg);
+						})
+						.catch((error) => {
+							console.error('Error:', error);
+							msgbox("Image poll error: " + error);
+							delete image_db[key];
+						});
+					}
+				}).catch((error) => {
+					console.log("Generation Error: " + error);
+					delete image_db[key];
+					msgbox("Image Generation Failed!\n\nPlease make sure ComfyUI is running and properly configured!\n\nIt must be launched with the flag --enable-cors-header '*' to enable API access\n");
+				});
 			}
 		}
 
@@ -18869,6 +19080,7 @@ Current version indicated by LITEVER below.
 								<option value="1">AI Horde</option>
 								<option value="2">KCPP / Forge / A1111</option>
 								<option value="3">OpenAI DALL-E</option>
+								<option value="4">ComfyUI</option>
 							</select>
 							<div id="generate_images_model_container" class="hidden">
 								<select class="form-control" id="generate_images_model" style="font-size: 12px;height:20px;padding:2px;margin:0px 0 0;" onblur="validate_sd_model()" title="Stable Diffusion Model Selection">
@@ -18889,6 +19101,12 @@ Current version indicated by LITEVER below.
 								<div class="justifyleft settingsmall"  title="Save images remotely on A1111/Forge host (caution)">Save In A1111/Forge </div>
 							   <input type="checkbox" id="save_remote_images" style="margin:0px 0 0;">
 							</div>
+							</div>
+							<div id="generate_images_comfy_container" class="settinglabel hidden">
+								<select title="Select Image Model" class="form-control" id="generate_images_comfy_model" style="height:20px;padding:0;margin:0px 0 0; width:calc(100% - 30px)">
+									<option value="">[None]</option>
+								</select>
+								<button type="button" class="btn btn-primary" onclick="set_comfy_endpoint()" style="height: 20px; padding: 0px 2px; margin: 0px 0px 0px 3px;">⚙️</button>
 							</div>
 							<div id="generate_images_dalle_container" class="settinglabel hidden">
 								<table width="100%"><tr>
