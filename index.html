@@ -4433,6 +4433,7 @@ Current version indicated by LITEVER below.
 		grammar:"",
 		tokenstreammode: (localflag?2:0), //0=off,1=pollstream,2=sse
 		generate_images_model: "stable_diffusion", //"" is disabled and "*" is all, anything else is the model name pulled from stable horde
+		img_gen_from_instruct: true,
 		img_autogen: false,
 		img_allownsfw: true,
 		img_cfgscale: 7,
@@ -5310,7 +5311,7 @@ Current version indicated by LITEVER below.
 		.then(modelsdata => {
 
 			if (modelsdata == null || modelsdata.length == 0) {
-				msgbox("Invalid data received or no models found. Is ComfyUI running at the url " + localsettings.saved_comfy_url + " ?\n\nIt must be launched with the flag --enable-cors-header '*' to enable API access");
+				msgbox("Invalid data received or no models found. Is ComfyUI running at the url " + localsettings.saved_comfy_url + " ?\n\nIt must be launched with the flags --listen --enable-cors-header '*' to enable API access");
 			} else {
 				let current_loaded_model = modelsdata[0];
 				//repopulate our model list
@@ -5325,7 +5326,7 @@ Current version indicated by LITEVER below.
 		}).catch((error) => {
 			if(!silent)
 			{
-				msgbox("ComfyUI Connect Error: " + error+"\nPlease make sure ComfyUI is running at "+localsettings.saved_comfy_url+" and properly configured!\n\nIt must be launched with the flag --enable-cors-header '*' to enable API access\n");
+				msgbox("ComfyUI Connect Error: " + error+"\nPlease make sure ComfyUI is running at "+localsettings.saved_comfy_url+" and properly configured!\n\nIt must be launched with the flags --listen --enable-cors-header '*' to enable API access\n");
 			}
 			comfyui_is_connected = false;
 		});
@@ -10244,6 +10245,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("img_allowhd").checked = localsettings.img_allowhd;
 		document.getElementById("img_crop").checked = localsettings.img_crop;
 		document.getElementById("img_autogen").checked = localsettings.img_autogen;
+		document.getElementById("img_gen_from_instruct").checked = localsettings.img_gen_from_instruct;
 		document.getElementById("save_images").checked = localsettings.save_images;
 		document.getElementById("save_remote_images").checked = localsettings.save_remote_images;
 		document.getElementById("img_cfgscale").value = localsettings.img_cfgscale;
@@ -10538,6 +10540,7 @@ Current version indicated by LITEVER below.
 		localsettings.img_crop = (document.getElementById("img_crop").checked ? true : false);
 		localsettings.img_allowhd = (document.getElementById("img_allowhd").checked ? true : false);
 		localsettings.img_autogen = (document.getElementById("img_autogen").checked ? true : false);
+		localsettings.img_gen_from_instruct = (document.getElementById("img_gen_from_instruct").checked ? true : false);
 		localsettings.save_images = (document.getElementById("save_images").checked ? true : false);
 		localsettings.save_remote_images = (document.getElementById("save_remote_images").checked ? true : false);
 		localsettings.prompt_for_savename = (document.getElementById("prompt_for_savename").checked ? true : false);
@@ -12040,6 +12043,16 @@ Current version indicated by LITEVER below.
 	{
 		warn_on_quit = true;
 		let newgen = document.getElementById("input_text").value;
+		let img_gen_trigger_prompt = "";
+		let doNotGenerate = false;
+
+		//match the request for creating images in instruct modes
+		if(newgen!="" && localsettings.img_gen_from_instruct && localsettings.opmode == 4 && localsettings.generate_images_mode!=0 && !newgen.includes("\n\n") &&
+		newgen.match(/\b(?:draw me a\b)|(?:(?:draw|show me|generate|create|make|illustrate|visualize|produce|give me)(?:\s\w+){0,3}\s(?:image|picture|drawing|photo))/))
+		{
+			img_gen_trigger_prompt = newgen;
+			doNotGenerate = true;
+		}
 
 		//apply regex transforms
 		if(regexreplace_data && regexreplace_data.length>0)
@@ -12055,7 +12068,6 @@ Current version indicated by LITEVER below.
 		}
 
 		const user_input_empty = (newgen.trim()=="");
-		let doNotGenerate = false;
 		pending_context_postinjection = "";
 
 		if (!user_input_empty || gametext_arr.length > 0 || current_memory != "" || current_anote != "")
@@ -12646,6 +12658,14 @@ Current version indicated by LITEVER below.
 			else
 			{
 				pending_response_id = "";
+			}
+
+			if(img_gen_trigger_prompt!="")
+			{
+				let txt = "I'll try and create that image.";
+				gametext_arr.push(txt);
+				var sentence = img_gen_trigger_prompt.trim().substring(0, 380);
+				do_manual_gen_image(sentence);
 			}
 
 			render_gametext();
@@ -18093,7 +18113,6 @@ Current version indicated by LITEVER below.
 						<button type="button" class="btn btn-primary mainnav" id="btn_actretry2" onclick="btn_retry()">Retry</button>
 						<button type="button" class="btn btn-primary bg_green mainnav" id="btn_genimg2" onclick="add_img_btn_menu()">Add Img</button>
 						<button type="button" class="btn btn-primary mainnav" id="btn_editmode" onclick="btn_editmode()">Edit</button>
-
 					</div>
 				</div>
 
@@ -19123,6 +19142,10 @@ Current version indicated by LITEVER below.
 							<div id="genimgopt" class="">
 								<table>
 								<tr><td>
+								<div class="settinglabel">
+									<div class="justifyleft settingsmall"  title="Parse user input text in instruct mode, and trigger image generation if requested">Detect ImgGen Instructions </div>
+									<input title="Detect ImgGen Instructions" type="checkbox" id="img_gen_from_instruct" style="margin:0px 0 0;">
+								</div>
 								<div class="settinglabel">
 									<div class="justifyleft settingsmall"  title="Automatically generates images periodically as you write">Autogenerate </div>
 								   <input title="Autogenerate Images" type="checkbox" id="img_autogen" style="margin:0px 0 0;">
