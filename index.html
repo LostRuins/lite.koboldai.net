@@ -175,7 +175,7 @@ Current version indicated by LITEVER below.
 		}
 
 		body.connected #topmenu {
-			background-color: #337ab7;
+			background-color: #2876b5;
 		}
 
 		#menuitems {
@@ -2249,6 +2249,12 @@ Current version indicated by LITEVER below.
     	flex-direction: column;
 		padding-left: 2px;
 		padding-right: 2px;
+		transition: box-shadow 1s ease, filter 1s ease;
+	}
+	.corporightpanel[imgdrop-active=true]
+	{
+		box-shadow: 0px 0px 0px 6px #2876b5 inset;
+		filter: brightness(140%);
 	}
 	.corpo_leftpanel_close
 	{
@@ -6354,6 +6360,10 @@ Current version indicated by LITEVER below.
 	//attempt to load a file from disk. could be any format, even images
 	function load_selected_file(selectedFile)
 	{
+		if (document.getElementById("corpodropimgzone").getAttribute("imgdrop-active")) {
+			return;
+		}
+		
 		var selectedFilename = "";
 		if(selectedFile)
 		{
@@ -10751,8 +10761,16 @@ Current version indicated by LITEVER below.
 	function toggle_uistyle()
 	{
 		//show or hide the 'Customize UI' button based on whether the Aesthetic Instruct UI Mode is active or not.
-		if (document.getElementById('gui_type').value==2) { document.getElementById('btn_aesthetics').classList.remove('hidden'); }
-		else { document.getElementById('btn_aesthetics').classList.add('hidden'); }
+		document.getElementById('btn_aesthetics').classList.add('hidden');
+		document.getElementById('btn_corpoestetics').classList.add('hidden');
+		
+		if (document.getElementById('gui_type').value == 2) {
+			document.getElementById('btn_aesthetics').classList.remove('hidden');
+		}
+		else if (document.getElementById('gui_type').value == 3) {
+			document.getElementById('btn_corpoestetics').classList.remove('hidden');
+		}
+
 		document.getElementById("guitypedesc").innerText = get_theme_desc(document.getElementById('gui_type').value);
 	}
 
@@ -11668,6 +11686,23 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	function check_inserted_ifimage_type(file)
+	{
+		return filetype = file && file['type'].split('/')[0];
+	}
+
+	function insert_imgfile_into_chat(file)
+	{
+		if (file && check_inserted_ifimage_type(file) === 'image') {
+			const reader = new FileReader();
+			reader.onload = function(img) {
+				let origImg = img.target.result;
+				self_upload_img(origImg);
+			}
+			reader.readAsDataURL(file);	
+		}
+	}
+
 	function add_img_btn_upload()
 	{
 		let finput = document.getElementById('addimgfileinput');
@@ -11675,22 +11710,52 @@ Current version indicated by LITEVER below.
 		finput.onchange = (event) => {
 			if (event.target.files.length > 0 && event.target.files[0]) {
 				const file = event.target.files[0];
-				const reader = new FileReader();
-				reader.onload = function(img) {
-					let origImg = img.target.result;
-					self_upload_img(origImg);
-				}
-				reader.readAsDataURL(file);
+				insert_imgfile_into_chat(file);
 			}
 			finput.value = "";
 		};
 		document.getElementById("addimgcontainer").classList.add("hidden");
 	}
 
-	function add_img_btn_menu()
+	// Could in future be used for different file types.
+	// But I believe it would be more useful if chat attachements were meant to be inserted into chat area and anything global like story JSONs outside.
+	function add_file_btn_menu()
 	{
 		update_genimg_button_visiblility();
 		document.getElementById("addimgcontainer").classList.remove("hidden");
+	}
+
+	function add_file_corpo_dropOver(event)
+	{
+		event.preventDefault();
+		document.getElementById("corpodropimgzone").setAttribute("imgdrop-active", true);
+	}
+
+	function add_file_corpo_dropLeave(event)
+	{
+		event.preventDefault();
+		document.getElementById("corpodropimgzone").setAttribute("imgdrop-active", false);
+	}
+
+	function add_file_corpo_drop(event)
+	{
+		event.preventDefault();
+		
+		if (event.dataTransfer.items) {
+			[...event.dataTransfer.items].forEach((item, i) => {
+				
+				if (item.kind === "file") {
+					const file = item.getAsFile();
+					insert_imgfile_into_chat(file);
+				}
+			});
+		} else {
+			[...event.dataTransfer.items].forEach((file, i) => {
+				insert_imgfile_into_chat(file);
+			});
+		}
+
+		document.getElementById("corpodropimgzone").setAttribute("imgdrop-active", false);		
 	}
 
 	var xtts_is_connected = false;
@@ -16355,7 +16420,7 @@ Current version indicated by LITEVER below.
 				+ `</div>`);
 
 			newbodystr += `<div class="corpostyleitem">
-				<div><img ${(curr.myturn ? "" : `onclick="corpo_click_avatar()"`)} src="${(curr.myturn ? human_square : niko_square)}" class="corpoavatar"/></div>
+				<div><img ${(curr.myturn ? "" : `onclick="corpo_click_avatar()"`)} src="${(curr.myturn ? human_square : (aestheticInstructUISettings.AI_portrait != "default" ? aestheticInstructUISettings.AI_portrait : niko_square))}" class="corpoavatar"/></div>
 				<div style="width:100%">
 				<div class="corpostyleitemheading">`+ namepart + `</div>
 				`+ bodypart + chunkbtns + `
@@ -16403,12 +16468,11 @@ Current version indicated by LITEVER below.
 	function populate_corpo_leftpanel()
 	{
 		let panel = document.getElementById('corpoleftpanelitems');
+		let saveitems = "";
 		let panelitems = `
 		<div onclick="btn_memory()" class="corpo_leftpanel_btn" type="button" style="background-image: var(--img_gear); padding-left: 44px;">Context</div>
 		<div onclick="btn_editmode()" class="corpo_leftpanel_btn" type="button" style="background-image: var(--img_corpo_edit); padding-left: 44px;">Raw Editor</div>
 		<div onclick="update_toggle_lightmode(true)" class="corpo_leftpanel_btn" type="button" style="background-image: var(--img_corpo_theme); padding-left: 44px;">Light / Dark Theme</div>
-		<div style="padding:2px;font-size:14px;margin-left:8px;font-weight:600;line-height:1.1;margin-top:22px">Quick Slot Load</div>
-		<hr style="margin-top:4px;margin-bottom:6px" />
 		`;
 
 		for(let i=0;i<SAVE_SLOTS;++i)
@@ -16420,9 +16484,14 @@ Current version indicated by LITEVER below.
 				entry = `<div onclick="load_from_slot(`+i+`)" class="corpo_leftpanel_btn" type="button">`+testslot+`</div>`;
 			}
 
-			panelitems += entry;
+			saveitems += entry;
 		}
 
+		if (saveitems) {
+			panelitems += `
+				<div style="padding:2px;font-size:14px;margin-left:8px;font-weight:600;line-height:1.1;margin-top:22px">Quick Slot Load</div>
+				<hr style="margin-top:4px;margin-bottom:6px"/>` + saveitems;
+		}
 
 		panel.innerHTML = panelitems;
 	}
@@ -17575,12 +17644,26 @@ Current version indicated by LITEVER below.
 		document.getElementById("aestheticsettingscontainer").classList.remove("hidden");
 		updateTextPreview();
 
-	}
+	}	
 	function hideAestheticUISettingsMenu(confirm) {
 		if (!confirm) { aestheticInstructUISettings = deepCopyAestheticSettings(tempAestheticInstructUISettings); updateUIFromData(); }
 		tempAestheticInstructUISettings = null;
 
 		document.getElementById("aestheticsettingscontainer").classList.add("hidden");
+		render_gametext();
+	}
+
+	function openCorpoUISettingsMenu() {
+		tempAestheticInstructUISettings = deepCopyAestheticSettings(aestheticInstructUISettings);
+		document.getElementById("corposettingscontainer").classList.remove("hidden");
+		updateTextPreview();
+
+	}	
+	function hideCorpoUISettingsMenu(confirm) {
+		if (!confirm) { aestheticInstructUISettings = deepCopyAestheticSettings(tempAestheticInstructUISettings); updateUIFromData(); }
+		tempAestheticInstructUISettings = null;
+
+		document.getElementById("corposettingscontainer").classList.add("hidden");
 		render_gametext();
 	}
 
@@ -18143,8 +18226,14 @@ Current version indicated by LITEVER below.
 					</p>
 				</div>
 				<button title="Show Corpo Side Panel" class="corpo_leftpanel_open mainnav" onclick="show_corpo_leftpanel(true)"><div class="corpo_arrow_right"></div></button>
-				<div class="corporightpanel">
-					<div id="corpostylemain" class="corpostylemain">
+				<div class="corporightpanel" id="corpodropimgzone"
+					ondrop="add_file_corpo_drop(event);"
+					ondragover="add_file_corpo_dropOver(event);"
+					ondragleave="add_file_corpo_dropLeave(event);">
+					<div id="corpostylemain" class="corpostylemain"
+					ondrop="add_file_corpo_drop(event);"
+					ondragover="add_file_corpo_dropOver(event);"
+					ondragleave="add_file_corpo_dropLeave(event);">
 						<div id="corpo_body" class="corpostyleinner"></div>
 					</div>
 					<div class="corpomainbtm">
@@ -18652,6 +18741,7 @@ Current version indicated by LITEVER below.
 								<option id="uipicker_corpo" value="3">Corpo Theme</option>
 							</select>
 							<button type="button" class="btn btn-primary" id="btn_aesthetics" onclick="openAestheticUISettingsMenu()" style="border-color: #bbbbbb; width:100%; height:30px; padding:0px 8px; margin: 3px 0 3px 0;">⚙️ Customize</button>
+							<button type="button" class="btn btn-primary" id="btn_corpoestetics" onclick="openCorpoUISettingsMenu()" style="border-color: #bbbbbb; width:100%; height:30px; padding:0px 8px; margin: 3px 0 3px 0;">⚙️ Customize</button>							
 							<div id="guitypedesc" class="settingsdesctxt"></div>
 						</div>
 					</div>
@@ -19964,6 +20054,45 @@ Current version indicated by LITEVER below.
 				<div id="aesthetic_text_preview_panel" style="background-color: black; padding: 10px; height:100%; overflow-y: auto; ">
 					<p>Style Preview</p>
 					<div id="aesthetic_text_preview" style="background-color: black; margin: 2px; text-align: left; word-wrap: break-word;"></div>
+				</div>
+				<input type="file" id="portraitFileInput" style="display:none" accept="image/*">
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="corposettingscontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup evenhigher" style="margin-left: 20px; margin-right: 20px;">
+			<div class="popuptitlebar" id="corpo_customization_panel">
+				<div class="popuptitletext">Corpo UI customization panel</div>
+			</div>
+			<div class="aidgpopuplistheader" style="display: flex; flex-direction: row; height:max(70vh, 480px);">
+				<!-- Settings panel -->
+				<div style="background-color: #122b40;" onchange="refreshPreview()">
+					<div style="padding: 10px; width:350px; height:100%">
+
+						<!-- PORTRAIT STYLE SETTINGS -->
+						<div>
+							<div class="settinglabel" style="display: flex;flex-direction: column; margin-top:5px; border-top: solid 1px rgba(180, 180, 255, 0.2);">
+								<!-- Portrait style header -->
+								<div class="justifyleft settingsmall" style="font-size: 15px; margin-bottom: 5px;">Portrait Style</div>
+
+								<!-- Portrait style main settings -->
+								<div style="margin-left: 12px;">
+									<div class="ui-settings-inline">
+										<div style="margin-right: 27px">Portraits: </div>
+										<div id="you-portrait">🖼️ Your Portrait</div>
+										<div id="AI-portrait">🖼️ AI's Portrait</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+					</div>
+					<div class="popupfooter" id="aesthetic_instruct_footer" style="margin-top: -55px;height:55px;">
+						<button type="button" class="btn btn-primary" id="btn_settingsaccept" onclick="hideCorpoUISettingsMenu(true)">OK</button>
+						<button type="button" class="btn btn-primary" id="btn_settingsclose" onclick="hideCorpoUISettingsMenu(false)">Cancel</button>
+					</div>
 				</div>
 				<input type="file" id="portraitFileInput" style="display:none" accept="image/*">
 			</div>
