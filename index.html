@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 182;
+	const LITEVER = 183;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -1265,6 +1265,20 @@ Current version indicated by LITEVER below.
 		}
 		.workerTable>tbody>tr>td{
 			padding: min(0.4vw, 5px);
+		}
+
+		.logprobstable
+		{
+			font-size: 11px;
+			width: 100%;
+			border-spacing: 2px;
+		}
+		.logprobstable table, th, td {
+			border: 2px solid #5d5d5d;
+		}
+		.logprobstable>tbody>tr>td
+		{
+			width: 16.4%;
 		}
 
 		.tablelines
@@ -3557,7 +3571,7 @@ Current version indicated by LITEVER below.
 						last_stop_reason = "stop";
 					}
 
-					last_response_str = JSON.stringify(data);
+					last_response_obj = JSON.parse(JSON.stringify(data));
 
 					//handle some early stopping criterias
 					if (localsettings.opmode == 3) //stop on selfname found
@@ -4349,7 +4363,7 @@ Current version indicated by LITEVER below.
 	var koboldcpp_version_obj = {};
 	var koboldcpp_has_vision = false;
 	var last_request_str = "No Requests Available"; //full context of last submitted request
-	var last_response_str = "No Response Available";
+	var last_response_obj = null;
 	var lastcheckgenkey = ""; //for checking polled-streaming unique id when generating in kcpp
 	var globalabortcontroller = null;
 	var passed_ai_warning_local = false;
@@ -7898,11 +7912,56 @@ Current version indicated by LITEVER below.
 
 	function show_last_req()
 	{
-		msgbox(last_request_str,"Last Request Sent",false);
+		let lr = "Request:\n" + last_request_str;
+		if(last_response_obj!=null)
+		{
+			lr += "\n\nResponse:\n" + JSON.stringify(last_response_obj);
+		}
+		msgbox(lr,"Last Request Info",false);
 	}
-	function show_last_resp()
+	function show_last_logprobs()
 	{
-		msgbox(last_response_str,"Last Response Viewer",false);
+		let lastlogprobsstr = "";
+		let kcpp_has_logprobs = (last_response_obj!=null && last_response_obj.results && last_response_obj.results.length > 0 && last_response_obj.results[0].logprobs!=null);
+		let oai_has_logprobs = (last_response_obj!=null && last_response_obj.choices && last_response_obj.choices.length > 0 && last_response_obj.choices[0].logprobs!=null);
+		if(kcpp_has_logprobs || oai_has_logprobs)
+		{
+			let lpc = (kcpp_has_logprobs?last_response_obj.results[0].logprobs.content:last_response_obj.choices[0].logprobs.content);
+			if(lpc)
+			{
+				lastlogprobsstr += `<table class="logprobstable">`;
+				for(let i=0;i<lpc.length;++i)
+				{
+					lastlogprobsstr += "<tr>";
+					let cn = lpc[i];
+					lastlogprobsstr += `<td style="color:lime">${escapeHtml(cn.token)}<br>(${(Math.exp(cn.logprob)*100).toFixed(2)}%)</td>`;
+					let addspace = false;
+					for(let j=0;j<5;++j)
+					{
+						if(j>=cn.top_logprobs.length)
+						{
+							lastlogprobsstr += `<td></td>`;
+							continue;
+						}
+						if(cn.top_logprobs[j].token==cn.token)
+						{
+							addspace = true;
+							continue;
+						}
+						lastlogprobsstr += `<td>${escapeHtml(cn.top_logprobs[j].token)}<br>(${(Math.exp(cn.top_logprobs[j].logprob)*100).toFixed(2)}%)</td>`
+					}
+					if(addspace)
+					{
+						lastlogprobsstr += `<td></td>`;
+					}
+					lastlogprobsstr += "</tr>";
+				}
+				lastlogprobsstr += "</table>";
+			}
+		} else {
+			lastlogprobsstr = "Not Available";
+		}
+		msgbox(lastlogprobsstr,"Logit Probability Viewer",true);
 	}
 
 	var worker_data_showonly = []; //only for table display, dont mix
@@ -11188,7 +11247,7 @@ Current version indicated by LITEVER below.
 		gametext_arr = [];
 		redo_arr = [];
 		last_request_str = "No Requests Available";
-		last_response_str = "No Response Available";
+		last_response_obj = null;
 		retry_prev_text = [];
 		retry_preserve_last = false;
 		redo_prev_text = [];
@@ -12939,7 +12998,7 @@ Current version indicated by LITEVER below.
 					streamchunk = ((pstreamamount != null && pstreamamount > 0) ? pstreamamount:8); //8 tokens per stream tick by default
 				}
 				last_request_str = JSON.stringify(submit_payload);
-				last_response_str = "No Response Available";
+				last_response_obj = null;
 				if (localsettings.tokenstreammode==2 && is_using_kcpp_with_sse()) {
 					let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_stream_endpoint);
 					kobold_api_stream_sse(sub_endpt, submit_payload);
@@ -13062,7 +13121,7 @@ Current version indicated by LITEVER below.
 				}
 
 				last_request_str = JSON.stringify(oai_payload);
-				last_response_str = "No Response Available";
+				last_response_obj = null;
 				let oaiheaders = {
 					'Content-Type': 'application/json',
 					'Authorization': 'Bearer ' + custom_oai_key
@@ -13171,7 +13230,7 @@ Current version indicated by LITEVER below.
 
 
 				last_request_str = JSON.stringify(claude_payload);
-				last_response_str = "No Response Available";
+				last_response_obj = null;
 
 				let claudeheaders = {
 					'Content-Type': 'application/json',
@@ -13321,7 +13380,7 @@ Current version indicated by LITEVER below.
 
 				let targetep = urlbase + custom_palm_key;
 				last_request_str = JSON.stringify(payload);
-				last_response_str = "No Response Available";
+				last_response_obj = null;
 
 				fetch(targetep, {
 					method: 'POST',
@@ -13392,7 +13451,7 @@ Current version indicated by LITEVER below.
 				}
 
 				last_request_str = JSON.stringify(cohere_payload);
-				last_response_str = "No Response Available";
+				last_response_obj = null;
 				let cohere_headers = {
 					'Content-Type': 'application/json',
 					'Authorization': 'Bearer ' + custom_cohere_key
@@ -13493,7 +13552,7 @@ Current version indicated by LITEVER below.
 			}
 
 			last_request_str = JSON.stringify(submit_payload);
-			last_response_str = "No Response Available";
+			last_response_obj = null;
 
 			fetch(selectedhorde.submit_endpoint, {
 				method: 'POST', // or 'PUT'
@@ -14314,8 +14373,8 @@ Current version indicated by LITEVER below.
 		{
 			shownotify();
 		}
-		let lastresp = `<a href="#" class="color_blueurl" onclick="show_last_resp()">(Inspect Response)</a>`;
-		let lastreq = `<a href="#" onclick="show_last_req()">Last request</a> served by <a href="#" onclick="get_and_show_workers()">${genworker}</a> using <span class="color_darkgreen">${genmdl}</span>${(genkudos>0?` for ${genkudos} kudos`:``)} in ${getTimeTaken()} seconds.${(last_response_str=="No Response Available"?"":lastresp)}`;
+		let lastresp = ` <a href="#" class="color_blueurl" onclick="show_last_logprobs()">(View Logprobs)</a>`;
+		let lastreq = `<a href="#" onclick="show_last_req()">Last request</a> served by <a href="#" onclick="get_and_show_workers()">${genworker}</a> using <span class="color_darkgreen">${genmdl}</span>${(genkudos>0?` for ${genkudos} kudos`:``)} in ${getTimeTaken()} seconds.${(last_response_obj!=null && (last_response_obj.results && last_response_obj.results.length > 0 && last_response_obj.results[0].logprobs!=null))?lastresp:""}`;
 		document.getElementById("lastreq1").innerHTML = lastreq;
 		document.getElementById("lastreq2").innerHTML = lastreq;
 		document.getElementById("lastreq3").innerHTML = lastreq;
