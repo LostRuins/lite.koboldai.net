@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 183;
+	const LITEVER = 184;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3105,6 +3105,15 @@ Current version indicated by LITEVER below.
 			.replace(/&#039;/g, "\'");
 	}
 
+	function unescapeRegexNewlines(input)
+	{
+		return input.replace(/\\\\/g, "[temp_rr_seq]")
+		.replace(/\\n/g, "\n")
+		.replace(/\\t/g, "\t")
+		.replace(/\\r/g, "\r")
+		.replace(/\[temp_rr_seq\]/g, "\\\\");
+	}
+
 	function isNumeric(n)
 	{
 		return !isNaN(parseFloat(n)) && isFinite(n);
@@ -3685,9 +3694,11 @@ Current version indicated by LITEVER below.
 				let dch = data.choices[0];
 				if (dch.text) {
 					synchro_polled_response = dch.text;
+					last_response_obj = JSON.parse(JSON.stringify(data));
 				}
 				else if (dch.message) {
 					synchro_polled_response = dch.message.content;
+					last_response_obj = JSON.parse(JSON.stringify(data));
 
 					if(localsettings.opmode==1 && gametext_arr.length>0 && synchro_polled_response!="")
 					{
@@ -3919,13 +3930,54 @@ Current version indicated by LITEVER below.
 					}
 				},
 				close() { //end of stream
-					synchro_polled_response = synchro_pending_stream;
-					synchro_pending_stream = "";
-					poll_pending_response();
+
+					let finish_actions = function()
+					{
+						synchro_polled_response = synchro_pending_stream;
+						synchro_pending_stream = "";
+						poll_pending_response();
+					};
+
 					//handle gen failures
 					if(resp.status==503)
 					{
+						finish_actions();
 						msgbox("Error while submitting prompt: Server appears to be busy.");
+					}
+					else
+					{
+						//if we wanted logprobs, try fetching them manually
+						if(localsettings.request_logprobs && last_response_obj==null)
+						{
+							fetch(custom_kobold_endpoint + koboldcpp_logprobs_endpoint, {
+								method: 'POST',
+								headers: get_kobold_header(),
+								body: JSON.stringify({
+								"genkey": lastcheckgenkey
+								}),
+							})
+							.then((response) => response.json())
+							.then((data) => {
+								//makes sure a delayed response doesnt arrive late and mess up
+								if (data && data.logprobs != null && last_response_obj==null) {
+									//fake a last response obj
+									let fakedresponse = {
+										"artificial_response": true,
+										"results":[{"logprobs":data.logprobs}]
+									};
+									last_response_obj = fakedresponse;
+								}
+								finish_actions();
+							})
+							.catch((error) => {
+								console.error('Error:', error);
+								finish_actions();
+							});
+						}
+						else
+						{
+							finish_actions();
+						}
 					}
 				},
 				abort(error) {
@@ -4227,6 +4279,7 @@ Current version indicated by LITEVER below.
 	const koboldcpp_version_endpoint = "/api/extra/version";
 	const koboldcpp_abort_endpoint = "/api/extra/abort";
 	const koboldcpp_check_endpoint = "/api/extra/generate/check";
+	const koboldcpp_logprobs_endpoint = "/api/extra/last_logprobs";
 	const koboldcpp_truemaxctxlen_endpoint = "/api/extra/true_max_context_length";
 	const koboldcpp_preloadstory_endpoint = "/api/extra/preloadstory";
 	const koboldcpp_transcribe_endpoint = "/api/extra/transcribe";
@@ -7927,7 +7980,48 @@ Current version indicated by LITEVER below.
 		if(kcpp_has_logprobs || oai_has_logprobs)
 		{
 			let lpc = (kcpp_has_logprobs?last_response_obj.results[0].logprobs.content:last_response_obj.choices[0].logprobs.content);
-			if(lpc)
+			if(!lpc)
+			{
+				if(oai_has_logprobs)
+				{
+					//try legacy logprobs api
+					let seltokarr = last_response_obj.choices[0].logprobs.tokens;
+					let sellogarr = last_response_obj.choices[0].logprobs.token_logprobs;
+					let topdict = last_response_obj.choices[0].logprobs.top_logprobs;
+					if(seltokarr && sellogarr && topdict)
+					{
+						lastlogprobsstr += `<table class="logprobstable">`;
+						for(let i=0;i<seltokarr.length;++i)
+						{
+							lastlogprobsstr += "<tr>";
+							lastlogprobsstr += `<td style="color:lime">${escapeHtml(seltokarr[i])}<br>(${(Math.exp(sellogarr[i])*100).toFixed(2)}%)</td>`;
+							let addspace = false;
+							let dictkeys = Object.keys(topdict[i]);
+							for(let j=0;j<5;++j)
+							{
+								if(j>=dictkeys.length)
+								{
+									lastlogprobsstr += `<td></td>`;
+									continue;
+								}
+								if(dictkeys[j]==seltokarr[i])
+								{
+									addspace = true;
+									continue;
+								}
+								lastlogprobsstr += `<td>${escapeHtml(dictkeys[j])}<br>(${(Math.exp(topdict[i][dictkeys[j]])*100).toFixed(2)}%)</td>`
+							}
+							if(addspace)
+							{
+								lastlogprobsstr += `<td></td>`;
+							}
+							lastlogprobsstr += "</tr>";
+						}
+						lastlogprobsstr += "</table>";
+					}
+				}
+			}
+			else
 			{
 				lastlogprobsstr += `<table class="logprobstable">`;
 				for(let i=0;i<lpc.length;++i)
@@ -11407,11 +11501,7 @@ Current version indicated by LITEVER below.
 					let escapedpat = escapeHtml(regexreplace_data[i].p);
 					let pat = new RegExp(escapedpat, "gm");
 					let rep = regexreplace_data[i].r;
-					rep = rep.replace(/\\\\/g, "[temp_rr_seq]")
-					.replace(/\\n/g, "\n")
-					.replace(/\\t/g, "\t")
-					.replace(/\\r/g, "\r")
-					.replace(/\[temp_rr_seq\]/g, "\\\\");
+					rep = unescapeRegexNewlines(rep);
 					inputtxt = inputtxt.replace(pat, rep);
 				}
 			}
@@ -12170,7 +12260,9 @@ Current version indicated by LITEVER below.
 				if(regexreplace_data[i].b && !(regexreplace_data[i].d) && regexreplace_data[i].p!="")
 				{
 					let pat = new RegExp(regexreplace_data[i].p, "gm");
-					newgen = newgen.replace(pat, regexreplace_data[i].r);
+					let rep = regexreplace_data[i].r;
+					rep = unescapeRegexNewlines(rep);
+					newgen = newgen.replace(pat, rep);
 				}
 			}
 		}
@@ -13029,6 +13121,16 @@ Current version indicated by LITEVER below.
 					"model": custom_oai_model,
 					"temperature": submit_payload.params.temperature,
 					"top_p": submit_payload.params.top_p,
+				}
+				if(localsettings.request_logprobs && !targetep.toLowerCase().includes("api.mistral.ai"))
+				{
+					if(document.getElementById("useoaichatcompl").checked)
+					{
+						oai_payload.logprobs = true;
+						oai_payload.top_logprobs = 5;
+					}else{
+						oai_payload.logprobs = 5;
+					}
 				}
 				if(!targetep.toLowerCase().includes("api.mistral.ai"))
 				{
@@ -14150,7 +14252,9 @@ Current version indicated by LITEVER below.
 				if(regexreplace_data[i].p!="" && !(regexreplace_data[i].d))
 				{
 					let pat = new RegExp(regexreplace_data[i].p, "gm");
-					gentxt = gentxt.replace(pat, regexreplace_data[i].r);
+					let rep = regexreplace_data[i].r;
+					rep = unescapeRegexNewlines(rep);
+					gentxt = gentxt.replace(pat, rep);
 				}
 			}
 		}
@@ -14373,8 +14477,10 @@ Current version indicated by LITEVER below.
 		{
 			shownotify();
 		}
+		let kcpp_has_logprobs = (last_response_obj!=null && last_response_obj.results && last_response_obj.results.length > 0 && last_response_obj.results[0].logprobs!=null);
+		let oai_has_logprobs = (last_response_obj!=null && last_response_obj.choices && last_response_obj.choices.length > 0 && last_response_obj.choices[0].logprobs!=null);
 		let lastresp = ` <a href="#" class="color_blueurl" onclick="show_last_logprobs()">(View Logprobs)</a>`;
-		let lastreq = `<a href="#" onclick="show_last_req()">Last request</a> served by <a href="#" onclick="get_and_show_workers()">${genworker}</a> using <span class="color_darkgreen">${genmdl}</span>${(genkudos>0?` for ${genkudos} kudos`:``)} in ${getTimeTaken()} seconds.${(last_response_obj!=null && (last_response_obj.results && last_response_obj.results.length > 0 && last_response_obj.results[0].logprobs!=null))?lastresp:""}`;
+		let lastreq = `<a href="#" onclick="show_last_req()">Last request</a> served by <a href="#" onclick="get_and_show_workers()">${genworker}</a> using <span class="color_darkgreen">${genmdl}</span>${(genkudos>0?` for ${genkudos} kudos`:``)} in ${getTimeTaken()} seconds.${(last_response_obj!=null && (kcpp_has_logprobs || oai_has_logprobs)?lastresp:"")}`;
 		document.getElementById("lastreq1").innerHTML = lastreq;
 		document.getElementById("lastreq2").innerHTML = lastreq;
 		document.getElementById("lastreq3").innerHTML = lastreq;
