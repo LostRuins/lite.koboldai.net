@@ -4300,6 +4300,7 @@ Current version indicated by LITEVER below.
 	const default_openrouter_base = "https://openrouter.ai/api/v1";
 	const default_mistralai_base = "https://api.mistral.ai/v1";
 	const default_featherless_base = "https://api.featherless.ai/v1";
+	const default_grok_base = "https://api.x.ai/v1";
 	const default_oai_base = "https://api.openai.com";
 	const default_claude_base = "https://api.anthropic.com";
 	const default_palm_base = "https://generativelanguage.googleapis.com/v1beta2/models/text-bison-001:generateText?key=";
@@ -4446,6 +4447,7 @@ Current version indicated by LITEVER below.
 		saved_openrouter_key: "",
 		saved_mistralai_key: "",
 		saved_featherless_key: "",
+		saved_grok_key:"",
 		saved_claude_key: "", //do not ever share this in save files!
 		saved_claude_addr: default_claude_base, //do not ever share this in save files!
 		saved_palm_key: "", //do not ever share this in save files!
@@ -6387,6 +6389,7 @@ Current version indicated by LITEVER below.
 			new_save_storyobj.savedsettings.saved_openrouter_key = "";
 			new_save_storyobj.savedsettings.saved_mistralai_key = "";
 			new_save_storyobj.savedsettings.saved_featherless_key = "";
+			new_save_storyobj.savedsettings.saved_grok_key = "";
 			new_save_storyobj.savedsettings.saved_palm_key = "";
 			new_save_storyobj.savedsettings.saved_cohere_key = "";
 
@@ -6730,6 +6733,7 @@ Current version indicated by LITEVER below.
 					let tmp_or1 = localsettings.saved_openrouter_key;
 					let tmp_mai = localsettings.saved_mistralai_key;
 					let tmp_fai = localsettings.saved_featherless_key;
+					let tmp_grok = localsettings.saved_grok_key;
 					let tmp_claude1 = localsettings.saved_claude_key;
 					let tmp_claude2 = localsettings.saved_claude_addr;
 					let tmp_palm1 = localsettings.saved_palm_key;
@@ -6770,6 +6774,7 @@ Current version indicated by LITEVER below.
 					localsettings.saved_openrouter_key = tmp_or1;
 					localsettings.saved_mistralai_key = tmp_mai;
 					localsettings.saved_featherless_key = tmp_fai;
+					localsettings.saved_grok_key = tmp_grok;
 					localsettings.saved_claude_key = tmp_claude1;
 					localsettings.saved_claude_addr = tmp_claude2;
 					localsettings.saved_palm_key = tmp_palm1;
@@ -8782,6 +8787,8 @@ Current version indicated by LITEVER below.
 				return document.getElementById("custom_mistralai_model");
 			case "8":
 				return document.getElementById("custom_featherless_model");
+			case "9":
+				return document.getElementById("custom_grok_model");
 			default:
 				return document.getElementById("custom_oai_model");
 		}
@@ -8887,7 +8894,12 @@ Current version indicated by LITEVER below.
 			}
 			else
 			{
-				msgbox(JSON.stringify(data.error.message),"Error Encountered",false,false);
+				let errmsg = data.error.message;
+				if(!errmsg)
+				{
+					errmsg = data.error;
+				}
+				msgbox(JSON.stringify(errmsg),"Error Encountered",false,false);
 			}
 		})
 		.catch(error => {
@@ -8944,6 +8956,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("custom_openrouter_model").classList.add("hidden");
 		document.getElementById("custom_mistralai_model").classList.add("hidden");
 		document.getElementById("custom_featherless_model").classList.add("hidden");
+		document.getElementById("custom_grok_model").classList.add("hidden");
 		document.getElementById("hordeloadmodelcontainer").classList.add("hidden");
 		document.getElementById("coherecustom").classList.add("hidden");
 
@@ -8961,12 +8974,13 @@ Current version indicated by LITEVER below.
 				document.getElementById("customkoboldkey").value = localsettings.saved_kai_key;
 			}
 		}
-		else if(epchoice==2 || epchoice==3 || epchoice==7 || epchoice==8)
+		else if(epchoice==2 || epchoice==3 || epchoice==7 || epchoice==8 || epchoice==9)
 		{
 			document.getElementById("oaicustom").classList.remove("hidden");
 			document.getElementById("openrouterdesc").classList.add("hidden");
 			document.getElementById("mistralaidesc").classList.add("hidden");
 			document.getElementById("featherlessdesc").classList.add("hidden");
+			document.getElementById("grokdesc").classList.add("hidden");
 			document.getElementById("oaidesc").classList.add("hidden");
 			if(epchoice==2)
 			{
@@ -8997,6 +9011,14 @@ Current version indicated by LITEVER below.
 				document.getElementById("custom_oai_key").value = localsettings.saved_featherless_key;
 				document.getElementById("custom_oai_endpoint").value = default_featherless_base;
 				try_fetch_oai_models_auto();
+			}
+			else if(epchoice==9)
+			{
+				document.getElementById("custom_grok_model").classList.remove("hidden");
+				document.getElementById("grokdesc").classList.remove("hidden");
+				document.getElementById("custom_oai_endpoint").classList.add("hidden");
+				document.getElementById("custom_oai_key").value = localsettings.saved_grok_key;
+				document.getElementById("custom_oai_endpoint").value = default_grok_base;
 			}
 			else //openrouter supports autofetch
 			{
@@ -9408,7 +9430,7 @@ Current version indicated by LITEVER below.
 					});
 			}
 		}
-		else if(epchoice==2 || epchoice==3 || epchoice==7 || epchoice==8) //connect to OAI / OpenRouter / MistralAI / Featherless Endpoint
+		else if(epchoice==2 || epchoice==3 || epchoice==7 || epchoice==8 || epchoice==9) //connect to OAI / OpenRouter / MistralAI / Featherless / Grok Endpoint
 		{
 			let desired_oai_key = document.getElementById("custom_oai_key").value.trim();
 			let desired_oai_ep = document.getElementById("custom_oai_endpoint").value.trim();
@@ -9443,6 +9465,10 @@ Current version indicated by LITEVER below.
 				else if(epchoice==8)
 				{
 					localsettings.saved_featherless_key = custom_oai_key;
+				}
+				else if(epchoice==9)
+				{
+					localsettings.saved_grok_key = custom_oai_key;
 				}
 				else
 				{
@@ -13117,13 +13143,13 @@ Current version indicated by LITEVER below.
 					"temperature": submit_payload.params.temperature,
 					"top_p": submit_payload.params.top_p,
 				}
-				if(localsettings.request_logprobs && !targetep.toLowerCase().includes("api.mistral.ai"))
+				if(localsettings.request_logprobs && !targetep.toLowerCase().includes("api.x.ai") && !targetep.toLowerCase().includes("api.mistral.ai"))
 				{
-					if(document.getElementById("useoaichatcompl").checked)
+					if(document.getElementById("useoaichatcompl").checked || targetep.toLowerCase().includes("api.x.ai"))
 					{
 						oai_payload.logprobs = true;
 						oai_payload.top_logprobs = 5;
-					}else{
+					} else {
 						oai_payload.logprobs = 5;
 					}
 				}
@@ -16911,6 +16937,9 @@ Current version indicated by LITEVER below.
 			}else if(custom_oai_endpoint.toLowerCase().includes("featherless.ai"))
 			{
 				localsettings.prev_custom_endpoint_type = 8;
+			}else if(custom_oai_endpoint.toLowerCase().includes("api.x.ai"))
+			{
+				localsettings.prev_custom_endpoint_type = 9;
 			}
 		}
 		else if(custom_claude_key!="")
@@ -18492,6 +18521,7 @@ Current version indicated by LITEVER below.
 				<option value="6">Cohere API</option>
 				<option value="7">MistralAI API</option>
 				<option value="8">Featherless API</option>
+				<option value="9">Grok API</option>
 			</select>
 			</div>
 
@@ -18566,6 +18596,11 @@ Current version indicated by LITEVER below.
 				Note that KoboldAI Lite takes no responsibility for your usage or consequences of this feature. Your API key is used directly with the Featherless API and is not transmitted to us.<br>Only Temperature, Top-P, Top-K, Min-P and Repetition Penalty samplers are used.<br><br>
 				<span class="color_green" style="font-weight: bold;">Please input Featherless Key.</span><br><br>
 				</span>
+				<span id="grokdesc" class="hidden">
+				Entering your Grok API key will allow you to use KoboldAI Lite with their API.<br><br>
+				Note that KoboldAI Lite takes no responsibility for your usage or consequences of this feature. Your API key is used directly with the Grok API and is not transmitted to us.<br>Only Temperature, Top-P, Top-K, Min-P and Repetition Penalty samplers are used.<br><br>
+				<span class="color_green" style="font-weight: bold;">Please input Grok Key.</span><br><br>
+				</span>
 
 				<input class="form-control" type="text" id="custom_oai_endpoint" placeholder="OpenAI API URL" value="" onblur="try_fetch_oai_models_auto()">
 				<input class="form-control" type="password" id="custom_oai_key" placeholder="API Key (Required)" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
@@ -18616,6 +18651,10 @@ Current version indicated by LITEVER below.
 					<option value="alpindale/WizardLM-2-8x22B">alpindale/WizardLM-2-8x22B</option>
 					<option value="meta-llama/Meta-Llama-3.1-405B-Instruct">meta-llama/Meta-Llama-3.1-405B-Instruct</option>
 				<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
+				</select>
+				<select style="padding:4px;display:inline;width:calc(100% - 220px)" class="form-control hidden" id="custom_grok_model" onchange="oai_model_change(true)">
+					<option value="grok-beta">grok-beta</option>
+					<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
 				</select>
 				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaifetchlist" onclick="oai_fetch_models()">Fetch List</button>
 				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaiusecustom" onclick="select_custom_oai_model()">Use Custom</button>
