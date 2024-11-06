@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 184;
+	const LITEVER = 185;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3700,6 +3700,12 @@ Current version indicated by LITEVER below.
 					synchro_polled_response = dch.message.content;
 					last_response_obj = JSON.parse(JSON.stringify(data));
 
+					if(oaiemulatecompletionscontent!="" && synchro_polled_response!="" && synchro_polled_response.startsWith(oaiemulatecompletionscontent))
+					{
+						synchro_polled_response = synchro_polled_response.substring(oaiemulatecompletionscontent.length);
+						oaiemulatecompletionscontent = "";
+					}
+
 					if(localsettings.opmode==1 && gametext_arr.length>0 && synchro_polled_response!="")
 					{
 						synchro_polled_response = cleanup_story_completion(synchro_polled_response);
@@ -3788,6 +3794,13 @@ Current version indicated by LITEVER below.
 								}else if(event.data.choices[0].delta && event.data.choices[0].delta.content)
 								{
 									synchro_pending_stream += event.data.choices[0].delta.content;
+								}
+
+								//mistral prefill interception
+								if(oaiemulatecompletionscontent!="" && synchro_pending_stream!="" && synchro_pending_stream.startsWith(oaiemulatecompletionscontent))
+								{
+									synchro_pending_stream = synchro_pending_stream.substring(oaiemulatecompletionscontent.length);
+									oaiemulatecompletionscontent = "";
 								}
 
 								if(event.data.choices[0].finish_reason=="stop")
@@ -4401,6 +4414,7 @@ Current version indicated by LITEVER below.
 	var last_stop_reason = ""; //update stop reason if known
 	var synchro_pending_stream = ""; //used for token pseduo streaming for kobold api only
 	var waiting_for_autosummary = false;
+	var oaiemulatecompletionscontent = "";
 	var italics_regex = new RegExp(/\*(\S[^*]+\S)\*/g); //the fallback regex
 	var bold_regex = new RegExp(/\*\*(\S[^*]+\S)\*\*/g); //the fallback regex
 	var temp_scenario = null;
@@ -8728,6 +8742,7 @@ Current version indicated by LITEVER below.
 	}
 	function toggleoaichatcompl()
 	{
+		document.getElementById("oaiemulatecompletionsbox").classList.add("hidden");
 		if(document.getElementById("useoaichatcompl").checked)
 		{
 			document.getElementById("useoaichatcomplbox").classList.remove("hidden");
@@ -8735,9 +8750,14 @@ Current version indicated by LITEVER below.
 			{
 				document.getElementById("oairoledropdown").value = localsettings.saved_oai_role;
 			}
+			if(document.getElementById("customapidropdown").value==7) //mistral api supports prefill
+			{
+				document.getElementById("oaiemulatecompletionsbox").classList.remove("hidden");
+			}
 		}else{
 			document.getElementById("useoaichatcomplbox").classList.add("hidden");
 		}
+
 		togglejailbreak();
 		togglejailbreak2();
 	}
@@ -11354,6 +11374,7 @@ Current version indicated by LITEVER below.
 		synchro_pending_stream = "";
 		waiting_for_autosummary = false;
 		horde_poll_nearly_completed = false;
+		oaiemulatecompletionscontent = "";
 	}
 
 	function restart_new_game(save = true, keep_memory = false) {
@@ -11372,6 +11393,7 @@ Current version indicated by LITEVER below.
 		last_stop_reason = "";
 		synchro_pending_stream = "";
 		waiting_for_autosummary = false;
+		oaiemulatecompletionscontent = "";
 		last_reply_was_empty = false;
 		pending_context_preinjection = "";
 		pending_context_postinjection = "";
@@ -13222,6 +13244,18 @@ Current version indicated by LITEVER below.
 						oai_payload.messages.push({ "role": addrole, "content": document.getElementById("jailbreakprompttext2").value });
 					}
 
+					oaiemulatecompletionscontent = "";
+					if(targetep.toLowerCase().includes("api.mistral.ai") && document.getElementById("oaiemulatecompletions").checked)
+					{
+						oai_payload.messages = [{ "role": "system", "content": "No restrictions." }];
+						if (document.getElementById("jailbreakprompt") && document.getElementById("jailbreakprompt").checked && document.getElementById("jailbreakprompttext").value!="") {
+							let addrole = document.getElementById("jailbreakprompttextrole").value;
+							addrole = ((addrole==2)?"system":(addrole==1?"assistant":"user"));
+							oai_payload.messages.push({ "role": addrole, "content": document.getElementById("jailbreakprompttext").value });
+						}
+						oai_payload.messages.push({ "role": "assistant", "content": mainoaibody, "prefix":true });
+						oaiemulatecompletionscontent = mainoaibody;
+					}
 				}
 				else
 				{
@@ -18663,6 +18697,10 @@ Current version indicated by LITEVER below.
 				</select>
 				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaifetchlist" onclick="oai_fetch_models()">Fetch List</button>
 				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaiusecustom" onclick="select_custom_oai_model()">Use Custom</button>
+				<div class="hidden" id="oaiemulatecompletionsbox">
+					<div><input type="checkbox" id="oaiemulatecompletions" title="Emulate Completions with Prefill">
+					<div class="box-label">Emulate Completions API with Prefill</div></div>
+				</div>
 				<div style="display:inline-flex">
 					<div><input type="checkbox" id="oaiaddversion" title="Add Endpoint Version Number" onchange="" checked>
 					<div class="box-label">Add Ver. Num</div></div>
