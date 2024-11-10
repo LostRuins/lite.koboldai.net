@@ -4355,6 +4355,7 @@ Current version indicated by LITEVER below.
 	const XTTS_ID = 1000;
 	const ALLTALK_ID = 1001;
 	const OAI_TTS_ID = 1002;
+	const BIG_HD_RES_PX = 512; //when saving oversized images, could be 640?
 	const HD_RES_PX = 512;
 	const NO_HD_RES_PX = 320;
 	const SAVE_SLOTS = 6;
@@ -13931,7 +13932,7 @@ Current version indicated by LITEVER below.
 				{
 					//console.log(outputimg);
 					let origImg = "data:image/jpeg;base64," + outputimg;
-					let imgres = localsettings.img_allowhd?HD_RES_PX:NO_HD_RES_PX;
+					let imgres = localsettings.img_allowhd?(localsettings.img_aspect==0?HD_RES_PX:BIG_HD_RES_PX):NO_HD_RES_PX;
 					compressImage(origImg, (newDataUri) => {
 						image_db[imgid].done = true;
 						image_db[imgid].result = newDataUri;
@@ -13961,7 +13962,7 @@ Current version indicated by LITEVER below.
 					{
 						//console.log(outputimg);
 						let origImg = "data:image/jpeg;base64," + outputimg;
-						let imgres = localsettings.img_allowhd?HD_RES_PX:NO_HD_RES_PX;
+						let imgres = localsettings.img_allowhd?(localsettings.img_aspect==0?HD_RES_PX:BIG_HD_RES_PX):NO_HD_RES_PX;
 						compressImage(origImg, (newDataUri) => {
 							image_db[imgid].done = true;
 							image_db[imgid].result = newDataUri;
@@ -14610,7 +14611,7 @@ Current version indicated by LITEVER below.
 		console.log("polling for pending images " + imagecount);
 		for (let key in image_db) {
 			let img = image_db[key];
-			if (img.done == false && img.poll_category==1) {
+			if (img.done == false && img.poll_category==1) { //horde image polling
 				//call check
 				fetch(stablehorde_poll_endpoint + "/" + key)
 					.then(x => x.json())
@@ -14637,7 +14638,7 @@ Current version indicated by LITEVER below.
 										img.queue = 0;
 										let origImg = "data:image/jpeg;base64," + finalimg.generations[0].img;
 										//console.log("Original image: " + origImg);
-										let imgres = localsettings.img_allowhd?HD_RES_PX:NO_HD_RES_PX;
+										let imgres = localsettings.img_allowhd?(localsettings.img_aspect==0?HD_RES_PX:BIG_HD_RES_PX):NO_HD_RES_PX;
 										compressImage(origImg, (newDataUri) => {
 											img.result = newDataUri;
 										}, true, false, imgres,0.35,false);
@@ -14660,7 +14661,7 @@ Current version indicated by LITEVER below.
 						delete image_db[key];
 					});
 			}
-			else if (img.done == false && img.poll_category==2)
+			else if (img.done == false && img.poll_category==2) //comfyui image polling
 			{
 				//comfyui polling
 				fetch(localsettings.saved_comfy_url + comfy_history_endpoint + "/" + key, {
@@ -14687,7 +14688,7 @@ Current version indicated by LITEVER below.
 							reader.onloadend = () => {
 								img.queue = 0;
 								let origImg = reader.result;
-								let imgres = localsettings.img_allowhd?HD_RES_PX:NO_HD_RES_PX;
+								let imgres = localsettings.img_allowhd?(localsettings.img_aspect==0?HD_RES_PX:BIG_HD_RES_PX):NO_HD_RES_PX;
 								compressImage(origImg, (newDataUri) => {
 									img.result = newDataUri;
 								}, true, false, imgres,0.35,false);
