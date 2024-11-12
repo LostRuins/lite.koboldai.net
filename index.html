@@ -3771,7 +3771,7 @@ Current version indicated by LITEVER below.
 					ctrl.buf += chunk;
 					let evs = [];
 					let m;
-					while ((m = /^data: (.*)\n\n/m.exec(ctrl.buf)) !== null) {
+					while ((m = /^data: (.*)(\r?\n){2}/m.exec(ctrl.buf)) !== null) {
 						try{evs.push({data: JSON.parse(m[1])});} catch (e) {}
 						ctrl.buf = ctrl.buf.substring(m.index + m[0].length);
 					}
@@ -3899,7 +3899,7 @@ Current version indicated by LITEVER below.
 					ctrl.buf += chunk;
 					let evs = [];
 					let m;
-					while ((m = /^event: (.*)\ndata: (.*)\n\n/m.exec(ctrl.buf)) !== null) {
+					while ((m = /^event: (.*)\ndata: (.*)(\r?\n){2}/m.exec(ctrl.buf)) !== null) {
 						evs.push({event: m[1], data: JSON.parse(m[2])});
 						ctrl.buf = ctrl.buf.substring(m.index + m[0].length);
 					}
@@ -8920,10 +8920,18 @@ Current version indicated by LITEVER below.
 			}
 			else
 			{
-				let errmsg = data.error.message;
-				if(!errmsg)
+				let errmsg = "";
+				if(data && data.error && data.error.message)
+				{
+					errmsg = data.error.message;
+				}
+				else if(data && data.error)
 				{
 					errmsg = data.error;
+				}
+				else
+				{
+					errmsg = data;
 				}
 				msgbox(JSON.stringify(errmsg),"Error Encountered",false,false);
 			}
