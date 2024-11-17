@@ -4241,6 +4241,7 @@ Current version indicated by LITEVER below.
 	const poll_interval_base_text = 500;
 	const poll_interval_base_img = 3800;
 	const poll_interval_idle = 1000;
+	const poll_interval_multiplayer = 2000; //every 2s
 
 	const text_hordes = [
 		{
@@ -4296,6 +4297,7 @@ Current version indicated by LITEVER below.
 	const koboldcpp_logprobs_endpoint = "/api/extra/last_logprobs";
 	const koboldcpp_truemaxctxlen_endpoint = "/api/extra/true_max_context_length";
 	const koboldcpp_preloadstory_endpoint = "/api/extra/preloadstory";
+	const koboldcpp_multiplayer_endpoint = "/api/extra/multiplayerstory";
 	const koboldcpp_transcribe_endpoint = "/api/extra/transcribe";
 	const koboldcpp_tokenize_endpoint = "/api/extra/tokencount";
 	const koboldcpp_perf_endpoint = "/api/extra/perf";
@@ -4432,6 +4434,8 @@ Current version indicated by LITEVER below.
 	var koboldcpp_version = ""; //detect if we are using koboldcpp
 	var koboldcpp_version_obj = {};
 	var koboldcpp_has_vision = false;
+	var koboldcpp_has_multiplayer = false;
+	var multiplayer_active = false;
 	var last_request_str = "No Requests Available"; //full context of last submitted request
 	var last_response_obj = null;
 	var lastcheckgenkey = ""; //for checking polled-streaming unique id when generating in kcpp
@@ -5034,6 +5038,7 @@ Current version indicated by LITEVER below.
 		setInterval(poll_pending_response, poll_interval_base_text);
 		setInterval(poll_image_db, poll_interval_base_img); //check images every Xs
 		setInterval(poll_idle_responses, poll_interval_idle); //a basic update loop for idle responses
+		setInterval(poll_multiplayer, poll_interval_multiplayer); //a basic update loop for idle responses
 
 		attempt_connect(false);
 
@@ -5900,6 +5905,10 @@ Current version indicated by LITEVER below.
 	{
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.74") >= 0);
 	}
+	function is_using_kcpp_with_multiplayer()
+	{
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.78") >= 0 && koboldcpp_has_multiplayer);
+	}
 
 
 	//0 is none, 1 is pseudostreaming, 2 is true poll-streaming, 3 is sse-streaming
@@ -6588,10 +6597,10 @@ Current version indicated by LITEVER below.
 		return is_kai;
 	}
 
-	function kai_json_load(storyobj, force_load_settngs)
+	function kai_json_load(storyobj, force_load_settings)
 	{
 		//either show popup or just proceed to load
-		handle_advload_popup((localsettings.show_advanced_load && !force_load_settngs),()=>
+		handle_advload_popup((localsettings.show_advanced_load && !force_load_settings),()=>
 		{
 			let old_gametext_arr = gametext_arr;
 			let old_current_anote = current_anote;
@@ -6846,7 +6855,7 @@ Current version indicated by LITEVER below.
 			migrate_old_images_in_gametext();
 
 			//prompt to import settings
-			if (localsettings.show_advanced_load && !force_load_settngs)
+			if (localsettings.show_advanced_load && !force_load_settings)
 			{
 				import_settings(
 				document.getElementById("advset_mainstory").checked,
@@ -7653,6 +7662,17 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	function join_multiplayer()
+	{
+		if(is_using_kcpp_with_multiplayer())
+		{
+			multiplayer_active = true;
+		}else{
+			msgbox("Multiplayer is not available or not enabled on this backend","No Multiplayer Detected");
+			multiplayer_active = false;
+		}
+	}
+
 	function character_creator()
 	{
 		hide_popups();
@@ -7971,6 +7991,10 @@ Current version indicated by LITEVER below.
 			let bcolor = (curr.opmode==1?"blue":(curr.opmode==2?"green":(curr.opmode==3?"red":"yellow")));
 			let entry = `<button type="button" name="`+i+`" class="scenarioitem `+bcolor+` btn btn-primary" onclick="return click_scenario(`+i+`)">`+curr.title+`</button>`;
 			scenarios += entry;
+		}
+		if(is_using_kcpp_with_multiplayer())
+		{
+			scenarios += `<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="join_multiplayer()">Join Multiplayer</button>`;
 		}
 
 		document.getElementById("scenariogrid").innerHTML = scenarios;
@@ -9317,9 +9341,10 @@ Current version indicated by LITEVER below.
 										koboldcpp_version_obj = data;
 										koboldcpp_version = data.version;
 										console.log("KoboldCpp Detected: " + koboldcpp_version);
-										document.getElementById("connectstatus").innerHTML = (`<span style='cursor: pointer;' onclick='fetch_koboldcpp_perf()'>KoboldCpp ${koboldcpp_version}</a>`);
+										document.getElementById("connectstatus").innerHTML = (`<span style='cursor: pointer;' onclick='fetch_koboldcpp_perf()'>KoboldCpp ${koboldcpp_version}${(multiplayer_active?"<br>Multiplayer":"")}</a>`);
 										koboldcpp_has_vision = (data.vision?true:false);
 										koboldcpp_has_whisper = (data.transcribe?true:false);
+										koboldcpp_has_multiplayer = (data.multiplayer?true:false);
 										let has_password = (data.protected?true:false);
 										let has_txt2img = (data.txt2img?true:false);
 										let no_txt_model = (mdlname=="inactive");
@@ -11473,6 +11498,7 @@ Current version indicated by LITEVER below.
 		last_known_filename = "saved_story.json";
 		is_impersonate_user = false;
 		voice_is_processing = false;
+		multiplayer_active = false;
 		if (!keep_memory)
 		{
 			personal_notes = "";
@@ -15240,6 +15266,30 @@ Current version indicated by LITEVER below.
 		}).catch((error) => {
 			console.log("Tokenize Error: " + error);
 			onDone([]);
+		});
+	}
+
+	function poll_multiplayer()
+	{
+		if(!is_using_kcpp_with_multiplayer() || !multiplayer_active)
+		{
+			return;
+		}
+
+		fetch(apply_proxy_url(desiredkoboldendpoint + koboldcpp_multiplayer_endpoint),
+		{
+			method: 'GET',
+			headers: get_kobold_header(),
+		})
+		.then(response => response.json())
+		.then(values5 => {
+			let tmpstory = values5;
+			if(is_kai_json(tmpstory))
+			{
+				kai_json_load(tmpstory, true);
+			}
+		}).catch(error => {
+			console.log("Failed to get preloaded story: " + error);
 		});
 	}
 
