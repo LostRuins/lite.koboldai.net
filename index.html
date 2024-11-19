@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 187;
+	const LITEVER = 188;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -7713,12 +7713,8 @@ Current version indicated by LITEVER below.
 			},false);
 
 		}else{
+			leave_multiplayer();
 			msgbox("Multiplayer is not available or not enabled on this backend","No Multiplayer Detected");
-			multiplayer_active = false;
-			multiplayer_last_turn_major = 0;
-			multiplayer_last_turn_minor = 0;
-			schedule_multiplayer_minor_change = false;
-			schedule_multiplayer_major_change = false;
 		}
 	}
 
@@ -7767,8 +7763,8 @@ Current version indicated by LITEVER below.
 				multiplayer_last_turn_minor = expected_minor;
 			}
 		}).catch(error => {
-			multiplayer_active = false;
-			render_gametext(false);
+			leave_multiplayer();
+			msgbox("Disconnected from multiplayer: " + error,"Disconnected from Multiplayer");
 			console.log("Failed to access multiplayer status: " + error);
 		});
 	}
@@ -8096,7 +8092,7 @@ Current version indicated by LITEVER below.
 		}
 		if(is_using_kcpp_with_multiplayer())
 		{
-			scenarios += `<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="join_multiplayer()">Join Multiplayer</button>`;
+			scenarios += `<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="hide_popups();join_multiplayer()">Join Multiplayer</button>`;
 		}
 
 		document.getElementById("scenariogrid").innerHTML = scenarios;
@@ -15454,16 +15450,12 @@ Current version indicated by LITEVER below.
 				}
 				else if(!vals || vals.error)
 				{
-					multiplayer_active = false;
-					schedule_multiplayer_minor_change = false;
-					schedule_multiplayer_major_change = false;
-					render_gametext(false);
+					leave_multiplayer();
+					msgbox("Disconnected from multiplayer due to bad response.","Disconnected from Multiplayer");
 				}
 			}).catch(error => {
-				multiplayer_active = false;
-				schedule_multiplayer_minor_change = false;
-				schedule_multiplayer_major_change = false;
-				render_gametext(false);
+				leave_multiplayer();
+				msgbox("Disconnected from multiplayer: " + error,"Disconnected from Multiplayer");
 				console.log("Failed to access multiplayer status: " + error);
 			});
 		}
