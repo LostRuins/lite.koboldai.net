@@ -636,6 +636,16 @@ Current version indicated by LITEVER below.
 			color: #d3e7ff;
 		}
 
+		.color_orangeurl {
+			color: #f7a223;
+		}
+		.color_orangeurl:hover {
+			color: #ffe8d6;
+		}
+		.color_orangeurl:focus {
+			color: #ffedd3;
+		}
+
 		.color_orange {
 			color: #f7a223;
 		}
@@ -4438,7 +4448,10 @@ Current version indicated by LITEVER below.
 	var koboldcpp_has_vision = false;
 	var koboldcpp_has_multiplayer = false;
 	var multiplayer_active = false;
-	var multiplayer_last_turn = 0;
+	var multiplayer_last_turn_major = 0;
+	var multiplayer_last_turn_minor = 0;
+	var schedule_multiplayer_minor_change = false;
+	var schedule_multiplayer_major_change = false;
 	var last_request_str = "No Requests Available"; //full context of last submitted request
 	var last_response_obj = null;
 	var lastcheckgenkey = ""; //for checking polled-streaming unique id when generating in kcpp
@@ -6575,6 +6588,7 @@ Current version indicated by LITEVER below.
 											restart_new_game(false);
 											gametext_arr.push(text);
 											render_gametext(true);
+											sync_multiplayer(true);
 										}, null, true)
 								} else {
 									msgbox("Could not load selected file. Is it valid?");
@@ -6602,7 +6616,7 @@ Current version indicated by LITEVER below.
 		return is_kai;
 	}
 
-	function kai_json_load(storyobj, force_load_settings)
+	function kai_json_load(storyobj, force_load_settings, ignore_multiplayer_sync)
 	{
 		//either show popup or just proceed to load
 		handle_advload_popup((localsettings.show_advanced_load && !force_load_settings),()=>
@@ -6875,6 +6889,10 @@ Current version indicated by LITEVER below.
 				import_settings(true, true, true, true, true, true);
 			}
 			render_gametext(true);
+			if(!ignore_multiplayer_sync) //we don't want an infinite loop
+			{
+				sync_multiplayer(true);
+			}
 		});
 	}
 
@@ -7056,6 +7074,7 @@ Current version indicated by LITEVER below.
 				}
 			}
 			render_gametext(true);
+			sync_multiplayer(true);
 		}
 
 		if(localsettings.import_tavern_prompt)
@@ -7097,6 +7116,7 @@ Current version indicated by LITEVER below.
 		localsettings.opmode = 3;
 		localsettings.gui_type_chat = 2;
 		render_gametext(true);
+		sync_multiplayer(true);
 	}
 	function nai_json_load(obj)
 	{
@@ -7119,6 +7139,7 @@ Current version indicated by LITEVER below.
 			current_wi = load_nai_wi(obj.lorebook);
 		}
 		render_gametext(true);
+		sync_multiplayer(true);
 	}
 	function load_nai_wi(obj)
 	{
@@ -7667,22 +7688,89 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	function leave_multiplayer()
+	{
+		multiplayer_active = false;
+		multiplayer_last_turn_major = 0;
+		multiplayer_last_turn_minor = 0;
+		schedule_multiplayer_minor_change = false;
+		schedule_multiplayer_major_change = false;
+		render_gametext(false);
+	}
+
 	function join_multiplayer()
 	{
 		if(is_using_kcpp_with_multiplayer())
 		{
-			inputBox("Enter a unique nickname to use for chat mode (only yourself), or leave it blank to share the same common chatname with other users.","Override Chat Nickname?","","[No Override]", ()=>{
+			inputBox("You're about to enter a Multiplayer Session. Note that stories or messages sent by other users are unfiltered and may contain disturbing content. You assume full responsibility and participate at your own discretion.\n\nEnter a unique nickname to use for chat mode (only yourself), or leave it blank to share the same common chatname with other users.","Join Multiplayer - Override Chat Nickname?","","[No Override]", ()=>{
 				let userinput = getInputBoxValue().trim();
 				multiplayer_active = true;
-				multiplayer_last_turn = 0;
+				multiplayer_last_turn_major = 0;
+				multiplayer_last_turn_minor = 0;
+				schedule_multiplayer_minor_change = false;
+				schedule_multiplayer_major_change = false;
 				render_gametext(false);
 			},false);
 
 		}else{
 			msgbox("Multiplayer is not available or not enabled on this backend","No Multiplayer Detected");
 			multiplayer_active = false;
-			multiplayer_last_turn = 0;
+			multiplayer_last_turn_major = 0;
+			multiplayer_last_turn_minor = 0;
+			schedule_multiplayer_minor_change = false;
+			schedule_multiplayer_major_change = false;
 		}
+	}
+
+	function sync_multiplayer(fullupdate)
+	{
+		if(!is_using_kcpp_with_multiplayer() || !multiplayer_active)
+		{
+			schedule_multiplayer_minor_change = false;
+			schedule_multiplayer_major_change = false;
+			return;
+		}
+		schedule_multiplayer_minor_change = true;
+		if(fullupdate)
+		{
+			schedule_multiplayer_major_change = true;
+		}
+	}
+
+	function submit_multiplayer(fullupdate)
+	{
+		if(!is_using_kcpp_with_multiplayer() || !multiplayer_active)
+		{
+			schedule_multiplayer_minor_change = false;
+			schedule_multiplayer_major_change = false;
+			return;
+		}
+		let subdata = generate_compressed_story(true,true,true);
+
+		fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_multiplayer_submit_endpoint),
+		{
+			method: 'POST',
+			headers: get_kobold_header(),
+			body: JSON.stringify({
+				"fullupdate": fullupdate,
+				"data": subdata,
+			})
+		})
+		.then(response => response.json())
+		.then(vals => {
+			let expected_major = (fullupdate?(1+multiplayer_last_turn_major):multiplayer_last_turn_major);
+			let expected_minor = (fullupdate?0:(multiplayer_last_turn_minor+1));
+			if(vals.turn_major==expected_major && vals.turn_minor==expected_minor)
+			{
+				//if nobody else updated, disregard our own updates
+				multiplayer_last_turn_major = expected_major;
+				multiplayer_last_turn_minor = expected_minor;
+			}
+		}).catch(error => {
+			multiplayer_active = false;
+			render_gametext(false);
+			console.log("Failed to access multiplayer status: " + error);
+		});
 	}
 
 	function character_creator()
@@ -7737,6 +7825,7 @@ Current version indicated by LITEVER below.
 			localsettings.gui_type_chat = 2;
 			localsettings.chatopponent = chatopponent;
 			render_gametext();
+			sync_multiplayer(true);
 		}
 		tempAestheticInstructUISettings = null;
 		hide_popups();
@@ -7858,6 +7947,7 @@ Current version indicated by LITEVER below.
 		}
 
 		render_gametext(true);
+		sync_multiplayer(true);
 	}
 	function togglescenarioautopick()
 	{
@@ -10961,6 +11051,7 @@ Current version indicated by LITEVER below.
 
 		autosave();//need to always autosave, so that we can switch back to non persistent sessions
 		render_gametext(false);
+		sync_multiplayer(true);
 	}
 
 	function get_preset_instruct_tag_format(sel)
@@ -11227,6 +11318,7 @@ Current version indicated by LITEVER below.
 		}
 		hide_popups();
 		restart_new_game(true, document.getElementById("keep_memory").checked);
+		sync_multiplayer(true);
 		hide_popups();
 	}
 
@@ -11524,8 +11616,6 @@ Current version indicated by LITEVER below.
 		last_known_filename = "saved_story.json";
 		is_impersonate_user = false;
 		voice_is_processing = false;
-		multiplayer_active = false;
-		multiplayer_last_turn = 0;
 		if (!keep_memory)
 		{
 			personal_notes = "";
@@ -11555,6 +11645,7 @@ Current version indicated by LITEVER below.
 			let ns = new AestheticInstructUISettings();
 			aestheticInstructUISettings = deepCopyAestheticSettings(ns);
 			refreshPreview(false);
+			leave_multiplayer();
 			restart_new_game();
 			display_settings();
 			confirm_settings();
@@ -13035,6 +13126,7 @@ Current version indicated by LITEVER below.
 			}
 
 			render_gametext();
+			sync_multiplayer(false);
 		}
 		is_impersonate_user = false;
 	}
@@ -15301,46 +15393,80 @@ Current version indicated by LITEVER below.
 		if(!is_using_kcpp_with_multiplayer() || !multiplayer_active)
 		{
 			document.getElementById("multiplayerstatus").innerText = "";
+			schedule_multiplayer_minor_change = false;
+			schedule_multiplayer_major_change = false;
 			return;
 		}
-		document.getElementById("multiplayerstatus").innerText = "Multiplayer";
+		document.getElementById("multiplayerstatus").innerHTML = `<a href="#" onclick="leave_multiplayer()" class="color_orangeurl" style="font-size:10px">[Exit Multiplayer]</a>`;
 
-		fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_multiplayer_check_endpoint),
+		//send our changes if they exist
+		if(schedule_multiplayer_minor_change || schedule_multiplayer_major_change)
 		{
-			method: 'GET',
-			headers: get_kobold_header(),
-		})
-		.then(response => response.json())
-		.then(vals => {
-			if(vals && vals.turn && multiplayer_active && vals.turn > multiplayer_last_turn)
+			submit_multiplayer(schedule_multiplayer_major_change);
+			schedule_multiplayer_minor_change = false;
+			schedule_multiplayer_major_change = false;
+		}
+		else
+		{
+			//listen for others changes
+			fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_multiplayer_check_endpoint),
 			{
-				multiplayer_last_turn = vals.turn;
-				fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_multiplayer_fetch_endpoint),
+				method: 'GET',
+				headers: get_kobold_header(),
+			})
+			.then(response => response.json())
+			.then(vals => {
+				if(vals && vals.turn_major && multiplayer_active && (vals.turn_major != multiplayer_last_turn_major || vals.turn_minor != multiplayer_last_turn_minor))
 				{
-					method: 'GET',
-					headers: get_kobold_header(),
-				})
-				.then(response => response.json())
-				.then(story => {
-					let tmpstory = story;
-					if(is_kai_json(tmpstory))
+					let minor_change = (multiplayer_last_turn_major == vals.turn_major);
+					multiplayer_last_turn_major = vals.turn_major;
+					multiplayer_last_turn_minor = vals.turn_minor;
+					fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_multiplayer_fetch_endpoint),
 					{
-						kai_json_load(tmpstory, true);
-					}
-				}).catch(error => {
-					console.log("Failed to get multiplayer story: " + error);
-				});
-			}
-			else if(!vals || vals.error)
-			{
+						method: 'GET',
+						headers: get_kobold_header(),
+					})
+					.then(response => response.text())
+					.then(story => {
+						let tmpstory = decompress_story(story);
+						if(tmpstory && is_kai_json(tmpstory))
+						{
+							if(minor_change)
+							{
+								//minor change, load only gametext_arr. assume its v1
+								gametext_arr = [];
+								if (tmpstory.prompt != "") {
+									gametext_arr.push(tmpstory.prompt);
+								}
+								for (var i = 0; i < tmpstory.actions.length; ++i) {
+									gametext_arr.push(tmpstory.actions[i]);
+								}
+								render_gametext(false);
+							}
+							else
+							{
+								kai_json_load(tmpstory, true, true); //major change, load everything
+							}
+						}
+					}).catch(error => {
+						console.log("Failed to get multiplayer story: " + error);
+					});
+				}
+				else if(!vals || vals.error)
+				{
+					multiplayer_active = false;
+					schedule_multiplayer_minor_change = false;
+					schedule_multiplayer_major_change = false;
+					render_gametext(false);
+				}
+			}).catch(error => {
 				multiplayer_active = false;
+				schedule_multiplayer_minor_change = false;
+				schedule_multiplayer_major_change = false;
 				render_gametext(false);
-			}
-		}).catch(error => {
-			multiplayer_active = false;
-			render_gametext(false);
-			console.log("Failed to access multiplayer status: " + error);
-		});
+				console.log("Failed to access multiplayer status: " + error);
+			});
+		}
 	}
 
 	//clock speed is 500ms per tick
@@ -15442,6 +15568,7 @@ Current version indicated by LITEVER below.
 						synchro_pending_stream = "";
 						show_abort_button(false);
 						render_gametext();
+						sync_multiplayer(false);
 					}
 				}
 				else {
@@ -15710,6 +15837,7 @@ Current version indicated by LITEVER below.
 				}
 
 				render_gametext();
+				sync_multiplayer(false);
 				console.log("Merged edit field. Parts:" + gametext_arr.length);
 			}
 
@@ -16022,7 +16150,7 @@ Current version indicated by LITEVER below.
 				document.getElementById("gametext").innerHTML = `Welcome to <span class="color_cyan">KoboldAI Lite</span>!`+
 				`<br>You are using the models <span class="color_green">${selmodelstr}</span>${(selected_workers.length == 0 ? `` : ` (Pinned to ${selected_workers.length} worker IDs)`)}.`+
 				`${whorun}.`+
-				(multiplayer_active?`<br><br><span class="color_green">[ Multiplayer is <b>Active</b>! This session is shared with other server participants. ]</span>`:(is_using_kcpp_with_multiplayer()?`<br><br>[ <a href="#" tabindex="${mainmenu_is_untab?`-1`:`0`}" class="color_blueurl mainnav" onclick="join_multiplayer()"><span class="color_green">Multiplayer Available</span> - Click Here To Join</a> ]`:``))+
+				(multiplayer_active?`<br><br><span class="color_green">[ Multiplayer is <b>Active</b>! This session is shared with other server participants.]<br>[ You can leave via exit button in top right corner. ]</span>`:(is_using_kcpp_with_multiplayer()?`<br><br>[ <a href="#" tabindex="${mainmenu_is_untab?`-1`:`0`}" class="color_blueurl mainnav" onclick="join_multiplayer()"><span class="color_green">Multiplayer Available</span> - Click Here To Join</a> ]`:``))+
 				`<br><br><b><span class="color_orange">${nowmode} Selected</span></b> - Enter a prompt below to begin!`+
 				`<br>Or, <a href="#" tabindex="${mainmenu_is_untab?`-1`:`0`}" class="color_blueurl mainnav" onclick="document.getElementById('loadfileinput').click()">load a <b>JSON File</b> or a <b>Character Card</b> here.</a>`+
 				`<br>Or, <a href="#" tabindex="${mainmenu_is_untab?`-1`:`0`}" class="color_blueurl mainnav" onclick="display_scenarios()">select a <b>Quick Start Scenario</b> here.</a>`+
@@ -17581,6 +17709,7 @@ Current version indicated by LITEVER below.
 			}
 			retry_preserve_last = false;
 			render_gametext();
+			sync_multiplayer(false);
 		}
 
 		}, 2000);
@@ -17605,6 +17734,7 @@ Current version indicated by LITEVER below.
 				redo_arr.push(popped);
 			}
 			render_gametext();
+			sync_multiplayer(false);
 		}
 	}
 
@@ -17628,6 +17758,7 @@ Current version indicated by LITEVER below.
 				gametext_arr.push(redo_prev_text.pop());
 			}
 			render_gametext();
+			sync_multiplayer(false);
 		}
 
 		}, 2000);
@@ -17645,12 +17776,14 @@ Current version indicated by LITEVER below.
 				let popped = redo_arr.pop();
 				gametext_arr.push(popped);
 				render_gametext();
+				sync_multiplayer(false);
 			}else if (redo_prev_text.length>0) {
 				last_reply_was_empty = false;
 				retry_prev_text.push(gametext_arr.pop());
 				retry_preserve_last = false;
 				gametext_arr.push(redo_prev_text.pop());
 				render_gametext();
+				sync_multiplayer(false);
 			}
 		}
 	}
@@ -18497,7 +18630,7 @@ Current version indicated by LITEVER below.
 				</div>
 				<div id="connectstatusdiv">
 					<div id="connectstatus">Connecting</div>
-					<div id="multiplayerstatus" class="color_green"></div>
+					<div id="multiplayerstatus"></div>
 				</div>
 			</div>
 		</div>
@@ -20078,7 +20211,7 @@ Current version indicated by LITEVER below.
 			</div>
 
 			<div class="popupfooter">
-				<button type="button" class="btn btn-primary" onclick="confirm_memory();save_wi();commit_wi_changes();render_gametext();hide_popups()">OK</button>
+				<button type="button" class="btn btn-primary" onclick="confirm_memory();save_wi();commit_wi_changes();render_gametext();sync_multiplayer(true);hide_popups()">OK</button>
 				<button type="button" class="btn btn-primary" onclick="hide_popups();">Cancel</button>
 			</div>
 		</div>
