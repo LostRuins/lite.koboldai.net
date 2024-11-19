@@ -4241,7 +4241,7 @@ Current version indicated by LITEVER below.
 	const poll_interval_base_text = 500;
 	const poll_interval_base_img = 3800;
 	const poll_interval_idle = 1000;
-	const poll_interval_multiplayer = 2000; //every 2s
+	const poll_interval_multiplayer = 2500; //every 2.5s
 
 	const text_hordes = [
 		{
@@ -4297,7 +4297,9 @@ Current version indicated by LITEVER below.
 	const koboldcpp_logprobs_endpoint = "/api/extra/last_logprobs";
 	const koboldcpp_truemaxctxlen_endpoint = "/api/extra/true_max_context_length";
 	const koboldcpp_preloadstory_endpoint = "/api/extra/preloadstory";
-	const koboldcpp_multiplayer_endpoint = "/api/extra/multiplayerstory";
+	const koboldcpp_multiplayer_check_endpoint = "/api/extra/multiplayer/status";
+	const koboldcpp_multiplayer_fetch_endpoint = "/api/extra/multiplayer/getstory";
+	const koboldcpp_multiplayer_submit_endpoint = "/api/extra/multiplayer/setstory";
 	const koboldcpp_transcribe_endpoint = "/api/extra/transcribe";
 	const koboldcpp_tokenize_endpoint = "/api/extra/tokencount";
 	const koboldcpp_perf_endpoint = "/api/extra/perf";
@@ -4436,6 +4438,7 @@ Current version indicated by LITEVER below.
 	var koboldcpp_has_vision = false;
 	var koboldcpp_has_multiplayer = false;
 	var multiplayer_active = false;
+	var multiplayer_last_turn = 0;
 	var last_request_str = "No Requests Available"; //full context of last submitted request
 	var last_response_obj = null;
 	var lastcheckgenkey = ""; //for checking polled-streaming unique id when generating in kcpp
@@ -5230,6 +5233,7 @@ Current version indicated by LITEVER below.
 						}
 					}
 					document.body.classList.add("connected");
+					document.getElementById("multiplayerstatus").innerText = "";
 					document.getElementById("connectstatus").innerHTML = "AI Horde";
 					document.getElementById("connectstatus").classList.add("color_offwhite");
 					render_gametext(false);
@@ -5244,6 +5248,7 @@ Current version indicated by LITEVER below.
 				else {
 					msgbox("Failed to connect to AI Horde Service!\nPlease check your network connection.<br><br>You may still be able to connect to an alternative service, <a href='#' class='color_blueurl' onclick='hide_popups();display_endpoint_container()'>click here to view options</a>.","Error Encountered",true);
 					document.body.classList.remove("connected");
+					document.getElementById("multiplayerstatus").innerText = "";
 					document.getElementById("connectstatus").innerHTML = "Offline Mode";
 					document.getElementById("connectstatus").classList.remove("color_offwhite");
 					render_gametext(false);
@@ -7666,10 +7671,17 @@ Current version indicated by LITEVER below.
 	{
 		if(is_using_kcpp_with_multiplayer())
 		{
-			multiplayer_active = true;
+			inputBox("Enter a unique nickname to use for chat mode (only yourself), or leave it blank to share the same common chatname with other users.","Override Chat Nickname?","","[No Override]", ()=>{
+				let userinput = getInputBoxValue().trim();
+				multiplayer_active = true;
+				multiplayer_last_turn = 0;
+				render_gametext(false);
+			},false);
+
 		}else{
 			msgbox("Multiplayer is not available or not enabled on this backend","No Multiplayer Detected");
 			multiplayer_active = false;
+			multiplayer_last_turn = 0;
 		}
 	}
 
@@ -9285,6 +9297,7 @@ Current version indicated by LITEVER below.
 								document.body.classList.add("connected");
 								document.getElementById("connectstatus").classList.add("color_offwhite");
 							}
+							document.getElementById("multiplayerstatus").innerText = "";
 							document.getElementById("connectstatus").innerHTML = "KoboldAI Endpoint";
 							render_gametext();
 
@@ -9341,7 +9354,8 @@ Current version indicated by LITEVER below.
 										koboldcpp_version_obj = data;
 										koboldcpp_version = data.version;
 										console.log("KoboldCpp Detected: " + koboldcpp_version);
-										document.getElementById("connectstatus").innerHTML = (`<span style='cursor: pointer;' onclick='fetch_koboldcpp_perf()'>KoboldCpp ${koboldcpp_version}${(multiplayer_active?"<br>Multiplayer":"")}</a>`);
+										document.getElementById("multiplayerstatus").innerText = "";
+										document.getElementById("connectstatus").innerHTML = (`<span style='cursor: pointer;' onclick='fetch_koboldcpp_perf()'>KoboldCpp ${koboldcpp_version}</a>`);
 										koboldcpp_has_vision = (data.vision?true:false);
 										koboldcpp_has_whisper = (data.transcribe?true:false);
 										koboldcpp_has_multiplayer = (data.multiplayer?true:false);
@@ -9388,6 +9402,12 @@ Current version indicated by LITEVER below.
 												} else {
 													close_welcome_panel(false);
 													kai_json_load(tmpstory, false);
+												}
+											}else{
+												if(koboldcpp_has_multiplayer)
+												{
+													//force refresh
+													render_gametext(false);
 												}
 											}
 										}).catch(error => {
@@ -9497,6 +9517,7 @@ Current version indicated by LITEVER below.
 								custom_kobold_endpoint = "";
 								if(localflag)
 								{
+									document.getElementById("multiplayerstatus").innerText = "";
 									document.getElementById("connectstatus").innerHTML = "Offline Mode";
 								}
 								render_gametext();
@@ -9575,6 +9596,7 @@ Current version indicated by LITEVER below.
 					document.body.classList.add("connected");
 					document.getElementById("connectstatus").classList.add("color_offwhite");
 				}
+				document.getElementById("multiplayerstatus").innerText = "";
 				document.getElementById("connectstatus").innerHTML = "OpenAI Endpoint";
 				render_gametext(true);
 			}
@@ -9625,6 +9647,7 @@ Current version indicated by LITEVER below.
 					document.body.classList.add("connected");
 					document.getElementById("connectstatus").classList.add("color_offwhite");
 				}
+				document.getElementById("multiplayerstatus").innerText = "";
 				document.getElementById("connectstatus").innerHTML = "Claude Endpoint";
 				render_gametext();
 
@@ -9657,6 +9680,7 @@ Current version indicated by LITEVER below.
 					document.body.classList.add("connected");
 					document.getElementById("connectstatus").classList.add("color_offwhite");
 				}
+				document.getElementById("multiplayerstatus").innerText = "";
 				document.getElementById("connectstatus").innerHTML = "Gemini Endpoint";
 				render_gametext();
 			}
@@ -9688,6 +9712,7 @@ Current version indicated by LITEVER below.
 					document.body.classList.add("connected");
 					document.getElementById("connectstatus").classList.add("color_offwhite");
 				}
+				document.getElementById("multiplayerstatus").innerText = "";
 				document.getElementById("connectstatus").innerHTML = "Cohere Endpoint";
 				render_gametext();
 			}
@@ -10093,6 +10118,7 @@ Current version indicated by LITEVER below.
 				desired_new_home_cluster = null;
 			}
 
+			document.getElementById("multiplayerstatus").innerText = "";
 			document.getElementById("connectstatus").innerHTML = "AI Horde";
 
 			render_gametext();
@@ -11499,6 +11525,7 @@ Current version indicated by LITEVER below.
 		is_impersonate_user = false;
 		voice_is_processing = false;
 		multiplayer_active = false;
+		multiplayer_last_turn = 0;
 		if (!keep_memory)
 		{
 			personal_notes = "";
@@ -15273,23 +15300,46 @@ Current version indicated by LITEVER below.
 	{
 		if(!is_using_kcpp_with_multiplayer() || !multiplayer_active)
 		{
+			document.getElementById("multiplayerstatus").innerText = "";
 			return;
 		}
+		document.getElementById("multiplayerstatus").innerText = "Multiplayer";
 
-		fetch(apply_proxy_url(desiredkoboldendpoint + koboldcpp_multiplayer_endpoint),
+		fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_multiplayer_check_endpoint),
 		{
 			method: 'GET',
 			headers: get_kobold_header(),
 		})
 		.then(response => response.json())
-		.then(values5 => {
-			let tmpstory = values5;
-			if(is_kai_json(tmpstory))
+		.then(vals => {
+			if(vals && vals.turn && multiplayer_active && vals.turn > multiplayer_last_turn)
 			{
-				kai_json_load(tmpstory, true);
+				multiplayer_last_turn = vals.turn;
+				fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_multiplayer_fetch_endpoint),
+				{
+					method: 'GET',
+					headers: get_kobold_header(),
+				})
+				.then(response => response.json())
+				.then(story => {
+					let tmpstory = story;
+					if(is_kai_json(tmpstory))
+					{
+						kai_json_load(tmpstory, true);
+					}
+				}).catch(error => {
+					console.log("Failed to get multiplayer story: " + error);
+				});
+			}
+			else if(!vals || vals.error)
+			{
+				multiplayer_active = false;
+				render_gametext(false);
 			}
 		}).catch(error => {
-			console.log("Failed to get preloaded story: " + error);
+			multiplayer_active = false;
+			render_gametext(false);
+			console.log("Failed to access multiplayer status: " + error);
 		});
 	}
 
@@ -15971,7 +16021,9 @@ Current version indicated by LITEVER below.
 
 				document.getElementById("gametext").innerHTML = `Welcome to <span class="color_cyan">KoboldAI Lite</span>!`+
 				`<br>You are using the models <span class="color_green">${selmodelstr}</span>${(selected_workers.length == 0 ? `` : ` (Pinned to ${selected_workers.length} worker IDs)`)}.`+
-				`${whorun}.<br><br><b><span class="color_orange">${nowmode} Selected</span></b> - Enter a prompt below to begin!`+
+				`${whorun}.`+
+				(multiplayer_active?`<br><br><span class="color_green">[ Multiplayer is <b>Active</b>! This session is shared with other server participants. ]</span>`:(is_using_kcpp_with_multiplayer()?`<br><br>[ <a href="#" tabindex="${mainmenu_is_untab?`-1`:`0`}" class="color_blueurl mainnav" onclick="join_multiplayer()"><span class="color_green">Multiplayer Available</span> - Click Here To Join</a> ]`:``))+
+				`<br><br><b><span class="color_orange">${nowmode} Selected</span></b> - Enter a prompt below to begin!`+
 				`<br>Or, <a href="#" tabindex="${mainmenu_is_untab?`-1`:`0`}" class="color_blueurl mainnav" onclick="document.getElementById('loadfileinput').click()">load a <b>JSON File</b> or a <b>Character Card</b> here.</a>`+
 				`<br>Or, <a href="#" tabindex="${mainmenu_is_untab?`-1`:`0`}" class="color_blueurl mainnav" onclick="display_scenarios()">select a <b>Quick Start Scenario</b> here.</a>`+
 				`<br>${(welcome!=""?`<br><em>${escapeHtml(welcome)}</em>`:``)}`;
@@ -18445,6 +18497,7 @@ Current version indicated by LITEVER below.
 				</div>
 				<div id="connectstatusdiv">
 					<div id="connectstatus">Connecting</div>
+					<div id="multiplayerstatus" class="color_green"></div>
 				</div>
 			</div>
 		</div>
