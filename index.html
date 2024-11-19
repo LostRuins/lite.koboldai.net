@@ -7702,7 +7702,7 @@ Current version indicated by LITEVER below.
 	{
 		if(is_using_kcpp_with_multiplayer())
 		{
-			inputBox("You're about to enter a Multiplayer Session. Note that stories or messages sent by other users are unfiltered and may contain disturbing content. You assume full responsibility and participate at your own discretion.\n\nEnter a unique nickname to use for chat mode (only yourself), or leave it blank to share the same common chatname with other users.","Join Multiplayer - Override Chat Nickname?","","[No Override]", ()=>{
+			inputBox(`You're about to enter a Multiplayer Session.<br><br><span class="color_red">Note that stories or messages sent by other users are <b>unfiltered</b>, and may contain <b>offensive or disturbing content</b>. You assume full responsibility and participate at your own discretion.</span><br><br>Enter a unique nickname to use for chat mode (only yourself), or leave it blank to share the same common chatname with other users.`,"Join Multiplayer - Override Chat Nickname?","","[No Override]", ()=>{
 				let userinput = getInputBoxValue().trim();
 				multiplayer_active = true;
 				multiplayer_last_turn_major = 0;
@@ -7710,7 +7710,7 @@ Current version indicated by LITEVER below.
 				schedule_multiplayer_minor_change = false;
 				schedule_multiplayer_major_change = false;
 				render_gametext(false);
-			},false);
+			},true);
 
 		}else{
 			leave_multiplayer();
@@ -7754,17 +7754,23 @@ Current version indicated by LITEVER below.
 		})
 		.then(response => response.json())
 		.then(vals => {
-			let expected_major = (fullupdate?(1+multiplayer_last_turn_major):multiplayer_last_turn_major);
-			let expected_minor = (fullupdate?0:(multiplayer_last_turn_minor+1));
-			if(vals.turn_major==expected_major && vals.turn_minor==expected_minor)
+			if(vals && vals.success)
 			{
-				//if nobody else updated, disregard our own updates
-				multiplayer_last_turn_major = expected_major;
-				multiplayer_last_turn_minor = expected_minor;
+				let expected_major = (fullupdate?(1+multiplayer_last_turn_major):multiplayer_last_turn_major);
+				let expected_minor = (fullupdate?0:(multiplayer_last_turn_minor+1));
+				if(vals.turn_major==expected_major && vals.turn_minor==expected_minor)
+				{
+					//if nobody else updated, disregard our own updates
+					multiplayer_last_turn_major = expected_major;
+					multiplayer_last_turn_minor = expected_minor;
+				}
+			}else{
+				leave_multiplayer();
+				msgbox("Multiplayer Error: " + JSON.stringify(vals),"Disconnected from Multiplayer");
 			}
 		}).catch(error => {
 			leave_multiplayer();
-			msgbox("Disconnected from multiplayer: " + error,"Disconnected from Multiplayer");
+			msgbox("Multiplayer Error: " + error,"Disconnected from Multiplayer");
 			console.log("Failed to access multiplayer status: " + error);
 		});
 	}
