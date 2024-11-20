@@ -3188,6 +3188,15 @@ Current version indicated by LITEVER below.
 		return formatted;
 	}
 
+	function get_my_multiplayer_chatname()
+	{
+		if(multiplayer_active && multiplayer_override_name!="")
+		{
+			return multiplayer_override_name;
+		}
+		return localsettings.chatname;
+	}
+
 	function get_instruct_starttag(doTrim=true)
 	{
 		if(doTrim){
@@ -4448,6 +4457,7 @@ Current version indicated by LITEVER below.
 	var koboldcpp_has_vision = false;
 	var koboldcpp_has_multiplayer = false;
 	var multiplayer_active = false;
+	var multiplayer_override_name = "";
 	var multiplayer_last_turn_major = 0;
 	var multiplayer_last_turn_minor = 0;
 	var schedule_multiplayer_minor_change = false;
@@ -7695,6 +7705,7 @@ Current version indicated by LITEVER below.
 		multiplayer_last_turn_minor = 0;
 		schedule_multiplayer_minor_change = false;
 		schedule_multiplayer_major_change = false;
+		multiplayer_override_name = "";
 		render_gametext(false);
 	}
 
@@ -7705,6 +7716,7 @@ Current version indicated by LITEVER below.
 			inputBox(`You're about to enter a Multiplayer Session.<br><br><span class="color_red">Note that stories or messages sent by other users are <b>unfiltered</b>, and may contain <b>offensive or disturbing content</b>. You assume full responsibility and participate at your own discretion.</span><br><br>Enter a unique nickname to use for chat mode (only yourself), or leave it blank to share the same common chatname with other users.`,"Join Multiplayer - Override Chat Nickname?","","[No Override]", ()=>{
 				let userinput = getInputBoxValue().trim();
 				multiplayer_active = true;
+				multiplayer_override_name = userinput;
 				multiplayer_last_turn_major = 0;
 				multiplayer_last_turn_minor = 0;
 				schedule_multiplayer_minor_change = false;
@@ -12546,7 +12558,7 @@ Current version indicated by LITEVER below.
 				{
 					if(localsettings.inject_chatnames_instruct)
 					{
-						newgen = localsettings.chatname + ": " + newgen;
+						newgen = get_my_multiplayer_chatname() + ": " + newgen;
 					}
 					if(localsettings.inject_timestamps)
 					{
@@ -12583,7 +12595,7 @@ Current version indicated by LITEVER below.
 				{
 					injecttime = " ["+(new Date().toLocaleTimeString([], {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'}))+"]";
 				}
-				newgen = "\n" + localsettings.chatname + ":"+ injecttime +" "+ newgen + "";
+				newgen = "\n" + get_my_multiplayer_chatname() + ":"+ injecttime +" "+ newgen + "";
 			}
 			else if(localsettings.opmode==3 && newgen.trim()=="")
 			{
@@ -12719,7 +12731,7 @@ Current version indicated by LITEVER below.
 					{
 						let recenttext = gametext_arr[gametext_arr.length-1].toLowerCase();
 						let spokennames = coarr.filter(x=>(recenttext.includes(x.toLowerCase())));
-						let selfname = localsettings.chatname + "\: ";
+						let selfname = get_my_multiplayer_chatname() + "\: ";
 						let wasself = (recenttext.includes(selfname.toLowerCase()));
 						if(wasself && spokennames.length>0)
 						{
@@ -12730,13 +12742,12 @@ Current version indicated by LITEVER below.
 					hasMulti = (coarr.length>1);
 				}
 
-				let me = localsettings.chatname;
 				if (co == null || co == "" || co.trim()=="") {
 					co = "";
 				}
 
 				//examine context to try to determine if there's an existing botname
-				var othernamesregex = new RegExp("\n(?!" + localsettings.chatname + ").+?\: ", "gi");
+				var othernamesregex = new RegExp("\n(?!" + get_my_multiplayer_chatname() + ").+?\: ", "gi");
 				if(!localsettings.chat_match_any_name && localsettings.chatopponent!="")
 				{
 					let namelist = localsettings.chatopponent.split("||$||");
@@ -12757,19 +12768,19 @@ Current version indicated by LITEVER below.
 				if(is_impersonate_user) //replace opponent with ourselves if needed
 				{
 					is_impersonate_user = false;
-					co = localsettings.chatname;
+					co = get_my_multiplayer_chatname();
 				}
 
 				if (localsettings.chat_context_mod && current_anote.length == 0 && current_memory.length == 0 && current_wi.length == 0) {
-					if (gametext_arr.length > 0 && gametext_arr[0].startsWith("\n" + me + ": ")) {
-						let injected = "[The following is an interesting chat message log between " + me + " and " + original_co + ".]\n\n" + localsettings.chatname + ": Hi.\n" + original_co + ": Hello.";
+					if (gametext_arr.length > 0 && gametext_arr[0].startsWith("\n" + localsettings.chatname + ": ")) {
+						let injected = "[The following is an interesting chat message log between " + localsettings.chatname + " and " + original_co + ".]\n\n" + localsettings.chatname + ": Hi.\n" + original_co + ": Hello.";
 						if(co=="")
 						{
-							injected = "[The following is an interesting chat message log between " + me + " and someone else.]\n\n" + localsettings.chatname + ": Hi.";
+							injected = "[The following is an interesting chat message log between " + localsettings.chatname + " and someone else.]\n\n" + localsettings.chatname + ": Hi.";
 						}
 						if(hasMulti)
 						{
-							injected = "[The following is an interesting chat message log between " + me + " and multiple others.]\n\n" + localsettings.chatname + ": Hi.";
+							injected = "[The following is an interesting chat message log between " + localsettings.chatname + " and multiple others.]\n\n" + localsettings.chatname + ": Hi.";
 						}
 						truncated_context = injected + truncated_context;
 					}
@@ -12792,6 +12803,7 @@ Current version indicated by LITEVER below.
 
 				if(localsettings.allow_continue_chat && newgen.trim() == "" && co!="")
 				{
+					let me = get_my_multiplayer_chatname();
 					//determine if the most recent speaker is ourself
 					let last_self = Math.max(truncated_context.lastIndexOf(me + ":"),truncated_context.lastIndexOf("\n"+me));
 					let last_oppo = truncated_context.lastIndexOf(co+":");
@@ -13146,7 +13158,12 @@ Current version indicated by LITEVER below.
 		}
 		if (localsettings.opmode == 3) //stop on selfname found
 		{
-			seqs = [localsettings.chatname + "\:",("\n" + localsettings.chatname + " ")];
+			seqs = [get_my_multiplayer_chatname() + "\:",("\n" + get_my_multiplayer_chatname() + " ")];
+			if(get_my_multiplayer_chatname()!=localsettings.chatname)
+			{
+				seqs.push(localsettings.chatname + "\:");
+				seqs.push("\n" + localsettings.chatname + " ");
+			}
 
 			//for multichat, everyone else becomes a stopper token
 			if (localsettings.chatopponent!="" && localsettings.chatopponent.includes("||$||")) {
@@ -13169,12 +13186,13 @@ Current version indicated by LITEVER below.
 		{
 			let st = get_instruct_starttag(true);
 			let et = get_instruct_endtag(true);
+			let me = get_my_multiplayer_chatname();
 			seqs = [st, et];
 			if(localsettings.inject_chatnames_instruct)
 			{
-				if(localsettings.chatname!="")
+				if(me!="")
 				{
-					seqs.push(localsettings.chatname + "\:");
+					seqs.push(me + "\:");
 				}
 				if(localsettings.chatopponent!="")
 				{
@@ -14477,6 +14495,7 @@ Current version indicated by LITEVER below.
 	function handle_incoming_text(gentxt, genworker, genmdl, genkudos) {
 		//handle stopping tokens if they got missed (eg. horde)
 		gentxt = trim_extra_stop_seqs(gentxt,true);
+		let mychatname = get_my_multiplayer_chatname();
 
 		//always trim incomplete sentences for adventure and chat (if not multiline)
 		//do not trim if instruct mode AND stop token reached
@@ -14489,7 +14508,7 @@ Current version indicated by LITEVER below.
 			if(localsettings.opmode == 3)
 			{
 				let foundOppoName = gentxt.indexOf(localsettings.chatopponent + "\: ");
-				let foundMyName = gentxt.indexOf(localsettings.chatname + "\: ");
+				let foundMyName = gentxt.indexOf(mychatname + "\: ");
 				if(foundOppoName > 0 || foundMyName > 0)
 				{
 					donottrim = true;
@@ -14574,8 +14593,8 @@ Current version indicated by LITEVER below.
 			{
 				gentxt = gentxt.substring(oppomatch.length);
 			}
-			let foundMyName = gentxt.indexOf(localsettings.chatname + "\:");
-			let foundMyName2 = gentxt.indexOf("\n" + localsettings.chatname + " ");
+			let foundMyName = gentxt.indexOf(mychatname + "\:");
+			let foundMyName2 = gentxt.indexOf("\n" + mychatname + " ");
 			var foundAltYouName = new RegExp("\nYou [A-Z\"\'*] ", "gi");
 			var foundAltYouNameRes = gentxt.match(foundAltYouName);
 			let splitresponse = [];
@@ -14587,7 +14606,7 @@ Current version indicated by LITEVER below.
 				{
 					let ml_check = input_arr[0];
 					//test for other chatopponents
-					var moreopponents = new RegExp("\n(?!" + localsettings.chatname + ").+?\: ", "gi");
+					var moreopponents = new RegExp("\n(?!" + mychatname + ").+?\: ", "gi");
 					var foundmoreopponent = ml_check.match(moreopponents);
 					if(foundmoreopponent != null && foundmoreopponent.length > 0)
 					{
@@ -14600,14 +14619,14 @@ Current version indicated by LITEVER below.
 
 			if (foundMyName != -1)
 			{
-				splitresponse = gentxt.split(localsettings.chatname + "\:");
+				splitresponse = gentxt.split(mychatname + "\:");
 				splitresponse = prune_multiliners(splitresponse);
 			}
 			else if (foundMyName2 != -1 &&
-			(localsettings.chatname!="User" ||
+			(mychatname!="User" ||
 			(foundAltYouNameRes!=null && foundAltYouNameRes.length>0))) //added by henky request, trigger even without colon
 			{
-				splitresponse = gentxt.split("\n" + localsettings.chatname + " ");
+				splitresponse = gentxt.split("\n" + mychatname + " ");
 				splitresponse = prune_multiliners(splitresponse);
 			}
 			else if (foundOppoNameWithNL > 0) //split by oppo name
@@ -14673,9 +14692,9 @@ Current version indicated by LITEVER below.
 
 			if(localsettings.inject_chatnames_instruct)
 			{
-				let st2 = localsettings.chatname + "\:";
+				let st2 = mychatname + "\:";
 				let et2 = localsettings.chatopponent + "\:";
-				if(localsettings.chatname!="")
+				if(mychatname!="")
 				{
 					found = gentxt.indexOf(st2);
 					splitresponse = [];
