@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 188;
+	const LITEVER = 189;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3498,141 +3498,64 @@ Current version indicated by LITEVER below.
 		return header;
 	}
 
-	//instead of a single fetch, optionally break it up into multiple repeated requests which update a local variable
-	function kobold_api_stream(sub_endpt,submit_payload,synchro_streaming_tokens_left,trackedgenid,synchro_streaming_response = "",tokens_per_tick = 4096)
+	//synchronous kai request
+	function kobold_api_sync_req(sub_endpt,submit_payload,trackedgenid)
 	{
-		//called recursively
-		if(synchro_streaming_tokens_left<=0)
+		let reqOpt = {
+		method: 'POST', // or 'PUT'
+		headers: get_kobold_header(),
+		body: JSON.stringify(submit_payload),
+		};
+		if(globalabortcontroller)
 		{
-			if(pending_response_id=="" || pending_response_id==trackedgenid) //drop unrelated requests
-			{
-				synchro_polled_response = synchro_streaming_response;
-			}
-			synchro_pending_stream = "";
+			reqOpt.signal = globalabortcontroller.signal;
 		}
-		else
-		{
-			let new_submit_payload = JSON.parse(JSON.stringify(submit_payload));
-			new_submit_payload.prompt += synchro_streaming_response;
-			new_submit_payload.max_length = Math.min(tokens_per_tick,synchro_streaming_tokens_left);
-
-			let reqOpt = {
-			method: 'POST', // or 'PUT'
-			headers: get_kobold_header(),
-			body: JSON.stringify(new_submit_payload),
-			};
-			if(globalabortcontroller)
-			{
-				reqOpt.signal = globalabortcontroller.signal;
-			}
-			fetch(sub_endpt, reqOpt)
-			.then((response) => response.json())
-			.then((data) => {
-				console.log("sync kobold_api_stream response: " + JSON.stringify(data));
-				if (custom_kobold_endpoint != "" && data && data.results != null && data.results.length > 0) {
-					synchro_streaming_response += data.results[0].text;
-					synchro_streaming_tokens_left -= tokens_per_tick;
-					if (data.results[0].finish_reason == "stop") {
-						last_stop_reason = "stop";
-					}
-
-					last_response_obj = JSON.parse(JSON.stringify(data));
-
-					//handle some early stopping criterias
-					if (localsettings.opmode == 3) //stop on selfname found
-					{
-						let foundMyName = synchro_streaming_response.indexOf(localsettings.chatname + "\:");
-						if (foundMyName != -1)
-						{
-							synchro_streaming_tokens_left = 0;
-						}
-					}
-					if (localsettings.opmode == 4) //stop on selfname found
-					{
-						let st = get_instruct_starttag(true);
-						let et = get_instruct_endtag(true);
-						let foundStop = synchro_streaming_response.indexOf(st);
-						if (foundStop != -1)
-						{
-							synchro_streaming_tokens_left = 0;
-						}
-						foundStop = synchro_streaming_response.indexOf(et);
-						if (foundStop != -1)
-						{
-							synchro_streaming_tokens_left = 0;
-						}
-					}
-
-					//stop on any stop token
-					if(extrastopseq!="")
-					{
-						let rep = replaceAll(extrastopseq,"\\n","\n");
-						let srep = rep.split("||$||");
-						if (srep.length > 0) {
-							for (let i = 0; i < srep.length; ++i) {
-								if (srep[i] && srep[i] != "") {
-									let foundStop = synchro_streaming_response.indexOf(srep[i]);
-									if (foundStop != -1)
-									{
-										synchro_streaming_tokens_left = 0;
-										break;
-									}
-								}
-							}
-						}
-					}
-
-					if(data.results[0].text=="") //stop on no output
-					{
-						synchro_streaming_tokens_left = 0;
-					}
-
-					if(pending_response_id!="")
-					{
-						synchro_pending_stream = synchro_streaming_response;
-						if(synchro_pending_stream!="")
-						{
-							render_gametext();
-						}
-					}
-					else
-					{
-						synchro_streaming_tokens_left = 0;
-					}
-
-					kobold_api_stream(sub_endpt,submit_payload,synchro_streaming_tokens_left,trackedgenid,synchro_streaming_response,tokens_per_tick);
+		fetch(sub_endpt, reqOpt)
+		.then((response) => response.json())
+		.then((data) => {
+			console.log("sync kobold_api_stream response: " + JSON.stringify(data));
+			if (custom_kobold_endpoint != "" && data && data.results != null && data.results.length > 0) {
+				let sync_response = data.results[0].text;
+				if (data.results[0].finish_reason == "stop") {
+					last_stop_reason = "stop";
 				}
-				else {
-					//error occurred, maybe captcha failed
-					console.error("error occurred in v1 generation");
-					clear_poll_flags();
-					render_gametext();
-
-					msgbox("Error occurred during text generation: " + formatError(data),"Error Encountered",false,false,
-					()=>{
-						if(is_using_kcpp_with_streaming() && data.detail && data.detail.type=="service_unavailable")
-						{
-							//offer to abort
-							msgboxYesNo("Attempt to abort existing request?","Send Abort Command?",()=>{
-								lastcheckgenkey = "";
-								abort_generation();
-							},null);
-						}
-					});
-				}
-			})
-			.catch((error) => {
-				console.error('Error:', error);
-				if(error.name!="AbortError") //aborts are silent
+				last_response_obj = JSON.parse(JSON.stringify(data));
+				if(pending_response_id=="" || pending_response_id==trackedgenid) //drop unrelated requests
 				{
-					flush_streaming_text();
-					msgbox("Error while submitting prompt: " + error);
+					synchro_polled_response = sync_response;
 				}
+				synchro_pending_stream = "";
+			}
+			else {
+				//error occurred, maybe captcha failed
+				console.error("error occurred in v1 generation");
 				clear_poll_flags();
 				render_gametext();
 
-			});
-		}
+				msgbox("Error occurred during text generation: " + formatError(data),"Error Encountered",false,false,
+				()=>{
+					if(is_using_kcpp_with_streaming() && data.detail && data.detail.type=="service_unavailable")
+					{
+						//offer to abort
+						msgboxYesNo("Attempt to abort existing request?","Send Abort Command?",()=>{
+							lastcheckgenkey = "";
+							abort_generation();
+						},null);
+					}
+				});
+			}
+		})
+		.catch((error) =>
+		{
+			console.error('Error:', error);
+			if(error.name!="AbortError") //aborts are silent
+			{
+				flush_streaming_text();
+				msgbox("Error while submitting prompt: " + error);
+			}
+			clear_poll_flags();
+			render_gametext();
+		});
 	}
 
 	function oai_api_sync_req(targetep,oai_payload,oaiheaders)
@@ -5837,25 +5760,22 @@ Current version indicated by LITEVER below.
 	}
 
 
-	//0 is none, 1 is pseudostreaming, 2 is true poll-streaming, 3 is sse-streaming
+	//0 is none, 1 is poll-streaming, 2 is sse-streaming
 	function determine_streaming_type()
 	{
 		if(localsettings.tokenstreammode==2 && is_using_kcpp_with_sse())
 		{
-			return 3;
+			return 2; //sse stream
 		}
-		let streamtype = (localsettings.tokenstreammode>0 ? 1 : 0);
-		let pstreamamount = urlParams.get('streamamount');
-		if(streamtype==1 && is_using_kcpp_with_streaming() && (pstreamamount == null || pstreamamount <= 0))
-		{
-			streamtype = 2; //true streaming
-		}
-
 		if(waiting_for_autosummary)
 		{
-			streamtype = 0;
+			return 0;
 		}
-		return streamtype;
+		if(localsettings.tokenstreammode==1 && is_using_kcpp_with_streaming())
+		{
+			return 1; //polled stream
+		}
+		return 0;
 	}
 
 	function determine_if_ban_eos(input_was_empty) {
@@ -11222,7 +11142,7 @@ Current version indicated by LITEVER below.
 			let long_story = (truncated_context.length>1800?true:false);
 			truncated_context += "\n### Instruction:Summarize the above text in a single paragraph of up to "+(long_story?"ten":"five")+" detailed sentences.\n### Response:";
 			truncated_context = replace_placeholders(truncated_context);
-		let submit_payload = {
+			let submit_payload = {
 			"prompt": truncated_context,
 			"params": {
 				"n": 1,
@@ -13135,13 +13055,6 @@ Current version indicated by LITEVER below.
 					}
 				}
 
-				let pseudostreaming = (determine_streaming_type()==1);
-				let streamchunk = 4096; //use 4096 for everything except pseudostreaming
-				if(pseudostreaming)
-				{
-					let pstreamamount = urlParams.get('streamamount');
-					streamchunk = ((pstreamamount != null && pstreamamount > 0) ? pstreamamount:8); //8 tokens per stream tick by default
-				}
 				last_request_str = JSON.stringify(submit_payload);
 				last_response_obj = null;
 				if (localsettings.tokenstreammode==2 && is_using_kcpp_with_sse()) {
@@ -13150,7 +13063,7 @@ Current version indicated by LITEVER below.
 				} else {
 					let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_endpoint);
 					let trackedgenid = pending_response_id; //if it changes, stop streaming
-					kobold_api_stream(sub_endpt, submit_payload, submit_payload.max_length, trackedgenid, "", streamchunk);
+					kobold_api_sync_req(sub_endpt, submit_payload, trackedgenid);
 				}
 				update_custom_kobold_endpoint_model_display();
 			}
@@ -15264,7 +15177,7 @@ Current version indicated by LITEVER below.
 					{
 						//still waiting, do nothing until next poll
 						console.log("sync request: still awaiting reply");
-						let polledstreaming = (determine_streaming_type()==2);
+						let polledstreaming = (determine_streaming_type()==1);
 						//only check once every 2 ticks if remote
 						if (polledstreaming && (localflag?true:(poll_ticks_passed%2==0)))
 						{
