@@ -3467,70 +3467,6 @@ Current version indicated by LITEVER below.
 		return null;
     };
 
-	//similar to Promises allSettled, but I want to roll my own for better control and compatibility
-	/**
-	 * @param {[RequestInfo,RequestInit][]} fetchList , but can also be string[]
-	 */
-	function multifetch(fetchList, onDoneResults)
-	{
-		if (fetchList == null || fetchList.length == 0) {
-			onDoneResults([],[]);
-		} else {
-
-			let signal = null;
-			//put in trycatch as some older browsers dont support
-			try {
-				let controller = new AbortController();
-				const timeoutId = setTimeout(() => { controller.abort() }, 12000);
-				signal = controller.signal;
-			} catch (e) {
-				console.log("AbortController Err: " + e);
-			}
-
-			let promisesLeft = fetchList.length;
-			let resultsArr = [];
-			let errorArr = [];
-
-			let multifetchResolve = function () {
-				resultsArr = resultsArr.sort((a,b)=>{
-					return (find_text_horde(a.cluster).sort_order - find_text_horde(b.cluster).sort_order);
-				});
-				onDoneResults(resultsArr,errorArr);
-			}
-
-			for (let i = 0; i < fetchList.length; ++i) {
-				let curr = fetchList[i];
-				if(!Array.isArray(curr))
-				{
-					curr = [curr,null];
-				}
-				let rqi = curr[1];
-				if(rqi==null)
-				{
-					rqi = {};
-				}
-				rqi.signal = signal;
-				fetch(curr[0].fullurl, rqi)
-				.then((response) => response.json())
-				.then((data) => {
-					resultsArr.push({cluster:curr[0].baseurl,data:data});
-					promisesLeft -= 1;
-					if (promisesLeft==0)
-					{
-						multifetchResolve();
-					}
-				})
-				.catch((error) => {
-					errorArr.push({cluster:curr[0].baseurl,data:error});
-					promisesLeft -= 1;
-					if (promisesLeft==0)
-					{
-						multifetchResolve();
-					}
-				});
-			}
-		}
-	}
 
 	function apply_proxy_url(url, proxy_by_default=false)
 	{
@@ -4262,39 +4198,15 @@ Current version indicated by LITEVER below.
 	const poll_interval_idle = 1000;
 	const poll_interval_multiplayer = 2000; //every 2s
 
-	const text_hordes = [
-		{
-			baseurl: "https://aihorde.net",
-			tag: "🤖",
-			sort_order: 1,
-			client_agent: default_client_agent,
-			get perf_endpoint(){return this.baseurl  + "/api/v2/status/performance"},
-			get models_endpoint(){return this.baseurl  + "/api/v2/status/models?type=text"},
-			get submit_endpoint(){return this.baseurl  + "/api/v2/generate/text/async"},
-			get polling_endpoint(){return this.baseurl  + "/api/v2/generate/text/status"},
-			get output_endpoint(){return this.baseurl  + "/api/v2/generate/text/status"},
-			get worker_endpoint(){return this.baseurl  + "/api/v2/workers?type=text"},
-			get finduser_endpoint(){return this.baseurl  + "/api/v2/find_user"},
-			get maintenance_endpoint(){return this.baseurl  + "/api/v2/workers"},
-		}
-	];
-
-	function find_text_horde(clusterurl)
-	{
-		for(let i=0;i<text_hordes.length;++i)
-		{
-			if(text_hordes[i].baseurl==clusterurl)
-			{
-				return text_hordes[i];
-			}
-		}
-		return null;
-	}
-
-	const perf_endpoints = text_hordes.map(a => ({"baseurl":a.baseurl,"fullurl":a.perf_endpoint}));
-	const models_endpoints =  text_hordes.map(a => ({"baseurl":a.baseurl,"fullurl":a.models_endpoint}));
-	const worker_endpoints =  text_hordes.map(a => ({"baseurl":a.baseurl,"fullurl":a.worker_endpoint}));
-	const finduser_endpoints =  text_hordes.map(a => ({"baseurl":a.baseurl,"fullurl":a.finduser_endpoint}));
+	const horde_base_url = "https://aihorde.net"
+	const horde_perf_endpoint = horde_base_url + "/api/v2/status/performance";
+	const horde_models_endpoint = horde_base_url + "/api/v2/status/models?type=text";
+	const horde_submit_endpoint = horde_base_url + "/api/v2/generate/text/async";
+	const horde_polling_endpoint = horde_base_url + "/api/v2/generate/text/status";
+	const horde_output_endpoint = horde_base_url + "/api/v2/generate/text/status";
+	const horde_worker_endpoint = horde_base_url + "/api/v2/workers?type=text";
+	const horde_finduser_endpoint = horde_base_url + "/api/v2/find_user";
+	const horde_maintenance_endpoint = horde_base_url + "/api/v2/workers";
 
 	const stablehorde_submit_endpoint = stablehorde_url + "/api/v2/generate/async";
 	const stablehorde_poll_endpoint = stablehorde_url + "/api/v2/generate/check";
@@ -4397,7 +4309,6 @@ Current version indicated by LITEVER below.
 	var retry_preserve_last = false; //if true, retrying does not delete any old text
 	var redo_prev_text = []; //if we undo a retry, save a copy here so it can be reverted with redo
 	var pending_response_id = ""; //guid of response pending from horde server
-	var pending_response_horde = text_hordes[0]; //the url to poll for pending response from a v2 submit
 	var poll_in_progress = false; //are we currently waiting for a text generation
 	var poll_ticks_passed = 0; //how much time passed after polling
 	var horde_poll_nearly_completed = false; //if true, increase polling rate
@@ -4482,7 +4393,6 @@ Current version indicated by LITEVER below.
 
 	var localsettings = {
 		my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
-		home_cluster: text_hordes[0].baseurl, //which horde does this api key belongs to
 		saved_oai_key: "", //do not ever share this in save files!
 		saved_oai_addr: default_oai_base, //do not ever share this in save files!
 		saved_dalle_key: "",
@@ -5231,51 +5141,39 @@ Current version indicated by LITEVER below.
 		else
 		{
 			//fetch horde performance status as initial login
-			multifetch(perf_endpoints, (resArr, errArr) => {
-				if (resArr && resArr.length > 0) {
-					perfdata = {
-						"queued_requests": 0,
-						"queued_tokens": 0,
-						"past_minute_tokens": 0,
-						"worker_count": 0
-					};
-					for (let i = 0; i < resArr.length; ++i) {
-						let cur = resArr[i].data;
-						if (cur.hasOwnProperty("text_worker_count")) {
-							//new horde api
-							perfdata.queued_requests += cur.queued_text_requests;
-							perfdata.worker_count += cur.text_worker_count;
-							perfdata.queued_tokens += cur.queued_tokens;
-							perfdata.past_minute_tokens += cur.past_minute_tokens;
-						} else {
-							//old horde api
-							perfdata.queued_requests += cur.queued_requests;
-							perfdata.worker_count += cur.worker_count;
-							perfdata.queued_tokens += cur.queued_tokens;
-							perfdata.past_minute_tokens += cur.past_minute_tokens;
-						}
-					}
-					document.body.classList.add("connected");
-					document.getElementById("multiplayerstatus").innerText = "";
-					document.getElementById("connectstatus").innerHTML = "AI Horde";
-					document.getElementById("connectstatus").classList.add("color_offwhite");
-					render_gametext(false);
+			fetch(horde_perf_endpoint)
+			.then(x => x.json())
+			.then(data => {
+				perfdata = {
+					"queued_requests": 0,
+					"queued_tokens": 0,
+					"past_minute_tokens": 0,
+					"worker_count": 0
+				};
+				//new horde api
+				perfdata.queued_requests += data.queued_text_requests;
+				perfdata.worker_count += data.text_worker_count;
+				perfdata.queued_tokens += data.queued_tokens;
+				perfdata.past_minute_tokens += data.past_minute_tokens;
+				document.body.classList.add("connected");
+				document.getElementById("multiplayerstatus").innerText = "";
+				document.getElementById("connectstatus").innerHTML = "AI Horde";
+				document.getElementById("connectstatus").classList.add("color_offwhite");
+				render_gametext(false);
 
-					read_url_params_data();
+				read_url_params_data();
 
-					if (popup_aiselect) {
-						display_endpoint_container();
-					}
-
+				if (popup_aiselect) {
+					display_endpoint_container();
 				}
-				else {
-					msgbox("Failed to connect to AI Horde Service!\nPlease check your network connection.<br><br>You may still be able to connect to an alternative service, <a href='#' class='color_blueurl' onclick='hide_popups();display_endpoint_container()'>click here to view options</a>.","Error Encountered",true);
-					document.body.classList.remove("connected");
-					document.getElementById("multiplayerstatus").innerText = "";
-					document.getElementById("connectstatus").innerHTML = "Offline Mode";
-					document.getElementById("connectstatus").classList.remove("color_offwhite");
-					render_gametext(false);
-				}
+			}).catch((error) => {
+				console.log("Error: " + error);
+				msgbox("Failed to connect to AI Horde Service!\nPlease check your network connection.<br><br>You may still be able to connect to an alternative service, <a href='#' class='color_blueurl' onclick='hide_popups();display_endpoint_container()'>click here to view options</a>.","Error Encountered",true);
+				document.body.classList.remove("connected");
+				document.getElementById("multiplayerstatus").innerText = "";
+				document.getElementById("connectstatus").innerHTML = "Offline Mode";
+				document.getElementById("connectstatus").classList.remove("color_offwhite");
+				render_gametext(false);
 			});
 		}
 
@@ -5991,18 +5889,6 @@ Current version indicated by LITEVER below.
 		return (window.location.hostname.includes("koboldai.net") || window.location.hostname.includes("lostruins.github.io"));
 	}
 
-	function get_most_common_cluster(arr)
-	{
-		let pickedcluster = arr[0].cluster;
-		let b={}, maxi=0;
-		for(let ki=0;ki<arr.length;++ki) {
-			let k = arr[ki].cluster;
-			if(b[k]) b[k]++; else b[k]=1;
-			if(maxi < b[k]) { pickedcluster=k; maxi=b[k]; }
-		}
-		return pickedcluster;
-	}
-
 	function generate_compressed_story(save_images,export_settings,export_aesthetic_settings) {
 		//encode the current story into a sharable url
 		//a tiny json format which gets compressed by LZMA then b64url
@@ -6161,13 +6047,6 @@ Current version indicated by LITEVER below.
 						selected_models.push(mdls[0]);
 					}
 
-					const allMatched1 = selected_models.every(item => item.cluster === selected_models[0].cluster);
-
-					if (!allMatched1) {
-						//if conflicted, get the most numerous cluster (mode)
-						let pickedcluster = get_most_common_cluster(selected_models);
-						selected_models = selected_models.filter(item => item.cluster === pickedcluster);
-					}
 					render_gametext();
 				}
 			}
@@ -6235,13 +6114,6 @@ Current version indicated by LITEVER below.
 								selected_models.push(mdls[0]);
 							}
 
-							const allMatched1 = selected_models.every(item => item.cluster === selected_models[0].cluster);
-
-							if (!allMatched1) {
-								//if conflicted, get the most numerous cluster (mode)
-								let pickedcluster = get_most_common_cluster(selected_models);
-								selected_models = selected_models.filter(item => item.cluster === pickedcluster);
-							}
 							render_gametext();
 						}
 
@@ -6453,7 +6325,6 @@ Current version indicated by LITEVER below.
 			new_save_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
 			//redact some values
 			new_save_storyobj.savedsettings.my_api_key = "0000000000";
-			new_save_storyobj.savedsettings.home_cluster = text_hordes[0].baseurl;
 			new_save_storyobj.savedsettings.saved_oai_key = "";
 			new_save_storyobj.savedsettings.saved_dalle_key = "";
 			new_save_storyobj.savedsettings.saved_dalle_url = "";
@@ -6800,7 +6671,6 @@ Current version indicated by LITEVER below.
 				if (storyobj.savedsettings && storyobj.savedsettings != "")
 				{
 					let tmpapikey1 = localsettings.my_api_key;
-					let tmphc = localsettings.home_cluster;
 					let tmp_oai1 = localsettings.saved_oai_key;
 					let tmp_oai2 = localsettings.saved_oai_addr;
 					let tmp_oai3 = localsettings.saved_dalle_key;
@@ -6841,7 +6711,6 @@ Current version indicated by LITEVER below.
 						}
 					}
 					localsettings.my_api_key = tmpapikey1;
-					localsettings.home_cluster = tmphc;
 					localsettings.saved_oai_key = tmp_oai1;
 					localsettings.saved_oai_addr = tmp_oai2;
 					localsettings.saved_dalle_key = tmp_oai3;
@@ -8298,39 +8167,17 @@ Current version indicated by LITEVER below.
 			onDoneCallback(cached_worker_list);
 			return;
 		}
-		multifetch(worker_endpoints,(resArr,errArr)=>{
-
-			if(resArr && resArr.length>0)
-			{
-				let wdata = [];
-				for(let i=0;i<resArr.length;++i)
-				{
-					let cur = resArr[i].data;
-					if (cur)
-					{
-						for (let x = 0; x < cur.length; ++x) {
-							let wd = cur[x];
-							wd.cluster = resArr[i].cluster;
-							if(wd.hasOwnProperty("max_content_length"))
-							{
-								wd.max_context_length = wd.max_content_length;
-							}
-							wdata.push(wd);
-						}
-					}
-				}
-
-				cached_worker_list = wdata;
-				stale_cached_worker_time = performance.now() + 30000; //cache worker list for 30s
-				if (onDoneCallback != null) {
-					onDoneCallback(wdata);
-				}
+		fetch(horde_worker_endpoint)
+		.then(x => x.json())
+		.then(data => {
+			cached_worker_list = data;
+			stale_cached_worker_time = performance.now() + 30000; //cache worker list for 30s
+			if (onDoneCallback != null) {
+				onDoneCallback(data);
 			}
-			else
-			{
-				console.log("Error: " + errArr);
-				msgbox("Failed to retrieve AI Horde Worker list!\nPlease check your network connection.");
-			}
+		}).catch((error) => {
+			console.log("Error: " + error);
+			msgbox("Failed to retrieve AI Horde Worker list!\nPlease check your network connection.");
 		});
 
 	}
@@ -8402,8 +8249,6 @@ Current version indicated by LITEVER below.
 			{
 				tokenspersec = 0;
 			}
-			let parentcluster = find_text_horde(elem.cluster);
-			let clustertag = ((parentcluster&&parentcluster.tag!="")?" "+parentcluster.tag+"":"");
 			let style = (elem.trusted ? "style=\"color:#dd77ff;\"" : "");
 			let brokenstyle = (elem.maintenance_mode ? "style=\"color:#ee4444;\"" : "");
 			let workerNameHtml = escapeHtml(elem.name.substring(0, 40));
@@ -8436,11 +8281,10 @@ Current version indicated by LITEVER below.
 	function show_my_own_workers()
 	{
 		let userData = lastValidFoundUserData;
-		let parentcluster = find_text_horde(lastValidFoundCluster);
 		lastValidFoundUserWorkers = [];
-		if (parentcluster && userData && userData.worker_ids && userData.worker_ids.length > 0)
+		if (userData && userData.worker_ids && userData.worker_ids.length > 0)
 		{
-			let urls = userData.worker_ids.map(x=>parentcluster.maintenance_endpoint + "/" + x);
+			let urls = userData.worker_ids.map(x=> horde_maintenance_endpoint + "/" + x);
 			Promise.all(urls.map(url => fetch(url).then(response => response.json()).catch(error => error)))
 				.then(values => {
 					values = values.filter(n => (n.id && n.id!=""));
@@ -9977,34 +9821,17 @@ Current version indicated by LITEVER below.
 		}
 
 		//fetch the model list
-		multifetch(models_endpoints,(resArr,errArr)=>{
-			if(resArr && resArr.length>0)
+		fetch(horde_models_endpoint)
+		.then(x => x.json())
+		.then(data => {
+			cached_model_list = data;
+			stale_cached_model_time = performance.now() + 30000; //cache model list for 30s
+			onDoneCallback(cached_model_list);
+		}).catch((error) => {
+			console.log("Error: " + error);
+			if(!is_popup_open())
 			{
-				let mdls = [];
-				for(let i=0;i<resArr.length;++i)
-				{
-					let cur = resArr[i].data;
-					if (cur)
-					{
-						for (let x = 0; x < cur.length; ++x) {
-							let mdl = cur[x];
-							mdl.cluster = resArr[i].cluster;
-							mdls.push(mdl);
-						}
-					}
-				}
-
-				cached_model_list = mdls;
-				stale_cached_model_time = performance.now() + 30000; //cache model list for 30s
-				onDoneCallback(mdls);
-			}
-			else
-			{
-				console.log("Error: " + errArr);
-				if(!is_popup_open())
-				{
-					msgbox("Failed to fetch models!\nPlease check your network connection.");
-				}
+				msgbox("Failed to fetch models!\nPlease check your network connection.");
 			}
 		});
 	}
@@ -10073,27 +9900,23 @@ Current version indicated by LITEVER below.
 						let curr = worker_data[i];
 						let cm = (curr.models && curr.models.length > 0) ? curr.models[0] : "None";
 						let cn = curr.name;
-						let parentcluster = find_text_horde(curr.cluster);
-						let clustertag = ((parentcluster && parentcluster.tag != "") ? "" + parentcluster.tag + " " : "");
 						let style = (curr.trusted ? "style=\"color:#b700ff;\"" : "");
 						style = (curr.maintenance_mode ? "style=\"color:#ee4444;\"" : style);
 						let extratag = (curr.trusted ? " 💜" : "");
 						extratag = (curr.maintenance_mode ? " ⛔" : extratag);
-						let alrselected = (selected_workers.filter(x => (x.cluster == curr.cluster && x.name == curr.name)).length > 0) ? " selected" : "";
-						model_choices += "<option " + style + " value=\"" + i + "\" " + alrselected + ">" + clustertag + escapeHtml(cn) + " (" + escapeHtml(cm) + ")" + extratag + "</option>";
+						let alrselected = (selected_workers.filter(x => (x.name == curr.name)).length > 0) ? " selected" : "";
+						model_choices += "<option " + style + " value=\"" + i + "\" " + alrselected + ">" + escapeHtml(cn) + " (" + escapeHtml(cm) + ")" + extratag + "</option>";
 					}
 					document.getElementById("pickedmodel").innerHTML = model_choices;
 				} else {
 					let model_choices = "";
 					for (let i = 0; i < models_data.length; ++i) {
 						let curr = models_data[i];
-						let parentcluster = find_text_horde(curr.cluster);
-						let clustertag = ((parentcluster && parentcluster.tag != "") ? "" + parentcluster.tag + " " : "");
-						let alrselected = (selected_models.filter(x => (x.cluster == curr.cluster && x.name == curr.name)).length > 0) ? " selected" : "";
+						let alrselected = (selected_models.filter(x => (x.name == curr.name)).length > 0) ? " selected" : "";
 						let mperf = parseFloat(curr.performance);
 						if (!mperf || isNaN(mperf) || mperf >= 99999) //a patch before the performance is properly fixed, we calculate it ourselves
 						{
-							let assocworkers = worker_data.filter(x => (x.cluster == curr.cluster && x.models.includes(curr.name)));
+							let assocworkers = worker_data.filter(x => (x.models.includes(curr.name)));
 							if (assocworkers.length > 0)
 							{
 								mperf = 0;
@@ -10109,7 +9932,7 @@ Current version indicated by LITEVER below.
 								mperf = mperf.toFixed(1)
 							}
 						}
-						model_choices += "<option value=\"" + i + "\" " + alrselected + ">" + clustertag + escapeHtml(curr.name) + " (ETA: "+ curr.eta +"s, Queue: " + curr.queued + ", Speed: " + mperf + ", Qty: " + curr.count + ")</option>";
+						model_choices += "<option value=\"" + i + "\" " + alrselected + ">" + escapeHtml(curr.name) + " (ETA: "+ curr.eta +"s, Queue: " + curr.queued + ", Speed: " + mperf + ", Qty: " + curr.count + ")</option>";
 					}
 					document.getElementById("pickedmodel").innerHTML = model_choices;
 				}
@@ -10178,7 +10001,7 @@ Current version indicated by LITEVER below.
 					prep_sel_workers.push(addedworker);
 					let modnames = addedworker.models;
 					for (var j = 0; j < modnames.length; ++j) {
-						let addedmodel = models_data.find(element => (element.name == modnames[j] && element.cluster==addedworker.cluster));
+						let addedmodel = models_data.find(element => (element.name == modnames[j]));
 						if (!prep_sel_models.includes(addedmodel)) {
 							prep_sel_models.push(addedmodel);
 						}
@@ -10195,21 +10018,6 @@ Current version indicated by LITEVER below.
 			prep_sel_models = prep_sel_models.filter(x=>x);
 			prep_sel_workers = prep_sel_workers.filter(x=>x);
 
-			const allMatched1 = prep_sel_models.every(item => item.cluster === prep_sel_models[0].cluster);
-			const allMatched2 = prep_sel_workers.every(item => item.cluster === prep_sel_workers[0].cluster);
-
-			if(!allMatched1 || !allMatched2)
-			{
-				if (prep_sel_workers.length > 0) {
-					let pickedcluster = get_most_common_cluster(prep_sel_workers);
-					prep_sel_workers = prep_sel_workers.filter(item => item.cluster === pickedcluster);
-					prep_sel_models = prep_sel_models.filter(item => item.cluster === pickedcluster);
-				} else {
-					let pickedcluster = get_most_common_cluster(prep_sel_models);
-					prep_sel_models = prep_sel_models.filter(item => item.cluster === pickedcluster);
-				}
-			}
-
 			selected_models = prep_sel_models;
 			selected_workers = prep_sel_workers;
 			localsettings.my_api_key = document.getElementById("apikey").value;
@@ -10217,21 +10025,12 @@ Current version indicated by LITEVER below.
 			{
 				localsettings.my_api_key = defaultsettings.my_api_key;
 			}
-			if (desired_new_home_cluster != null) {
-				localsettings.home_cluster = desired_new_home_cluster;
-				desired_new_home_cluster = null;
-			}
 
 			document.getElementById("multiplayerstatus").innerText = "";
 			document.getElementById("connectstatus").innerHTML = "AI Horde";
 
 			render_gametext();
 			hide_popups();
-
-			if(!allMatched1 || !allMatched2)
-			{
-				msgbox("You've selected multiple workers from different clusters. Only one cluster will be used.","Caution");
-			}
 		}
 	}
 
@@ -10243,8 +10042,7 @@ Current version indicated by LITEVER below.
 			msgboxYesNo(`Are you sure you want to delete the worker <span class='color_orange'>`+elem.name+`</span> with the ID <span class='color_orange'>`+elem.id+`</span>?<br><br><b>This action is irreversible!</b>`,"Confirm Delete Worker",
 			()=>{
 				let newapikey = document.getElementById("apikey").value;
-				let parentcluster = find_text_horde(lastValidFoundCluster);
-				fetch(parentcluster.maintenance_endpoint + "/" + elem.id, {
+				fetch(horde_maintenance_endpoint + "/" + elem.id, {
 						method: 'DELETE',
 						headers: {
 							'Content-Type': 'application/json',
@@ -10267,7 +10065,6 @@ Current version indicated by LITEVER below.
 	function update_my_workers()
 	{
 		let newapikey = document.getElementById("apikey").value;
-		let parentcluster = find_text_horde(lastValidFoundCluster);
 		for(var i=0;i<lastValidFoundUserWorkers.length;++i)
 		{
 			let desc = document.getElementById("mwc_desc_"+i);
@@ -10284,7 +10081,7 @@ Current version indicated by LITEVER below.
 					{
 						wo.info = desc.value.trim();
 					}
-					fetch(parentcluster.maintenance_endpoint + "/" + lastValidFoundUserWorkers[i].id, {
+					fetch(horde_maintenance_endpoint + "/" + lastValidFoundUserWorkers[i].id, {
 						method: 'PUT',
 						headers: {
 							'Content-Type': 'application/json',
@@ -10305,9 +10102,7 @@ Current version indicated by LITEVER below.
 
 	}
 
-	let desired_new_home_cluster = null;
 	let lastValidFoundUserData = null;
-	let lastValidFoundCluster = null;
 	let lastValidFoundUserWorkers = [];
 	function fetch_kudo_balance()
 	{
@@ -10315,70 +10110,50 @@ Current version indicated by LITEVER below.
 		{
 			return;
 		}
-		desired_new_home_cluster = null;
 		let newapikey = document.getElementById("apikey").value;
 
 		if (newapikey != null && newapikey.trim() != "") {
 			document.getElementById("showownworkerslink").classList.add("hidden");
 			document.getElementById("kudos_bal").innerHTML = "Checking...<br>&nbsp;";
 
-			let fupayload = {
+			fetch(horde_finduser_endpoint, {
 				method: 'GET',
 				headers: {
 					'apikey': newapikey,
 				},
-			};
-			let fu_zip = finduser_endpoints.map(a => [a, fupayload]);
-			multifetch(fu_zip, (resArr, errArr) => {
-				if (resArr && resArr.length > 0) {
-					lastValidFoundUserData = null;
-					lastValidFoundCluster = "";
-					for (let i = 0; i < resArr.length; ++i) {
-						let curdat = resArr[i].data;
-						let clus = resArr[i].cluster;
-						if (curdat) {
-							let uname = curdat.username;
-							console.log(curdat);
-							if (uname != null && uname != "") {
-								lastValidFoundUserData = curdat;
-								lastValidFoundCluster = clus;
-								break;
-							}
-						}
-					}
-					if (lastValidFoundUserData) {
-						desired_new_home_cluster = lastValidFoundCluster;
-						let kuds = lastValidFoundUserData.kudos;
-						let uname = lastValidFoundUserData.username;
-						let parentcluster = find_text_horde(desired_new_home_cluster);
-						let clustertag = ((parentcluster&&parentcluster.tag!="")?""+parentcluster.tag+" ":"");
-						let unameurl = "<a class='color_blueurl' href='#' onclick='show_my_own_workers()'>"+uname+"</a>";
-						if (kuds < 0) {
-							document.getElementById("kudos_bal").innerHTML = clustertag + unameurl + "<br>Kudos Balance: 0";
-							if(uname.toLowerCase()=="anonymous#0")
-							{
-								document.getElementById("kudos_bal").innerHTML = clustertag + uname + "<br>"+
-								"<a class='color_blueurl' href='https://aihorde.net/register'>(Register New User)</a>";
-							}else{
-								document.getElementById("showownworkerslink").classList.remove("hidden");
-							}
-						} else {
-							document.getElementById("kudos_bal").innerHTML = clustertag + unameurl + "<br>Kudos Balance: " + kuds;
+			})
+			.then((response) => response.json())
+			.then((data) => {
+				console.log(data);
+				lastValidFoundUserData = null;
+				if (data && data.username != null && data.username != "") {
+					lastValidFoundUserData = data;
+					let uname = data.username;
+					let kuds = data.kudos;
+					let unameurl = "<a class='color_blueurl' href='#' onclick='show_my_own_workers()'>"+uname+"</a>";
+					if (kuds < 0) {
+						document.getElementById("kudos_bal").innerHTML = unameurl + "<br>Kudos Balance: 0";
+						if(uname.toLowerCase()=="anonymous#0")
+						{
+							document.getElementById("kudos_bal").innerHTML = uname + "<br>"+
+							"<a class='color_blueurl' href='https://aihorde.net/register'>(Register New User)</a>";
+						}else{
 							document.getElementById("showownworkerslink").classList.remove("hidden");
 						}
-
-					}
-					else {
-						document.getElementById("kudos_bal").innerHTML = "API Key Error<br><a class='color_blueurl' href='https://aihorde.net/register'>(Register New User)</a>";
+					} else {
+						document.getElementById("kudos_bal").innerHTML = unameurl + "<br>Kudos Balance: " + kuds;
+						document.getElementById("showownworkerslink").classList.remove("hidden");
 					}
 				}
 				else {
-					console.log("Error: " + errArr);
 					document.getElementById("kudos_bal").innerHTML = "API Key Error<br><a class='color_blueurl' href='https://aihorde.net/register'>(Register New User)</a>";
 				}
+			})
+			.catch((error) => {
+				console.log("Error: " + error);
+				document.getElementById("kudos_bal").innerHTML = "API Key Error<br><a class='color_blueurl' href='https://aihorde.net/register'>(Register New User)</a>";
 			});
 		}
-
 	}
 
 	function inputboxfocus()
@@ -11940,9 +11715,9 @@ Current version indicated by LITEVER below.
 		render_gametext();
 
 		//we do this last so its ok even if it fails
-		if (pending_response_horde && id_to_cancel && id_to_cancel != "" && !is_using_custom_ep())
+		if (id_to_cancel && id_to_cancel != "" && !is_using_custom_ep())
 		{
-			let cancelurl = pending_response_horde.output_endpoint + "/" + id_to_cancel;
+			let cancelurl = horde_output_endpoint + "/" + id_to_cancel;
 			fetch(cancelurl, {
 				method: 'DELETE'
 			})
@@ -12655,7 +12430,7 @@ Current version indicated by LITEVER below.
 						for(let mm=0;mm<selected_models.length;++mm)
 						{
 							let x = selected_models[mm];
-							if(x.cluster == curr.cluster && curr.models.includes(x.name))
+							if(curr.models.includes(x.name))
 							{
 								wrk_list.push(curr);
 								break;
@@ -13884,36 +13659,8 @@ Current version indicated by LITEVER below.
 		}
 		else {
 			console.log("submit v2 api");
-
-			//determine which horde selected models or workers are on.
-			//if they are on both, or if no workers/models are selected,
-			//then we prioritize the one matching our home cluster
-			let selectedhorde = find_text_horde(localsettings.home_cluster);
-			if (selected_workers.length > 0) {
-				const foundhome = selected_workers.filter(m => m.cluster == localsettings.home_cluster);
-				const foundaway = selected_workers.filter(m => m.cluster != localsettings.home_cluster);
-
-				if (foundhome.length == 0 && foundaway.length > 0) {
-					let bettermatch = find_text_horde(foundaway[0].cluster);
-					if (bettermatch) {
-						selectedhorde = bettermatch;
-					}
-				}
-			}
-			else if (selected_models.length > 0) {
-				const foundhome = selected_models.filter(m => m.cluster == localsettings.home_cluster);
-				const foundaway = selected_models.filter(m => m.cluster != localsettings.home_cluster);
-				if (foundhome.length == 0 && foundaway.length > 0) {
-					let bettermatch = find_text_horde(foundaway[0].cluster);
-					if (bettermatch) {
-						selectedhorde = bettermatch;
-					}
-				}
-			}
-
-			//use anon key if we are generating for a model outside our home cluster
-			let apikeytouse = (selectedhorde.baseurl == localsettings.home_cluster ? localsettings.my_api_key : defaultsettings.my_api_key);
-			let clientagenttouse = selectedhorde.client_agent;
+			let apikeytouse = localsettings.my_api_key;
+			let clientagenttouse = default_client_agent;
 			let subpostheaders = {
 				'Content-Type': 'application/json',
 				'apikey': apikeytouse,
@@ -13940,7 +13687,7 @@ Current version indicated by LITEVER below.
 			last_request_str = JSON.stringify(submit_payload);
 			last_response_obj = null;
 
-			fetch(selectedhorde.submit_endpoint, {
+			fetch(horde_submit_endpoint, {
 				method: 'POST', // or 'PUT'
 				headers: subpostheaders,
 				body: JSON.stringify(submit_payload),
@@ -13950,7 +13697,6 @@ Current version indicated by LITEVER below.
 					console.log('Success:', data);
 					if (data.id && data.id != "") {
 						pending_response_id = data.id;
-						pending_response_horde = selectedhorde;
 						poll_ticks_passed = 0;
 						console.log("awaiting response for " + pending_response_id);
 					}
@@ -15595,7 +15341,7 @@ Current version indicated by LITEVER below.
 					//horde api needs to constantly poll to see if response is done
 					console.log("async request: started for pending id " + pending_response_id);
 					poll_in_progress = true;
-					fetch(pending_response_horde.polling_endpoint + "/" + pending_response_id)
+					fetch(horde_polling_endpoint + "/" + pending_response_id)
 					.then(x => x.json())
 					.then(data => {
 						if (data.message != null || data.faulted == true || data.is_possible == false) {
@@ -15622,7 +15368,7 @@ Current version indicated by LITEVER below.
 								//complete, fetch final results. we wait 0.5s more as kudos may take time to calculate
 								setTimeout(() => {
 									console.log("fetching completed generation for " + pending_response_id);
-									fetch(pending_response_horde.output_endpoint + "/" + pending_response_id)
+									fetch(horde_output_endpoint + "/" + pending_response_id)
 										.then(x => x.json())
 										.then(data => {
 											console.log("Finished " + pending_response_id + ": " + JSON.stringify(data));
