@@ -4412,6 +4412,7 @@ Current version indicated by LITEVER below.
 		inject_timestamps: false,
 		inject_chatnames_instruct: false,
 		inject_jailbreak_instruct: false,
+		adventure_dicemode: false,
 		idle_responses: 0,
 		idle_duration: 60,
 		export_settings: true, //affects if settings are included with the story and sharelinks
@@ -10284,6 +10285,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("inject_timestamps").checked = localsettings.inject_timestamps;
 		document.getElementById("inject_chatnames_instruct").checked = localsettings.inject_chatnames_instruct;
 		document.getElementById("inject_jailbreak_instruct").checked = localsettings.inject_jailbreak_instruct;
+		document.getElementById("adventure_dicemode").checked = localsettings.adventure_dicemode;
 		document.getElementById("idle_responses").value = localsettings.idle_responses;
 		document.getElementById("idle_duration").value = localsettings.idle_duration;
 		document.getElementById("fix_alpaca_leak").checked = localsettings.fix_alpaca_leak;
@@ -10605,6 +10607,7 @@ Current version indicated by LITEVER below.
 		localsettings.inject_timestamps = (document.getElementById("inject_timestamps").checked ? true : false);
 		localsettings.inject_chatnames_instruct = (document.getElementById("inject_chatnames_instruct").checked ? true : false);
 		localsettings.inject_jailbreak_instruct = (document.getElementById("inject_jailbreak_instruct").checked ? true : false);
+		localsettings.adventure_dicemode = (document.getElementById("adventure_dicemode").checked ? true : false);
 		localsettings.idle_responses = document.getElementById("idle_responses").value;
 		localsettings.idle_duration = document.getElementById("idle_duration").value;
 		localsettings.fix_alpaca_leak = (document.getElementById("fix_alpaca_leak").checked ? true : false);
@@ -12297,7 +12300,14 @@ Current version indicated by LITEVER below.
 			}
 			if (localsettings.opmode == 2 && newgen != "" && localsettings.adventure_is_action) {
 				//append action for adventure mode, except for the first turn.
-				newgen = "\n\n\> " + newgen + "\n\n";
+				let diceaddon = "";
+				if(localsettings.adventure_dicemode)
+				{
+					let roll = Math.floor(Math.random() * 20) + 1;
+					let outcome = (roll==20?"Perfect":(roll>16?"Excellent":(roll>12?"Good":(roll>8?"Fair":(roll>4?"Poor":"Terrible")))));
+					diceaddon = ` (Rolled 1d20=${roll}/20, Outcome: ${outcome})`;
+				}
+				newgen = "\n\n\> " + newgen + diceaddon + "\n\n";
 			}
 			//if very first submission is a story in adventure mode, swap to action
 			if(localsettings.opmode == 2 && newgen != "" && gametext_arr.length==0)
@@ -19128,6 +19138,11 @@ Current version indicated by LITEVER below.
 							<div class="justifyleft settingsmall">Assistant Jailbreak <span class="helpicon">?<span
 								class="helptext">Automatically injects a jailbreak message after every instruct query, to make the AI more likely to obey you.</span></span></div>
 							<input type="checkbox" title="Assistant Jailbreak" id="inject_jailbreak_instruct" style="margin:0px 0px 0px auto;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Adventure DiceMode <span class="helpicon">?<span
+								class="helptext">Allows the AI to roll a dice to determine the outcome of your actions in adventure mode.</span></span></div>
+							<input type="checkbox" title="Adventure DiceMode" id="adventure_dicemode" style="margin:0px 0px 0px auto;">
 						</div>
 
 					</div>
