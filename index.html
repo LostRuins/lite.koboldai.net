@@ -5087,7 +5087,6 @@ Current version indicated by LITEVER below.
 				perfdata.queued_tokens += data.queued_tokens;
 				perfdata.past_minute_tokens += data.past_minute_tokens;
 				document.body.classList.add("connected");
-				document.getElementById("multiplayerstatus").innerText = "";
 				document.getElementById("connectstatus").innerHTML = "AI Horde";
 				document.getElementById("connectstatus").classList.add("color_offwhite");
 				render_gametext(false);
@@ -5101,7 +5100,6 @@ Current version indicated by LITEVER below.
 				console.log("Error: " + error);
 				msgbox("Failed to connect to AI Horde Service!\nPlease check your network connection.<br><br>You may still be able to connect to an alternative service, <a href='#' class='color_blueurl' onclick='hide_popups();display_endpoint_container()'>click here to view options</a>.","Error Encountered",true);
 				document.body.classList.remove("connected");
-				document.getElementById("multiplayerstatus").innerText = "";
 				document.getElementById("connectstatus").innerHTML = "Offline Mode";
 				document.getElementById("connectstatus").classList.remove("color_offwhite");
 				render_gametext(false);
@@ -7578,11 +7576,11 @@ Current version indicated by LITEVER below.
 				}
 			}else{
 				leave_multiplayer();
-				msgbox("Multiplayer Error: " + JSON.stringify(vals),"Disconnected from Multiplayer");
+				msgbox("Multiplayer Error: " + JSON.stringify(vals)+"\n\nYou can reconnect by clicking 'Join Multiplayer'.","Disconnected from Multiplayer");
 			}
 		}).catch(error => {
 			leave_multiplayer();
-			msgbox("Multiplayer Error: " + error,"Disconnected from Multiplayer");
+			msgbox("Multiplayer Error: " + error + "\n\nYou can reconnect by clicking 'Join Multiplayer'.","Disconnected from Multiplayer");
 			console.log("Failed to access multiplayer status: " + error);
 		});
 	}
@@ -7907,10 +7905,6 @@ Current version indicated by LITEVER below.
 			let bcolor = (curr.opmode==1?"blue":(curr.opmode==2?"green":(curr.opmode==3?"red":"yellow")));
 			let entry = `<button type="button" name="`+i+`" class="scenarioitem `+bcolor+` btn btn-primary" onclick="return click_scenario(`+i+`)">`+curr.title+`</button>`;
 			scenarios += entry;
-		}
-		if(is_using_kcpp_with_multiplayer())
-		{
-			scenarios += `<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="hide_popups();join_multiplayer()">Join Multiplayer</button>`;
 		}
 
 		document.getElementById("scenariogrid").innerHTML = scenarios;
@@ -9176,7 +9170,6 @@ Current version indicated by LITEVER below.
 								document.body.classList.add("connected");
 								document.getElementById("connectstatus").classList.add("color_offwhite");
 							}
-							document.getElementById("multiplayerstatus").innerText = "";
 							document.getElementById("connectstatus").innerHTML = "KoboldAI Endpoint";
 							render_gametext();
 
@@ -9233,7 +9226,6 @@ Current version indicated by LITEVER below.
 										koboldcpp_version_obj = data;
 										koboldcpp_version = data.version;
 										console.log("KoboldCpp Detected: " + koboldcpp_version);
-										document.getElementById("multiplayerstatus").innerText = "";
 										document.getElementById("connectstatus").innerHTML = (`<span style='cursor: pointer;' onclick='fetch_koboldcpp_perf()'>KoboldCpp ${koboldcpp_version}</a>`);
 										koboldcpp_has_vision = (data.vision?true:false);
 										koboldcpp_has_whisper = (data.transcribe?true:false);
@@ -9396,7 +9388,6 @@ Current version indicated by LITEVER below.
 								custom_kobold_endpoint = "";
 								if(localflag)
 								{
-									document.getElementById("multiplayerstatus").innerText = "";
 									document.getElementById("connectstatus").innerHTML = "Offline Mode";
 								}
 								render_gametext();
@@ -9475,7 +9466,6 @@ Current version indicated by LITEVER below.
 					document.body.classList.add("connected");
 					document.getElementById("connectstatus").classList.add("color_offwhite");
 				}
-				document.getElementById("multiplayerstatus").innerText = "";
 				document.getElementById("connectstatus").innerHTML = "OpenAI Endpoint";
 				render_gametext(true);
 			}
@@ -9526,7 +9516,6 @@ Current version indicated by LITEVER below.
 					document.body.classList.add("connected");
 					document.getElementById("connectstatus").classList.add("color_offwhite");
 				}
-				document.getElementById("multiplayerstatus").innerText = "";
 				document.getElementById("connectstatus").innerHTML = "Claude Endpoint";
 				render_gametext();
 
@@ -9559,7 +9548,6 @@ Current version indicated by LITEVER below.
 					document.body.classList.add("connected");
 					document.getElementById("connectstatus").classList.add("color_offwhite");
 				}
-				document.getElementById("multiplayerstatus").innerText = "";
 				document.getElementById("connectstatus").innerHTML = "Gemini Endpoint";
 				render_gametext();
 			}
@@ -9591,7 +9579,6 @@ Current version indicated by LITEVER below.
 					document.body.classList.add("connected");
 					document.getElementById("connectstatus").classList.add("color_offwhite");
 				}
-				document.getElementById("multiplayerstatus").innerText = "";
 				document.getElementById("connectstatus").innerHTML = "Cohere Endpoint";
 				render_gametext();
 			}
@@ -9957,7 +9944,6 @@ Current version indicated by LITEVER below.
 				localsettings.my_api_key = defaultsettings.my_api_key;
 			}
 
-			document.getElementById("multiplayerstatus").innerText = "";
 			document.getElementById("connectstatus").innerHTML = "AI Horde";
 
 			render_gametext();
@@ -15086,12 +15072,10 @@ Current version indicated by LITEVER below.
 	{
 		if(!is_using_kcpp_with_multiplayer() || !multiplayer_active)
 		{
-			document.getElementById("multiplayerstatus").innerText = "";
 			schedule_multiplayer_minor_change = false;
 			schedule_multiplayer_major_change = false;
 			return;
 		}
-		document.getElementById("multiplayerstatus").innerHTML = `<a href="#" onclick="leave_multiplayer()" class="color_orangeurl" style="font-size:10px">[Exit Multiplayer]</a>`;
 
 		//send our changes if they exist
 		if(schedule_multiplayer_minor_change || schedule_multiplayer_major_change)
@@ -15132,6 +15116,13 @@ Current version indicated by LITEVER below.
 						{
 							if(minor_change)
 							{
+								//abort any ongoing generations
+								if(synchro_pending_stream != "" || pending_response_id != "")
+								{
+									retry_preserve_last = false;
+									synchro_pending_stream = "";
+									abort_generation();
+								}
 								//minor change, load only gametext_arr. assume its v1
 								gametext_arr = [];
 								if (tmpstory.prompt != "") {
@@ -15154,11 +15145,11 @@ Current version indicated by LITEVER below.
 				else if(!vals || vals.error)
 				{
 					leave_multiplayer();
-					msgbox("Disconnected from multiplayer due to bad response.","Disconnected from Multiplayer");
+					msgbox("Disconnected from multiplayer due to bad response.\n\nYou can reconnect by clicking 'Join Multiplayer'.","Disconnected from Multiplayer");
 				}
 			}).catch(error => {
 				leave_multiplayer();
-				msgbox("Disconnected from multiplayer: " + error,"Disconnected from Multiplayer");
+				msgbox("Disconnected from multiplayer: " + error +"\n\nYou can reconnect by clicking 'Join Multiplayer'.","Disconnected from Multiplayer");
 				console.log("Failed to access multiplayer status: " + error);
 			});
 		}
@@ -16052,6 +16043,26 @@ Current version indicated by LITEVER below.
 				document.getElementById("topbtn_scenarios").classList.remove("hidden");
 				document.getElementById("topbtn_quickplay").classList.add("hidden");
 			}
+		}
+
+		if(is_using_kcpp_with_multiplayer())
+		{
+			if(multiplayer_active)
+			{
+				document.getElementById("connectstatusmultiplayer").classList.remove("hidden");
+				document.getElementById("topbtn_multiplayer_join").classList.add("hidden");
+				document.getElementById("topbtn_multiplayer_leave").classList.remove("hidden");
+			} else {
+				document.getElementById("connectstatusmultiplayer").classList.add("hidden");
+				document.getElementById("topbtn_multiplayer_join").classList.remove("hidden");
+				document.getElementById("topbtn_multiplayer_leave").classList.add("hidden");
+			}
+		}
+		else
+		{
+			document.getElementById("connectstatusmultiplayer").classList.add("hidden");
+			document.getElementById("topbtn_multiplayer_join").classList.add("hidden");
+			document.getElementById("topbtn_multiplayer_leave").classList.add("hidden");
 		}
 
 		if (selected_models.length == 0) //if no model, disable all first
@@ -18319,13 +18330,20 @@ Current version indicated by LITEVER below.
 										onclick="closeTopNav();display_settings()">Settings</a>
 								</li>
 
+								<li class="nav-item hidden" id="topbtn_multiplayer_join">
+									<a class="nav-link mainnav" href="#" onclick="join_multiplayer()">Join Multiplayer</a>
+								</li>
+								<li class="nav-item hidden" id="topbtn_multiplayer_leave">
+									<a class="nav-link mainnav" href="#" onclick="leave_multiplayer()">Exit Multiplayer</a>
+								</li>
+
 							</ul>
 						</div>
 					</nav>
 				</div>
 				<div id="connectstatusdiv">
 					<div id="connectstatus">Connecting</div>
-					<div id="multiplayerstatus"></div>
+					<div class="hidden" id="connectstatusmultiplayer">Multiplayer</div>
 				</div>
 			</div>
 		</div>
