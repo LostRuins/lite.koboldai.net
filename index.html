@@ -9075,6 +9075,10 @@ Current version indicated by LITEVER below.
 
 	function transform_oai_ep(desired_oai_ep)
 	{
+		if(desired_oai_ep!="")
+		{
+			desired_oai_ep = desired_oai_ep.trim();
+		}
 		if(desired_oai_ep!="" && desired_oai_ep.slice(-1)=="/")
 		{
 			desired_oai_ep = desired_oai_ep.slice(0, -1);
@@ -9086,6 +9090,10 @@ Current version indicated by LITEVER below.
 		}
 		if (document.getElementById("oaiaddversion").checked)
 		{
+			//fix incorrect paths
+			if(desired_oai_ep!="" && desired_oai_ep.toLowerCase().endsWith("/chat/completions")) {
+				desired_oai_ep = desired_oai_ep.slice(0,-17);
+			}
 			if(desired_oai_ep!="" && desired_oai_ep.length > 4 && !desired_oai_ep.slice(-4).toLowerCase().includes("/v") && !desired_oai_ep.toLowerCase().includes("/v1/")) {
 				desired_oai_ep = desired_oai_ep + "/v1";
 			}
@@ -14179,12 +14187,10 @@ Current version indicated by LITEVER below.
 		gentxt = trim_extra_stop_seqs(gentxt,true);
 		let mychatname = get_my_multiplayer_chatname();
 
-		//always trim incomplete sentences for adventure and chat (if not multiline)
+		//allow trim incomplete sentences
 		//do not trim if instruct mode AND stop token reached
 		let donottrim = ((localsettings.opmode == 4||localsettings.opmode == 3) && last_stop_reason=="stop");
-		if (!donottrim && (localsettings.opmode == 2
-		|| (localsettings.opmode == 3 && !localsettings.allow_continue_chat)
-		|| localsettings.trimsentences == true)) {
+		if (!donottrim && localsettings.trimsentences == true) {
 			//also, to prevent a trim from bisecting a chat name, if a response contains a chatname, do not trim
 			donottrim = false;
 			if(localsettings.opmode == 3)
