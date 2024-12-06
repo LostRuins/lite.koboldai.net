@@ -1249,6 +1249,11 @@ Current version indicated by LITEVER below.
 			margin: 4px;
 		}
 
+		.inlinelabel .rowitem
+		{
+			padding: 4px;
+		}
+
 
 		.tokens-in-box {
 			position: relative;
@@ -4307,6 +4312,7 @@ Current version indicated by LITEVER below.
 		narrate_both_sides: false,
 		narrate_only_dialog: false,
 		voice_end_delay: 300,
+		voice_suppress_nonspeech: false,
 		tts_speed: 1.0,
 		image_styles: "",
 		image_negprompt: "",
@@ -10308,6 +10314,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("narrate_only_dialog").checked = localsettings.narrate_only_dialog;
 		document.getElementById("tts_speed").value = localsettings.tts_speed;
 		document.getElementById("voice_end_delay").value = localsettings.voice_end_delay;
+		document.getElementById("voice_suppress_nonspeech").checked = localsettings.voice_suppress_nonspeech;
 		toggle_opmode();
 
 		//sd models display
@@ -10604,6 +10611,7 @@ Current version indicated by LITEVER below.
 		localsettings.narrate_only_dialog = (document.getElementById("narrate_only_dialog").checked?true:false);
 		localsettings.tts_speed = document.getElementById("tts_speed").value;
 		localsettings.voice_end_delay = document.getElementById("voice_end_delay").value;
+		localsettings.voice_suppress_nonspeech = (document.getElementById("voice_suppress_nonspeech").checked?true:false);
 		localsettings.auto_ctxlen = (document.getElementById("auto_ctxlen").checked ? true : false);
 		localsettings.auto_genamt = (document.getElementById("auto_genamt").checked ? true : false);
 
@@ -14767,6 +14775,107 @@ Current version indicated by LITEVER below.
 			&& !currentlySpeaking && !xtts_is_playing && !is_popup_open());
 	}
 
+	// AUDIO MANIPULATION FUNCTIONS
+	//resample audio freq (to 16khz)
+	function resampleAudioBuffer(buffer, resampledRate, callback)
+	{
+		const originalSampleRate = buffer.sampleRate;
+		const channels = buffer.numberOfChannels;
+		const length = buffer.length;
+		const ratio = originalSampleRate / resampledRate;
+		const newLength = Math.round(length / ratio);
+		const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+		const resampledBuffer = audioContext.createBuffer(channels, newLength, resampledRate);
+		const offlineContext = new OfflineAudioContext(channels, newLength, resampledRate);
+		const source = offlineContext.createBufferSource();
+		source.buffer = buffer;
+		source.connect(offlineContext.destination);
+		const startRendering = offlineContext.startRendering();
+		startRendering.then((renderedBuffer) => {
+			callback(renderedBuffer);
+		}).catch((error) => {
+			console.error('Resample Err:', error);
+		});
+		source.start();
+		return resampledBuffer;
+	}
+
+	function audioBufferToWavBlob(audioBuffer)
+	{
+		let writeWavString = function (view, offset, string) {
+			for (let i = 0; i < string.length; i++) {
+				view.setUint8(offset + i, string.charCodeAt(i));
+			}
+		}
+		const numOfChan = audioBuffer.numberOfChannels,
+			length = audioBuffer.length * numOfChan * 2 + 44,
+			buffer = new ArrayBuffer(length),
+			view = new DataView(buffer),
+			channels = [],
+			sampleRate = 16000,
+			bitDepth = 16;
+		writeWavString(view, 0, 'RIFF');
+		view.setUint32(4, 44 + audioBuffer.length * 2 - 8, true);
+		writeWavString(view, 8, 'WAVE');
+		writeWavString(view, 12, 'fmt ');
+		view.setUint32(16, 16, true);
+		view.setUint16(20, 1, true);
+		view.setUint16(22, numOfChan, true);
+		view.setUint32(24, sampleRate, true);
+		view.setUint32(28, sampleRate * numOfChan * 2, true);
+		view.setUint16(32, numOfChan * 2, true);
+		view.setUint16(34, bitDepth, true);
+		writeWavString(view, 36, 'data');
+		view.setUint32(40, audioBuffer.length * numOfChan * 2, true);
+		for (let i = 0; i < audioBuffer.numberOfChannels; i++) {
+			channels.push(audioBuffer.getChannelData(i));
+		}
+		let offset = 44;
+		for (let i = 0; i < audioBuffer.length; i++) {
+			for (let channel = 0; channel < numOfChan; channel++) {
+				const sample = Math.max(-1, Math.min(1, channels[channel][i]));
+				view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+				offset += 2;
+			}
+		}
+		return new Blob([buffer], { type: 'audio/wav' });
+	}
+
+	function audioBlobToDecodedAudioBuffer(inBlob, onDone)
+	{
+		let reader = new window.FileReader();
+		reader.readAsArrayBuffer(inBlob);
+		reader.onloadend = function() {
+		let arrayBuffer = reader.result;
+		window.AudioContext = window.AudioContext || window.webkitAudioContext;
+		let audioContext = new AudioContext();
+		audioContext.decodeAudioData(arrayBuffer, (buffer)=>{
+			onDone(buffer);
+		},(err)=>
+		{
+			let fakebuf = audioContext.createBuffer(1, 8, audioContext.sampleRate);
+			onDone(fakebuf);
+		});
+		}
+	}
+
+	function concatenateAudioBuffers(buffer1, buffer2)
+	{
+		const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+		const numberOfChannels = Math.min(buffer1.numberOfChannels, buffer2.numberOfChannels);
+		const tmp = audioContext.createBuffer(
+			numberOfChannels,
+			buffer1.length + buffer2.length,
+			buffer1.sampleRate
+		);
+		for (let i = 0; i < numberOfChannels; i++) {
+			const channel = tmp.getChannelData(i);
+			channel.set(buffer1.getChannelData(i), 0);
+			channel.set(buffer2.getChannelData(i), buffer1.length);
+		}
+		return tmp;
+	}
+
 	var isVoiceInputConfigured = false;
 	function init_voice_typing()
 	{
@@ -14784,103 +14893,6 @@ Current version indicated by LITEVER below.
 		//under BSD-3-Clause license
 		//original source https://github.com/kdavis-mozilla/vad.js Copyright (c) 2015, Kelly Daviss
 		let VAD=function(t){for(var e in this.options={fftSize:512,bufferLen:512,voice_stop:function(){},voice_start:function(){},smoothingTimeConstant:.99,energy_offset:1e-8,energy_threshold_ratio_pos:2,energy_threshold_ratio_neg:.5,energy_integration:1,filter:[{f:200,v:0},{f:2e3,v:1}],source:null,context:null},t)t.hasOwnProperty(e)&&(this.options[e]=t[e]);if(!this.options.source)throw Error("The options must specify a MediaStreamAudioSourceNode.");this.options.context=this.options.source.context,this.hertzPerBin=this.options.context.sampleRate/this.options.fftSize,this.iterationFrequency=this.options.context.sampleRate/this.options.bufferLen,this.iterationPeriod=1/this.iterationFrequency,this.setFilter=function(t){this.filter=[];for(var e=0,i=this.options.fftSize/2;e<i;e++){this.filter[e]=0;for(var s=0,o=t.length;s<o;s++)if(e*this.hertzPerBin<t[s].f){this.filter[e]=t[s].v;break}}},this.setFilter(this.options.filter),this.ready={},this.vadState=!1,this.energy_offset=this.options.energy_offset,this.energy_threshold_pos=this.energy_offset*this.options.energy_threshold_ratio_pos,this.energy_threshold_neg=this.energy_offset*this.options.energy_threshold_ratio_neg,this.voiceTrend=0,this.voiceTrendMax=10,this.voiceTrendMin=-10,this.voiceTrendStart=5,this.voiceTrendEnd=-5,this.analyser=this.options.context.createAnalyser(),this.analyser.smoothingTimeConstant=this.options.smoothingTimeConstant,this.analyser.fftSize=this.options.fftSize,this.floatFrequencyData=new Float32Array(this.analyser.frequencyBinCount),this.floatFrequencyDataLinear=new Float32Array(this.floatFrequencyData.length),this.options.source.connect(this.analyser),this.scriptProcessorNode=this.options.context.createScriptProcessor(this.options.bufferLen,1,1),this.scriptProcessorNode.connect(this.options.context.destination);var i=this;this.scriptProcessorNode.onaudioprocess=function(t){i.analyser.getFloatFrequencyData(i.floatFrequencyData),i.update(),i.monitor()},this.options.source.connect(this.scriptProcessorNode),this.update=function(){for(var t=this.floatFrequencyData,e=0,i=t.length;e<i;e++)this.floatFrequencyDataLinear[e]=Math.pow(10,t[e]/10);this.ready={}},this.getEnergy=function(){if(this.ready.energy)return this.energy;for(var t=0,e=this.floatFrequencyDataLinear,i=0,s=e.length;i<s;i++)t+=this.filter[i]*e[i]*e[i];return this.energy=t,this.ready.energy=!0,t},this.monitor=function(){var t=this.getEnergy()-this.energy_offset;t>this.energy_threshold_pos?this.voiceTrend=this.voiceTrend+1>this.voiceTrendMax?this.voiceTrendMax:this.voiceTrend+1:t<-this.energy_threshold_neg?this.voiceTrend=this.voiceTrend-1<this.voiceTrendMin?this.voiceTrendMin:this.voiceTrend-1:this.voiceTrend>0?this.voiceTrend--:this.voiceTrend<0&&this.voiceTrend++;var e=!1,i=!1;this.voiceTrend>this.voiceTrendStart?e=!0:this.voiceTrend<this.voiceTrendEnd&&(i=!0);var s=t*this.iterationPeriod*this.options.energy_integration;return s>0||!i?this.energy_offset+=s:this.energy_offset+=10*s,this.energy_offset=this.energy_offset<0?0:this.energy_offset,this.energy_threshold_pos=this.energy_offset*this.options.energy_threshold_ratio_pos,this.energy_threshold_neg=this.energy_offset*this.options.energy_threshold_ratio_neg,e&&!this.vadState&&(this.vadState=!0,this.options.voice_start()),i&&this.vadState&&(this.vadState=!1,this.options.voice_stop()),t}};
-
-		//resample audio freq (to 16khz)
-		function resampleAudioBuffer(buffer, resampledRate, callback) {
-			const originalSampleRate = buffer.sampleRate;
-			const channels = buffer.numberOfChannels;
-			const length = buffer.length;
-			const ratio = originalSampleRate / resampledRate;
-			const newLength = Math.round(length / ratio);
-			const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-			const resampledBuffer = audioContext.createBuffer(channels, newLength, resampledRate);
-			const offlineContext = new OfflineAudioContext(channels, newLength, resampledRate);
-			const source = offlineContext.createBufferSource();
-			source.buffer = buffer;
-			source.connect(offlineContext.destination);
-			const startRendering = offlineContext.startRendering();
-			startRendering.then((renderedBuffer) => {
-				callback(renderedBuffer);
-			}).catch((error) => {
-				console.error('Resample Err:', error);
-			});
-			source.start();
-			return resampledBuffer;
-		}
-
-		let audioBufferToWavBlob = function (audioBuffer) {
-			let writeWavString = function (view, offset, string) {
-				for (let i = 0; i < string.length; i++) {
-					view.setUint8(offset + i, string.charCodeAt(i));
-				}
-			}
-			const numOfChan = audioBuffer.numberOfChannels,
-				length = audioBuffer.length * numOfChan * 2 + 44,
-				buffer = new ArrayBuffer(length),
-				view = new DataView(buffer),
-				channels = [],
-				sampleRate = 16000,
-				bitDepth = 16;
-			writeWavString(view, 0, 'RIFF');
-			view.setUint32(4, 44 + audioBuffer.length * 2 - 8, true);
-			writeWavString(view, 8, 'WAVE');
-			writeWavString(view, 12, 'fmt ');
-			view.setUint32(16, 16, true);
-			view.setUint16(20, 1, true);
-			view.setUint16(22, numOfChan, true);
-			view.setUint32(24, sampleRate, true);
-			view.setUint32(28, sampleRate * numOfChan * 2, true);
-			view.setUint16(32, numOfChan * 2, true);
-			view.setUint16(34, bitDepth, true);
-			writeWavString(view, 36, 'data');
-			view.setUint32(40, audioBuffer.length * numOfChan * 2, true);
-			for (let i = 0; i < audioBuffer.numberOfChannels; i++) {
-				channels.push(audioBuffer.getChannelData(i));
-			}
-			let offset = 44;
-			for (let i = 0; i < audioBuffer.length; i++) {
-				for (let channel = 0; channel < numOfChan; channel++) {
-					const sample = Math.max(-1, Math.min(1, channels[channel][i]));
-					view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
-					offset += 2;
-				}
-			}
-			return new Blob([buffer], { type: 'audio/wav' });
-		}
-
-		let audioBlobToDecodedAudioBuffer = function(inBlob, onDone)
-		{
-			let reader = new window.FileReader();
-			reader.readAsArrayBuffer(inBlob);
-			reader.onloadend = function() {
-			let arrayBuffer = reader.result;
-			window.AudioContext = window.AudioContext || window.webkitAudioContext;
-			let audioContext = new AudioContext();
-			audioContext.decodeAudioData(arrayBuffer, (buffer)=>{
-				onDone(buffer);
-			},(err)=>
-			{
-				let fakebuf = audioContext.createBuffer(1, 8, audioContext.sampleRate);
-				onDone(fakebuf);
-			});
-			}
-		}
-
-		let concatenateAudioBuffers = function(buffer1, buffer2) {
-			const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-			const numberOfChannels = Math.min(buffer1.numberOfChannels, buffer2.numberOfChannels);
-			const tmp = audioContext.createBuffer(
-				numberOfChannels,
-				buffer1.length + buffer2.length,
-				buffer1.sampleRate
-			);
-			for (let i = 0; i < numberOfChannels; i++) {
-				const channel = tmp.getChannelData(i);
-				channel.set(buffer1.getChannelData(i), 0);
-				channel.set(buffer2.getChannelData(i), buffer1.length);
-			}
-			return tmp;
-		}
 
 		let onRecordingReady = function (e) {
 			let completeRecording = new Blob([e.data], { type: 'audio/webm' });
@@ -14917,7 +14929,7 @@ Current version indicated by LITEVER below.
 
 			audiodatareader.onloadend = function () {
 				let dataurl = audiodatareader.result;
-				dispatch_transcribe(dataurl);
+				dispatch_transcribe_audio(dataurl);
 			}
 		}
 
@@ -14969,14 +14981,15 @@ Current version indicated by LITEVER below.
 			let myvad = new VAD(options);
 		});
 	}
-	function dispatch_transcribe(dataurl)
+	function dispatch_transcribe_audio(dataurl)
 	{
 		voice_is_processing = true;
 		update_submit_button(false);
 
 		let payload = {
 			"audio_data": dataurl,
-			"prompt": ""
+			"prompt": "",
+			"suppress_non_speech": localsettings.voice_suppress_nonspeech
 		};
 		fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_transcribe_endpoint), {
 			method: 'POST',
@@ -15008,6 +15021,52 @@ Current version indicated by LITEVER below.
 			update_submit_button(false);
 		});
 	}
+	function transcribe_file_btn()
+	{
+		let finput = document.getElementById('transcribe_file_input');
+		finput.click();
+		finput.onchange = (event) => {
+			if (event.target.files.length > 0 && event.target.files[0]) {
+				const file = event.target.files[0];
+				const completeRecording = file; // Directly use file as the Blob
+
+				audioBlobToDecodedAudioBuffer(completeRecording,(buffer)=>{
+					resampleAudioBuffer(buffer,16000,(rsBuffer)=>{
+						let wavblob = audioBufferToWavBlob(rsBuffer);
+						const reader = new FileReader();
+						reader.onload = function(audiodata) {
+							let dataurl = audiodata.target.result;
+							let payload = {
+								"audio_data": dataurl,
+								"prompt": "",
+								"suppress_non_speech": (document.getElementById("voice_suppress_nonspeech").checked?true:false)
+							};
+							fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_transcribe_endpoint), {
+								method: 'POST',
+								headers: {
+									'Content-Type': 'application/json',
+								},
+								body: JSON.stringify(payload),
+							})
+							.then(x => x.json())
+							.then(resp => {
+								console.log(resp);
+								if(resp && resp.text && resp.text!="")
+								{
+									msgbox(resp.text,"Transcribed Audio");
+								}
+							}).catch((error) => {
+								console.log("Transcribe Error: " + error);
+							});
+						}
+						reader.readAsDataURL(wavblob);
+					});
+				});
+			}
+			finput.value = "";
+		};
+	}
+
 	function kcpp_tokenize(prompt,onDone)
 	{
 		let payload = {
@@ -19539,31 +19598,38 @@ Current version indicated by LITEVER below.
 							</select>
 						</div>
 						<div class="inlinelabel" style="font-size: 11px;">
-							<div class="justifyleft" style="padding:4px">Voice Delay: </div>
-							<input title="Voice Delay Milliseconds" type="text" inputmode="decimal" value="300" id="voice_end_delay" style="width:40px">
+							<div class="justifyleft" style="padding:2px"  title="Suppress non-speech (e.g. music and sounds) from transcription">Suppress Non-Speech </div>
+						  	<input title="Suppress Non-Speech" type="checkbox" id="voice_suppress_nonspeech" style="margin:0px 0px 0px auto;">
 						</div>
+						<div class="inlinelabel" style="font-size: 11px;">
+							<div class="justifyleft" style="padding:3px">Voice Delay: </div>
+							<input title="Voice Delay Milliseconds" type="text" inputmode="decimal" value="300" id="voice_end_delay" style="width:40px">
+							<input type="file" id="transcribe_file_input" accept="audio/*" style="display:none;">
+							<button id="transcribe_file_btn" type="button" class="bg_green btn btn-primary" style="height:20px; padding:2px 3px; font-size:11px;margin-top: 3px;" onclick="transcribe_file_btn()">Transcribe File</button>
+						</div>
+
 					</div>
 
 
 					<div class="settingitem wide">
-						<div style="font-size:12px;">
+						<div style="font-size:12px; line-height: 1.2;">
 							<div class="settingsdesctxt">Style tags to use for generating images:<br>(E.g. Sketch, Realistic, Anime, 3D Render, Drawing)<br></div>
 							<input class="settinglabel miniinput" title="Style Tags" type="text" placeholder="Default Style" value="" id="imagestyleinput">
 
 							<div class="inlinelabel">
-								<div class="justifyleft" style="padding:4px">Negative Prompt: </div>
+								<div class="justifyleft rowitem">Negative Prompt: </div>
 								<input title="Negative Prompt" style="width:calc(100% - 110px);" type="text" placeholder="Default Negative Prompt. Put &quot;none&quot; to skip" value="" id="negpromptinput">
 							</div>
 							<div class="inlinelabel">
-								<div class="justifyleft" style="padding:4px">Number of Steps: </div>
+								<div class="justifyleft rowitem">Number of Steps: </div>
 								<input title="Number of Steps" type="text" inputmode="decimal" id="img_steps" style="width:60px">
 							</div>
 							<div class="inlinelabel">
-								<div class="justifyleft" style="padding:4px">Cfg. Scale: </div>
+								<div class="justifyleft rowitem">Cfg. Scale: </div>
 								<input title="Cfg. Scale" type="text" inputmode="decimal" id="img_cfgscale" style="width:60px">
 							</div>
 							<div class="inlinelabel">
-								<div class="justifyleft" style="padding:4px">Sampler: </div>
+								<div class="justifyleft rowitem">Sampler: </div>
 								<select title="Image Sampler" style="padding:1px; font-size:12px; height:20px; width: 100px;" class="form-control" id="img_sampler">
 									<option value="Euler">Euler</option>
 									<option value="Euler a">Euler A</option>
@@ -19574,7 +19640,7 @@ Current version indicated by LITEVER below.
 								</select>
 							</div>
 							<div class="inlinelabel">
-								<div class="justifyleft" style="padding:4px">Aspect Ratio <span class="helpicon">?
+								<div class="justifyleft rowitem">Aspect Ratio <span class="helpicon">?
 									<span class="helptext">Square is recommended. Changing aspect ratio will affect the resolution used to generate. This may impact quality or memory usage.</span>
 								</span>: </div>
 								<select title="Image Aspect Ratio" style="padding:1px; font-size:12px; height:20px; width: 100px;" class="form-control" id="img_aspect">
@@ -19585,23 +19651,23 @@ Current version indicated by LITEVER below.
 								</select>
 							</div>
 							<div class="inlinelabel">
-								<div class="justifyleft" style="padding:4px">Img2Img Strength <span class="helpicon">?
+								<div class="justifyleft rowitem">Img2Img Strength <span class="helpicon">?
 									<span class="helptext">Higher values lead to a more different image.</span>
 								</span>: </div>
 								<input title="Img2Img Strength" type="text" inputmode="decimal" id="img_img2imgstr" style="width:60px">
 							</div>
 							<div class="inlinelabel">
-								<div class="justifyleft" style="padding:4px">Clip Skip: </div>
+								<div class="justifyleft rowitem">Clip Skip: </div>
 								<input title="Clip Skip" type="text" inputmode="decimal" id="img_clipskip" style="width:60px">
 							</div>
 							<div class="inlinelabel">
-								<div class="justifyleft" style="padding:4px">Save Higher-Res <span class="helpicon">?
+								<div class="justifyleft rowitem">Save Higher-Res <span class="helpicon">?
 									<span class="helptext">This option will result in larger save files which may be slower. Changing this setting only applies to NEW images.</span>
 								</span>: </div>
 								<input title="Save Higher-Res Images" type="checkbox" id="img_allowhd" style="margin:0px 0 0;">
 							</div>
 							<div class="inlinelabel">
-								<div class="justifyleft" style="padding:4px">Crop Images <span class="helpicon">?
+								<div class="justifyleft rowitem">Crop Images <span class="helpicon">?
 									<span class="helptext">If enabled, oversized imported images will be cropped to fit. If disabled, images will be letterboxed instead.</span>
 								</span>: </div>
 								<input title="Crop Images" type="checkbox" id="img_crop" style="margin:0px 0 0;">
