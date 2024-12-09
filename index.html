@@ -271,7 +271,7 @@ Current version indicated by LITEVER below.
 			max-width: 100%;
 			height: auto;
 		}
-		.txtchunk, ai_context_koboldlite_internal, #gametext, .chat_received_withd_msg p,.chat_sent_msg p {
+		.txtchunk, #gametext, .chat_received_withd_msg p,.chat_sent_msg p {
 			white-space: pre-wrap;
 		}
 
@@ -16194,11 +16194,11 @@ Current version indicated by LITEVER below.
 
 			if(localsettings.opmode==3 && localsettings.gui_type_chat==1)
 			{
-				render_enhanced_chat(textToRender);
+				render_messenger_ui(textToRender);
 			}
 			else
 			{
-				document.getElementById("chat_msg_body").innerHTML = render_enhanced_chat_instruct(textToRender,false);
+				document.getElementById("chat_msg_body").innerHTML = render_aesthetic_ui(textToRender,false);
 			}
 			if ((localsettings.opmode == 3 && localsettings.chatopponent != "")||localsettings.opmode == 4||localsettings.opmode==2) {
 				document.getElementById("cht_inp_bg").classList.add("shorter");
@@ -16887,7 +16887,7 @@ Current version indicated by LITEVER below.
 		return chatunits;
 	}
 
-	function render_enhanced_chat(input)
+	function render_messenger_ui(input)
 	{
 		var chatbody = document.getElementById("chat_msg_body");
 		if(!chatbody)
@@ -18074,7 +18074,7 @@ Current version indicated by LITEVER below.
 		}
 	}
 
-	function render_enhanced_chat_instruct(input, isPreview) //class suffix string used to prevent defined styles from leaking into global scope
+	function render_aesthetic_ui(input, isPreview) //class suffix string used to prevent defined styles from leaking into global scope
 	{
 		if(!isPreview)
 		{
@@ -18086,7 +18086,15 @@ Current version indicated by LITEVER below.
 				document.getElementById('enhancedchatinterface_inner').style.backgroundColor = null;
 			}
 		}
+		let as = aestheticInstructUISettings;
 		let classSuffixStr = isPreview ? "prv" : "";
+		let portraitsStyling = // Also, implement portraits as css classes. Now chat entries can reuse them instead of recreating them.
+		`<style>
+			.you-portrait-image`+classSuffixStr+` {margin: 10px 6px; background:url(`+ as.you_portrait +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
+			.AI-portrait-image`+classSuffixStr+` {margin: 10px 6px; background:url(`+ (as.AI_portrait!="default"?as.AI_portrait:niko_square) +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
+		</style>
+		`;
+
 		const contextDict = { sysOpen: '<sys_context_koboldlite_internal>', youOpen: '<user_context_koboldlite_internal>', AIOpen: '<AI_context_koboldlite_internal>', closeTag: '<end_of_context_koboldlite_internal>' }
 		let you = "$UnusedTagMatch$"; let bot = "$UnusedTagMatch$"; // Instruct tags will be used to wrap text in styled bubbles.
 		if(localsettings.opmode==3||localsettings.opmode==4)
@@ -18095,7 +18103,6 @@ Current version indicated by LITEVER below.
 			bot = get_instruct_endtag();
 		}
 
-		let as = aestheticInstructUISettings;								// ..and use this as shortcut to avoid typing it each time.
 		if(localsettings.opmode==3)
 		{
 			if(!input.startsWith("\n"))
@@ -18160,12 +18167,6 @@ Current version indicated by LITEVER below.
 			}
 		}
 
-		let portraitsStyling = // Also, implement portraits as css classes. Now chat entries can reuse them instead of recreating them.
-		`<style>
-			.you-portrait-image`+classSuffixStr+` {margin: 10px 6px; background:url(`+ as.you_portrait +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
-			.AI-portrait-image`+classSuffixStr+` {margin: 10px 6px; background:url(`+ (as.AI_portrait!="default"?as.AI_portrait:niko_square) +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
-		</style>
-		`;
 
 		// We'll transform the input to a well-formatted HTML string that'll contain the whole visuals for the Aesthetic Instruct Mode. Effectively we're styling the input.
 		let noSystemPrompt = input.trim().startsWith(you.trim()) || input.trim().startsWith(bot.trim());
@@ -18312,7 +18313,7 @@ Current version indicated by LITEVER below.
 			preview = replaceAll(preview,'\n[USER_REPLY]\n', "");
 			preview = replaceAll(preview,'\n[AI_REPLY]\n', "");
 		}
-		document.getElementById('aesthetic_text_preview').innerHTML = render_enhanced_chat_instruct(preview,true);
+		document.getElementById('aesthetic_text_preview').innerHTML = render_aesthetic_ui(preview,true);
 	}
 	</script>
 
