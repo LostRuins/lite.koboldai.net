@@ -18176,6 +18176,13 @@ Current version indicated by LITEVER below.
 		if (synchro_pending_stream != "" && !isPreview) {
 			newbodystr += getStreamingText();
 		} 		 // Add the pending stream if it's needed. This will add any streamed text to a new bubble for the AI.
+		else{
+			let codeblockcount = (newbodystr.match(/```/g) || []).length;
+			if(codeblockcount>0 && codeblockcount%2!=0 )
+			{
+				newbodystr += "```"; //force end code block
+			}
+		}
 		newbodystr += contextDict.closeTag + '</p></div></div>';						 // Lastly, append the closing div so our body's raw form is completed.
 		if (aestheticInstructUISettings.use_markdown) {
 
@@ -18186,8 +18193,8 @@ Current version indicated by LITEVER below.
 			let internalHTMLparts = []; // We'll cache the embedded HTML parts here to keep them intact.
 			for (let role of aestheticTextStyleRoles) {																// ..starting by the "speech" and *actions* for each role.
 				let styleRole = aestheticInstructUISettings.use_uniform_colors ? 'uniform' : role;					// Uniform role is preferred if it's active on the settings.
-				newbodystr = newbodystr.replace(new RegExp(`${contextDict[`${role}Open`]}([^]*?)${contextDict.closeTag}`, 'g'), (match, p) => {
-					let replacedText = match.replace(/<[^>]*>/g, (htmlPart) => { internalHTMLparts.push(htmlPart); return `<internal_html_${internalHTMLparts.length - 1}>`; });
+				newbodystr = newbodystr.replace(new RegExp(`${contextDict[`${role}Open`]}([^]*?)${contextDict.closeTag}`, 'g'), (match, captured) => {
+					let replacedText = captured.replace(/<[^>]*>/g, (htmlPart) => { internalHTMLparts.push(htmlPart); return `<internal_html_${internalHTMLparts.length - 1}>`; });
 					replacedText = replacedText.replace(bold_regex, wrapperSpan(styleRole, 'action')); 		// Apply the actions style to *actions*.
 					replacedText = replacedText.replace(italics_regex, wrapperSpan(styleRole, 'action')); 		// Apply the actions style to *actions*.
 					replacedText = replacedText.replace(/“(.*?)”/g, wrapperSpan(styleRole, 'speech')); 	// Apply the speech style to "speech".
@@ -18196,7 +18203,7 @@ Current version indicated by LITEVER below.
 					{
 						replacedText = simpleMarkdown(replacedText);
 					}
-					return replacedText;
+					return `<span>${replacedText}</span>`;
 				});
 			}
 			newbodystr = newbodystr.replace(/<internal_html_(.*?)>/gm, (match, p) => {
