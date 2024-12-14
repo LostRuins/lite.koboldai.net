@@ -11881,23 +11881,22 @@ Current version indicated by LITEVER below.
 			}
 		},false);
 	}
-	function toggle_tts_mode() {
+
+	function toggle_tts_mode()
+	{
 		document.getElementById("xtts_container").classList.add("hidden");
 		document.getElementById("oai_tts_container").classList.add("hidden");
 		document.getElementById("alltalk_specific_controls").classList.add("hidden");
-		
+
 		const selectedTTS = document.getElementById("ttsselect").value;
-		
+
 		if(selectedTTS == XTTS_ID || selectedTTS == ALLTALK_ID) {
 			document.getElementById("xtts_container").classList.remove("hidden");
-			
+
 			if(selectedTTS == ALLTALK_ID) {
 				document.getElementById("alltalk_specific_controls").classList.remove("hidden");
-				if(localsettings.saved_alltalk_url) {
-					fetch_rvc_voices(localsettings.saved_alltalk_url);
-				}
-				update_rvc_state();
-				setupAllTalkControls(); // Add this line to setup the controls
+				fetch_rvc_voices();
+				adjust_alltalk_controls();
 			}
 			fetch_xtts_voices(true, selectedTTS == XTTS_ID);
 		}
@@ -11906,19 +11905,18 @@ Current version indicated by LITEVER below.
 		}
 	}
 
-	// Call setupAllTalkControls when the page loads
-	document.addEventListener('DOMContentLoaded', function() {
-		setupAllTalkControls();
-	});
 	// Fetch RVC voices for AllTalk
-	function fetch_rvc_voices(url) {
-		fetch(url + "/api/rvcvoices")
+	function fetch_rvc_voices()
+	{
+		if(!xtts_is_connected) //prevent it from constantly fetching, will only fetch once before connecting
+		{
+			fetch(localsettings.saved_alltalk_url + "/api/rvcvoices")
 			.then(response => response.json())
 			.then(data => {
 				console.log("RVC voices response:", data); // Debug log
 				const rvcSelect = document.getElementById("alltalk_rvc_voice");
 				rvcSelect.innerHTML = '<option value="Disabled">Disabled</option>';
-				
+
 				if (data.status === "success" && Array.isArray(data.rvcvoices)) {  // Changed from data.voices to data.rvcvoices
 					data.rvcvoices.forEach(voice => {  // Changed from data.voices to data.rvcvoices
 						if (voice !== "Disabled") {
@@ -11933,43 +11931,21 @@ Current version indicated by LITEVER below.
 			.catch(error => {
 				console.log("Error fetching RVC voices:", error);
 			});
+		}
 	}
-	// Function to handle RVC dropdown state (Disable if Streaming Selected)
-	function update_rvc_state() {
+
+	//single callback to update alltalk controls on any alltalk UI event.
+	function adjust_alltalk_controls() {
+		const pitchSlider = document.getElementById("alltalk_rvc_pitch");
+		const pitchValue = document.getElementById("alltalk_rvc_pitch_value");
+		pitchValue.textContent = pitchSlider.value;
 		const streamingMode = document.getElementById("alltalk_streaming").value === "true";
 		const rvcSelect = document.getElementById("alltalk_rvc_voice");
 		const rvcPitch = document.getElementById("alltalk_rvc_pitch");
-		
-		console.log("Updating RVC state, streaming mode:", streamingMode);
-		
-		// Update disabled state
 		rvcSelect.disabled = streamingMode;
 		rvcPitch.disabled = streamingMode;
-		
-		// Only reset to Disabled if switching to streaming mode
-		if (streamingMode) {
-			rvcSelect.value = "Disabled";
-		}
 	}
-	// Make sure RVC Pitch Slider works
-	function setupAllTalkControls() {
-		const pitchSlider = document.getElementById("alltalk_rvc_pitch");
-		const pitchValue = document.getElementById("alltalk_rvc_pitch_value");
-		
-		if (pitchSlider && pitchValue) {
-			pitchSlider.addEventListener("input", function() {
-				pitchValue.textContent = this.value;
-			});
-		}
-	}	
-	// Listener for AllTalk streaming mode changes
-	document.addEventListener('DOMContentLoaded', function() {
-		const streamingSelect = document.getElementById("alltalk_streaming");
-		streamingSelect.addEventListener("change", function() {
-			console.log("Streaming mode changed to:", this.value); // Debug log
-			update_rvc_state();
-		});
-	});
+
 	// Update set_xtts_url to use the new fetch_rvc_voices function
 	function set_xtts_url() {
 		let is_xtts = (document.getElementById("ttsselect").value==XTTS_ID);
@@ -11984,15 +11960,14 @@ Current version indicated by LITEVER below.
 				userinput = (is_xtts?default_xtts_base:default_alltalk_base);
 			}
 			if (userinput != null && userinput!="") {
+				xtts_is_connected = false;
 				if(is_xtts) {
 					localsettings.saved_xtts_url = userinput.trim();
 				} else {
 					localsettings.saved_alltalk_url = userinput.trim();
 					// Fetch RVC voices with new URL
-					fetch_rvc_voices(userinput.trim());
+					fetch_rvc_voices();
 				}
-
-				xtts_is_connected = false;
 				fetch_xtts_voices(false, is_xtts);
 			}
 		},false);
@@ -12115,10 +12090,11 @@ Current version indicated by LITEVER below.
 						console.log("XTTS Speak Error: " + error);
 					});
 				}
-				else {
+				else
+				{
 					//alltalk
 					const isStreaming = document.getElementById("alltalk_streaming").value === "true";
-					
+
 					if (isStreaming) {
 						// Create a URLSearchParams object for streaming
 						const params = new URLSearchParams({
@@ -12130,12 +12106,12 @@ Current version indicated by LITEVER below.
 
 						// Create streaming URL
 						const streamingUrl = `${localsettings.saved_alltalk_url}/api/tts-generate-streaming?${params.toString()}`;
-						
+
 						// Use the existing Web Audio API setup
 						const audioElement = new Audio(streamingUrl);
 						xtts_is_playing = true;
 						update_submit_button(false);
-						
+
 						audioElement.onended = function() {
 							setTimeout(() => {
 								xtts_is_playing = false;
@@ -12143,13 +12119,13 @@ Current version indicated by LITEVER below.
 								console.log("Audio finished playing");
 							}, 300);
 						};
-						
+
 						audioElement.onerror = function(error) {
 							console.log("AllTalk Streaming Error:", error);
 							xtts_is_playing = false;
 							update_submit_button(false);
 						};
-						
+
 						audioElement.play();
 					} else {
 						// Standard mode using FormData
@@ -12181,7 +12157,7 @@ Current version indicated by LITEVER below.
 								const audioElement = new Audio(audioUrl);
 								xtts_is_playing = true;
 								update_submit_button(false);
-								
+
 								audioElement.onended = function() {
 									setTimeout(() => {
 										xtts_is_playing = false;
@@ -12189,13 +12165,13 @@ Current version indicated by LITEVER below.
 										console.log("Audio finished playing");
 									}, 300);
 								};
-								
+
 								audioElement.onerror = function(error) {
 									console.log("AllTalk Playback Error:", error);
 									xtts_is_playing = false;
 									update_submit_button(false);
 								};
-								
+
 								audioElement.play();
 							} else {
 								console.log("AllTalk Generation Error:", data);
@@ -19707,13 +19683,33 @@ Current version indicated by LITEVER below.
 							</select>
 							<button id="test_tts" type="button" class="bg_green btn btn-primary" style="height:20px; width:30px; padding:2px 3px;font-size:11px; margin-left: 2px;" onclick="test_tts()">Test</button>
 							<div id="xtts_container" class="settinglabel hidden">
-								<table width="100%"><tr>
-								<td><button id="xtts_url" type="button" class="btn btn-primary" style="width:100%; padding:2px 3px;margin-top:2px;font-size:11px;" onclick="set_xtts_url()">Set URL</button></td>
-								<td><select class="form-control" id="xtts_voices" style="font-size:12px;height:20px;padding:0;margin:0px 0 0;">
-								<option value="female_calm" selected>female_calm</option><option value="female">female</option><option value="male">male</option>
-								</select></td>
-								</tr><tr style="font-size:12px;padding:2px;margin:0px 0 0;"><td>Language </td><td><input class="settinglabel miniinput" type="text" value="EN" id="xtts_lang" style="margin-left:3px; height:18px; width: 40px; padding: 2px;"></td></tr>
-								</table>
+								<div>
+									<table width="100%"><tr>
+									<td><button id="xtts_url" type="button" class="btn btn-primary" style="width:100%; padding:2px 3px;margin-top:2px;font-size:11px;" onclick="set_xtts_url()">Set URL</button></td>
+									<td><select class="form-control" id="xtts_voices" style="font-size:12px;height:20px;padding:0;margin:0px 0 0;">
+									<option value="female_calm" selected>female_calm</option><option value="female">female</option><option value="male">male</option>
+									</select></td>
+									</tr><tr style="font-size:12px;padding:2px;margin:0px 0 0;"><td>Language </td><td><input class="settinglabel miniinput" type="text" value="EN" id="xtts_lang" style="margin-left:3px; height:18px; width: 40px; padding: 2px;"></td></tr>
+									</table>
+								</div>
+								<div id="alltalk_specific_controls" class="settinglabel hidden">
+									<div style="font-size:12px;">Generation Mode</div>
+									<select onchange="adjust_alltalk_controls();" class="form-control" id="alltalk_streaming" style="font-size:12px;height:20px;padding:0;margin:0px 0 0;width:100%;">
+										<option value="false">Standard</option>
+										<option value="true">Streaming (Coqui XTTS only)</option>
+									</select>
+
+									<div style="font-size:12px;margin-top:4px;">RVC Voice</div>
+									<select class="form-control" id="alltalk_rvc_voice" style="font-size:12px;height:20px;padding:0;margin:0px 0 0;width:100%;">
+										<option value="Disabled">Disabled</option>
+									</select>
+
+									<div style="font-size:12px;margin-top:4px;">RVC Pitch</div>
+									<div style="display:flex;align-items:center;">
+										<input oninput="adjust_alltalk_controls();" type="range" id="alltalk_rvc_pitch" min="-24" max="24" value="0" style="flex:1;height:20px;">
+										<span id="alltalk_rvc_pitch_value" style="margin-left:5px;font-size:12px;">0</span>
+									</div>
+								</div>
 							</div>
 							<div id="oai_tts_container" class="settinglabel hidden">
 								<table width="100%"><tr>
@@ -19724,24 +19720,6 @@ Current version indicated by LITEVER below.
 								</table>
 							</div>
 						</div>
-						<div id="alltalk_specific_controls" class="settinglabel hidden">
-							<div style="font-size:12px;">Generation Mode</div>
-							<select class="form-control" id="alltalk_streaming" style="font-size:12px;height:20px;padding:0;margin:0px 0 0;width:100%;">
-								<option value="false">Standard</option>
-								<option value="true">Streaming (Coqui XTTS only)</option>
-							</select>
-							
-							<div style="font-size:12px;margin-top:4px;">RVC Voice</div>
-							<select class="form-control" id="alltalk_rvc_voice" style="font-size:12px;height:20px;padding:0;margin:0px 0 0;width:100%;">
-								<option value="Disabled">Disabled</option>
-							</select>
-							
-							<div style="font-size:12px;margin-top:4px;">RVC Pitch</div>
-							<div style="display:flex;align-items:center;">
-								<input type="range" id="alltalk_rvc_pitch" min="-24" max="24" value="0" style="flex:1;height:20px;">
-								<span id="alltalk_rvc_pitch_value" style="margin-left:5px;font-size:12px;">0</span>
-							</div>
-						</div>						
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall"  title="If unchecked, only speak AI replies, not other text.">Narrate Both Sides </div>
 						   <input title="Narrate Both Sides" type="checkbox" id="narrate_both_sides" style="margin:0px 0px 0px auto;">
