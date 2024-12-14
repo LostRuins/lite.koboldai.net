@@ -4125,7 +4125,9 @@ Current version indicated by LITEVER below.
 	const xtts_gen_endpoint = "/tts_to_audio/";
 	const xtts_voices_endpoint = "/speakers_list";
 	const alltalk_gen_endpoint = "/api/tts-generate";
+	const alltalk_stream_endpoint = "/api/tts-generate-streaming";
 	const alltalk_voices_endpoint = "/api/voices";
+	const alltalk_rvc_voices_endpoint = "/api/rvcvoices";
 
 	//support for quick news updates
 	const horde_news_endpoint = "https://hordenews.concedo.workers.dev"
@@ -11886,46 +11888,92 @@ Current version indicated by LITEVER below.
 	{
 		document.getElementById("xtts_container").classList.add("hidden");
 		document.getElementById("oai_tts_container").classList.add("hidden");
-		if(document.getElementById("ttsselect").value==XTTS_ID || document.getElementById("ttsselect").value==ALLTALK_ID)
-		{
+		document.getElementById("alltalk_specific_controls").classList.add("hidden");
+
+		const selectedTTS = document.getElementById("ttsselect").value;
+
+		if(selectedTTS == XTTS_ID || selectedTTS == ALLTALK_ID) {
 			document.getElementById("xtts_container").classList.remove("hidden");
-			fetch_xtts_voices(true, document.getElementById("ttsselect").value==XTTS_ID);
+
+			if(selectedTTS == ALLTALK_ID) {
+				document.getElementById("alltalk_specific_controls").classList.remove("hidden");
+				fetch_rvc_voices();
+				adjust_alltalk_controls();
+			}
+			fetch_xtts_voices(true, selectedTTS == XTTS_ID);
 		}
-		else if(document.getElementById("ttsselect").value==OAI_TTS_ID)
-		{
+		else if(selectedTTS == OAI_TTS_ID) {
 			document.getElementById("oai_tts_container").classList.remove("hidden");
 		}
 	}
-	function set_xtts_url()
+
+	// Fetch RVC voices for AllTalk
+	function fetch_rvc_voices()
 	{
+		if(!xtts_is_connected) //prevent it from constantly fetching, will only fetch once before connecting
+		{
+			fetch(localsettings.saved_alltalk_url + alltalk_rvc_voices_endpoint)
+			.then(response => response.json())
+			.then(data => {
+				console.log("RVC voices response:", data); // Debug log
+				const rvcSelect = document.getElementById("alltalk_rvc_voice");
+				rvcSelect.innerHTML = '<option value="Disabled">Disabled</option>';
+				if (data.status === "success" && Array.isArray(data.rvcvoices)) {  // Changed from data.voices to data.rvcvoices
+					data.rvcvoices.forEach(voice => {  // Changed from data.voices to data.rvcvoices
+						if (voice !== "Disabled") {
+							const option = document.createElement("option");
+							option.value = voice;
+							option.textContent = voice.split("\\").pop().replace(".pth", "");
+							rvcSelect.appendChild(option);
+						}
+					});
+				}
+			})
+			.catch(error => {
+				console.log("Error fetching RVC voices:", error);
+			});
+		}
+	}
+
+	//single callback to update alltalk controls on any alltalk UI event.
+	function adjust_alltalk_controls() {
+		const pitchSlider = document.getElementById("alltalk_rvc_pitch");
+		const pitchValue = document.getElementById("alltalk_rvc_pitch_value");
+		pitchValue.textContent = pitchSlider.value;
+		const streamingMode = (document.getElementById("alltalk_streaming").checked ? true : false);
+		const rvcSelect = document.getElementById("alltalk_rvc_voice");
+		const rvcPitch = document.getElementById("alltalk_rvc_pitch");
+		rvcSelect.disabled = streamingMode;
+		rvcPitch.disabled = streamingMode;
+	}
+
+	// Update set_xtts_url to use the new fetch_rvc_voices function
+	function set_xtts_url() {
 		let is_xtts = (document.getElementById("ttsselect").value==XTTS_ID);
 		let epname = (is_xtts?"XTTS":"AllTalk");
 		inputBox("Enter "+epname+" API Server URL.",epname+" API Server URL",(is_xtts?localsettings.saved_xtts_url:localsettings.saved_alltalk_url),"Input "+epname+" API Server URL", ()=>{
 			let userinput = getInputBoxValue();
 			userinput = userinput.trim();
-			if(userinput!="" && userinput.slice(-1)=="/")
-			{
+			if(userinput!="" && userinput.slice(-1)=="/") {
 				userinput = userinput.slice(0, -1);
 			}
-			if(userinput=="")
-			{
+			if(userinput=="") {
 				userinput = (is_xtts?default_xtts_base:default_alltalk_base);
 			}
 			if (userinput != null && userinput!="") {
-				if(is_xtts)
-				{
-					localsettings.saved_xtts_url = userinput.trim();
-				}
-				else
-				{
-					localsettings.saved_alltalk_url = userinput.trim();
-				}
-
 				xtts_is_connected = false;
+				if(is_xtts) {
+					localsettings.saved_xtts_url = userinput.trim();
+				} else {
+					localsettings.saved_alltalk_url = userinput.trim();
+					// Fetch RVC voices with new URL
+					fetch_rvc_voices();
+				}
 				fetch_xtts_voices(false, is_xtts);
 			}
 		},false);
 	}
+
 	function tts_speak(text, speech_synth_override=null)
 	{
 		if(!text || text=="" || text.trim()=="")
@@ -12041,35 +12089,18 @@ Current version indicated by LITEVER below.
 							},300);
 						};
 					}).catch((error) => {
+						xtts_is_playing = false;
+						update_submit_button(false);
 						console.log("XTTS Speak Error: " + error);
 					});
 				}
 				else
 				{
 					//alltalk
-					const formData = new FormData();
-					formData.append("text_input", text); // max 2000 chars
-					formData.append("text_filtering", "none"); // (none|standard|html)
-					formData.append("character_voice_gen", document.getElementById("xtts_voices").value);
-					formData.append("narrator_enabled", false);
-					formData.append("narrator_voice_gen", document.getElementById("xtts_voices").value);
-					formData.append("text_not_inside", "character"); // character or narrator, determines which to use
-					formData.append("language", document.getElementById("xtts_lang").value.trim().toLowerCase());
-					formData.append("output_file_name", "audiofile"); // NOTE: file name only, with no extension and no dashes!
-					formData.append("output_file_timestamp", true);
-					formData.append("autoplay", false); //to play in browser
-					formData.append("autoplay_volume", 1.0); // (0.1..2.0)
-					formData.append("streaming", true); // unknown why
+					const isStreaming = (document.getElementById("alltalk_streaming").checked ? true : false);
 
-					fetch(localsettings.saved_alltalk_url + alltalk_gen_endpoint, {
-						method: 'POST',
-						body: formData, // send payload as FormData
-					})
-					.then(response => response.arrayBuffer())
-					.then(data => {
-						return audioContext.decodeAudioData(data);
-					})
-					.then(decodedData => {
+					let playDecodedAllTalkData = function(decodedData)
+					{
 						const playSound = audioContext.createBufferSource();
 						playSound.buffer = decodedData;
 						playSound.connect(audioContext.destination);
@@ -12083,9 +12114,109 @@ Current version indicated by LITEVER below.
 								console.log("Audio finished playing");
 							},300);
 						};
-					}).catch((error) => {
-						console.log("AllTalk Speak Error: " + error);
-					});
+					}
+
+					if (isStreaming) {
+						// Create a URLSearchParams object for streaming
+						const params = new URLSearchParams({
+							text: text,
+							voice: document.getElementById("xtts_voices").value,
+							language: document.getElementById("xtts_lang").value.trim().toLowerCase(),
+							output_file: "klite_stream_output.wav",
+						});
+
+						// Create streaming URL, but right now it's as good as sync
+						const streamingUrl = `${localsettings.saved_alltalk_url}${alltalk_stream_endpoint}?${params.toString()}`;
+						fetch(streamingUrl)
+						.then(response => response.arrayBuffer())
+						.then(data => {
+							return audioContext.decodeAudioData(data);
+						})
+						.then(decodedData => {
+							playDecodedAllTalkData(decodedData);
+						})
+						.catch((error) => {
+							console.log("AllTalk v2 Speak Error:", data);
+							xtts_is_playing = false;
+							update_submit_button(false);
+						});
+
+					} else {
+						// Standard mode using FormData
+						const formData = new FormData();
+						formData.append("text_input", text);
+						formData.append("text_filtering", "none");
+						formData.append("character_voice_gen", document.getElementById("xtts_voices").value);
+						formData.append("narrator_enabled", false);
+						formData.append("narrator_voice_gen", document.getElementById("xtts_voices").value);
+						formData.append("text_not_inside", "character");
+						formData.append("language", document.getElementById("xtts_lang").value.trim().toLowerCase());
+						formData.append("output_file_name", "audiofile");
+						formData.append("output_file_timestamp", true);
+						formData.append("autoplay", false);
+						formData.append("autoplay_volume", 1.0);
+						formData.append("rvccharacter_voice_gen", document.getElementById("alltalk_rvc_voice").value);
+						formData.append("rvccharacter_pitch", document.getElementById("alltalk_rvc_pitch").value);
+						formData.append("rvcnarrator_voice_gen", document.getElementById("alltalk_rvc_voice").value);
+						formData.append("rvcnarrator_pitch", document.getElementById("alltalk_rvc_pitch").value);
+
+						fetch(localsettings.saved_alltalk_url + alltalk_gen_endpoint, {
+							method: 'POST',
+							body: formData, // send payload as FormData
+						}).then(response => {
+							//content type can be JSON (alltalk v2) or raw audio (v1)
+							const contentType = response.headers.get("Content-Type");
+							//alltalk v2 json
+							if (contentType && contentType.toLowerCase().includes("application/json"))
+							{
+								return response.json().then(data => {
+									if (data && data.output_file_url && data.status === "generate-success")
+									{
+										const audioUrl = `${localsettings.saved_alltalk_url}${data.output_file_url}`;
+										fetch(audioUrl)
+										.then(response => response.arrayBuffer())
+										.then(data => {
+											return audioContext.decodeAudioData(data);
+										})
+										.then(decodedData => {
+											playDecodedAllTalkData(decodedData);
+										})
+										.catch((error) => {
+											console.log("AllTalk v2 Speak Error:", data);
+											xtts_is_playing = false;
+											update_submit_button(false);
+										});
+									} else {
+										console.log("AllTalk Generation Error:", data);
+										xtts_is_playing = false;
+										update_submit_button(false);
+									}
+								})
+								.catch((error) => {
+									console.log("AllTalk Request Error:", error);
+									xtts_is_playing = false;
+									update_submit_button(false);
+								});
+							}
+							else //alltalk v1 audio
+							{
+								return response.arrayBuffer().then(data => {
+									return audioContext.decodeAudioData(data);
+								})
+								.then(decodedData => {
+									playDecodedAllTalkData(decodedData);
+								}).catch((error) => {
+									console.log("AllTalk v1 Speak Error: " + error);
+									xtts_is_playing = false;
+									update_submit_button(false);
+								});
+							}
+						}).catch((error) => {
+							console.log("AllTalk Non-Stream Req Error: " + error);
+							xtts_is_playing = false;
+							update_submit_button(false);
+						});
+					}
 				}
 			}
 		}
@@ -19584,13 +19715,34 @@ Current version indicated by LITEVER below.
 							</select>
 							<button id="test_tts" type="button" class="bg_green btn btn-primary" style="height:20px; width:30px; padding:2px 3px;font-size:11px; margin-left: 2px;" onclick="test_tts()">Test</button>
 							<div id="xtts_container" class="settinglabel hidden">
-								<table width="100%"><tr>
-								<td><button id="xtts_url" type="button" class="btn btn-primary" style="width:100%; padding:2px 3px;margin-top:2px;font-size:11px;" onclick="set_xtts_url()">Set URL</button></td>
-								<td><select class="form-control" id="xtts_voices" style="font-size:12px;height:20px;padding:0;margin:0px 0 0;">
-								<option value="female_calm" selected>female_calm</option><option value="female">female</option><option value="male">male</option>
-								</select></td>
-								</tr><tr style="font-size:12px;padding:2px;margin:0px 0 0;"><td>Language </td><td><input class="settinglabel miniinput" type="text" value="EN" id="xtts_lang" style="margin-left:3px; height:18px; width: 40px; padding: 2px;"></td></tr>
-								</table>
+								<div>
+									<table width="100%"><tr>
+									<td><button id="xtts_url" type="button" class="btn btn-primary" style="width:100%; padding:2px 3px;margin-top:2px;font-size:11px;" onclick="set_xtts_url()">Set URL</button></td>
+									<td><select class="form-control" id="xtts_voices" style="font-size:12px;height:20px;padding:0;margin:0px 0 0;">
+									<option value="female_calm" selected>female_calm</option><option value="female">female</option><option value="male">male</option>
+									</select></td>
+									</tr><tr style="font-size:12px;padding:2px;margin:0px 0 0;"><td>Language </td><td><input class="settinglabel miniinput" type="text" value="EN" id="xtts_lang" style="margin-left:3px; height:18px; width: 40px; padding: 2px;"></td></tr>
+									</table>
+								</div>
+								<div id="alltalk_specific_controls" style="width:100%;font-size: 11px;" class="settinglabel hidden">
+									<div>
+										<div class="justifyleft" style="padding:2px"  title="AllTalk Streaming">Audio Streaming </div>
+										<input title="AllTalk Streaming" onchange="adjust_alltalk_controls();" type="checkbox" id="alltalk_streaming" style="margin:0px 0px 0px auto;">
+									</div>
+									<div>
+										<div>RVC Voice</div>
+										<select class="form-control" id="alltalk_rvc_voice" style="font-size:12px;height:20px;padding:0;margin:0px 0 0;width:100%;">
+										<option value="Disabled">Disabled</option>
+										</select>
+									</div>
+									<div>
+										<div>RVC Pitch</div>
+										<div style="display:flex;align-items:center;">
+										<input oninput="adjust_alltalk_controls();" type="range" id="alltalk_rvc_pitch" min="-24" max="24" value="0" style="flex:1;height:20px;">
+										<span id="alltalk_rvc_pitch_value" style="margin-left:5px;font-size:12px;">0</span>
+										</div>
+									</div>
+								</div>
 							</div>
 							<div id="oai_tts_container" class="settinglabel hidden">
 								<table width="100%"><tr>
