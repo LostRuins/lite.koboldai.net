@@ -8650,16 +8650,27 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		if(mdlname.includes("gemini-1.5-") || mdlname.includes("gemini-exp-"))
 		{
 			document.getElementById("gemini_system_instruction").classList.remove("hidden");
-			document.getElementById("geminiroledropdowndiv").classList.remove("hidden");
+			document.getElementById("gemini_role_options").classList.remove("hidden");
 			if(localsettings.saved_palm_jailbreak=="")
 			{
 				document.getElementById("gemini_system_instruction").value = "";
 			} else {
 				document.getElementById("gemini_system_instruction").value = localsettings.saved_palm_jailbreak;
 			}
+			togglegeminirole();
 		}else{
 			document.getElementById("gemini_system_instruction").classList.add("hidden");
-			document.getElementById("geminiroledropdowndiv").classList.add("hidden");
+			document.getElementById("gemini_role_options").classList.add("hidden");
+		}
+	}
+	function togglegeminirole()
+	{
+		let sentrole = document.getElementById("geminiroledropdown").value;
+		if(sentrole=="")
+		{
+			document.getElementById("gemini_role_options2").classList.add("hidden");
+		}else{
+			document.getElementById("gemini_role_options2").classList.remove("hidden");
 		}
 	}
 
@@ -13628,6 +13639,19 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 								}
 							]
 						}];
+					}
+					let postfixrole = document.getElementById("gemini_postfix_role").value;
+					let postfixtext = document.getElementById("gemini_postfix_text").value;
+					if(postfixtext!="" && sentrole!="")
+					{
+						payload.contents.push({
+							"role":postfixrole,
+							"parts":[
+								{
+								"text": postfixtext
+								}
+							]
+						});
 					}
 
 					let sysinst = document.getElementById("gemini_system_instruction").value;
@@ -19122,13 +19146,23 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 				</div>
 				<span class="color_green" style="font-weight: bold;">Please input Gemini or PaLM API Key.</span><br><br>
 				<input class="form-control" type="password" id="custom_palm_key" placeholder="PaLM/Gemini API Key (Required)" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
-				<div id="geminiroledropdowndiv">
-				Main Message Role:
-				<select class="form-control" style="height: 25px; font-size:12px; padding:4px;display:inline;width:100px" id="geminiroledropdown">
-					<option value="" selected>Default</option>
-					<option value="user">User</option>
-					<option value="assistant">Assistant</option>
-				</select>
+				<div id="gemini_role_options">
+				<div>
+					Main Message Role:
+					<select class="form-control" style="height: 25px; font-size:12px; padding:4px;display:inline;width:100px" onload="togglegeminirole();" onchange="togglegeminirole();" id="geminiroledropdown">
+						<option value="" selected>Default</option>
+						<option value="user">User</option>
+						<option value="model">Model</option>
+					</select>
+				</div>
+				<div id="gemini_role_options2" style="display:flex">
+					<select class="form-control" style="height: 25px; font-size:12px; padding:4px;display:inline;width:100px" id="gemini_postfix_role">
+						<option value="user">User</option>
+						<option value="model" selected>Model</option>
+					</select>
+					<textarea class="form-control" rows="3" style="resize: vertical; line-height:1.1; padding:4px;  display:inline; width: 100%;" type="text" id="gemini_postfix_text" placeholder="(Enter Gemini Postfix)"
+					value=""></textarea>
+				</div>
 				</div>
 				<textarea class="form-control" rows="3" style="resize: vertical; line-height:1.1; padding:4px; display:inline; width: 100%" type="text" id="gemini_system_instruction" placeholder="(Enter System Instruction)"
 				value=""></textarea><br>
