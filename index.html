@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 193;
+	const LITEVER = 194;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3947,6 +3947,20 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		const convertMarkdownTableToHtml = (t) => {
 			let hsep = /^[\s]*\|(?:[\s]*[-:]+[-:|\s]*)+\|[\s]*$/gm;let l=/^[\s]*\|(.*)\|[\s]*$/gm,r=t.split(/\r?\n|\r/),e="<table class='tablelines'>";for(let o of r){let hs=o.match(hsep);if(hs){continue;}let d=o.match(l);if(d){let i=d[0].split("|").map(t=>t.trim());e+=`<tr class='tablelines'><td class='tablelines'>${i.join("</td><td class='tablelines'>")}</td></tr>`}}return e+"</table>"
 		};
+		const replaceLatex = (input) =>{
+			//all latex patterns except inline tex
+			input = input.replace(/(^```math\n([\s\S]*?)\n```$|^\\\[\n([\s\S]*?)\n\\\]$|^\$\$\n([\s\S]*?)\n\$\$$|\$\$([^\n]+?)\$\$|\\\(([^\n]+?)\\\)|\\\[([^\n]+?)\\\])/gm, (match, p1, p2, p3, p4, p5, p6, p7) => {
+				let content = p2 || p3 || p4 || p5 || p6 || p7;
+				content = unescapeHtml(content);
+				return temml.renderToString(content); // render LaTeX content
+			});
+			input = input.replace(/(?:^|[^\\])\$(\S[^$\n]*?\S)\$(?!\d)/g, (match, p1) => {
+				let content = p1;
+				content = unescapeHtml(content);
+				return " "+temml.renderToString(content); // render LaTeX content
+			});
+			return input;
+		};
 		const formatMarkdown = (md) => {
 			md = md.replace(/^###### (.*?)\s*#*$/gm, "<h6>$1</h6>")
 			.replace(/^##### (.*?)\s*#*$/gm, "<h5>$1</h5>")
@@ -4008,13 +4022,9 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 				return `<pre><code>${escapeHTML(code)}</code></pre>`;})
 			.replace(/^\t(.*)/gm, (match, code) => {
 				return `<pre><code>${escapeHTML(code)}</code></pre>`;})
-			.replace(/<\/code\><\/pre\>\n<pre\><code\>/g, "\n")
-			.replace(/(\$\$(.*?)\$\$|\\\((.*?)\\\)|\\\[\s{0,4}([\s\S]*?)\s{0,4}\\\])/g, (match, p1, p2, p3, p4) => {
-				let content = p2 || p3 || p4;
-				content = unescapeHtml(content);
-				return temml.renderToString(content); // render LaTeX content
-			})
-			.replace(/\\([`_~\*\+\-\.\^\\\<\>\(\)\[\]])/gm, "$1");
+			.replace(/<\/code\><\/pre\>\n<pre\><code\>/g, "\n");
+			md = replaceLatex(md);
+			md = md.replace(/\\([`_~\*\+\-\.\^\\\<\>\(\)\[\]])/gm, "$1");
 			return md;
 		};
 		text = text.replace(/\r\n/g, "\n").replace(/\n~~~/g, "\n```").replace(/```(([^`]|`[^`])+)```/g, "<code>$1</code>");
@@ -19342,7 +19352,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Enable Markdown <span class="helpicon">?<span
-								class="helptext">Allows the UI to use markdown formatting such as quotes and code blocks.</span></span></div>
+								class="helptext">Allows the UI to use markdown formatting such as quotes, LaTeX, and code blocks.</span></span></div>
 								<input type="checkbox" title="Enabled Markdown" id="instruct_has_markdown" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="settinglabel">
