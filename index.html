@@ -4423,6 +4423,12 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		xtc_threshold: 0.2,
 		xtc_probability: 0.0,
 		sampler_order: [6, 0, 1, 3, 4, 2, 5],
+		memsnippet_enabled: false, // Memory snippets off by default
+		memsnippet_numOfSnippets: 3, // Number of snippets to include defaults to 3
+		memsnippet_minSignificance: 0.01, // Must have the bare minimum of significance to be included
+		memsnippet_searchRange: 300, // Tokens to include in search
+		memsnippet_chunkSize: 0, // Size of memory chunks / snippets
+		memsnippet_chunkOverlap: 0 // Overlap between chunks
 	};
 
 	var defaultsettings = JSON.parse(JSON.stringify(localsettings));
@@ -11365,6 +11371,12 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 			logitbiasdict = {};
 			wi_searchdepth = 0;
 			wi_insertlocation = 0;
+			localsettings.memsnippet_enabled = false;
+			localsettings.memsnippet_numOfSnippets = 3;
+			localsettings.memsnippet_minSignificance = 0.01;
+			localsettings.memsnippet_searchRange = 300;
+			localsettings.memsnippet_chunkSize = 0;
+			localsettings.memsnippet_chunkOverlap = 0;
 			current_anotetemplate = "[Author's note: <|>]";
 			regexreplace_data = [];
 			placeholder_tags_data = [];
@@ -12373,6 +12385,26 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		}
 	}
 
+	function getMaxAllowedCharacters(content, amountToTrimForContext) {
+		//this is a hack since we dont have a proper tokenizer, but we can estimate 1 token per 3 characters
+		let chars_per_token = 3.0;
+		//we try to detect attempts at coding which tokenize poorly. This usually happens when the average word length is high.
+		let avgwordlen = (1.0 + content.length) / (1.0 + countWords(content));
+		if (avgwordlen >= 7.8) {
+			chars_per_token = 2.7;
+		}
+		if (current_memory == null || current_memory.trim() == "") {
+			//if there is no memory, then we can be a lot of lenient with the character counts since the backend will truncate excess anyway
+			chars_per_token = 4.8;
+		}
+		if (is_using_kcpp_with_added_memory()) //easily handle overflow
+		{
+			chars_per_token = 6;
+		}
+		chars_per_token = chars_per_token * (localsettings.token_count_multiplier * 0.01);
+		return Math.max(1, Math.floor((amountToTrimForContext) * chars_per_token) - 12);
+	}
+
 	function submit_generation()
 	{
 		warn_on_quit = true;
@@ -12567,25 +12599,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 			let truncated_context = concat_gametext(true, "","","",false,true); //no need to truncate if memory is empty
 			truncated_context = truncated_context.replace(/\xA0/g,' '); //replace non breaking space nbsp
 
-			//this is a hack since we dont have a proper tokenizer, but we can estimate 1 token per 3 characters
-			let chars_per_token = 3.0;
-			//we try to detect attempts at coding which tokenize poorly. This usually happens when the average word length is high.
-			let avgwordlen = (1.0+truncated_context.length)/(1.0+countWords(truncated_context));
-			if(avgwordlen>=7.8)
-			{
-				chars_per_token = 2.7;
-			}
-			if (current_memory == null || current_memory.trim() == "")
-			{
-				//if there is no memory, then we can be a lot of lenient with the character counts since the backend will truncate excess anyway
-				chars_per_token = 4.8;
-			}
-			if(is_using_kcpp_with_added_memory()) //easily handle overflow
-			{
-				chars_per_token = 6;
-			}
-			chars_per_token = chars_per_token * (localsettings.token_count_multiplier*0.01);
-			let max_allowed_characters = Math.max(1, Math.floor((maxctxlen-maxgenamt) * chars_per_token) - 12);
+			let max_allowed_characters = getMaxAllowedCharacters(truncated_context, (maxctxlen - maxgenamt))
 
 			//for adventure mode, inject hidden context, even more if there's nothing in memory
 			if (localsettings.opmode == 2  && localsettings.adventure_context_mod)
@@ -12708,6 +12722,8 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 				}
 
 			}
+
+			const rawNewText = newgen;
 
 			if (localsettings.opmode == 4)
 			{
@@ -12886,6 +12902,22 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 				//if there's no authors note at all, don't include the template
 				truncated_anote = "";
 			}
+
+			// [LTM][START]
+			if (localsettings.memsnippet_enabled) {
+				// Finds the relevant memory fragments, formats them in a similar way to an authors note and inserts them before WI
+				const rawTextForLtm = !!rawNewText ? rawNewText : gametext_arr.length > 0 ? gametext_arr.slice(-1)[0] : undefined
+				let ltmSnippets = SimilarityUtils.getMemForLastResponse(localsettings.memsnippet_numOfSnippets, localsettings.memsnippet_minSignificance, (maxctxlen - maxgenamt), rawTextForLtm)
+				if (ltmSnippets.length === 0) {
+					console.log("No memory fragments found either as history is too short or no relevant content found")
+				}
+				else {
+					console.log("Memory fragments", ltmSnippets)
+					let ltmContent = ltmSnippets.map(snippet => snippet.snippet).join("|")
+					wistr = `\n\n[Chat history: ${ltmContent}]\n\n` + wistr
+				}
+			}
+			// [LTM][END]
 
 			if(wi_insertlocation>0)
 			{
@@ -17346,9 +17378,12 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		document.getElementById("memory_tab").classList.remove("active");
 		document.getElementById("wi_tab").classList.remove("active");
 		document.getElementById("token_tab").classList.remove("active");
+		document.getElementById("memsnippet_tab").classList.remove("active");
 		document.getElementById("memory_tab_container").classList.add("hidden");
 		document.getElementById("wi_tab_container").classList.add("hidden");
 		document.getElementById("token_tab_container").classList.add("hidden");
+		document.getElementById("memsnippet_tab_container").classList.add("hidden");
+
 		switch (newtab) {
 			case 0:
 				document.getElementById("memory_tab").classList.add("active");
@@ -17359,6 +17394,10 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 				document.getElementById("wi_tab_container").classList.remove("hidden");
 				break;
 			case 2:
+				document.getElementById("memsnippet_tab").classList.add("active");
+				document.getElementById("memsnippet_tab_container").classList.remove("hidden");
+				break;
+			case 3:
 				document.getElementById("token_tab").classList.add("active");
 				document.getElementById("token_tab_container").classList.remove("hidden");
 				break;
@@ -17394,6 +17433,8 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		//setup wi tab
 		start_editing_wi();
 		update_wi();
+
+		load_memsnippet();
 
 		populate_placeholder_tags();
 		populate_regex_replacers();
@@ -17702,6 +17743,45 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		wilist.innerHTML = selectionhtml;
 		document.getElementById("wi_searchdepth").value = wi_searchdepth;
 		document.getElementById("wi_insertlocation").value = wi_insertlocation;
+	}
+
+	function load_memsnippet() {
+		document.getElementById("memsnippet_enabled").checked = localsettings.memsnippet_enabled;
+		document.getElementById("memsnippet_numOfSnippets").value = localsettings.memsnippet_numOfSnippets;
+		document.getElementById("memsnippet_minSignificance").value = localsettings.memsnippet_minSignificance;
+		document.getElementById("memsnippet_searchRange").value = localsettings.memsnippet_searchRange;
+		document.getElementById("memsnippet_chunkSize").value = localsettings.memsnippet_chunkSize;
+		document.getElementById("memsnippet_chunkOverlap").value = localsettings.memsnippet_chunkOverlap;
+	}
+
+	function save_memsnippet() {
+		localsettings.memsnippet_enabled = (document.getElementById("memsnippet_enabled").checked ? true : false);
+		localsettings.memsnippet_numOfSnippets = parseInt(document.getElementById("memsnippet_numOfSnippets").value);
+		localsettings.memsnippet_minSignificance = parseFloat(document.getElementById("memsnippet_minSignificance").value);
+		localsettings.memsnippet_searchRange = parseInt(document.getElementById("memsnippet_searchRange").value);
+		localsettings.memsnippet_chunkSize = parseInt(document.getElementById("memsnippet_chunkSize").value);
+		localsettings.memsnippet_chunkOverlap = parseInt(document.getElementById("memsnippet_chunkOverlap").value);
+	}
+
+	function validateMemInput(input) {
+		const chunkInputs = ["memsnippet_chunkOverlap", "memsnippet_chunkSize"]
+
+		let notValid
+		if (chunkInputs.includes(input.id)) {
+			let chunkSizeInputVal = parseInt(document.getElementById("memsnippet_chunkSize").value)
+			notValid = chunkSizeInputVal !== 0 && parseInt(document.getElementById("memsnippet_chunkOverlap").value) >= chunkSizeInputVal;
+			if (notValid) {
+				chunkInputs.map(id => document.getElementById(id)).forEach(elem => elem.setCustomValidity("Chunk overlap cannot be greater than chunk size"))
+			}
+			else {
+				chunkInputs.map(id => document.getElementById(id)).forEach(elem => elem.setCustomValidity(""))
+			}
+		}
+		notValid = !input?.validity?.valid;
+
+		document.getElementById("memoryOkButton").disabled = notValid;
+		document.getElementById("memoryOkButton").title = notValid ? `${input.title}: ${input.validationMessage}` : "";
+		input.reportValidity();
 	}
 
 	var backLongPressTimer = null;
@@ -20138,7 +20218,8 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 			<div><ul class="nav nav-tabs settingsnav">
 				<li id="memory_tab" class="active"><a class="" href="#" onclick="display_memory_tab(0)">Memory</a></li>
 				<li id="wi_tab"><a class="" href="#" onclick="display_memory_tab(1)">World Info</a></li>
-				<li id="token_tab"><a class="" href="#" onclick="display_memory_tab(2)">Tokens</a></li>
+				<li id="memsnippet_tab"><a class="" href="#" onclick="display_memory_tab(2)">Memory Snippet</a></li>
+				<li id="token_tab"><a class="" href="#" onclick="display_memory_tab(3)">Tokens</a></li>
 			  </ul></div>
 
 			<div class="memtabcontainer" id="memory_tab_container">
@@ -20221,6 +20302,69 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 				<input title="World Info Case Sensitive" type="checkbox" id="case_sensitive_wi" style="margin:0px 0 0;">
 				</div>
 			</div>
+			<!-- Memory snippets -->
+			<div class="memtabcontainer" id="memsnippet_tab_container">
+				<div class="settinglabel" style="padding: 4px;">
+					<div class="justifyleft settingsmall"
+						title="Controls whether automatic snippets from memory are included based on the last user and AI prompt.">
+						Enable memory snippets </div>
+					<input title="Enable memory snippets" type="checkbox" id="memsnippet_enabled"
+						style="margin:0px 0 0;">
+				</div>
+
+				<div class="settinglabel" style="padding: 4px;">
+					<div class="justifyleft settingsmall">Amount of memory snippets to include <span
+							class="helpicon">?<span class="helptext">Controls
+								how many snippets of text from the memory are included based on the automatic
+								search</span></span></div>
+					<input title="Amount of memory snippets to include" class="settinglabel miniinput"
+						style="height:16px;padding:0px;margin:0px 4px 0; width:90px;font-size:10px;" type="number"
+						min="1" max="5" step="1" pattern="\d+" placeholder="Number of snippets" value=""
+						id="memsnippet_numOfSnippets" oninput="validateMemInput(this);">
+				</div>
+				<div class="settinglabel" style="padding: 4px;">
+					<div class="justifyleft settingsmall">Minimum significance required for inclusion <span
+							class="helpicon">?<span class="helptext">Controls
+								the minimum threshold for snippets to be included based on the automatic search, ranging
+								from 0 (any significance) to 1, which is a high degree of significance</span></span>
+					</div>
+					<input title="Minimum significance required for inclusion" class="settinglabel miniinput"
+						style="height:16px;padding:0px;margin:0px 4px 0; width:90px;font-size:10px;" type="number"
+						min="0" max="1" step="0.01" pattern="\d\.\d{1,2}" placeholder="Minimum significance" value=""
+						id="memsnippet_minSignificance" oninput="validateMemInput(this);">
+				</div>
+				<div class="settinglabel" style="padding: 4px;">
+					<div class="justifyleft settingsmall">Amount of text to search by<span class="helpicon">?<span
+								class="helptext">Controls
+								the amount of text used to search, essentially the last n characters</span></span>
+					</div>
+					<input title="Amount of text to search by" class="settinglabel miniinput"
+						style="height:16px;padding:0px;margin:0px 4px 0; width:90px;font-size:10px;" type="number"
+						min="1" step="1" pattern="\d+" placeholder="Amount of text to search by" value=""
+						id="memsnippet_searchRange" oninput="validateMemInput(this);">
+				</div>
+				<div class="settinglabel" style="padding: 4px;">
+					<div class="justifyleft settingsmall">Chunk size <span class="helpicon">?<span
+								class="helptext">Controls the size of each snippet being searched for - when this is 0,
+								an automatic value is calculated</span></span>
+					</div>
+					<input title="Chunk size" class="settinglabel miniinput"
+						style="height:16px;padding:0px;margin:0px 4px 0; width:90px;font-size:10px;" type="number"
+						min="0" step="1" pattern="\d+" placeholder="Chunk size" value="" id="memsnippet_chunkSize"
+						oninput="validateMemInput(this);">
+				</div>
+				<div class="settinglabel" style="padding: 4px;">
+					<div class="justifyleft settingsmall">Chunk overlap <span class="helpicon">?<span
+								class="helptext">Controls the amount of overlap between each snippet, helping to reduce
+								issues of contextual understanding - when this is 0, an automatic value is
+								calculated</span></span>
+					</div>
+					<input title="Chunk overlap" class="settinglabel miniinput"
+						style="height:16px;padding:0px;margin:0px 4px 0; width:90px;font-size:10px;" type="number"
+						min="0" step="1" pattern="\d+" placeholder="Chunk overlap" value="" id="memsnippet_chunkOverlap"
+						oninput="validateMemInput(this);">
+				</div>
+			</div>
 
 			<div class="memtabcontainer" id="token_tab_container">
 				<div class="justifyleft settinglabel">Extra Stopping Sequences <span class="helpicon">?<span
@@ -20296,8 +20440,8 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 
 			</div>
 
-			<div class="popupfooter">
-				<button type="button" class="btn btn-primary" onclick="confirm_memory();save_wi();commit_wi_changes();render_gametext();sync_multiplayer(true);hide_popups()">OK</button>
+			<div id="memoryOkButton" class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="confirm_memory();save_wi();commit_wi_changes();save_memsnippet();render_gametext();sync_multiplayer(true);hide_popups()">OK</button>
 				<button type="button" class="btn btn-primary" onclick="hide_popups();">Cancel</button>
 			</div>
 		</div>
@@ -20753,5 +20897,792 @@ else
 	console.log("service workers API not available");
 }
 </script>
+
+<!-- [LTM][START] -->
+
+<!-- Minisearch-->
+<script>
+	/**
+	 * Minisearch 7.1
+	 * 
+	 * MIT License
+	 */
+
+	/**
+	 * Minified by jsDelivr using Terser v5.19.2.
+	 * Original file: /npm/minisearch@7.1.0/dist/umd/index.js
+	 *
+	 * Do NOT use SRI with dynamically generated files! More information: https://www.jsdelivr.com/using-sri-with-dynamic-files
+	 */
+	!function (t, e) { "object" == typeof exports && "undefined" != typeof module ? module.exports = e() : "function" == typeof define && define.amd ? define(e) : (t = "undefined" != typeof globalThis ? globalThis : t || self).MiniSearch = e() }(this, (function () { "use strict"; function t(t, e, s, i) { return new (s || (s = Promise))((function (n, o) { function r(t) { try { u(i.next(t)) } catch (t) { o(t) } } function c(t) { try { u(i.throw(t)) } catch (t) { o(t) } } function u(t) { var e; t.done ? n(t.value) : (e = t.value, e instanceof s ? e : new s((function (t) { t(e) }))).then(r, c) } u((i = i.apply(t, e || [])).next()) })) } "function" == typeof SuppressedError && SuppressedError; const e = "KEYS", s = "VALUES", i = ""; class n { constructor(t, e) { const s = t._tree, i = Array.from(s.keys()); this.set = t, this._type = e, this._path = i.length > 0 ? [{ node: s, keys: i }] : [] } next() { const t = this.dive(); return this.backtrack(), t } dive() { if (0 === this._path.length) return { done: !0, value: void 0 }; const { node: t, keys: e } = o(this._path); if (o(e) === i) return { done: !1, value: this.result() }; const s = t.get(o(e)); return this._path.push({ node: s, keys: Array.from(s.keys()) }), this.dive() } backtrack() { if (0 === this._path.length) return; const t = o(this._path).keys; t.pop(), t.length > 0 || (this._path.pop(), this.backtrack()) } key() { return this.set._prefix + this._path.map((({ keys: t }) => o(t))).filter((t => t !== i)).join("") } value() { return o(this._path).node.get(i) } result() { switch (this._type) { case s: return this.value(); case e: return this.key(); default: return [this.key(), this.value()] } } [Symbol.iterator]() { return this } } const o = t => t[t.length - 1], r = (t, e, s, n, o, c, u, h) => { const d = c * u; t: for (const a of t.keys()) if (a === i) { const e = o[d - 1]; e <= s && n.set(h, [t.get(a), e]) } else { let i = c; for (let t = 0; t < a.length; ++t, ++i) { const n = a[t], r = u * i, c = r - u; let h = o[r]; const d = Math.max(0, i - s - 1), l = Math.min(u - 1, i + s); for (let t = d; t < l; ++t) { const s = n !== e[t], i = o[c + t] + +s, u = o[c + t + 1] + 1, d = o[r + t] + 1, a = o[r + t + 1] = Math.min(i, u, d); a < h && (h = a) } if (h > s) continue t } r(t.get(a), e, s, n, o, i, u, h + a) } }; class c { constructor(t = new Map, e = "") { this._size = void 0, this._tree = t, this._prefix = e } atPrefix(t) { if (!t.startsWith(this._prefix)) throw new Error("Mismatched prefix"); const [e, s] = u(this._tree, t.slice(this._prefix.length)); if (void 0 === e) { const [e, n] = m(s); for (const s of e.keys()) if (s !== i && s.startsWith(n)) { const i = new Map; return i.set(s.slice(n.length), e.get(s)), new c(i, t) } } return new c(e, t) } clear() { this._size = void 0, this._tree.clear() } delete(t) { return this._size = void 0, a(this._tree, t) } entries() { return new n(this, "ENTRIES") } forEach(t) { for (const [e, s] of this) t(e, s, this) } fuzzyGet(t, e) { return ((t, e, s) => { const i = new Map; if (void 0 === e) return i; const n = e.length + 1, o = n + s, c = new Uint8Array(o * n).fill(s + 1); for (let t = 0; t < n; ++t)c[t] = t; for (let t = 1; t < o; ++t)c[t * n] = t; return r(t, e, s, i, c, 1, n, ""), i })(this._tree, t, e) } get(t) { const e = h(this._tree, t); return void 0 !== e ? e.get(i) : void 0 } has(t) { const e = h(this._tree, t); return void 0 !== e && e.has(i) } keys() { return new n(this, e) } set(t, e) { if ("string" != typeof t) throw new Error("key must be a string"); this._size = void 0; return d(this._tree, t).set(i, e), this } get size() { if (this._size) return this._size; this._size = 0; const t = this.entries(); for (; !t.next().done;)this._size += 1; return this._size } update(t, e) { if ("string" != typeof t) throw new Error("key must be a string"); this._size = void 0; const s = d(this._tree, t); return s.set(i, e(s.get(i))), this } fetch(t, e) { if ("string" != typeof t) throw new Error("key must be a string"); this._size = void 0; const s = d(this._tree, t); let n = s.get(i); return void 0 === n && s.set(i, n = e()), n } values() { return new n(this, s) } [Symbol.iterator]() { return this.entries() } static from(t) { const e = new c; for (const [s, i] of t) e.set(s, i); return e } static fromObject(t) { return c.from(Object.entries(t)) } } const u = (t, e, s = []) => { if (0 === e.length || null == t) return [t, s]; for (const n of t.keys()) if (n !== i && e.startsWith(n)) return s.push([t, n]), u(t.get(n), e.slice(n.length), s); return s.push([t, e]), u(void 0, "", s) }, h = (t, e) => { if (0 === e.length || null == t) return t; for (const s of t.keys()) if (s !== i && e.startsWith(s)) return h(t.get(s), e.slice(s.length)) }, d = (t, e) => { const s = e.length; t: for (let n = 0; t && n < s;) { for (const o of t.keys()) if (o !== i && e[n] === o[0]) { const i = Math.min(s - n, o.length); let r = 1; for (; r < i && e[n + r] === o[r];)++r; const c = t.get(o); if (r === o.length) t = c; else { const s = new Map; s.set(o.slice(r), c), t.set(e.slice(n, n + r), s), t.delete(o), t = s } n += r; continue t } const o = new Map; return t.set(e.slice(n), o), o } return t }, a = (t, e) => { const [s, n] = u(t, e); if (void 0 !== s) if (s.delete(i), 0 === s.size) l(n); else if (1 === s.size) { const [t, e] = s.entries().next().value; f(n, t, e) } }, l = t => { if (0 === t.length) return; const [e, s] = m(t); if (e.delete(s), 0 === e.size) l(t.slice(0, -1)); else if (1 === e.size) { const [s, n] = e.entries().next().value; s !== i && f(t.slice(0, -1), s, n) } }, f = (t, e, s) => { if (0 === t.length) return; const [i, n] = m(t); i.set(n + e, s), i.delete(n) }, m = t => t[t.length - 1], g = "or"; class _ { constructor(t) { if (null == (null == t ? void 0 : t.fields)) throw new Error('MiniSearch: option "fields" must be provided'); const e = null == t.autoVacuum || !0 === t.autoVacuum ? O : t.autoVacuum; this._options = Object.assign(Object.assign(Object.assign({}, v), t), { autoVacuum: e, searchOptions: Object.assign(Object.assign({}, x), t.searchOptions || {}), autoSuggestOptions: Object.assign(Object.assign({}, z), t.autoSuggestOptions || {}) }), this._index = new c, this._documentCount = 0, this._documentIds = new Map, this._idToShortId = new Map, this._fieldIds = {}, this._fieldLength = new Map, this._avgFieldLength = [], this._nextId = 0, this._storedFields = new Map, this._dirtCount = 0, this._currentVacuum = null, this._enqueuedVacuum = null, this._enqueuedVacuumConditions = I, this.addFields(this._options.fields) } add(t) { const { extractField: e, tokenize: s, processTerm: i, fields: n, idField: o } = this._options, r = e(t, o); if (null == r) throw new Error(`MiniSearch: document does not have ID field "${o}"`); if (this._idToShortId.has(r)) throw new Error(`MiniSearch: duplicate ID ${r}`); const c = this.addDocumentId(r); this.saveStoredFields(c, t); for (const o of n) { const n = e(t, o); if (null == n) continue; const r = s(n.toString(), o), u = this._fieldIds[o], h = new Set(r).size; this.addFieldLength(c, u, this._documentCount - 1, h); for (const t of r) { const e = i(t, o); if (Array.isArray(e)) for (const t of e) this.addTerm(u, c, t); else e && this.addTerm(u, c, e) } } } addAll(t) { for (const e of t) this.add(e) } addAllAsync(t, e = {}) { const { chunkSize: s = 10 } = e, i = { chunk: [], promise: Promise.resolve() }, { chunk: n, promise: o } = t.reduce((({ chunk: t, promise: e }, i, n) => (t.push(i), (n + 1) % s == 0 ? { chunk: [], promise: e.then((() => new Promise((t => setTimeout(t, 0))))).then((() => this.addAll(t))) } : { chunk: t, promise: e })), i); return o.then((() => this.addAll(n))) } remove(t) { const { tokenize: e, processTerm: s, extractField: i, fields: n, idField: o } = this._options, r = i(t, o); if (null == r) throw new Error(`MiniSearch: document does not have ID field "${o}"`); const c = this._idToShortId.get(r); if (null == c) throw new Error(`MiniSearch: cannot remove document with ID ${r}: it is not in the index`); for (const o of n) { const n = i(t, o); if (null == n) continue; const r = e(n.toString(), o), u = this._fieldIds[o], h = new Set(r).size; this.removeFieldLength(c, u, this._documentCount, h); for (const t of r) { const e = s(t, o); if (Array.isArray(e)) for (const t of e) this.removeTerm(u, c, t); else e && this.removeTerm(u, c, e) } } this._storedFields.delete(c), this._documentIds.delete(c), this._idToShortId.delete(r), this._fieldLength.delete(c), this._documentCount -= 1 } removeAll(t) { if (t) for (const e of t) this.remove(e); else { if (arguments.length > 0) throw new Error("Expected documents to be present. Omit the argument to remove all documents."); this._index = new c, this._documentCount = 0, this._documentIds = new Map, this._idToShortId = new Map, this._fieldLength = new Map, this._avgFieldLength = [], this._storedFields = new Map, this._nextId = 0 } } discard(t) { const e = this._idToShortId.get(t); if (null == e) throw new Error(`MiniSearch: cannot discard document with ID ${t}: it is not in the index`); this._idToShortId.delete(t), this._documentIds.delete(e), this._storedFields.delete(e), (this._fieldLength.get(e) || []).forEach(((t, s) => { this.removeFieldLength(e, s, this._documentCount, t) })), this._fieldLength.delete(e), this._documentCount -= 1, this._dirtCount += 1, this.maybeAutoVacuum() } maybeAutoVacuum() { if (!1 === this._options.autoVacuum) return; const { minDirtFactor: t, minDirtCount: e, batchSize: s, batchWait: i } = this._options.autoVacuum; this.conditionalVacuum({ batchSize: s, batchWait: i }, { minDirtCount: e, minDirtFactor: t }) } discardAll(t) { const e = this._options.autoVacuum; try { this._options.autoVacuum = !1; for (const e of t) this.discard(e) } finally { this._options.autoVacuum = e } this.maybeAutoVacuum() } replace(t) { const { idField: e, extractField: s } = this._options, i = s(t, e); this.discard(i), this.add(t) } vacuum(t = {}) { return this.conditionalVacuum(t) } conditionalVacuum(t, e) { return this._currentVacuum ? (this._enqueuedVacuumConditions = this._enqueuedVacuumConditions && e, null != this._enqueuedVacuum || (this._enqueuedVacuum = this._currentVacuum.then((() => { const e = this._enqueuedVacuumConditions; return this._enqueuedVacuumConditions = I, this.performVacuuming(t, e) }))), this._enqueuedVacuum) : !1 === this.vacuumConditionsMet(e) ? Promise.resolve() : (this._currentVacuum = this.performVacuuming(t), this._currentVacuum) } performVacuuming(e, s) { return t(this, void 0, void 0, (function* () { const t = this._dirtCount; if (this.vacuumConditionsMet(s)) { const s = e.batchSize || S.batchSize, i = e.batchWait || S.batchWait; let n = 1; for (const [t, e] of this._index) { for (const [t, s] of e) for (const [i] of s) this._documentIds.has(i) || (s.size <= 1 ? e.delete(t) : s.delete(i)); 0 === this._index.get(t).size && this._index.delete(t), n % s == 0 && (yield new Promise((t => setTimeout(t, i)))), n += 1 } this._dirtCount -= t } yield null, this._currentVacuum = this._enqueuedVacuum, this._enqueuedVacuum = null })) } vacuumConditionsMet(t) { if (null == t) return !0; let { minDirtCount: e, minDirtFactor: s } = t; return e = e || O.minDirtCount, s = s || O.minDirtFactor, this.dirtCount >= e && this.dirtFactor >= s } get isVacuuming() { return null != this._currentVacuum } get dirtCount() { return this._dirtCount } get dirtFactor() { return this._dirtCount / (1 + this._documentCount + this._dirtCount) } has(t) { return this._idToShortId.has(t) } getStoredFields(t) { const e = this._idToShortId.get(t); if (null != e) return this._storedFields.get(e) } search(t, e = {}) { const s = this.executeQuery(t, e), i = []; for (const [t, { score: n, terms: o, match: r }] of s) { const s = o.length || 1, c = { id: this._documentIds.get(t), score: n * s, terms: Object.keys(r), queryTerms: o, match: r }; Object.assign(c, this._storedFields.get(t)), (null == e.filter || e.filter(c)) && i.push(c) } return t === _.wildcard && null == e.boostDocument && null == this._options.searchOptions.boostDocument || i.sort(k), i } autoSuggest(t, e = {}) { e = Object.assign(Object.assign({}, this._options.autoSuggestOptions), e); const s = new Map; for (const { score: i, terms: n } of this.search(t, e)) { const t = n.join(" "), e = s.get(t); null != e ? (e.score += i, e.count += 1) : s.set(t, { score: i, terms: n, count: 1 }) } const i = []; for (const [t, { score: e, terms: n, count: o }] of s) i.push({ suggestion: t, terms: n, score: e / o }); return i.sort(k), i } get documentCount() { return this._documentCount } get termCount() { return this._index.size } static loadJSON(t, e) { if (null == e) throw new Error("MiniSearch: loadJSON should be given the same options used when serializing the index"); return this.loadJS(JSON.parse(t), e) } static loadJSONAsync(e, s) { return t(this, void 0, void 0, (function* () { if (null == s) throw new Error("MiniSearch: loadJSON should be given the same options used when serializing the index"); return this.loadJSAsync(JSON.parse(e), s) })) } static getDefault(t) { if (v.hasOwnProperty(t)) return p(v, t); throw new Error(`MiniSearch: unknown option "${t}"`) } static loadJS(t, e) { const { index: s, documentIds: i, fieldLength: n, storedFields: o, serializationVersion: r } = t, c = this.instantiateMiniSearch(t, e); c._documentIds = j(i), c._fieldLength = j(n), c._storedFields = j(o); for (const [t, e] of c._documentIds) c._idToShortId.set(e, t); for (const [t, e] of s) { const s = new Map; for (const t of Object.keys(e)) { let i = e[t]; 1 === r && (i = i.ds), s.set(parseInt(t, 10), j(i)) } c._index.set(t, s) } return c } static loadJSAsync(e, s) { return t(this, void 0, void 0, (function* () { const { index: t, documentIds: i, fieldLength: n, storedFields: o, serializationVersion: r } = e, c = this.instantiateMiniSearch(e, s); c._documentIds = yield V(i), c._fieldLength = yield V(n), c._storedFields = yield V(o); for (const [t, e] of c._documentIds) c._idToShortId.set(e, t); let u = 0; for (const [e, s] of t) { const t = new Map; for (const e of Object.keys(s)) { let i = s[e]; 1 === r && (i = i.ds), t.set(parseInt(e, 10), yield V(i)) } ++u % 1e3 == 0 && (yield T(0)), c._index.set(e, t) } return c })) } static instantiateMiniSearch(t, e) { const { documentCount: s, nextId: i, fieldIds: n, averageFieldLength: o, dirtCount: r, serializationVersion: u } = t; if (1 !== u && 2 !== u) throw new Error("MiniSearch: cannot deserialize an index created with an incompatible version"); const h = new _(e); return h._documentCount = s, h._nextId = i, h._idToShortId = new Map, h._fieldIds = n, h._avgFieldLength = o, h._dirtCount = r || 0, h._index = new c, h } executeQuery(t, e = {}) { if (t === _.wildcard) return this.executeWildcardQuery(e); if ("string" != typeof t) { const s = Object.assign(Object.assign(Object.assign({}, e), t), { queries: void 0 }), i = t.queries.map((t => this.executeQuery(t, s))); return this.combineResults(i, s.combineWith) } const { tokenize: s, processTerm: i, searchOptions: n } = this._options, o = Object.assign(Object.assign({ tokenize: s, processTerm: i }, n), e), { tokenize: r, processTerm: c } = o, u = r(t).flatMap((t => c(t))).filter((t => !!t)).map(b(o)).map((t => this.executeQuerySpec(t, o))); return this.combineResults(u, o.combineWith) } executeQuerySpec(t, e) { const s = Object.assign(Object.assign({}, this._options.searchOptions), e), i = (s.fields || this._options.fields).reduce(((t, e) => Object.assign(Object.assign({}, t), { [e]: p(s.boost, e) || 1 })), {}), { boostDocument: n, weights: o, maxFuzzy: r, bm25: c } = s, { fuzzy: u, prefix: h } = Object.assign(Object.assign({}, x.weights), o), d = this._index.get(t.term), a = this.termResults(t.term, t.term, 1, t.termBoost, d, i, n, c); let l, f; if (t.prefix && (l = this._index.atPrefix(t.term)), t.fuzzy) { const e = !0 === t.fuzzy ? .2 : t.fuzzy, s = e < 1 ? Math.min(r, Math.round(t.term.length * e)) : e; s && (f = this._index.fuzzyGet(t.term, s)) } if (l) for (const [e, s] of l) { const o = e.length - t.term.length; if (!o) continue; null == f || f.delete(e); const r = h * e.length / (e.length + .3 * o); this.termResults(t.term, e, r, t.termBoost, s, i, n, c, a) } if (f) for (const e of f.keys()) { const [s, o] = f.get(e); if (!o) continue; const r = u * e.length / (e.length + o); this.termResults(t.term, e, r, t.termBoost, s, i, n, c, a) } return a } executeWildcardQuery(t) { const e = new Map, s = Object.assign(Object.assign({}, this._options.searchOptions), t); for (const [t, i] of this._documentIds) { const n = s.boostDocument ? s.boostDocument(i, "", this._storedFields.get(t)) : 1; e.set(t, { score: n, terms: [], match: {} }) } return e } combineResults(t, e = g) { if (0 === t.length) return new Map; const s = e.toLowerCase(), i = y[s]; if (!i) throw new Error(`Invalid combination operator: ${e}`); return t.reduce(i) || new Map } toJSON() { const t = []; for (const [e, s] of this._index) { const i = {}; for (const [t, e] of s) i[t] = Object.fromEntries(e); t.push([e, i]) } return { documentCount: this._documentCount, nextId: this._nextId, documentIds: Object.fromEntries(this._documentIds), fieldIds: this._fieldIds, fieldLength: Object.fromEntries(this._fieldLength), averageFieldLength: this._avgFieldLength, storedFields: Object.fromEntries(this._storedFields), dirtCount: this._dirtCount, index: t, serializationVersion: 2 } } termResults(t, e, s, i, n, o, r, c, u = new Map) { if (null == n) return u; for (const h of Object.keys(o)) { const d = o[h], a = this._fieldIds[h], l = n.get(a); if (null == l) continue; let f = l.size; const m = this._avgFieldLength[a]; for (const n of l.keys()) { if (!this._documentIds.has(n)) { this.removeTerm(a, n, e), f -= 1; continue } const o = r ? r(this._documentIds.get(n), e, this._storedFields.get(n)) : 1; if (!o) continue; const g = l.get(n), _ = this._fieldLength.get(n)[a], y = s * i * d * o * w(g, f, this._documentCount, _, m, c), b = u.get(n); if (b) { b.score += y, F(b.terms, t); const s = p(b.match, e); s ? s.push(h) : b.match[e] = [h] } else u.set(n, { score: y, terms: [t], match: { [e]: [h] } }) } } return u } addTerm(t, e, s) { const i = this._index.fetch(s, C); let n = i.get(t); if (null == n) n = new Map, n.set(e, 1), i.set(t, n); else { const t = n.get(e); n.set(e, (t || 0) + 1) } } removeTerm(t, e, s) { if (!this._index.has(s)) return void this.warnDocumentChanged(e, t, s); const i = this._index.fetch(s, C), n = i.get(t); null == n || null == n.get(e) ? this.warnDocumentChanged(e, t, s) : n.get(e) <= 1 ? n.size <= 1 ? i.delete(t) : n.delete(e) : n.set(e, n.get(e) - 1), 0 === this._index.get(s).size && this._index.delete(s) } warnDocumentChanged(t, e, s) { for (const i of Object.keys(this._fieldIds)) if (this._fieldIds[i] === e) return void this._options.logger("warn", `MiniSearch: document with ID ${this._documentIds.get(t)} has changed before removal: term "${s}" was not present in field "${i}". Removing a document after it has changed can corrupt the index!`, "version_conflict") } addDocumentId(t) { const e = this._nextId; return this._idToShortId.set(t, e), this._documentIds.set(e, t), this._documentCount += 1, this._nextId += 1, e } addFields(t) { for (let e = 0; e < t.length; e++)this._fieldIds[t[e]] = e } addFieldLength(t, e, s, i) { let n = this._fieldLength.get(t); null == n && this._fieldLength.set(t, n = []), n[e] = i; const o = (this._avgFieldLength[e] || 0) * s + i; this._avgFieldLength[e] = o / (s + 1) } removeFieldLength(t, e, s, i) { if (1 === s) return void (this._avgFieldLength[e] = 0); const n = this._avgFieldLength[e] * s - i; this._avgFieldLength[e] = n / (s - 1) } saveStoredFields(t, e) { const { storeFields: s, extractField: i } = this._options; if (null == s || 0 === s.length) return; let n = this._storedFields.get(t); null == n && this._storedFields.set(t, n = {}); for (const t of s) { const s = i(e, t); void 0 !== s && (n[t] = s) } } } _.wildcard = Symbol("*"); const p = (t, e) => Object.prototype.hasOwnProperty.call(t, e) ? t[e] : void 0, y = { [g]: (t, e) => { for (const s of e.keys()) { const i = t.get(s); if (null == i) t.set(s, e.get(s)); else { const { score: t, terms: n, match: o } = e.get(s); i.score = i.score + t, i.match = Object.assign(i.match, o), M(i.terms, n) } } return t }, and: (t, e) => { const s = new Map; for (const i of e.keys()) { const n = t.get(i); if (null == n) continue; const { score: o, terms: r, match: c } = e.get(i); M(n.terms, r), s.set(i, { score: n.score + o, terms: n.terms, match: Object.assign(n.match, c) }) } return s }, and_not: (t, e) => { for (const s of e.keys()) t.delete(s); return t } }, w = (t, e, s, i, n, o) => { const { k: r, b: c, d: u } = o; return Math.log(1 + (s - e + .5) / (e + .5)) * (u + t * (r + 1) / (t + r * (1 - c + c * i / n))) }, b = t => (e, s, i) => ({ term: e, fuzzy: "function" == typeof t.fuzzy ? t.fuzzy(e, s, i) : t.fuzzy || !1, prefix: "function" == typeof t.prefix ? t.prefix(e, s, i) : !0 === t.prefix, termBoost: "function" == typeof t.boostTerm ? t.boostTerm(e, s, i) : 1 }), v = { idField: "id", extractField: (t, e) => t[e], tokenize: t => t.split(L), processTerm: t => t.toLowerCase(), fields: void 0, searchOptions: void 0, storeFields: [], logger: (t, e) => { "function" == typeof (null === console || void 0 === console ? void 0 : console[t]) && console[t](e) }, autoVacuum: !0 }, x = { combineWith: g, prefix: !1, fuzzy: !1, maxFuzzy: 6, boost: {}, weights: { fuzzy: .45, prefix: .375 }, bm25: { k: 1.2, b: .7, d: .5 } }, z = { combineWith: "and", prefix: (t, e, s) => e === s.length - 1 }, S = { batchSize: 1e3, batchWait: 10 }, I = { minDirtFactor: .1, minDirtCount: 20 }, O = Object.assign(Object.assign({}, S), I), F = (t, e) => { t.includes(e) || t.push(e) }, M = (t, e) => { for (const s of e) t.includes(s) || t.push(s) }, k = ({ score: t }, { score: e }) => e - t, C = () => new Map, j = t => { const e = new Map; for (const s of Object.keys(t)) e.set(parseInt(s, 10), t[s]); return e }, V = e => t(void 0, void 0, void 0, (function* () { const t = new Map; let s = 0; for (const i of Object.keys(e)) t.set(parseInt(i, 10), e[i]), ++s % 1e3 == 0 && (yield T(0)); return t })), T = t => new Promise((e => setTimeout(e, t))), L = /[\n\r\p{Z}\p{P}]+/u; return _ }));
+</script>
+
+
+<script>
+	/**
+	 * Extraction of the lunr libraries stemmer code.  This allows for the stripping of characters to allow a word to be tokenised in its "original" form.
+	 * 
+	 * Code included under the MIT license (from the Lunr repo)
+	 * 
+	 * https://github.com/olivernn/lunr.js/blob/aa5a878f62a6bba1e8e5b95714899e17e8150b38/lib/stemmer.js
+	 */
+
+	/*!
+	* lunr.stemmer
+	* Copyright (C) 2020 Oliver Nightingale
+	* Includes code from - http://tartarus.org/~martin/PorterStemmer/js.txt
+	*/
+
+	/**
+	 * lunr.stemmer is an english language stemmer, this is a JavaScript
+	 * implementation of the PorterStemmer taken from http://tartarus.org/~martin
+	 *
+	 * @static
+	 * @implements {lunr.PipelineFunction}
+	 * @param {lunr.Token} token - The string to stem
+	 * @returns {lunr.Token}
+	 * @see {@link lunr.Pipeline}
+	 * @function
+	 */
+	var step2list = {
+		"ational": "ate",
+		"tional": "tion",
+		"enci": "ence",
+		"anci": "ance",
+		"izer": "ize",
+		"bli": "ble",
+		"alli": "al",
+		"entli": "ent",
+		"eli": "e",
+		"ousli": "ous",
+		"ization": "ize",
+		"ation": "ate",
+		"ator": "ate",
+		"alism": "al",
+		"iveness": "ive",
+		"fulness": "ful",
+		"ousness": "ous",
+		"aliti": "al",
+		"iviti": "ive",
+		"biliti": "ble",
+		"logi": "log"
+	},
+		step3list = {
+			"icate": "ic",
+			"ative": "",
+			"alize": "al",
+			"iciti": "ic",
+			"ical": "ic",
+			"ful": "",
+			"ness": ""
+		},
+
+		c = "[^aeiou]",          // consonant
+		v = "[aeiouy]",          // vowel
+		C = c + "[^aeiouy]*",    // consonant sequence
+		V = v + "[aeiou]*",      // vowel sequence
+
+		mgr0 = "^(" + C + ")?" + V + C,               // [C]VC... is m>0
+		meq1 = "^(" + C + ")?" + V + C + "(" + V + ")?$",  // [C]VC[V] is m=1
+		mgr1 = "^(" + C + ")?" + V + C + V + C,       // [C]VCVC... is m>1
+		s_v = "^(" + C + ")?" + v;                   // vowel in stem
+
+	var re_mgr0 = new RegExp(mgr0);
+	var re_mgr1 = new RegExp(mgr1);
+	var re_meq1 = new RegExp(meq1);
+	var re_s_v = new RegExp(s_v);
+
+	var re_1a = /^(.+?)(ss|i)es$/;
+	var re2_1a = /^(.+?)([^s])s$/;
+	var re_1b = /^(.+?)eed$/;
+	var re2_1b = /^(.+?)(ed|ing)$/;
+	var re_1b_2 = /.$/;
+	var re2_1b_2 = /(at|bl|iz)$/;
+	var re3_1b_2 = new RegExp("([^aeiouylsz])\\1$");
+	var re4_1b_2 = new RegExp("^" + C + v + "[^aeiouwxy]$");
+
+	var re_1c = /^(.+?[^aeiou])y$/;
+	var re_2 = /^(.+?)(ational|tional|enci|anci|izer|bli|alli|entli|eli|ousli|ization|ation|ator|alism|iveness|fulness|ousness|aliti|iviti|biliti|logi)$/;
+
+	var re_3 = /^(.+?)(icate|ative|alize|iciti|ical|ful|ness)$/;
+
+	var re_4 = /^(.+?)(al|ance|ence|er|ic|able|ible|ant|ement|ment|ent|ou|ism|ate|iti|ous|ive|ize)$/;
+	var re2_4 = /^(.+?)(s|t)(ion)$/;
+
+	var re_5 = /^(.+?)e$/;
+	var re_5_1 = /ll$/;
+	var re3_5 = new RegExp("^" + C + v + "[^aeiouwxy]$");
+
+	var porterStemmer = function porterStemmer(w) {
+		var stem,
+			suffix,
+			firstch,
+			re,
+			re2,
+			re3,
+			re4;
+
+		if (w.length < 3) { return w; }
+
+		firstch = w.substr(0, 1);
+		if (firstch == "y") {
+			w = firstch.toUpperCase() + w.substr(1);
+		}
+
+		// Step 1a
+		re = re_1a
+		re2 = re2_1a;
+
+		if (re.test(w)) { w = w.replace(re, "$1$2"); }
+		else if (re2.test(w)) { w = w.replace(re2, "$1$2"); }
+
+		// Step 1b
+		re = re_1b;
+		re2 = re2_1b;
+		if (re.test(w)) {
+			var fp = re.exec(w);
+			re = re_mgr0;
+			if (re.test(fp[1])) {
+				re = re_1b_2;
+				w = w.replace(re, "");
+			}
+		} else if (re2.test(w)) {
+			var fp = re2.exec(w);
+			stem = fp[1];
+			re2 = re_s_v;
+			if (re2.test(stem)) {
+				w = stem;
+				re2 = re2_1b_2;
+				re3 = re3_1b_2;
+				re4 = re4_1b_2;
+				if (re2.test(w)) { w = w + "e"; }
+				else if (re3.test(w)) { re = re_1b_2; w = w.replace(re, ""); }
+				else if (re4.test(w)) { w = w + "e"; }
+			}
+		}
+
+		// Step 1c - replace suffix y or Y by i if preceded by a non-vowel which is not the first letter of the word (so cry -> cri, by -> by, say -> say)
+		re = re_1c;
+		if (re.test(w)) {
+			var fp = re.exec(w);
+			stem = fp[1];
+			w = stem + "i";
+		}
+
+		// Step 2
+		re = re_2;
+		if (re.test(w)) {
+			var fp = re.exec(w);
+			stem = fp[1];
+			suffix = fp[2];
+			re = re_mgr0;
+			if (re.test(stem)) {
+				w = stem + step2list[suffix];
+			}
+		}
+
+		// Step 3
+		re = re_3;
+		if (re.test(w)) {
+			var fp = re.exec(w);
+			stem = fp[1];
+			suffix = fp[2];
+			re = re_mgr0;
+			if (re.test(stem)) {
+				w = stem + step3list[suffix];
+			}
+		}
+
+		// Step 4
+		re = re_4;
+		re2 = re2_4;
+		if (re.test(w)) {
+			var fp = re.exec(w);
+			stem = fp[1];
+			re = re_mgr1;
+			if (re.test(stem)) {
+				w = stem;
+			}
+		} else if (re2.test(w)) {
+			var fp = re2.exec(w);
+			stem = fp[1] + fp[2];
+			re2 = re_mgr1;
+			if (re2.test(stem)) {
+				w = stem;
+			}
+		}
+
+		// Step 5
+		re = re_5;
+		if (re.test(w)) {
+			var fp = re.exec(w);
+			stem = fp[1];
+			re = re_mgr1;
+			re2 = re_meq1;
+			re3 = re3_5;
+			if (re.test(stem) || (re2.test(stem) && !(re3.test(stem)))) {
+				w = stem;
+			}
+		}
+
+		re = re_5_1;
+		re2 = re_mgr1;
+		if (re.test(w) && re2.test(w)) {
+			re = re_1b_2;
+			w = w.replace(re, "");
+		}
+
+		// and turn initial Y back to y
+
+		if (firstch == "y") {
+			w = firstch.toLowerCase() + w.substr(1);
+		}
+
+		return w;
+	};
+</script>
+
+<!-- Similarity comparitors and utils -->
+<script>
+
+	/**
+	 * Performance benchmarking class (times and prints out durations and number of invocations)
+	 */
+	class PerformanceTimer {
+		_internalTimers = {}
+
+		/**
+		 * Starts a timer under the provided timer name
+		 */
+		start(internalName = "default") {
+			if (this._internalTimers[internalName] === undefined) {
+				this._internalTimers[internalName] = { invocations: 0 }
+			}
+			this._internalTimers[internalName].start = new Date()
+		}
+
+		/**
+		 * Stops the timer and stores the new average duration, also incrementing the invocation count
+		 */
+		stop(internalName = "default") {
+			if (this._internalTimers[internalName] === undefined) {
+				return
+			}
+			let duration = new Date() - this._internalTimers[internalName].start
+			if (this._internalTimers[internalName].duration === undefined) {
+				this._internalTimers[internalName].duration = duration
+			}
+			else {
+				this._internalTimers[internalName].duration = (this._internalTimers[internalName].duration + duration) / 2
+			}
+			this._internalTimers[internalName].invocations += 1
+		}
+
+		/**
+		 * Prints all the timers and their details
+		 */
+		print() {
+			for (let timer in this._internalTimers) {
+				console.log(`Timer ${timer}: ${this._internalTimers[timer].invocations} invocations with an average of ${this._internalTimers[timer].duration}ms duration`)
+			}
+		}
+	}
+
+	// a list of commonly used words that have little meaning and can be excluded
+	// from analysis.
+	const stopwords = [
+		'about', 'above', 'after', 'again', 'all', 'also', 'am', 'an', 'and', 'another',
+		'any', 'are', 'as', 'at', 'be', 'because', 'been', 'before', 'being', 'below',
+		'between', 'both', 'but', 'by', 'came', 'can', 'cannot', 'come', 'could', 'did',
+		'do', 'does', 'doing', 'during', 'each', 'few', 'for', 'from', 'further', 'get',
+		'got', 'has', 'had', 'he', 'have', 'her', 'here', 'him', 'himself', 'his', 'how',
+		'if', 'in', 'into', 'is', 'it', 'its', 'itself', 'like', 'make', 'many', 'me',
+		'might', 'more', 'most', 'much', 'must', 'my', 'myself', 'never', 'now', 'of', 'on',
+		'only', 'or', 'other', 'our', 'ours', 'ourselves', 'out', 'over', 'own',
+		'said', 'same', 'see', 'she', 'should', 'since', 'so', 'some', 'still', 'such', 'take', 'than',
+		'that', 'the', 'their', 'theirs', 'them', 'themselves', 'then', 'there', 'these', 'they',
+		'this', 'those', 'through', 'to', 'too', 'under', 'until', 'up', 'very', 'was',
+		'way', 'we', 'well', 'were', 'what', 'where', 'when', 'which', 'while', 'who',
+		'whom', 'with', 'would', 'why', 'you', 'your', 'yours', 'yourself',
+		'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+		'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '$', '1',
+		'2', '3', '4', '5', '6', '7', '8', '9', '0', '_',
+		'll', 're'
+	]
+
+	/**
+	 * Basic structure of a Similarity Comparitor - This does not work by itself
+	 */
+	class SimilarityComparitor {
+		/**
+		 * Determines if you split based on paragraphs or instruct / user turns
+		 */
+		_splitAsParagraphs
+		/**
+		 * Amount to trim from the history which is the context
+		 */
+		_amountToTrimForContext
+		/**
+		 * Max length of search term
+		 */
+		_maxLengthOfSearchString
+		/**
+		 * Max length per chunk
+		 */
+		_chunkSplitSize
+		/**
+		 * Overlap per chunk
+		 */
+		_chunkOverlap
+		/**
+		 * Last message from user
+		 */
+		_lastMessage
+		/**
+		 * Predictions for chunk size
+		 */
+		_chunkPredictions
+
+		constructor(amountToTrimForContext, lastMessage, maxLengthOfSearchString = localsettings.memsnippet_searchRange, chunkSplitSize = localsettings.memsnippet_chunkSize, chunkOverlap = localsettings.memsnippet_chunkOverlap) {
+			this._amountToTrimForContext = amountToTrimForContext
+			this._maxLengthOfSearchString = maxLengthOfSearchString
+			this._chunkSplitSize = chunkSplitSize
+			this._chunkOverlap = chunkOverlap
+
+			this._lastMessage = lastMessage
+			this._chunkPredictions = this.getChunkPredictions()
+			console.log("Chunk predictions", this._chunkPredictions)
+		}
+
+		_ratioOfOverlapToChunkSize = 0.8
+		_chunkMultiplier = 10
+
+		getChunkPredictions() {
+			//this is a hack since we dont have a proper tokenizer, but we can estimate 1 token per 3 characters
+			let chars_per_token = 3.0;
+
+			let content = this.getCurrentContext();
+			//we try to detect attempts at coding which tokenize poorly. This usually happens when the average word length is high.
+			let avgwordlen = (1.0 + content.length) / (1.0 + countWords(content));
+			if (avgwordlen >= 7.8) {
+				chars_per_token = 2.7;
+			}
+
+			if (current_memory == null || current_memory.trim() == "") {
+				//if there is no memory, then we can be a lot of lenient with the character counts since the backend will truncate excess anyway
+				chars_per_token = 4.8;
+			}
+
+			if (is_using_kcpp_with_added_memory()) //easily handle overflow
+			{
+				chars_per_token = 6;
+			}
+
+			chars_per_token = chars_per_token * (localsettings.token_count_multiplier * 0.01)
+
+			const average = array => array.reduce((a, b) => a + b) / array.length;
+			let avgParagraphLength = average(content.split(/\n+/g).map(paragraph => paragraph.replace(/[^\w\d\s]+/g, " ").split(/\s+/g).length))
+			let chunkGuess = (avgwordlen * avgParagraphLength) * this._chunkMultiplier, chunkGuessOverlap = this._ratioOfOverlapToChunkSize * chunkGuess
+
+			return { avgwordlen, chars_per_token, avgParagraphLength, chunkGuess, chunkGuessOverlap }
+		}
+
+		getChunksBasedOnPredictedValues() {
+			let i = 0;
+			let chunkSizeToUse = this._chunkPredictions.chunkGuess, chunkOverlapToUse = this._chunkPredictions.chunkGuessOverlap;
+			if (!!localsettings.memsnippet_chunkSize && localsettings.memsnippet_chunkSize !== 0) {
+				chunkSizeToUse = localsettings.memsnippet_chunkSize
+				if (!!localsettings.memsnippet_chunkOverlap && localsettings.memsnippet_chunkOverlap !== 0) {
+					chunkOverlapToUse = localsettings.memsnippet_chunkOverlap;
+				}
+				else {
+					chunkOverlapToUse = this._ratioOfOverlapToChunkSize * chunkSizeToUse
+				}
+			}
+
+			return this.getParagraphsFromHistory(chunkSizeToUse, chunkOverlapToUse).map(paragraph => {
+				i += 1;
+				return {
+					id: i,
+					snippet: paragraph,
+					text: this._stripToTokens(paragraph),
+					category: "context"
+				}
+			});
+		}
+
+		/**
+		 * Cleans up / removes special tags used in lite
+		 */
+		_cleanupSpecialTags(text) {
+			return text.replace(/\{\{\[INPUT\]\}\}/g, "").replace(/\{\{\[OUTPUT\]\}\}/g, "")
+		}
+
+		/**
+		 * Checks if words in a are found in b, as a percentage of how many are present
+		 */
+		comparitor(a, b) {
+			throw new Exception("Not implemented")
+		}
+
+		/**
+		 * Compares a single message to another one
+		 */
+		compareSingle(currentMessage, historyMessage) {
+			return this.keywordSimilarities(currentMessage, historyMessage)
+		}
+
+		/**
+		 * Compares a single message across the entire history (or memories)
+		 */
+		compareSeries(currentMessage, ...history) {
+			let comparisons = history.map(historyMessage => {
+				return { snippet: historyMessage, match: this.compareSingle(currentMessage, historyMessage) }
+			});
+			comparisons.sort((a, b) => {
+				return a.match > b.match ? -1 : 1
+			});
+			return comparisons;
+		}
+
+		/**
+		 * Compares a single message across the entire history, with the amount of values to return (like a top N) and a minimum similarity as a percentage
+		 */
+		compareAndGetTopNWithCull(currentMessage, valuesToReturn, similarity, ...history) {
+			let comparisonsSorted = this.compareSeries(currentMessage, ...history);
+			if (!!similarity) {
+				let comparisonsToReturn = []
+				for (let i = 0; i < comparisonsSorted.length; i++) {
+					if (comparisonsSorted[i].match < similarity) {
+						break;
+					}
+					comparisonsToReturn.push(comparisonsSorted[i])
+				}
+				comparisonsSorted = comparisonsToReturn;
+			}
+			return comparisonsSorted.filter((elem, pos, arr) => arr.findIndex(elemIn => elemIn.snippet === elem.snippet) === pos).slice(0, valuesToReturn);
+		}
+
+		/**
+		 * Compares a single message across the entire history, with the amount of values to return (like a top N)
+		 */
+		compareAndGetTopN(currentMessage, valuesToReturn, ...history) {
+			return this.compareAndGetTopNWithCull(currentMessage, valuesToReturn, undefined, ...history);
+		}
+
+		/**
+		 * Should not be used - only for internal use with the function getParagraphsFromHistory
+		 */
+		_currentContextCache
+		_gameTextCache
+		_lastResponseCache
+		_paragraphsCache
+
+		/**
+		 * Gets a static copy of the entire game text
+		 */
+		getAllGameText() {
+			if (this._gameTextCache === undefined) {
+				let gameText = concat_gametext().replace(/\xA0/g, ' ').trim()
+				let maxAllowedCharacters = getMaxAllowedCharacters(gameText, this._amountToTrimForContext);
+				if (gameText.length > maxAllowedCharacters) {
+					this._currentContextCache = gameText.substring(gameText.length - maxAllowedCharacters)
+					this._gameTextCache = gameText.substring(0, gameText.length - maxAllowedCharacters)
+				}
+				else {
+					console.log("History too short to enable memory fragments")
+					this._gameTextCache = ""
+					this._currentContextCache = ""
+				}
+			}
+			return this._gameTextCache;
+		}
+
+		/**
+		 * Gets the current context
+		 */
+		getCurrentContext() {
+			this.getAllGameText()
+			return this._currentContextCache
+		}
+
+		/**
+		 * Escapes a string to a regex supported format
+		 */
+		_escapeRegExp(stringToEscape) {
+			return stringToEscape.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
+		}
+
+		_stripToTokens(text) {
+			return this._cleanupSpecialTags(text).replace(/[^\w\s\d-]/g, " ").replace("\s+", " ")
+		}
+
+		/**
+		 * Gets the last response from the AI and yourself
+		 */
+		getLastResponse() {
+			if (this._lastResponseCache === undefined) {
+				let gameText = this.getCurrentContext(), matcher, result = ""
+
+				if (gameText.length === 0) {
+					this._lastResponseCache = "";
+				}
+				else {
+					if (gameText.length > this._maxLengthOfSearchString) {
+						gameText = gameText.substring(gameText.length - this._maxLengthOfSearchString, gameText.length)
+					}
+					console.log(`Last response within ${this._maxLengthOfSearchString} characters: ${gameText}`)
+
+					this._lastResponseCache = this._cleanupSpecialTags(gameText).trim()
+				}
+			}
+
+			return this._lastResponseCache
+		}
+
+		/**
+		 * Gets the paragraphs from the current history
+		 */
+		getParagraphsFromHistory(chunkSize = this._chunkSplitSize, chunkSizeOverlap = this._chunkOverlap) {
+			if (this._paragraphsCache === undefined) {
+				if (this.getAllGameText().length === 0) {
+					this._paragraphsCache = [];
+				}
+				else {
+					this._paragraphsCache = []
+					let allText = replaceAll(this._cleanupSpecialTags(this.getAllGameText()), this.getLastResponse(), "")
+					let tempLog = [], i = 0, startLoc = 0;
+					while (startLoc < allText.length && i < Number.MAX_SAFE_INTEGER) {
+						let actualChunkStart = Math.max(0, startLoc - chunkSizeOverlap);
+						let actualChunkEnd = Math.min(allText.length, actualChunkStart + chunkSize);
+						let currentSnippet = allText.substring(actualChunkStart, actualChunkEnd)
+						this._paragraphsCache.push(currentSnippet)
+						startLoc = actualChunkEnd
+						tempLog.push({ nextPos: startLoc, snippet: currentSnippet })
+						i++
+					}
+					console.debug("Memory chunks", tempLog)
+					this._paragraphsCache = this._paragraphsCache.map(c => c.replace(/\n\n/g, "\n")).filter(s => !!s)
+				}
+			}
+			return this._paragraphsCache;
+		}
+
+		/**
+		 * Compare message against all the paragraphs in memory, with the amount of values to return (like a top N)
+		 */
+		getTopNFromParagraphs(currentMessage, valuesToReturn) {
+			return this.compareAndGetTopN(currentMessage, valuesToReturn, ...this.getParagraphsFromHistory());
+		}
+
+		/**
+		 * Compare message against all the paragraphs in memory, with the amount of values to return (like a top N) and a minimum similarity as a percentage
+		 */
+		getTopNAndCullFromParagraphs(currentMessage, valuesToReturn, minRelevance) {
+			return this.compareAndGetTopNWithCull(currentMessage, valuesToReturn, minRelevance, ...this.getParagraphsFromHistory());
+		}
+	}
+
+	class LastMessageSimilarityComparitor extends SimilarityComparitor {
+		_sectionMaxResults = 5
+		_searchEndTolerance = 20
+		_chunks
+
+		constructor(_amountToTrimForContext, lastMessage) {
+			super(_amountToTrimForContext, lastMessage)
+			this._chunks = this.getChunksBasedOnPredictedValues()
+		}
+
+		_clone(obj) {
+			return JSON.parse(JSON.stringify(obj))
+		}
+
+		/**
+		 * Stub methods
+		 */
+		getSectionResults(searchSections) {
+			throw new Exception("Needs a searcher implementation")
+		}
+
+		getFieldToReduceBy() {
+			throw new Exception("Needs a searcher implementation")
+		}
+
+		/**
+		 * Modifies the series method to return the comparisons from Minisearch
+		 */
+		compareSeries(currentMessage, ...historyMessages) {
+			// Split into segments with different strengths assigned (later segments have more importance)
+			let searchSections = [
+				{
+					term: this._stripToTokens(currentMessage),
+					strength: 1
+				},
+				{
+					term: this._stripToTokens(this._lastMessage),
+					strength: 2
+				}
+			]
+			console.debug("Search sections", searchSections)
+
+			// Searches for results based on splits roughly every 100 characters
+			let sectionResults = this.getSectionResults(searchSections)
+			console.debug("Section results", this._clone(sectionResults))
+
+			// Adds scores together across results to form a summary
+			let sectionSummary = sectionResults.reduce((docs, doc) => {
+				const existingDoc = docs.find((c) => c[this.getFieldToReduceBy()] === doc[this.getFieldToReduceBy()]);
+				if (existingDoc) {
+					existingDoc.score += doc.score
+				}
+				else {
+					docs.push(doc);
+				}
+
+				return docs;
+			}, []);
+			console.debug("Section summary", this._clone(sectionSummary))
+
+			// Maps to the more simple standard output structure and sort by total score
+			let comparisons = sectionSummary.map(doc => {
+				return {
+					match: doc.score,
+					snippet: doc.snippet
+				}
+			}).sort((a, b) => {
+				return a.match > b.match ? -1 : 1
+			});
+			console.debug("Comparisons", this._clone(comparisons))
+
+			// Scales each score by max score to get a proportional match relevance
+			if (comparisons.length === 0) {
+				return []
+			}
+			let maxScore = comparisons[0].match
+			return comparisons.map(result => {
+				result.match /= maxScore
+				return result
+			});
+		}
+	}
+
+	/**
+	 * Minisearch similarity comparitor
+	 */
+	class MinisearchLastMessageSimilarityComparitor extends LastMessageSimilarityComparitor {
+
+		/**
+		 * Minisearch implementation
+		 */
+		_miniSearch = new MiniSearch({
+			fields: ["text"], // fields to index for full-text search
+			storeFields: ['category', "snippet"], // fields to return with search results
+			searchOptions: {
+				fuzzy: 0,
+				bm25: { // https://lucaong.github.io/minisearch/types/MiniSearch.BM25Params.html
+					b: 0.7, // Normalisation for the length of the string
+					d: 0.7, // Minimum significance of a term showing up once
+					k: 1.5 // Term frequency falloff (higher values allow for bigger differences based on amount of repetition of terms)
+				}
+			},
+			processTerm: (term, _fieldName) => {
+				let processedTerm = stopwords.includes(term.toLowerCase()) ? false : MiniSearch.getDefault("processTerm")(term)
+				return processedTerm
+			},
+			tokenize: (str) => {
+				let terms = MiniSearch.getDefault("tokenize")(str);
+				return terms.concat(terms.map(porterStemmer));
+			}
+
+		})
+
+		/**
+		 * On initialisation, add all paragraphs in history as documents
+		 */
+		constructor(_amountToTrimForContext, lastMessage) {
+			let timer = new PerformanceTimer()
+			timer.start(`Minisearch index gen`)
+			super(_amountToTrimForContext, lastMessage)
+			this._miniSearch.addAll(this._chunks)
+			timer.stop(`Minisearch index gen`)
+			timer.print()
+		}
+
+		getSectionResults(searchSections) {
+			return searchSections.map((entry) => {
+				let term = entry.term, strength = entry.strength;
+				let performanceTimer = new PerformanceTimer()
+				performanceTimer.start(`Searching: Minisearch`)
+				let docs = this._miniSearch.search(term)
+				performanceTimer.stop(`Searching: Minisearch`)
+				performanceTimer.print()
+				if (docs.length === 0) {
+					return []
+				}
+				let maxScore = docs[0].score
+				return docs.slice(0, this._sectionMaxResults).map(doc => {
+					doc.score *= strength / maxScore
+					return doc
+				})
+			}).flat()
+		}
+
+		getFieldToReduceBy() {
+			return "id"
+		}
+	}
+
+	/**
+	 * Static utility methods for similarity comparisons
+	 */
+	class SimilarityUtils {
+		/**
+		 * Compare message using all the current comparitors, timing how long each takes and printing the results
+		 */
+		static compareSimilarityFunction(lastMessage, valuesToReturn = 3, minRelevance = 0.01, amountToTrimForContext = 0) {
+			let similarityComparitors = [new MinisearchLastMessageSimilarityComparitor(amountToTrimForContext, lastMessage)];
+			let timer = new PerformanceTimer()
+			similarityComparitors.forEach(similarityComparitor => {
+				let comparitorType = similarityComparitor.constructor.name
+				timer.start(`Searching and return results: ${comparitorType}`)
+				let results = similarityComparitor.getTopNAndCullFromParagraphs(similarityComparitor.getLastResponse(), valuesToReturn, minRelevance)
+				timer.stop(`Searching and return results: ${comparitorType}`)
+
+				console.log(`Results for: ${lastMessage} - ${comparitorType}\n-----\n`)
+				results.forEach(r => console.log(`${r.match}: ${r.snippet}`))
+				console.log("\n-----\n\n")
+			})
+			timer.print()
+		}
+
+		/**
+		 * Gets the last response from the AI and yourself
+		 */
+		static getLastResponse() {
+			return new SimilarityComparitor().getLastResponse()
+		}
+
+		/**
+		 * Get the most relevant snippets from memory based on the last response
+		 */
+		static getMemForLastResponse(valuesToReturn = 3, minRelevance = 0.01, amountToTrimForContext = 0, lastMessage = undefined) {
+			// this.compareSimilarityFunction(lastMessage, valuesToReturn, minRelevance, amountToTrimForContext)
+			// return []
+
+			let comparitor = new MinisearchLastMessageSimilarityComparitor(amountToTrimForContext, lastMessage)
+			if (comparitor.getLastResponse() !== "") {
+				let timer = new PerformanceTimer()
+				timer.start("MemRetrieval")
+				let results = comparitor.getTopNAndCullFromParagraphs(comparitor.getLastResponse(), valuesToReturn, minRelevance)
+				timer.stop("MemRetrieval")
+				timer.print()
+				return results
+			}
+			return [];
+		}
+	}
+</script>
+
+<!-- [LTM][END] -->
 
 </html>
