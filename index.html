@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 195;
+	const LITEVER = 196;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -4630,6 +4630,149 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		}
 	}
 
+	//save to indexeddb, but fallback to localstorage
+	function indexeddb_save(objkey, objdatastr)
+	{
+		return new Promise((resolve, reject) => {
+		objdatastr = (objdatastr?String(objdatastr):"");
+		let fallbackSave = function()
+		{
+			localStorage.setItem(STORAGE_PREFIX + objkey, objdatastr);
+			resolve();
+		}
+		const isIndexedDBSupported = !!window.indexedDB;
+		if(!isIndexedDBSupported)
+		{
+			console.log(`IndexedDB not supported! Fallback to localstorage.`);
+			fallbackSave();
+			return;
+		}
+
+		const request = indexedDB.open(STORAGE_PREFIX, 1);
+		request.onerror = function(event)
+		{
+			console.error(`Unable to initialize IndexedDB Database! Fallback to localstorage.`);
+			fallbackSave();
+			return;
+		}
+		request.onupgradeneeded = function(event)
+		{
+			try
+			{
+				const db = event.target.result;
+				if (!db.objectStoreNames.contains(STORAGE_PREFIX)) {
+					db.createObjectStore(STORAGE_PREFIX, { keyPath: "key" });
+				}
+			} catch (error) {
+				console.error("IndexedDB upgrade error, falling back to localstorage:", error);
+				fallbackSave();
+				return;
+			}
+		}
+		request.onsuccess = function(event)
+		{
+			try {
+				const db = event.target.result;
+				const transaction = db.transaction(STORAGE_PREFIX, "readwrite");
+				const store = transaction.objectStore(STORAGE_PREFIX);
+				const storeRequest = store.put({ key: objkey, value: objdatastr });
+
+				storeRequest.onsuccess = function () {
+					localStorage.setItem(STORAGE_PREFIX + objkey, "offload_to_indexeddb"); //indicate its been offloaded
+					resolve();
+				};
+				storeRequest.onerror = function (event) {
+					console.error("StoreRequest failed!");
+					fallbackSave();
+				};
+				transaction.onerror = function (event) {
+					console.error("Transaction failed!");
+					fallbackSave();
+				};
+				transaction.onabort = function (event) {
+					console.error("Transaction aborted!");
+					fallbackSave();
+				};
+			} catch (error) {
+				console.error("IndexedDB error, falling back to localstorage:", error);
+				fallbackSave();
+			}
+		}
+		});
+	}
+	function indexeddb_load(objkey, defaultvalue) //returns a promise that does not reject, and retrieves key value on resolve
+	{
+		return new Promise((resolve, reject) => {
+
+		let fallbackResolveLoad = function() //if indexeddb fails
+		{
+			let fallbackval = localStorage.getItem(STORAGE_PREFIX + objkey, defaultvalue);
+			if(fallbackval=="offload_to_indexeddb") //value was offloaded but we cant read it. return default
+			{
+				resolve(defaultvalue);
+			}
+		}
+
+		const isIndexedDBSupported = !!window.indexedDB;
+		if(!isIndexedDBSupported)
+		{
+			console.log(`IndexedDB not supported! Fallback to localstorage.`);
+			fallbackResolveLoad();
+			return;
+		}
+
+		//if value is not offloaded, return it immediately
+		let testval = localStorage.getItem(STORAGE_PREFIX + objkey, defaultvalue);
+		if(testval!="offload_to_indexeddb")
+		{
+			console.log(`Value not offloaded to indexeddb! Fallback to localstorage.`);
+			resolve(testval);
+			return;
+		}
+
+		const request = indexedDB.open(STORAGE_PREFIX, 1);
+        request.onsuccess = (event) => {
+			const db = event.target.result;
+			const transaction = db.transaction(STORAGE_PREFIX, "readonly");
+			const store = transaction.objectStore(STORAGE_PREFIX);
+            const getRequest = store.get(objkey);
+            getRequest.onsuccess = () => {
+				let res = getRequest.result;
+				if(res){
+					resolve(res.value); //since it was json previously, return it
+				}else{
+					resolve(defaultvalue);
+				}
+			}
+            getRequest.onerror = () =>
+			{
+				console.log(getRequest.error);
+				fallbackResolveLoad();
+			}
+        };
+
+		request.onupgradeneeded = function(event)
+		{
+			try
+			{
+				const db = event.target.result;
+				if (!db.objectStoreNames.contains(STORAGE_PREFIX)) {
+					db.createObjectStore(STORAGE_PREFIX, { keyPath: "key" });
+				}
+			} catch (error) {
+				console.error("IndexedDB upgrade error, falling back to localstorage:", error);
+				fallbackResolveLoad();
+			}
+		}
+
+      	request.onerror = function(event)
+		{
+			console.error(`Unable to initialize IndexedDB Database! Fallback to localstorage.`);
+			fallbackResolveLoad();
+		}
+    	});
+	}
+
 	//attempt to load settings
 	function init() {
 
@@ -4727,12 +4870,61 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 			}
 		}
 
-		console.log("Init started");
+		//poke speech synth to preload voices
+		if ('speechSynthesis' in window) {
+			let voices = window.speechSynthesis.getVoices();
+			console.log("Voices loading...");
+		}
+
+		//setup drag and drop zone for files
+		setupDragDrop();
+
+		//fix for iphone zooming
+		if(navigator.userAgent.indexOf('iPhone') > -1 )
+		{
+			document.querySelector('meta[name="viewport"]')
+			.setAttribute("content","width=device-width, initial-scale=1, maximum-scale=1");
+		}
+
+		//fix for copy paste text in firefox, and also to prevent pasting rich text
+		document.getElementById("gametext").addEventListener("paste", function(e) {
+			e.preventDefault();
+
+			let text = e.clipboardData
+			? (e.originalEvent || e).clipboardData.getData('text/plain')
+			: // For IE
+			window.clipboardData
+			? window.clipboardData.getData('Text')
+			: '';
+
+			let elem = document.getElementById("gametext")
+			let selection = window.getSelection();
+			let fullySelected = (elem.innerText!="" && selection.toString() === elem.innerText);
+			if(fullySelected || elem.innerText.trim()=="")
+			{
+				document.execCommand('selectAll', false, null);
+				document.execCommand('insertText', false, "");
+				elem.innerHTML = "";
+			}
+
+			text = escapeHtml(text);
+			text = text.replace(/\r?\n/g, '<br>');
+			document.execCommand("insertHTML", false, text);
+		});
+
+
+		console.log("Load autosaves started");
 		let loadok = false;
-		try {
-			let loadedsettingsjson = localStorage.getItem(STORAGE_PREFIX + "settings");
-			let loadedstorycompressed = localStorage.getItem(STORAGE_PREFIX + "story");
-			let loadedbackgroundimg = localStorage.getItem(STORAGE_PREFIX + "bgimg");
+
+		//load all autosave data from indexeddb
+		Promise.all([
+			indexeddb_load("settings",""),
+			indexeddb_load("story",""),
+			indexeddb_load("bgimg",""),
+			indexeddb_load("savedcustomcss",""),
+		]).then(([loadedsettingsjson, loadedstorycompressed, loadedbackgroundimg, currcss]) => {
+		try
+		{
 			if (loadedsettingsjson != null && loadedsettingsjson != "" && loadedstorycompressed != null && loadedstorycompressed != "") {
 				let loadedsettings = JSON.parse(loadedsettingsjson);
 				//see if persist is enabled
@@ -4775,7 +4967,6 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 			update_toggle_lightmode(false); //load theme but dont save or toggle it
 
 			//load custom css
-			let currcss = localStorage.getItem(STORAGE_PREFIX + "savedcustomcss", "");
 			let resetcss = urlParams.get('resetcss');
 			if(currcss!="" && !resetcss)
 			{
@@ -4787,7 +4978,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 			else if(resetcss)
 			{
 				console.log("Custom CSS reset.")
-				localStorage.setItem(STORAGE_PREFIX + "savedcustomcss", "");
+				indexeddb_save("savedcustomcss", "");
 				window.history.replaceState(null, null, window.location.pathname);
 			}
 
@@ -4795,7 +4986,6 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 			console.log("Discarded invalid local save: " + e);
 			loadok = false;
 		}
-
 
 		if(!loadok && !localflag && selected_models.length==0 && !is_using_custom_ep()) //nothing was loaded. this is a brand new state, in web lite
 		{
@@ -4846,12 +5036,6 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		//invert colors
 		toggle_invert_colors();
 
-		//poke speech synth to preload voices
-		if ('speechSynthesis' in window) {
-			let voices = window.speechSynthesis.getVoices();
-			console.log("Voices loading...");
-		}
-
 		//start the polling script for async generation status checking every Xs
 		setInterval(poll_pending_response, poll_interval_base_text);
 		setInterval(poll_image_db, poll_interval_base_img); //check images every Xs
@@ -4875,46 +5059,11 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 			});
 		}
 
-		//setup drag and drop zone for files
-		setupDragDrop();
-
-		//setup customization UI functionality
+		//setup customization aesthetic UI functionality
 		initializeInstructUIFunctionality();
 
-		//fix for iphone zooming
-		if(navigator.userAgent.indexOf('iPhone') > -1 )
-		{
-			document.querySelector('meta[name="viewport"]')
-			.setAttribute("content","width=device-width, initial-scale=1, maximum-scale=1");
-		}
+		});
 
-		//fix for copy paste text in firefox, and also to prevent pasting rich text
-		{
-			document.getElementById("gametext").addEventListener("paste", function(e) {
-				e.preventDefault();
-
-				let text = e.clipboardData
-				? (e.originalEvent || e).clipboardData.getData('text/plain')
-				: // For IE
-				window.clipboardData
-				? window.clipboardData.getData('Text')
-				: '';
-
-				let elem = document.getElementById("gametext")
-				let selection = window.getSelection();
-				let fullySelected = (elem.innerText!="" && selection.toString() === elem.innerText);
-				if(fullySelected || elem.innerText.trim()=="")
-				{
-					document.execCommand('selectAll', false, null);
-  					document.execCommand('insertText', false, "");
-					elem.innerHTML = "";
-				}
-
-				text = escapeHtml(text);
-				text = text.replace(/\r?\n/g, '<br>');
-				document.execCommand("insertHTML", false, text);
-			});
-		}
 	}
 
 	function setupDragDrop()
@@ -5798,16 +5947,17 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		console.log("Autosave Start: ", story);
 		(function retry_autosave(json) {
 			lz_c.compress(json, 1, function(res) {
-				console.log("Autosave Done");
 				let compressedstory = buf_to_b64(res);
-				localStorage.setItem(STORAGE_PREFIX + "story", compressedstory);
-				let newer = pending_storyjson_autosave;
-				if (newer && newer !== json) {
-					console.log("Updating Autosave");
-					retry_autosave(newer);
-				}else{
-					pending_storyjson_autosave = null;
-				}
+				indexeddb_save("story",compressedstory).then(()=>{
+					console.log("Autosave Done");
+					let newer = pending_storyjson_autosave;
+					if (newer && newer !== json) {
+						console.log("Updating Autosave");
+						retry_autosave(newer);
+					}else{
+						pending_storyjson_autosave = null;
+					}
+				});
 			});
 		})(storyjson);
 	}
@@ -6042,7 +6192,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 				document.getElementById("gamescreen").classList.add("translucentbg");
 				document.getElementById("enhancedchatinterface").classList.add("transparentbg");
 				document.getElementById("enhancedchatinterface_inner").classList.add("transparentbg");
-				localStorage.setItem(STORAGE_PREFIX + "bgimg", compressedImageURI);
+				indexeddb_save("bgimg", compressedImageURI);
 			}, true, false, 1024, 0.5);
 		}
 	};
@@ -6052,7 +6202,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		document.getElementById("gamescreen").classList.remove("translucentbg");
 		document.getElementById("enhancedchatinterface").classList.remove("transparentbg");
 		document.getElementById("enhancedchatinterface_inner").classList.remove("transparentbg");
-		localStorage.setItem(STORAGE_PREFIX + "bgimg", "");
+		indexeddb_save("bgimg", "");
 	}
 
 	function load_file_button()
@@ -6320,7 +6470,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 						compressImage(data, (compressedImageURI, aspectratio)=>{
 							aestheticInstructUISettings.AI_portrait = compressedImageURI;
 							document.getElementById('portrait_ratio_AI').value = aspectratio.toFixed(2);
-							refreshPreview(true);
+							refreshAestheticPreview(true);
 							render_gametext();
 						}, true);
 					}
@@ -7645,7 +7795,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		if (temp_scenario.image && temp_scenario.image != "") {
 			aestheticInstructUISettings.AI_portrait = temp_scenario.image;
 			document.getElementById('portrait_ratio_AI').value = (temp_scenario.image_aspect?temp_scenario.image_aspect:1).toFixed(2);
-			refreshPreview(true);
+			refreshAestheticPreview(true);
 		}
 		if (temp_scenario.worldinfo && temp_scenario.worldinfo.length > 0) {
 			current_wi = temp_scenario.worldinfo;
@@ -9152,278 +9302,274 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 				custom_kobold_endpoint = desiredkoboldendpoint;
 				custom_kobold_key = desiredkoboldkey;
 
-				let urls1 = [
-					apply_proxy_url(desiredkoboldendpoint + kobold_custom_mdl_endpoint),
-				];
+				let fetchedurl = apply_proxy_url(desiredkoboldendpoint + kobold_custom_mdl_endpoint);
+				fetch(fetchedurl,{
+					method: 'GET',
+					headers: get_kobold_header(),
+				})
+				.then(response => response.json())
+				.then(values => {
+					console.log(values);
+					let mdlname = values[0].result;
+					if (!mdlname) {
+						msgbox("Error at Custom KoboldAI Endpoint!<br><br>The custom endpoint failed to respond correctly.<br><br>You may wish to <a href='#' class='color_blueurl' onclick='hide_popups();display_endpoint_container();'>try a different URL or API type</a>.","Error Encountered",true);
 
-				Promise.all(urls1.map(url => fetch(url,{
-						method: 'GET',
-						headers: get_kobold_header(),
-					})
-					.then(response => response.json())))
-					.then(values => {
-						console.log(values);
-						let mdlname = values[0].result;
-						if (!mdlname) {
-							msgbox("Error at Custom KoboldAI Endpoint!<br><br>The custom endpoint failed to respond correctly.<br><br>You may wish to <a href='#' class='color_blueurl' onclick='hide_popups();display_endpoint_container();'>try a different URL or API type</a>.","Error Encountered",true);
-
-							selected_models = [];
-							selected_workers = [];
-							custom_kobold_endpoint = "";
-							render_gametext();
-						} else if (mdlname == "ReadOnly") {
-							msgbox("The custom endpoint is working, but no model was loaded.\n\nPlease select and load a model and try again.");
-							selected_models = [];
-							selected_workers = [];
-							custom_kobold_endpoint = "";
-							render_gametext();
-						} else {
-
-							//good to go
-							custom_kobold_endpoint = desiredkoboldendpoint;
-							custom_kobold_key = desiredkoboldkey;
-							localsettings.saved_kai_addr = custom_kobold_endpoint;
-							localsettings.saved_kai_key = custom_kobold_key;
-							selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": mdlname, "count": 1 }];
-							selected_workers = [];
-							if (perfdata == null) {
-								//generate some fake perf data if horde is offline and using custom endpoint
-								perfdata = {
-									"queued_requests": 0,
-									"queued_tokens": 0,
-									"past_minute_tokens": 0,
-									"worker_count": 0
-								};
-								document.body.classList.add("connected");
-								document.getElementById("connectstatus").classList.add("color_offwhite");
-							}
-							document.getElementById("connectstatus").innerHTML = "KoboldAI Endpoint";
-							render_gametext();
-
-							{
-								//now we get the version number, however this is optional
-								//if it fails we can still proceed
-								fetch(apply_proxy_url(desiredkoboldendpoint + kobold_custom_version_endpoint),
-								{
-									method: 'GET',
-									headers: get_kobold_header(),
-								})
-								.then(response => response.json())
-								.then(values2 => {
-									console.log(values2);
-									let ep_version = values2.result;
-									kobold_endpoint_version = (ep_version?ep_version:"");
-								}).catch(error => {
-									console.log("Failed to get KAI version number: " + error);
-								});
-
-								//also get max ctx supported
-								fetch(apply_proxy_url(desiredkoboldendpoint + kobold_custom_maxctxlen_endpoint),
-								{
-									method: 'GET',
-									headers: get_kobold_header(),
-								})
-								.then(response => response.json())
-								.then(values3 => {
-									console.log(values3);
-									let ep_maxctx = values3.value;
-									if(ep_maxctx && ep_maxctx>document.getElementById("max_context_length_slide").max)
-									{
-										document.getElementById("max_context_length_slide").max = ep_maxctx;
-										document.getElementById("max_context_length_slide_label").innerText = ep_maxctx;
-									}
-								}).catch(error => {
-									console.log("Failed to get KAI max ctx: " + error);
-								});
-
-							}
-
-							//allow kcpp version check for remote endpoints too
-							{
-								//for local mode, check if we are using koboldcpp, if so we can use streaming if permitted by version
-								fetch(apply_proxy_url(desiredkoboldendpoint + koboldcpp_version_endpoint),
-								{
-									method: 'GET',
-									headers: get_kobold_header(),
-								})
-								.then(x => x.json())
-								.then(data => {
-									if(data && data!="" && data.version && data.version!="")
-									{
-										koboldcpp_version_obj = data;
-										koboldcpp_version = data.version;
-										console.log("KoboldCpp Detected: " + koboldcpp_version);
-										document.getElementById("connectstatus").innerHTML = (`<span style='cursor: pointer;' onclick='fetch_koboldcpp_perf()'>KoboldCpp ${koboldcpp_version}</a>`);
-										koboldcpp_has_vision = (data.vision?true:false);
-										koboldcpp_has_whisper = (data.transcribe?true:false);
-										koboldcpp_has_multiplayer = (data.multiplayer?true:false);
-										let has_password = (data.protected?true:false);
-										let has_txt2img = (data.txt2img?true:false);
-										let no_txt_model = (mdlname=="inactive");
-
-										//also check against kcpp's max true context length
-										fetch(apply_proxy_url(desiredkoboldendpoint + koboldcpp_truemaxctxlen_endpoint),
-										{
-											method: 'GET',
-											headers: get_kobold_header(),
-										})
-										.then(response => response.json())
-										.then(values4 => {
-											console.log(values4);
-											let ep_maxctx = values4.value;
-											if(ep_maxctx && ep_maxctx>document.getElementById("max_context_length_slide").max)
-											{
-												document.getElementById("max_context_length_slide").max = ep_maxctx;
-												document.getElementById("max_context_length_slide_label").innerText = ep_maxctx;
-											}
-											if(localflag && localsettings.max_context_length==4096 && ep_maxctx>4096)
-											{
-												localsettings.max_context_length = ep_maxctx;
-											}
-										}).catch(error => {
-											console.log("Failed to get true max ctx: " + error);
-										});
-
-										//and check if there's a kcpp savefile preloaded
-										fetch(apply_proxy_url(desiredkoboldendpoint + koboldcpp_preloadstory_endpoint),
-										{
-											method: 'GET',
-											headers: get_kobold_header(),
-										})
-										.then(response => response.json())
-										.then(values5 => {
-											let tmpstory = values5;
-											if(is_kai_json(tmpstory))
-											{
-												if (localsettings.persist_session && !safe_to_overwrite()) {
-													console.log("Preload story: Unsafe to overwrite");
-												} else {
-													close_welcome_panel(false);
-													kai_json_load(tmpstory, false);
-												}
-											}else{
-												if(koboldcpp_has_multiplayer)
-												{
-													//force refresh
-													render_gametext(false);
-												}
-											}
-										}).catch(error => {
-											console.log("Failed to get preloaded story: " + error);
-										});
-
-										//check if image gen is supported
-										fetch(apply_proxy_url(desiredkoboldendpoint + a1111_models_endpoint))
-										.then(response => response.json())
-										.then(values6 => {
-											console.log(values6);
-											if(values6 && values6.length>0 && values6[0].model_name!="inactive" && values6[0].filename!=null)
-											{
-												let firstitem = values6[0];
-												//local image gen is available
-												if(localsettings.generate_images_mode==0)
-												{
-													console.log("Connect to KoboldCpp Image Gen");
-													localsettings.generate_images_mode = 2;
-													localsettings.saved_a1111_url = desiredkoboldendpoint;
-													connect_to_a1111(true);
-													render_gametext(true);
-												}
-											}
-											else
-											{
-												//hide the add img if the image server is down
-												if(localsettings.generate_images_mode==2 && localsettings.saved_a1111_url==desiredkoboldendpoint)
-												{
-													localsettings.generate_images_mode = 0;
-													localsettings.saved_a1111_url = default_a1111_base
-													render_gametext(true);
-												}
-											}
-
-										}).catch(error => {
-											console.log("Failed to get local image models: " + error);
-										});
-
-										//prompt to request password for kcpp
-										if(localflag && has_password && !localmodekey)
-										{
-											console.log("Password protection detected. Prompting for password...");
-											inputBox("This KoboldCpp instance may be password protected.\nPlease input password:","API Key Required",localsettings.saved_kai_key,"(Input API Key)", ()=>{
-												let userinput = getInputBoxValue();
-												userinput = userinput.trim();
-												if (userinput != null && userinput!="") {
-													custom_kobold_key = document.getElementById("customkoboldkey").value = localmodekey = localsettings.saved_kai_key = userinput.trim();
-													update_custom_kobold_endpoint_model_display(true);
-												}
-											},false,false,true);
-										}
-										else if(localflag && has_txt2img && no_txt_model && safe_to_overwrite())
-										{
-											msgboxYesNo("This KoboldCpp instance seems to be running an Image Generation model without any Text Generation model loaded.\n\nWould you like to launch StableUI (Dedicated Image Generation WebUI bundled with KoboldCpp)?\n\nIf unsure, select 'No'.","Launch StableUI?", ()=>{
-												go_to_stableui();
-											},()=>{
-											});
-										}
-										else if(localflag && no_txt_model && !has_txt2img && !koboldcpp_has_vision && !koboldcpp_has_whisper)
-										{
-											msgboxYesNo("This KoboldCpp instance has no models loaded. You can still use the WebUI to edit or view existing stories.<br><br>Would you like to connect to an external API service?","No Models Loaded",
-											()=>{
-												localflag = false;
-												hide_popups();
-												restore_endpoint_dropdowns();
-												document.getElementById("customapidropdown").value = "1";
-												render_gametext(false);
-												display_endpoint_container();
-											},()=>{},true);
-										}
-
-									}else{
-										console.log("Unknown KoboldCpp Check Response: " + data);
-									}
-								}).catch((error) => {
-									console.log("Not using KoboldCpp");
-								});
-							}
+						selected_models = [];
+						selected_workers = [];
+						custom_kobold_endpoint = "";
+						render_gametext();
+					} else if (mdlname == "ReadOnly") {
+						msgbox("The custom endpoint is working, but no model was loaded.\n\nPlease select and load a model and try again.");
+						selected_models = [];
+						selected_workers = [];
+						custom_kobold_endpoint = "";
+						render_gametext();
+					} else {
+						//good to go
+						custom_kobold_endpoint = desiredkoboldendpoint;
+						custom_kobold_key = desiredkoboldkey;
+						localsettings.saved_kai_addr = custom_kobold_endpoint;
+						localsettings.saved_kai_key = custom_kobold_key;
+						selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": mdlname, "count": 1 }];
+						selected_workers = [];
+						if (perfdata == null) {
+							//generate some fake perf data if horde is offline and using custom endpoint
+							perfdata = {
+								"queued_requests": 0,
+								"queued_tokens": 0,
+								"past_minute_tokens": 0,
+								"worker_count": 0
+							};
+							document.body.classList.add("connected");
+							document.getElementById("connectstatus").classList.add("color_offwhite");
 						}
-					})
-					.catch(error => {
+						document.getElementById("connectstatus").innerHTML = "KoboldAI Endpoint";
+						render_gametext();
 
-						//on first error, do not give up, switch to cors proxy and try again.
-						//if it still fails, then show error
-						console.log("Error: " + error);
+						{
+							//now we get the version number, however this is optional
+							//if it fails we can still proceed
+							fetch(apply_proxy_url(desiredkoboldendpoint + kobold_custom_version_endpoint),
+							{
+								method: 'GET',
+								headers: get_kobold_header(),
+							})
+							.then(response => response.json())
+							.then(values2 => {
+								console.log(values2);
+								let ep_version = values2.result;
+								kobold_endpoint_version = (ep_version?ep_version:"");
+							}).catch(error => {
+								console.log("Failed to get KAI version number: " + error);
+							});
 
-						let is_local = is_local_url(custom_kobold_endpoint);
-
-						if (uses_cors_proxy || is_local) {
-							if(is_local && sublocalpathname!="")
+							//also get max ctx supported
+							fetch(apply_proxy_url(desiredkoboldendpoint + kobold_custom_maxctxlen_endpoint),
 							{
-								sublocalpathname = ""; //one more try
-								attempt_connect(false);
-							}
-							else if(is_local && reattempt_local_port80)
-							{
-								reattempt_local_port80 = false;
-								localmodeport = 80;
-								attempt_connect(false);
-							}
-							else
-							{
-								msgbox("Failed to connect to Custom KoboldAI Endpoint!<br><br>Please check if KoboldAI is running at the url: " + desiredkoboldendpoint + "<br><br>You can also <a href='#' class='color_blueurl' onclick='hide_popups();display_endpoint_container();'>try a different URL or API type</a>.","Error Encountered",true);
-								selected_models = [];
-								selected_workers = [];
-								custom_kobold_endpoint = "";
-								if(localflag)
+								method: 'GET',
+								headers: get_kobold_header(),
+							})
+							.then(response => response.json())
+							.then(values3 => {
+								console.log(values3);
+								let ep_maxctx = values3.value;
+								if(ep_maxctx && ep_maxctx>document.getElementById("max_context_length_slide").max)
 								{
-									document.getElementById("connectstatus").innerHTML = "Offline Mode";
+									document.getElementById("max_context_length_slide").max = ep_maxctx;
+									document.getElementById("max_context_length_slide_label").innerText = ep_maxctx;
 								}
-								render_gametext();
-							}
-						} else {
-							uses_cors_proxy = true; //fallback to cors proxy, this will remain for rest of session
-							connect_custom_endpoint(); //one more try
+							}).catch(error => {
+								console.log("Failed to get KAI max ctx: " + error);
+							});
+
 						}
-					});
+
+						//allow kcpp version check for remote endpoints too
+						{
+							//for local mode, check if we are using koboldcpp, if so we can use streaming if permitted by version
+							fetch(apply_proxy_url(desiredkoboldendpoint + koboldcpp_version_endpoint),
+							{
+								method: 'GET',
+								headers: get_kobold_header(),
+							})
+							.then(x => x.json())
+							.then(data => {
+								if(data && data!="" && data.version && data.version!="")
+								{
+									koboldcpp_version_obj = data;
+									koboldcpp_version = data.version;
+									console.log("KoboldCpp Detected: " + koboldcpp_version);
+									document.getElementById("connectstatus").innerHTML = (`<span style='cursor: pointer;' onclick='fetch_koboldcpp_perf()'>KoboldCpp ${koboldcpp_version}</a>`);
+									koboldcpp_has_vision = (data.vision?true:false);
+									koboldcpp_has_whisper = (data.transcribe?true:false);
+									koboldcpp_has_multiplayer = (data.multiplayer?true:false);
+									let has_password = (data.protected?true:false);
+									let has_txt2img = (data.txt2img?true:false);
+									let no_txt_model = (mdlname=="inactive");
+
+									//also check against kcpp's max true context length
+									fetch(apply_proxy_url(desiredkoboldendpoint + koboldcpp_truemaxctxlen_endpoint),
+									{
+										method: 'GET',
+										headers: get_kobold_header(),
+									})
+									.then(response => response.json())
+									.then(values4 => {
+										console.log(values4);
+										let ep_maxctx = values4.value;
+										if(ep_maxctx && ep_maxctx>document.getElementById("max_context_length_slide").max)
+										{
+											document.getElementById("max_context_length_slide").max = ep_maxctx;
+											document.getElementById("max_context_length_slide_label").innerText = ep_maxctx;
+										}
+										if(localflag && localsettings.max_context_length==4096 && ep_maxctx>4096)
+										{
+											localsettings.max_context_length = ep_maxctx;
+										}
+									}).catch(error => {
+										console.log("Failed to get true max ctx: " + error);
+									});
+
+									//and check if there's a kcpp savefile preloaded
+									fetch(apply_proxy_url(desiredkoboldendpoint + koboldcpp_preloadstory_endpoint),
+									{
+										method: 'GET',
+										headers: get_kobold_header(),
+									})
+									.then(response => response.json())
+									.then(values5 => {
+										let tmpstory = values5;
+										if(is_kai_json(tmpstory))
+										{
+											if (localsettings.persist_session && !safe_to_overwrite()) {
+												console.log("Preload story: Unsafe to overwrite");
+											} else {
+												close_welcome_panel(false);
+												kai_json_load(tmpstory, false);
+											}
+										}else{
+											if(koboldcpp_has_multiplayer)
+											{
+												//force refresh
+												render_gametext(false);
+											}
+										}
+									}).catch(error => {
+										console.log("Failed to get preloaded story: " + error);
+									});
+
+									//check if image gen is supported
+									fetch(apply_proxy_url(desiredkoboldendpoint + a1111_models_endpoint))
+									.then(response => response.json())
+									.then(values6 => {
+										console.log(values6);
+										if(values6 && values6.length>0 && values6[0].model_name!="inactive" && values6[0].filename!=null)
+										{
+											let firstitem = values6[0];
+											//local image gen is available
+											if(localsettings.generate_images_mode==0)
+											{
+												console.log("Connect to KoboldCpp Image Gen");
+												localsettings.generate_images_mode = 2;
+												localsettings.saved_a1111_url = desiredkoboldendpoint;
+												connect_to_a1111(true);
+												render_gametext(true);
+											}
+										}
+										else
+										{
+											//hide the add img if the image server is down
+											if(localsettings.generate_images_mode==2 && localsettings.saved_a1111_url==desiredkoboldendpoint)
+											{
+												localsettings.generate_images_mode = 0;
+												localsettings.saved_a1111_url = default_a1111_base
+												render_gametext(true);
+											}
+										}
+
+									}).catch(error => {
+										console.log("Failed to get local image models: " + error);
+									});
+
+									//prompt to request password for kcpp
+									if(localflag && has_password && !localmodekey)
+									{
+										console.log("Password protection detected. Prompting for password...");
+										inputBox("This KoboldCpp instance may be password protected.\nPlease input password:","API Key Required",localsettings.saved_kai_key,"(Input API Key)", ()=>{
+											let userinput = getInputBoxValue();
+											userinput = userinput.trim();
+											if (userinput != null && userinput!="") {
+												custom_kobold_key = document.getElementById("customkoboldkey").value = localmodekey = localsettings.saved_kai_key = userinput.trim();
+												update_custom_kobold_endpoint_model_display(true);
+											}
+										},false,false,true);
+									}
+									else if(localflag && has_txt2img && no_txt_model && safe_to_overwrite())
+									{
+										msgboxYesNo("This KoboldCpp instance seems to be running an Image Generation model without any Text Generation model loaded.\n\nWould you like to launch StableUI (Dedicated Image Generation WebUI bundled with KoboldCpp)?\n\nIf unsure, select 'No'.","Launch StableUI?", ()=>{
+											go_to_stableui();
+										},()=>{
+										});
+									}
+									else if(localflag && no_txt_model && !has_txt2img && !koboldcpp_has_vision && !koboldcpp_has_whisper)
+									{
+										msgboxYesNo("This KoboldCpp instance has no models loaded. You can still use the WebUI to edit or view existing stories.<br><br>Would you like to connect to an external API service?","No Models Loaded",
+										()=>{
+											localflag = false;
+											hide_popups();
+											restore_endpoint_dropdowns();
+											document.getElementById("customapidropdown").value = "1";
+											render_gametext(false);
+											display_endpoint_container();
+										},()=>{},true);
+									}
+
+								}else{
+									console.log("Unknown KoboldCpp Check Response: " + data);
+								}
+							}).catch((error) => {
+								console.log("Not using KoboldCpp");
+							});
+						}
+					}
+				})
+				.catch(error => {
+
+					//on first error, do not give up, switch to cors proxy and try again.
+					//if it still fails, then show error
+					console.log("Error: " + error);
+
+					let is_local = is_local_url(custom_kobold_endpoint);
+
+					if (uses_cors_proxy || is_local) {
+						if(is_local && sublocalpathname!="")
+						{
+							sublocalpathname = ""; //one more try
+							attempt_connect(false);
+						}
+						else if(is_local && reattempt_local_port80)
+						{
+							reattempt_local_port80 = false;
+							localmodeport = 80;
+							attempt_connect(false);
+						}
+						else
+						{
+							msgbox("Failed to connect to Custom KoboldAI Endpoint!<br><br>Please check if KoboldAI is running at the url: " + desiredkoboldendpoint + "<br><br>You can also <a href='#' class='color_blueurl' onclick='hide_popups();display_endpoint_container();'>try a different URL or API type</a>.","Error Encountered",true);
+							selected_models = [];
+							selected_workers = [];
+							custom_kobold_endpoint = "";
+							if(localflag)
+							{
+								document.getElementById("connectstatus").innerHTML = "Offline Mode";
+							}
+							render_gametext();
+						}
+					} else {
+						uses_cors_proxy = true; //fallback to cors proxy, this will remain for rest of session
+						connect_custom_endpoint(); //one more try
+					}
+				});
 			}
 		}
 		else if(epchoice==2 || epchoice==3 || epchoice==7 || epchoice==8 || epchoice==9) //connect to OAI / OpenRouter / MistralAI / Featherless / Grok Endpoint
@@ -9629,23 +9775,27 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		mainmenu_untab(true);
 		document.getElementById("saveloadcontainer").classList.remove("hidden");
 
-		let filetable = ``;
-
-		let entry = `<div style="display:flex">
-				<button type="button" style="font-size:12px; margin:2px;width:33%" name="localsave" class="btn btn-primary" onclick="hide_popups();save_file_button()">`+"💾<br>Download File"+`</button>
-				<button type="button" style="font-size:12px; margin:2px;width:33%" name="localload" class="btn btn-primary" onclick="hide_popups();load_file_button()">`+"📁<br>Open File"+`</button>
-				<button type="button" style="font-size:12px; margin:2px;width:34%" name="shareurl" class="btn btn-primary" onclick="hide_popups();share_story_button()">`+"🌐<br>Share"+`</button>
-				</div>
-				<div style="margin-top:3px; text-align: center; align-self: center; width: calc(100% - 184px);">
-				<span style="font-weight:bold;text-decoration: underline;">Temporary Browser Storage</span>
-				</div>`;
-		filetable += entry;
-
-		try
+		let slotpromises = [];
+		for(let i=0;i<SAVE_SLOTS;++i)
 		{
-			for(let i=0;i<SAVE_SLOTS;++i)
+			slotpromises.push(indexeddb_load("slot_"+i+"_meta",""));
+		}
+		Promise.all(slotpromises).then(slotlabels=>
+		{
+			let filetable = ``;
+			let entry = `<div style="display:flex">
+					<button type="button" style="font-size:12px; margin:2px;width:33%" name="localsave" class="btn btn-primary" onclick="hide_popups();save_file_button()">`+"💾<br>Download File"+`</button>
+					<button type="button" style="font-size:12px; margin:2px;width:33%" name="localload" class="btn btn-primary" onclick="hide_popups();load_file_button()">`+"📁<br>Open File"+`</button>
+					<button type="button" style="font-size:12px; margin:2px;width:34%" name="shareurl" class="btn btn-primary" onclick="hide_popups();share_story_button()">`+"🌐<br>Share"+`</button>
+					</div>
+					<div style="margin-top:3px; text-align: center; align-self: center; width: calc(100% - 184px);">
+					<span style="font-weight:bold;text-decoration: underline;">Temporary Browser Storage</span>
+					</div>`;
+			filetable += entry;
+
+			for(let i=0;i<slotlabels.length;++i)
 			{
-				let testslot = localStorage.getItem(STORAGE_PREFIX + "slot_"+i+"_meta");
+				let testslot = slotlabels[i];
 				let lbl = (i+1);
 				entry = `<div style="display:flex; height:42px;">
 					<div style="margin:3px; text-align: center; align-self: center; width: calc(100% - 184px);">
@@ -9659,88 +9809,81 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 					</div></div>`;
 				filetable += entry;
 			}
-
 			populate_corpo_leftpanel();
-		} catch (e) {
-			console.log("get slots failed: " + e);
-		}
-		document.getElementById("saveloadentries").innerHTML = filetable;
+			document.getElementById("saveloadentries").innerHTML = filetable;
+		});
 	}
 	function save_to_slot(slot)
 	{
 		let defaultsavename = (localsettings.opmode==1?"Untitled Story":(localsettings.opmode==2?"Untitled Adventure":(localsettings.opmode==3?"Untitled Chat":"Untitled Instruct")));
 		let savename = defaultsavename + " " + new Date().toLocaleString();
 		let slotnumshown = (slot+1);
-		let testslot = localStorage.getItem(STORAGE_PREFIX + "slot_"+slot+"_meta");
-		if(testslot)
-		{
-			savename = testslot;
-		}
-		let newcompressedstory = generate_compressed_story(true,true,true);
+		indexeddb_load("slot_"+slot+"_meta","").then(testslot=>{
+			if (testslot) {
+				savename = testslot;
+			}
+			let newcompressedstory = generate_compressed_story(true, true, true);
 
-		const slotwrite = function()
-		{
-			warn_on_quit = false;
-			inputBox("Enter a label for this Browser Storage Slot data","Enter a label",savename,defaultsavename,()=>{
-				let userinput = getInputBoxValue();
-				if(userinput.trim()=="")
-				{
-					userinput = defaultsavename;
-				}
-				localStorage.setItem(STORAGE_PREFIX + "slot_"+slot+"_data", newcompressedstory);
-				localStorage.setItem(STORAGE_PREFIX + "slot_"+slot+"_meta", userinput);
-				display_saveloadcontainer();
-			});
-		}
+			const slotwrite = function () {
+				warn_on_quit = false;
+				inputBox("Enter a label for this Browser Storage Slot data", "Enter a label", savename, defaultsavename, () => {
+					let userinput = getInputBoxValue();
+					if (userinput.trim() == "") {
+						userinput = defaultsavename;
+					}
+					indexeddb_save("slot_" + slot + "_data", newcompressedstory)
+					indexeddb_save("slot_" + slot + "_meta", userinput).then(()=>{display_saveloadcontainer()});
+				});
+			}
 
-		if(testslot)
-		{
-			msgboxYesNo("Overwrite existing story in Browser Storage Slot "+slotnumshown+"?","Overwrite Storage Slot "+slotnumshown,()=>{
+			if (testslot) {
+				msgboxYesNo("Overwrite existing story in Browser Storage Slot " + slotnumshown + "?", "Overwrite Storage Slot " + slotnumshown, () => {
+					slotwrite();
+				}, null);
+			}
+			else {
 				slotwrite();
-			},null);
-		}else{
-			slotwrite();
-		}
-
-
+			}
+		});
 	}
 	function load_from_slot(slot)
 	{
-		let loadedstorycompressed = localStorage.getItem(STORAGE_PREFIX + "slot_"+slot+"_data");
-		if(loadedstorycompressed)
-		{
-			hide_popups();
-			import_compressed_story(loadedstorycompressed,false);
-		}else{
-			msgbox("Unable to load story from browser storage","Browser Storage Load Failed");
-		}
+		indexeddb_load("slot_"+slot+"_data","").then(loadedstorycompressed=>{
+			if(loadedstorycompressed)
+			{
+				hide_popups();
+				import_compressed_story(loadedstorycompressed,false);
+			}else{
+				msgbox("Unable to load story from browser storage","Browser Storage Load Failed");
+			}
+		});
 	}
 	function download_from_slot(slot)
 	{
-		let loadedstorycompressed = localStorage.getItem(STORAGE_PREFIX + "slot_"+slot+"_data");
-		if(loadedstorycompressed)
-		{
-			tempfileobj = decompress_story(loadedstorycompressed);
-			if(tempfileobj)
+		indexeddb_load("slot_"+slot+"_data","").then(loadedstorycompressed=>{
+			if(loadedstorycompressed)
 			{
-				save_file_button(true);
+				tempfileobj = decompress_story(loadedstorycompressed);
+				if(tempfileobj)
+				{
+					save_file_button(true);
+				}
+				else
+				{
+					tempfileobj = generate_base_storyobj();
+					msgbox("Story could not be downloaded. Try loading it first.","Browser Storage Load Failed");
+				}
+			}else{
+				msgbox("Unable to load story from browser storage","Browser Storage Load Failed");
 			}
-			else
-			{
-				tempfileobj = generate_base_storyobj();
-				msgbox("Story could not be downloaded. Try loading it first.","Browser Storage Load Failed");
-			}
-		}else{
-			msgbox("Unable to load story from browser storage","Browser Storage Load Failed");
-		}
+		});
 	}
 	function delete_from_slot(slot)
 	{
 		let slotnumshown = (slot+1);
 		msgboxYesNo("Delete story in Browser Storage Slot "+slotnumshown+"?","Delete Storage Slot "+slotnumshown,()=>{
-			localStorage.setItem(STORAGE_PREFIX + "slot_"+slot+"_data", "");
-			localStorage.setItem(STORAGE_PREFIX + "slot_"+slot+"_meta", "");
-			display_saveloadcontainer();
+			indexeddb_save("slot_"+slot+"_data", "");
+			indexeddb_save("slot_"+slot+"_meta", "").then(()=>{display_saveloadcontainer()});
 		},()=>{
 			display_saveloadcontainer();
 		});
@@ -11273,19 +11416,20 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 	}
 	function apply_user_mod()
 	{
-		let currmod = localStorage.getItem(STORAGE_PREFIX + "savedusermod", "");
-		inputBoxOkCancel("Here, you can apply third-party mod scripts shared by other users.<br><br><span class='color_red'>Caution: This mod will have full access to your story and API keys, so only run third-party mods that you trust! For security, mods must always be manually applied every time.</span><br><br>Want to start modding? <a href='#' class='color_blueurl' onclick='simplemodexample()'>Click here</a> to load a simple example mod.","Apply Third-Party Mod",currmod,"Paste Mod Script Here",()=>{
+		indexeddb_load("savedusermod","").then(currmod=>{
+			inputBoxOkCancel("Here, you can apply third-party mod scripts shared by other users.<br><br><span class='color_red'>Caution: This mod will have full access to your story and API keys, so only run third-party mods that you trust! For security, mods must always be manually applied every time.</span><br><br>Want to start modding? <a href='#' class='color_blueurl' onclick='simplemodexample()'>Click here</a> to load a simple example mod.","Apply Third-Party Mod",currmod,"Paste Mod Script Here",()=>{
 			let userinput = getInputBoxValue().trim();
-			localStorage.setItem(STORAGE_PREFIX + "savedusermod", userinput);
+			indexeddb_save("savedusermod",userinput);
 			if(userinput!="" && userinput.trim()!="")
 			{
 				var userModScript = new Function(userinput);
 				userModScript();
 			}
-		},
-		()=>{
-			//do nothing on cancel
-		},true,true);
+			},
+			()=>{
+				//do nothing on cancel
+			},true,true);
+		});
 	}
 
 	function sanitize_css(input)
@@ -11297,16 +11441,17 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 	}
 	function apply_custom_css()
 	{
-		let currcss = localStorage.getItem(STORAGE_PREFIX + "savedcustomcss", "");
-		inputBoxOkCancel("Here, you can apply third-party custom CSS styles shared by other users.<br><br><span class='color_red'>Caution: This will modify the existing document, so only use third-party CSS styles that you trust! Custom CSS is persistent, but can be reset in this menu.</span><br><br>You can return to default styles by clearing the box below. If you get stuck, add ?resetcss=1 to the URL to clear custom styles.","Apply Custom CSS Styles",currcss,"Paste CSS Styles Here",()=>{
+		indexeddb_load("savedcustomcss","").then(currcss=>{
+			inputBoxOkCancel("Here, you can apply third-party custom CSS styles shared by other users.<br><br><span class='color_red'>Caution: This will modify the existing document, so only use third-party CSS styles that you trust! Custom CSS is persistent, but can be reset in this menu.</span><br><br>You can return to default styles by clearing the box below. If you get stuck, add ?resetcss=1 to the URL to clear custom styles.","Apply Custom CSS Styles",currcss,"Paste CSS Styles Here",()=>{
 			let userinput = sanitize_css(getInputBoxValue().trim());
-			localStorage.setItem(STORAGE_PREFIX + "savedcustomcss", userinput);
+			indexeddb_save("savedcustomcss", userinput);
 			let styleElement = document.getElementById('custom_css');
 			styleElement.innerHTML = userinput;
-		},
-		()=>{
-			//do nothing on cancel
-		},true,true);
+			},
+			()=>{
+				//do nothing on cancel
+			},true,true);
+		});
 	}
 
 	function clear_poll_flags()
@@ -11385,7 +11530,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 			localsettings = JSON.parse(JSON.stringify(defaultsettings));
 			let ns = new AestheticInstructUISettings();
 			aestheticInstructUISettings = deepCopyAestheticSettings(ns);
-			refreshPreview(false);
+			refreshAestheticPreview(false);
 			leave_multiplayer();
 			restart_new_game();
 			display_settings();
@@ -11393,7 +11538,8 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 			document.getElementById("keep_memory").checked = false;
 			clear_bg_img();
 			pick_default_horde_models();
-			localStorage.setItem(STORAGE_PREFIX + "savedusermod", "");
+			indexeddb_save("savedusermod","");
+			indexeddb_save("savedcustomcss", "");
 		},null);
 
 	}
@@ -17005,29 +17151,34 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 
 	function populate_corpo_leftpanel()
 	{
-		let panel = document.getElementById('corpoleftpanelitems');
-		let panelitems = `
-		<div onclick="btn_memory()" class="corpo_leftpanel_btn" type="button" style="background-image: var(--img_gear); padding-left: 44px;">Context</div>
-		<div onclick="btn_editmode()" class="corpo_leftpanel_btn" type="button" style="background-image: var(--img_corpo_edit); padding-left: 44px;">Raw Editor</div>
-		<div onclick="update_toggle_lightmode(true)" class="corpo_leftpanel_btn" type="button" style="background-image: var(--img_corpo_theme); padding-left: 44px;">Light / Dark Theme</div>
-		<div style="padding:2px;font-size:14px;margin-left:8px;font-weight:600;line-height:1.1;margin-top:22px">Quick Slot Load</div>
-		<hr style="margin-top:4px;margin-bottom:6px" />
-		`;
-
+		let slotpromises = [];
 		for(let i=0;i<SAVE_SLOTS;++i)
 		{
-			let testslot = localStorage.getItem(STORAGE_PREFIX + "slot_"+i+"_meta");
-			let entry = "";
-			if(testslot)
-			{
-				entry = `<div onclick="load_from_slot(`+i+`)" class="corpo_leftpanel_btn" type="button">`+testslot+`</div>`;
-			}
-
-			panelitems += entry;
+			slotpromises.push(indexeddb_load("slot_"+i+"_meta",""));
 		}
+		Promise.all(slotpromises).then(slotlabels=>
+		{
+			let panel = document.getElementById('corpoleftpanelitems');
+			let panelitems = `
+			<div onclick="btn_memory()" class="corpo_leftpanel_btn" type="button" style="background-image: var(--img_gear); padding-left: 44px;">Context</div>
+			<div onclick="btn_editmode()" class="corpo_leftpanel_btn" type="button" style="background-image: var(--img_corpo_edit); padding-left: 44px;">Raw Editor</div>
+			<div onclick="update_toggle_lightmode(true)" class="corpo_leftpanel_btn" type="button" style="background-image: var(--img_corpo_theme); padding-left: 44px;">Light / Dark Theme</div>
+			<div style="padding:2px;font-size:14px;margin-left:8px;font-weight:600;line-height:1.1;margin-top:22px">Quick Slot Load</div>
+			<hr style="margin-top:4px;margin-bottom:6px" />
+			`;
 
-
-		panel.innerHTML = panelitems;
+			for(let i=0;i<slotlabels.length;++i)
+			{
+				let testslot = slotlabels[i];
+				let entry = "";
+				if(testslot)
+				{
+					entry = `<div onclick="load_from_slot(`+i+`)" class="corpo_leftpanel_btn" type="button">`+testslot+`</div>`;
+				}
+				panelitems += entry;
+			}
+			panel.innerHTML = panelitems;
+		});
 	}
 
 	function show_corpo_leftpanel(open)
@@ -17327,12 +17478,12 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		//autosave
 		try {
 			update_prev_custom_endpoint_type();
-			localStorage.setItem(STORAGE_PREFIX + "settings", JSON.stringify(localsettings));
+			indexeddb_save("settings", JSON.stringify(localsettings));
 			if (localsettings.persist_session) {
 				autosave_compressed_story(true,true,true);
 			}
 		} catch (e) {
-			console.log("Autosave Failed: " + e);
+			console.error("Autosave Failed: " + e);
 		}
 
 	}
@@ -18086,7 +18237,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 							aestheticInstructUISettings.AI_portrait = compressedImageURI;
 							document.getElementById('portrait_ratio_AI').value = aspectratio.toFixed(2);
 						}
-						refreshPreview(true);
+						refreshAestheticPreview(true);
 					}
 				}
 				reader.readAsDataURL(file);
@@ -18134,7 +18285,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 			// Initialize the functionalities of the colorPicker
 			colorPicker.addEventListener('change', function() {
 				element.style[`${useBackground ? 'backgroundColor' : 'color'}`] = this.value;
-				refreshPreview();
+				refreshAestheticPreview();
 			});
 			element.addEventListener('mouseover', () => element.style.cursor = "pointer");
 		});
@@ -18168,17 +18319,17 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 			document.getElementById('portrait_width_AI').value = 100;
 			document.getElementById('portrait_ratio_you').value = 1.0;
 			document.getElementById('portrait_width_you').value = 100;
-			refreshPreview(true);
+			refreshAestheticPreview(true);
 		});
 
 		document.getElementById("reset-all-aesthetic-instruct").addEventListener('click', (e) => {
 
 			let ns = new AestheticInstructUISettings();
 			aestheticInstructUISettings = deepCopyAestheticSettings(ns);
-			refreshPreview(false);
+			refreshAestheticPreview(false);
 		});
 
-		refreshPreview(false);
+		refreshAestheticPreview(false);
 	}
 
 	function openAestheticUISettingsMenu() {
@@ -18203,7 +18354,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		return copy;
 	}
 
-	function refreshPreview(updateFromUI = true) {
+	function refreshAestheticPreview(updateFromUI = true) {
 		if (updateFromUI) { updateDataFromUI(); }
 		updateUIFromData();
 		updateTextPreview();
@@ -20504,7 +20655,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 			</div>
 			<div class="aidgpopuplistheader" style="display: flex; flex-direction: row; height:max(70vh, 480px);">
 				<!-- Settings panel -->
-				<div style="background-color: #122b40;" onchange="refreshPreview()">
+				<div style="background-color: #122b40;" onchange="refreshAestheticPreview()">
 					<div style="padding: 10px; width:350px; height:100%">
 
 						<!-- BACKGROUND STYLE SETTINGS -->
