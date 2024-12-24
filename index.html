@@ -4201,6 +4201,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 	var redo_arr = []; //array of texts that are in the redo stack
 	var retry_prev_text = []; //when we retry, save the last 3 versions in case they want to undo
 	var retry_preserve_last = false; //if true, retrying does not delete any old text
+	var retry_in_progress = false; //if true, and generation was INTERRUPTED, restore previous messages!
 	var redo_prev_text = []; //if we undo a retry, save a copy here so it can be reverted with redo
 	var pending_response_id = ""; //guid of response pending from horde server
 	var poll_in_progress = false; //are we currently waiting for a text generation
@@ -11375,6 +11376,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 
 	function handle_incoming_autosummary(gentxt)
 	{
+		retry_in_progress = false;
 		waiting_for_autosummary = false;
 		gentxt = gentxt.trim();
 		gentxt = gentxt.split("###")[0];
@@ -11463,6 +11465,19 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 
 	function clear_poll_flags()
 	{
+		if(retry_in_progress)
+		{
+			retry_in_progress = false;
+			if(retry_preserve_last)
+			{
+				//restore text before retry
+				if(retry_prev_text.length>0)
+				{
+					retry_preserve_last = false;
+					gametext_arr.push(retry_prev_text.pop());
+				}
+			}
+		}
 		pending_response_id = "";
 		poll_in_progress = false;
 		synchro_polled_response = null;
@@ -11482,6 +11497,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		last_response_obj = null;
 		retry_prev_text = [];
 		retry_preserve_last = false;
+		retry_in_progress = false;
 		redo_prev_text = [];
 		nextgeneratedimagemilestone = generateimagesinterval;
 		pending_response_id = "";
@@ -12562,6 +12578,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		let newgen = document.getElementById("input_text").value;
 		let img_gen_trigger_prompt = "";
 		let doNotGenerate = false;
+		retry_in_progress = false;
 
 		//match the request for creating images in instruct modes
 		if(newgen!="" && localsettings.img_gen_from_instruct && localsettings.opmode == 4 && localsettings.generate_images_mode!=0 && !newgen.includes("\n"))
@@ -14556,6 +14573,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 	}
 
 	function handle_incoming_text(gentxt, genworker, genmdl, genkudos) {
+		retry_in_progress = false;
 		//handle stopping tokens if they got missed (eg. horde)
 		gentxt = trim_extra_stop_seqs(gentxt,true);
 		let mychatname = get_my_multiplayer_chatname();
@@ -18052,13 +18070,16 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 			document.getElementById("input_text").value = "";
 			let temp = gametext_arr[gametext_arr.length-1];
 			redo_prev_text = [];
+			let erased_last = false;
 			if(!retry_preserve_last)
 			{
 				gametext_arr.pop();
+				erased_last = true;
 			}
 			retry_preserve_last = false;
 			let last_retry_stack_temp = retry_prev_text;
 			submit_generation();
+			retry_in_progress = erased_last;
 			retry_prev_text = last_retry_stack_temp;
 			retry_prev_text.push(temp);
 			if(retry_prev_text.length>2)
