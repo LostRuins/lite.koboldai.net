@@ -338,7 +338,8 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 
 		#input_text,
 		#memorytext,
-		#anotetext {
+		#anotetext,
+		#documentdb_data {
 			height: 80px;
 			resize: none;
 			overflow: auto;
@@ -4228,6 +4229,12 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 	var current_wi = []; //each item stores a wi object.
 	var wi_insertlocation = 0; //after memory
 	var wi_searchdepth = 0; //search everything
+	var documentdb_enabled = false;
+	var documentdb_searchhistory = false;
+	var documentdb_numresults = 3;
+	var documentdb_searchrange = 300;
+	var documentdb_chunksize = 800;
+	var documentdb_data = "";
 	var generateimagesinterval = 750; //if generated images is enabled, it will trigger after every 700 new characters in context.
 	var nextgeneratedimagemilestone = generateimagesinterval; //used to keep track of when to generate the next image
 	var image_db = {}; //stores a dictionary of pending images
@@ -6360,6 +6367,12 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		new_save_storyobj.logitbiasdict = JSON.parse(JSON.stringify(logitbiasdict));
 		new_save_storyobj.regexreplace_data = JSON.parse(JSON.stringify(regexreplace_data));
 		new_save_storyobj.placeholder_tags_data = JSON.parse(JSON.stringify(placeholder_tags_data));
+		new_save_storyobj.documentdb_enabled = documentdb_enabled;
+		new_save_storyobj.documentdb_searchhistory = documentdb_searchhistory;
+		new_save_storyobj.documentdb_numresults = documentdb_numresults;
+		new_save_storyobj.documentdb_searchrange = documentdb_searchrange;
+		new_save_storyobj.documentdb_chunksize = documentdb_chunksize;
+		new_save_storyobj.documentdb_data = documentdb_data;
 
 		if (export_settings) {
 			new_save_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
@@ -6642,6 +6655,30 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 				if(storyobj.placeholder_tags_data)
 				{
 					placeholder_tags_data = storyobj.placeholder_tags_data;
+				}
+				if(storyobj.documentdb_enabled)
+				{
+					documentdb_enabled = storyobj.documentdb_enabled;
+				}
+				if(storyobj.documentdb_searchhistory)
+				{
+					documentdb_searchhistory = storyobj.documentdb_searchhistory;
+				}
+				if(storyobj.documentdb_numresults)
+				{
+					documentdb_numresults = storyobj.documentdb_numresults;
+				}
+				if(storyobj.documentdb_searchrange)
+				{
+					documentdb_searchrange = storyobj.documentdb_searchrange;
+				}
+				if(storyobj.documentdb_chunksize)
+				{
+					documentdb_chunksize = storyobj.documentdb_chunksize;
+				}
+				if(storyobj.documentdb_data)
+				{
+					documentdb_data = storyobj.documentdb_data;
 				}
 			} else {
 				//v2 load
@@ -11289,7 +11326,18 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 				placeholder_tags_data.push({"p":v1,"r":v2});
 			}
 		}
-
+		documentdb_enabled = document.getElementById("documentdb_enabled").checked?true:false;
+		documentdb_searchhistory = document.getElementById("documentdb_searchhistory").checked?true:false;
+		documentdb_numresults = document.getElementById("documentdb_numresults").value;
+		documentdb_searchrange = document.getElementById("documentdb_searchrange").value;
+		documentdb_chunksize = document.getElementById("documentdb_chunksize").value;
+		documentdb_data = document.getElementById("documentdb_data").value;
+		documentdb_numresults = parseInt(documentdb_numresults);
+		documentdb_numresults = cleannum(documentdb_numresults,1,10);
+		documentdb_searchrange = parseInt(documentdb_searchrange);
+		documentdb_searchrange = cleannum(documentdb_searchrange,0,1024);
+		documentdb_chunksize = parseInt(documentdb_chunksize);
+		documentdb_chunksize = cleannum(documentdb_chunksize,32,2048);
 	}
 
 	function set_personal_notes()
@@ -11541,6 +11589,12 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 			current_anotetemplate = "[Author's note: <|>]";
 			regexreplace_data = [];
 			placeholder_tags_data = [];
+			documentdb_enabled = false;
+			documentdb_searchhistory = false;
+			documentdb_numresults = 3;
+			documentdb_searchrange = 300;
+			documentdb_chunksize = 800;
+			documentdb_data = "";
 		}
 		warn_on_quit = false;
 		show_corpo_leftpanel(false);
@@ -13051,8 +13105,8 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 				}
 			}
 
-			// [LTM][START]
-			if (1)
+			// Document DB Long term memory minisearch
+			if (documentdb_enabled)
 			{
 				// Finds the relevant memory fragments, formats them in a similar way to an authors note and inserts them before WI
 				const ltmSearchQuery = !!rawNewText ? rawNewText : gametext_arr.length > 0 ? gametext_arr.slice(-1)[0] : undefined;
@@ -13060,16 +13114,27 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 				{
 					let gameText = concat_gametext().replace(/\xA0/g, ' ').trim();
 					let maxAllowedCharacters = getMaxAllowedCharacters(gameText, maxctxlen, maxgenamt);
-					if (gameText.length > maxAllowedCharacters)
+					if (documentdb_data!="" || gameText.length > maxAllowedCharacters)
 					{
-						let skippedActiveContext = gameText.substring(gameText.length - maxAllowedCharacters);
-						let historicalContext = gameText.substring(0, gameText.length - maxAllowedCharacters); //context that is no longer active
-						const recentTextLimit = 300;
+						const recentTextLimit = documentdb_searchrange;
+						let skippedActiveContext = gameText;
+						let historicalContext = "";
+						if(gameText.length > maxAllowedCharacters)
+						{
+							skippedActiveContext = gameText.substring(gameText.length - maxAllowedCharacters);
+							historicalContext = gameText.substring(0, gameText.length - maxAllowedCharacters); //context that is no longer active
+						}
 						let recentTextStr = skippedActiveContext;
 						if (skippedActiveContext.length > recentTextLimit) {
 							recentTextStr = skippedActiveContext.substring(skippedActiveContext.length - recentTextLimit);
 						}
-						let ltmSnippets = DatabaseMinisearch(historicalContext,ltmSearchQuery,recentTextStr);
+						let fullDocument = documentdb_data;
+						if(documentdb_searchhistory && historicalContext)
+						{
+							fullDocument += "\n"+historicalContext;
+						}
+
+						let ltmSnippets = DatabaseMinisearch(fullDocument,ltmSearchQuery,recentTextStr);
 						if (ltmSnippets.length === 0)
 						{
 							console.log("No memory fragments found either as history is too short or no relevant content found");
@@ -13087,7 +13152,6 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 					}
 				}
 			}
-			// [LTM][END]
 
 			//limit wi size
 			if(wistr!="")
@@ -17569,11 +17633,11 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		document.getElementById("memory_tab").classList.remove("active");
 		document.getElementById("wi_tab").classList.remove("active");
 		document.getElementById("token_tab").classList.remove("active");
-		document.getElementById("memsnippet_tab").classList.remove("active");
+		document.getElementById("documentdb_tab").classList.remove("active");
 		document.getElementById("memory_tab_container").classList.add("hidden");
 		document.getElementById("wi_tab_container").classList.add("hidden");
 		document.getElementById("token_tab_container").classList.add("hidden");
-		document.getElementById("memsnippet_tab_container").classList.add("hidden");
+		document.getElementById("documentdb_tab_container").classList.add("hidden");
 
 		switch (newtab) {
 			case 0:
@@ -17585,8 +17649,8 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 				document.getElementById("wi_tab_container").classList.remove("hidden");
 				break;
 			case 2:
-				document.getElementById("memsnippet_tab").classList.add("active");
-				document.getElementById("memsnippet_tab_container").classList.remove("hidden");
+				document.getElementById("documentdb_tab").classList.add("active");
+				document.getElementById("documentdb_tab_container").classList.remove("hidden");
 				break;
 			case 3:
 				document.getElementById("token_tab").classList.add("active");
@@ -17624,6 +17688,13 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		//setup wi tab
 		start_editing_wi();
 		update_wi();
+
+		document.getElementById("documentdb_enabled").checked = documentdb_enabled;
+		document.getElementById("documentdb_searchhistory").checked = documentdb_searchhistory;
+		document.getElementById("documentdb_numresults").value = documentdb_numresults
+		document.getElementById("documentdb_searchrange").value = documentdb_searchrange;
+		document.getElementById("documentdb_chunksize").value = documentdb_chunksize;
+		document.getElementById("documentdb_data").value = documentdb_data;
 
 		populate_placeholder_tags();
 		populate_regex_replacers();
@@ -18799,11 +18870,16 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 	//searches dbText for searchStr and recentTextStr, returns up to 3 results
 	function DatabaseMinisearch(dbText, searchStr, recentTextStr)
 	{	//predefined minisearch constants
-		const chunkSize = 512;
-		const chunkSizeOverlap = 256;
+		const chunkSize = documentdb_chunksize;
+		const chunkSizeOverlap = chunkSize*0.5;
 		const maxResultsPerSection = 5; //returns up to 5 matches per section
-		const valuesToReturn = 3;
+		const valuesToReturn = documentdb_numresults;
 		const minSimilarity = 0.2;
+
+		if(dbText=="" || searchStr=="")
+		{
+			return [];
+		}
 
 		//utility functions used in minisearch
 		let cleanupSpecialTags = function(text) {
@@ -18816,7 +18892,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 
 		let searchAndScore = function(searchStr, recentTextStr, paragraphs) {
 			let searchSections = [];
-			if(recentTextStr) //extra nearby data passed to search
+			if(recentTextStr && recentTextStr!=searchStr) //extra nearby data passed to search
 			{
 				searchSections.push({term: stripToTokens(recentTextStr),strength: 1});
 			}
@@ -20519,7 +20595,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 			<div><ul class="nav nav-tabs settingsnav">
 				<li id="memory_tab" class="active"><a class="" href="#" onclick="display_memory_tab(0)">Memory</a></li>
 				<li id="wi_tab"><a class="" href="#" onclick="display_memory_tab(1)">World Info</a></li>
-				<li id="memsnippet_tab"><a class="" href="#" onclick="display_memory_tab(2)">Document DB</a></li>
+				<li id="documentdb_tab"><a class="" href="#" onclick="display_memory_tab(2)">Document DB</a></li>
 				<li id="token_tab"><a class="" href="#" onclick="display_memory_tab(3)">Tokens</a></li>
 			  </ul></div>
 
@@ -20604,17 +20680,17 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 				</div>
 			</div>
 
-			<div class="memtabcontainer" id="memsnippet_tab_container">
+			<div class="memtabcontainer" id="documentdb_tab_container">
 				<div class="settinglabel" style="padding: 4px;">Automatically search and include relevant snippets from uploaded documents or history.</div>
 				<div class="settinglabel" style="padding: 4px;">
 					<div class="justifyleft settingsmall" title="Enable Document DB">Enable Document DB </div>
-					<input title="Enable Document DB" type="checkbox" id="memsnippet_enabled" style="margin:0px 0 0;">
+					<input title="Enable Document DB" type="checkbox" id="documentdb_enabled" style="margin:0px 0 0;">
 				</div>
 
 				<div class="settinglabel" style="padding: 4px;">
 					<div class="justifyleft settingsmall" title="Search Includes Context History">Search Includes Context History <span class="helpicon">?
 						<span class="helptext">If enabled, the entire story/chat history is used as a searchable document</span></span></div>
-					<input title="Search Context History" type="checkbox" id="memsnippet_searchhistory" style="margin:0px 0 0;">
+					<input title="Search Context History" type="checkbox" id="documentdb_searchhistory" style="margin:0px 0 0;">
 				</div>
 
 				<div class="settinglabel" style="padding: 4px;">
@@ -20622,7 +20698,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 					<span class="helptext">Controls how many snippets to retrieve from DB</span></span></div>
 					<input title="Number of Search Results" class="settinglabel miniinput"
 						style="height:16px;margin:0px 4px 0; width:90px;font-size:10px;" type="number"
-						min="1" max="5" step="1" pattern="\d+" placeholder="" value="" id="memsnippet_numresults">
+						min="1" max="5" step="1" pattern="\d+" placeholder="" value="" id="documentdb_numresults">
 				</div>
 				<div class="settinglabel" style="padding: 4px;">
 					<div class="justifyleft settingsmall">Nearby Text Amount <span class="helpicon">?
@@ -20630,7 +20706,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 					</div>
 					<input title="Nearby Text Amount" class="settinglabel miniinput"
 						style="height:16px;margin:0px 4px 0; width:90px;font-size:10px;" type="number"
-						min="1" step="1" pattern="\d+" placeholder="" value="" id="memsnippet_searchrange">
+						min="1" step="1" pattern="\d+" placeholder="" value="" id="documentdb_searchrange">
 				</div>
 				<div class="settinglabel" style="padding: 4px;">
 					<div class="justifyleft settingsmall">Search Chunk Size <span class="helpicon">?
@@ -20638,8 +20714,14 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 					</div>
 					<input title="Search Chunk Size" class="settinglabel miniinput"
 						style="height:16px;margin:0px 4px 0; width:90px;font-size:10px;" type="number"
-						min="0" step="1" pattern="\d+" placeholder="" value="" id="memsnippet_chunksize">
+						min="0" step="1" pattern="\d+" placeholder="" value="" id="documentdb_chunksize">
 				</div>
+				<div class="settinglabel">
+					<div class="justifyleft"><br>DocumentDB Storage<span class="helpicon">?<span
+						class="helptext">Paste as much raw text data here as you like. E.g. background information, reference documents, etc. This text will populate the database that will be chunked and searched by DocumentDB.</span></span></div>
+				</div>
+				<textarea title="Edit DocumentDB" class="form-control" id="documentdb_data" style="height: 120px;"
+					placeholder="Paste as much text data here as you like. This text will populate the database that will be searched by DocumentDB."></textarea>
 			</div>
 
 			<div class="memtabcontainer" id="token_tab_container">
