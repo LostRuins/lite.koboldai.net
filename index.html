@@ -1649,10 +1649,20 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 			width:308px;
 			height:462px;
 		}
+		.zoomedimg.portrait_long
+		{
+			width:231px;
+			height:462px;
+		}
 		.zoomedimg.landscape
 		{
 			width:462px;
 			height:308px;
+		}
+		.zoomedimg.landscape_long
+		{
+			width:462px;
+			height:231px;
 		}
 
 		@media (max-width: 620px) {
@@ -1669,6 +1679,16 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 			{
 				width:min(96vw, 420px);
 				height:min(64vw, 280px);
+			}
+			.zoomedimg.portrait_long
+			{
+				width:min(48vw, 210px);
+				height:min(96vw, 420px);
+			}
+			.zoomedimg.landscape_long
+			{
+				width:min(96vw, 420px);
+				height:min(48vw, 210px);
 			}
 		}
 		.mdlpicker::-webkit-calendar-picker-indicator {
@@ -4216,9 +4236,8 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 	const XTTS_ID = 1000;
 	const ALLTALK_ID = 1001;
 	const OAI_TTS_ID = 1002;
-	const BIG_HD_RES_PX = 512; //when saving oversized images, could be 640?
-	const HD_RES_PX = 512;
-	const NO_HD_RES_PX = 320;
+	const HD_RES_PX = 768;
+	const NO_HD_RES_PX = 512;
 	const SAVE_SLOTS = 6;
 
 	//all configurable globals
@@ -4407,7 +4426,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		img_clipskip: -1,
 		img_steps: 20,
 		img_sampler: "Euler",
-		img_aspect:0, //0=square,1=portrait,2=landscape,3=bigsquare
+		img_aspect:0, //0=square,1=portrait,2=landscape,3=bigsquare,4=portrait_long,5=landscape_long
 		save_images: true,
 		save_remote_images: false,
 		prompt_for_savename: false,
@@ -5531,7 +5550,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 				let nimgtag = "[<|p|" + imgid + "|p|>]";
 				gametext_arr.push(nimgtag);
 				image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:prompt, poll_category:2 };
-				image_db[imgid].aspect = (req_payload.params.width>req_payload.params.height?2:(req_payload.params.width<req_payload.params.height?1:0));
+				image_db[imgid].aspect = (req_payload.params.width>=req_payload.params.height*2?5:(req_payload.params.height>=req_payload.params.width*2?4:(req_payload.params.width>req_payload.params.height?2:(req_payload.params.width<req_payload.params.height?1:0))));
 				image_db[imgid].imsource = 0; //0=generated,1=uploaded
 			}else{
 				console.log("Generation Error!");
@@ -12020,9 +12039,17 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		compressImage(origImg, (newDataUri, outAspect) => {
 			image_db[imgid].done = true;
 			image_db[imgid].result = newDataUri;
-			if(outAspect<0.7)
+			if(outAspect<=0.5)
+			{
+				image_db[imgid].aspect = 4; //portrait_long
+			}
+			else if(outAspect<0.7)
 			{
 				image_db[imgid].aspect = 1; //portrait
+			}
+			else if(outAspect>=2)
+			{
+				image_db[imgid].aspect = 5; //landscape_long
 			}
 			else if(outAspect>1.4)
 			{
@@ -14268,6 +14295,19 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 			iwidth = 768;
 			iheight = 768;
 		}
+		else if(localsettings.img_aspect==4)
+		{
+			iheight = 1024;
+		}
+		else if(localsettings.img_aspect==5)
+		{
+			iwidth = 1024;
+		}
+		else if(localsettings.img_aspect==6)
+		{
+			iwidth = 1024;
+			iheight = 1024;
+		}
 
 		let genimg_payload = {
 			"prompt": (sentence + negprompt),
@@ -14319,7 +14359,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 					let nimgtag = "[<|p|" + data.id + "|p|>]";
 					gametext_arr.push(nimgtag);
 					image_db[data.id] = { done: false, queue: "Starting", result: "", prompt:sentence, poll_category:1 };
-					image_db[data.id].aspect = (iwidth>iheight?2:(iwidth<iheight?1:0));
+					image_db[data.id].aspect = (iwidth>=iheight*2?5:(iheight>=iwidth*2?4:(iwidth>iheight?2:(iwidth<iheight?1:0))));
 					image_db[data.id].imsource = 0; //0=generated,1=uploaded
 					console.log("New image queued " + nimgtag);
 				}
@@ -14341,14 +14381,14 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 			let nimgtag = "[<|p|" + imgid + "|p|>]";
 			gametext_arr.push(nimgtag);
 			image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:sentence, poll_category:0 };
-			image_db[imgid].aspect = (iwidth>iheight?2:(iwidth<iheight?1:0));
+			image_db[imgid].aspect = (iwidth>=iheight*2?5:(iheight>=iwidth*2?4:(iwidth>iheight?2:(iwidth<iheight?1:0))));
 			image_db[imgid].imsource = 0; //0=generated,1=uploaded
 			generate_a1111_image(genimg_payload,(outputimg)=>{
 				if(outputimg)
 				{
 					//console.log(outputimg);
 					let origImg = "data:image/jpeg;base64," + outputimg;
-					let imgres = localsettings.img_allowhd?(localsettings.img_aspect==0?HD_RES_PX:BIG_HD_RES_PX):NO_HD_RES_PX;
+					let imgres = localsettings.img_allowhd?(localsettings.img_aspect==0?NO_HD_RES_PX:HD_RES_PX):NO_HD_RES_PX;
 					compressImage(origImg, (newDataUri) => {
 						image_db[imgid].done = true;
 						image_db[imgid].result = newDataUri;
@@ -14378,7 +14418,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 					{
 						//console.log(outputimg);
 						let origImg = "data:image/jpeg;base64," + outputimg;
-						let imgres = localsettings.img_allowhd?(localsettings.img_aspect==0?HD_RES_PX:BIG_HD_RES_PX):NO_HD_RES_PX;
+						let imgres = localsettings.img_allowhd?HD_RES_PX:NO_HD_RES_PX;
 						compressImage(origImg, (newDataUri) => {
 							image_db[imgid].done = true;
 							image_db[imgid].result = newDataUri;
@@ -14512,6 +14552,8 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		{
 			document.getElementById("zoomedimg").classList.remove("portrait");
 			document.getElementById("zoomedimg").classList.remove("landscape");
+			document.getElementById("zoomedimg").classList.remove("portrait_long");
+			document.getElementById("zoomedimg").classList.remove("landscape_long");
 			if(savedmeta.aspect==1)
 			{
 				document.getElementById("zoomedimg").classList.add("portrait");
@@ -14519,6 +14561,14 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 			else if(savedmeta.aspect==2)
 			{
 				document.getElementById("zoomedimg").classList.add("landscape");
+			}
+			else if(savedmeta.aspect==4)
+			{
+				document.getElementById("zoomedimg").classList.add("portrait_long");
+			}
+			else if(savedmeta.aspect==5)
+			{
+				document.getElementById("zoomedimg").classList.add("landscape_long");
 			}
 
 			if(!savedmeta.visionmode)
@@ -14651,6 +14701,16 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 				{
 					dimW *= 1.35;
 					dimH *= 0.9;
+				}
+				else if(completed_imgs_meta[imghash].aspect==4) //portrait_long
+				{
+					dimH *= 1.5;
+					dimW *= 0.75;
+				}
+				else if(completed_imgs_meta[imghash].aspect==5) //landscape_long
+				{
+					dimW *= 1.5;
+					dimH *= 0.75;
 				}
 			}
 			return prefix + `<div class="`+siclass+reinvertcolor+`"><img src="` + data + `" width=` + dimW + ` height=` + dimH + ` title="`+alttxt+`" style="border-radius: 6%; cursor: pointer;" onclick="return click_image(this,\'`+imghash+`\');"></div>` + suffix;
@@ -15054,7 +15114,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 										img.queue = 0;
 										let origImg = "data:image/jpeg;base64," + finalimg.generations[0].img;
 										//console.log("Original image: " + origImg);
-										let imgres = localsettings.img_allowhd?(localsettings.img_aspect==0?HD_RES_PX:BIG_HD_RES_PX):NO_HD_RES_PX;
+										let imgres = localsettings.img_allowhd?(localsettings.img_aspect==0?NO_HD_RES_PX:HD_RES_PX):NO_HD_RES_PX;
 										compressImage(origImg, (newDataUri) => {
 											img.result = newDataUri;
 										}, true, false, imgres,0.35,false);
@@ -15104,7 +15164,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 							reader.onloadend = () => {
 								img.queue = 0;
 								let origImg = reader.result;
-								let imgres = localsettings.img_allowhd?(localsettings.img_aspect==0?HD_RES_PX:BIG_HD_RES_PX):NO_HD_RES_PX;
+								let imgres = localsettings.img_allowhd?(localsettings.img_aspect==0?NO_HD_RES_PX:HD_RES_PX):NO_HD_RES_PX;
 								compressImage(origImg, (newDataUri) => {
 									img.result = newDataUri;
 								}, true, false, imgres,0.35,false);
@@ -15200,12 +15260,26 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 				let minsizeW = Math.min(origW, origH);
 				let minsizeH = Math.min(origW, origH);
 
-				if(aspectratio<0.7)
+				if(aspectratio<=0.5)
+				{
+					//portrait
+					minsizeH *= 2;
+					canvas.width = wantedWidth = maxSize/2;
+					canvas.height = wantedHeight = maxSize;
+				}
+				else if(aspectratio<0.7)
 				{
 					//portrait
 					minsizeH *= 1.5;
 					canvas.width = wantedWidth = maxSize/1.5;
 					canvas.height = wantedHeight = maxSize;
+				}
+				else if(aspectratio>=2)
+				{
+					//landscape
+					minsizeW *= 2;
+					canvas.width = wantedWidth = maxSize;
+					canvas.height = wantedHeight = maxSize/2;
 				}
 				else if(aspectratio>1.4)
 				{
@@ -20422,14 +20496,17 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 								</select>
 							</div>
 							<div class="inlinelabel">
-								<div class="justifyleft rowitem">Aspect Ratio <span class="helpicon">?
-									<span class="helptext">Square is recommended. Changing aspect ratio will affect the resolution used to generate. This may impact quality or memory usage.</span>
+								<div class="justifyleft rowitem">Resolution <span class="helpicon">?
+									<span class="helptext">Changing resolution will affect the aspect ratio used to generate. This may impact quality or memory usage.</span>
 								</span>: </div>
-								<select title="Image Aspect Ratio" style="padding:1px; font-size:12px; height:20px; width: 100px;" class="form-control" id="img_aspect">
-									<option value="0">Square</option>
-									<option value="1">Portrait</option>
-									<option value="2">Landscape</option>
-									<option value="3">BigSquare</option>
+								<select title="Resolution" style="padding:1px; font-size:12px; height:20px; width: 180px;" class="form-control" id="img_aspect">
+									<option value="0">512 x 512 (Square)</option>
+									<option value="1">512 x 768 (Portrait)</option>
+									<option value="2">768 x 512 (Landscape)</option>
+									<option value="3">768 x 768 (BigSquare)</option>
+									<option value="4">512 x 1024 (TallPortrait)</option>
+									<option value="5">1024 x 512 (LongLandscape)</option>
+									<option value="6">1024 x 1024 (HugeSquare)</option>
 								</select>
 							</div>
 							<div class="inlinelabel">
