@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 197;
+	const LITEVER = 198;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3203,6 +3203,22 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		}
 	}
 
+	function removeAndReplacePlaceholders(text) {
+		// Replace {{user}} and other placeholders
+		text = replace_placeholders(text);
+
+		// Remove any instruct tags as needed to ensure a more accurate search
+		text = replaceAll(text, get_instruct_starttag(false), "");
+		text = replaceAll(text, get_instruct_endtag(false), "");
+		text = replaceAll(text, get_instruct_systag(false), "");
+		text = replaceAll(text, get_instruct_starttag(false).trim(), "");
+		text = replaceAll(text, get_instruct_endtag(false).trim(), "");
+		text = replaceAll(text, get_instruct_systag(false).trim(), "");
+		text = text.replace(/\{\{\[INPUT\]\}\}/g, "").replace(/\{\{\[OUTPUT\]\}\}/g, "");
+
+		return text;
+	}
+
 	function readTavernPngFromBlob(blob, onDone)
 	{
 		var fileReader = new FileReader();
@@ -4177,6 +4193,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 	const koboldcpp_transcribe_endpoint = "/api/extra/transcribe";
 	const koboldcpp_tokenize_endpoint = "/api/extra/tokencount";
 	const koboldcpp_perf_endpoint = "/api/extra/perf";
+	const koboldcpp_websearch_endpoint = "/api/extra/websearch"
 
 	const oai_models_endpoint = "/models";
 	const oai_submit_endpoint = "/completions";
@@ -4278,6 +4295,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 	var documentdb_searchrange = 300;
 	var documentdb_chunksize = 800;
 	var documentdb_data = "";
+	var websearch_enabled = false;
 	var generateimagesinterval = 750; //if generated images is enabled, it will trigger after every 700 new characters in context.
 	var nextgeneratedimagemilestone = generateimagesinterval; //used to keep track of when to generate the next image
 	var image_db = {}; //stores a dictionary of pending images
@@ -4319,6 +4337,9 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 	var koboldcpp_version_obj = {};
 	var koboldcpp_has_vision = false;
 	var koboldcpp_has_multiplayer = false;
+	var koboldcpp_has_websearch = false;
+	var lastSearchQuery = "";
+	var lastSearchResults = [];
 	var multiplayer_active = false;
 	var multiplayer_pinged = false;
 	var multiplayer_override_name = "";
@@ -5927,6 +5948,10 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 	{
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.78") >= 0 && koboldcpp_has_multiplayer);
 	}
+	function is_using_kcpp_with_websearch()
+	{
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.80") >= 0 && koboldcpp_has_websearch);
+	}
 
 
 	//0 is none, 1 is poll-streaming, 2 is sse-streaming
@@ -6416,6 +6441,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		new_save_storyobj.documentdb_searchrange = documentdb_searchrange;
 		new_save_storyobj.documentdb_chunksize = documentdb_chunksize;
 		new_save_storyobj.documentdb_data = documentdb_data;
+		new_save_storyobj.websearch_enabled = websearch_enabled;
 
 		if (export_settings) {
 			new_save_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
@@ -6722,6 +6748,10 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 				if(storyobj.documentdb_data)
 				{
 					documentdb_data = storyobj.documentdb_data;
+				}
+				if(storyobj.websearch_enabled)
+				{
+					websearch_enabled = storyobj.websearch_enabled;
 				}
 			} else {
 				//v2 load
@@ -9492,6 +9522,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 									koboldcpp_has_vision = (data.vision?true:false);
 									koboldcpp_has_whisper = (data.transcribe?true:false);
 									koboldcpp_has_multiplayer = (data.multiplayer?true:false);
+									koboldcpp_has_websearch = (data.websearch?true:false);
 									let has_password = (data.protected?true:false);
 									let has_txt2img = (data.txt2img?true:false);
 									let no_txt_model = (mdlname=="inactive");
@@ -11381,6 +11412,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		documentdb_searchrange = cleannum(documentdb_searchrange,0,1024);
 		documentdb_chunksize = parseInt(documentdb_chunksize);
 		documentdb_chunksize = cleannum(documentdb_chunksize,32,2048);
+		websearch_enabled = document.getElementById("websearch_enabled").checked?true:false;
 	}
 
 	function set_personal_notes()
@@ -11638,6 +11670,7 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 			documentdb_searchrange = 300;
 			documentdb_chunksize = 800;
 			documentdb_data = "";
+			websearch_enabled = false;
 		}
 		warn_on_quit = false;
 		show_corpo_leftpanel(false);
@@ -12674,10 +12707,19 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		return Math.max(1, Math.floor(((maxctxlen - maxgenamt)) * chars_per_token) - 12);
 	}
 
-	function submit_generation()
+	function submit_generation() //wrap websearch into this
+	{
+		let senttext = document.getElementById("input_text").value;
+		document.getElementById("input_text").value = "";
+		PerformWebsearch(senttext,(res)=>{
+			submit_generation_post_search(senttext);
+		});
+	}
+
+	function submit_generation_post_search(senttext)
 	{
 		warn_on_quit = true;
-		let newgen = document.getElementById("input_text").value;
+		let newgen = senttext;
 		let img_gen_trigger_prompt = "";
 		let doNotGenerate = false;
 		retry_in_progress = false;
@@ -12813,7 +12855,6 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 			retry_prev_text = [];
 			retry_preserve_last = true; //initially set to true
 			redo_prev_text = [];
-			document.getElementById("input_text").value = "";
 			pending_response_id = "-1";
 
 			let mtl = document.getElementById("maintxtloader");
@@ -13155,6 +13196,17 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 							wistr += wi.content + "\n";
 						}
 					}
+				}
+			}
+
+			//use newest websearch results
+			if (websearch_enabled && is_using_kcpp_with_websearch() && lastSearchResults && lastSearchResults.length>0)
+			{
+				for(let i=0;i<lastSearchResults.length;++i)
+				{
+					let sresult = lastSearchResults[i];
+					let snippet = `\n[Search Snippet: ${sresult.title}\nSource: ${sresult.url}\nExcerpt: ${((sresult.content && sresult.content!="")?sresult.content:sresult.desc)}]`;
+					wistr = snippet + wistr;
 				}
 			}
 
@@ -17732,10 +17784,12 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		memory_tab = newtab;
 		document.getElementById("memory_tab").classList.remove("active");
 		document.getElementById("wi_tab").classList.remove("active");
+		document.getElementById("websearch_tab").classList.remove("active");
 		document.getElementById("token_tab").classList.remove("active");
 		document.getElementById("documentdb_tab").classList.remove("active");
 		document.getElementById("memory_tab_container").classList.add("hidden");
 		document.getElementById("wi_tab_container").classList.add("hidden");
+		document.getElementById("websearch_tab_container").classList.add("hidden");
 		document.getElementById("token_tab_container").classList.add("hidden");
 		document.getElementById("documentdb_tab_container").classList.add("hidden");
 
@@ -17753,6 +17807,10 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 				document.getElementById("documentdb_tab_container").classList.remove("hidden");
 				break;
 			case 3:
+				document.getElementById("websearch_tab").classList.add("active");
+				document.getElementById("websearch_tab_container").classList.remove("hidden");
+				break;
+			case 4:
 				document.getElementById("token_tab").classList.add("active");
 				document.getElementById("token_tab_container").classList.remove("hidden");
 				break;
@@ -17795,6 +17853,15 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		document.getElementById("documentdb_searchrange").value = documentdb_searchrange;
 		document.getElementById("documentdb_chunksize").value = documentdb_chunksize;
 		document.getElementById("documentdb_data").value = documentdb_data;
+		document.getElementById("websearch_enabled").checked = websearch_enabled;
+		if(is_using_kcpp_with_websearch())
+		{
+			document.getElementById("websearchunsupporteddiv").classList.add("hidden");
+		}
+		else
+		{
+			document.getElementById("websearchunsupporteddiv").classList.remove("hidden");
+		}
 
 		populate_placeholder_tags();
 		populate_regex_replacers();
@@ -18966,6 +19033,67 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 		document.getElementById('aesthetic_text_preview').innerHTML = render_aesthetic_ui(preview,true);
 	}
 
+	function PerformWebsearch(webSearchQuery, onDone)
+	{
+		//websearch
+		if (websearch_enabled && is_using_kcpp_with_websearch())
+		{
+			webSearchQuery = webSearchQuery.trim();
+			if(webSearchQuery=="")
+			{
+				webSearchQuery = (gametext_arr.length > 0 ? gametext_arr.slice(-1)[0] : "");
+			}
+			webSearchQuery = removeAndReplacePlaceholders(webSearchQuery);
+			webSearchQuery = webSearchQuery.trim();
+			webSearchQuery = webSearchQuery.replace(/(?:\r\n|\r|\n)/g, '. ');
+			if(webSearchQuery==lastSearchQuery || webSearchQuery=="")
+			{
+				onDone(); //use cached results
+			}
+			else
+			{
+				if(pending_response_id=="")
+				{
+					pending_response_id = "-1";
+					render_gametext(false);
+				}
+				let murl = `${custom_kobold_endpoint}${koboldcpp_websearch_endpoint}`;
+				murl = apply_proxy_url(murl);
+				fetch(murl, {
+					method: 'POST',
+					headers: get_kobold_header(),
+					body: JSON.stringify({q: webSearchQuery}),
+				})
+				.then(x => x.json())
+				.then(values => {
+					lastSearchQuery = webSearchQuery;
+					lastSearchResults = values;
+					if(pending_response_id=="-1")
+					{
+						pending_response_id = "";
+					}
+					onDone();
+				})
+				.catch(error => {
+					console.log("WebSearch Error: " + error);
+					lastSearchResults = [];
+					lastSearchQuery = "";
+					if(pending_response_id=="-1")
+					{
+						pending_response_id = "";
+					}
+					onDone();
+				});
+			}
+		}
+		else
+		{
+			lastSearchResults = [];
+			lastSearchQuery = "";
+			onDone();
+		}
+	}
+
 	//LTM TextDB Memsnipper searching
 	//searches dbText for searchStr and recentTextStr, returns up to 3 results
 	function DatabaseMinisearch(dbText, searchStr, recentTextStr)
@@ -19042,21 +19170,6 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 				result.match /= maxScore;
 				return result;
 			});
-		}
-
-		let removeAndReplacePlaceholders = function(text) {
-			// Replace {{user}} and other placeholders
-			text = replace_placeholders(text);
-
-			// Remove any instruct tags as needed to ensure a more accurate search
-			text = replaceAll(text, get_instruct_starttag(false), "");
-			text = replaceAll(text, get_instruct_endtag(false), "");
-			text = replaceAll(text, get_instruct_systag(false), "");
-			text = replaceAll(text, get_instruct_starttag(false).trim(), "");
-			text = replaceAll(text, get_instruct_endtag(false).trim(), "");
-			text = replaceAll(text, get_instruct_systag(false).trim(), "");
-
-			return text;
 		}
 
 		//step 1: chunk the dbtext into paragraph chunks
@@ -20721,7 +20834,8 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 				<li id="memory_tab" class="active"><a class="" href="#" onclick="display_memory_tab(0)">Memory</a></li>
 				<li id="wi_tab"><a class="" href="#" onclick="display_memory_tab(1)">World Info</a></li>
 				<li id="documentdb_tab"><a class="" href="#" onclick="display_memory_tab(2)">TextDB</a></li>
-				<li id="token_tab"><a class="" href="#" onclick="display_memory_tab(3)">Tokens</a></li>
+				<li id="websearch_tab"><a class="" href="#" onclick="display_memory_tab(3)">WebSearch</a></li>
+				<li id="token_tab"><a class="" href="#" onclick="display_memory_tab(4)">Tokens</a></li>
 			  </ul></div>
 
 			<div class="memtabcontainer" id="memory_tab_container">
@@ -20847,6 +20961,15 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 				</div>
 				<textarea title="Edit TextDB" class="form-control" id="documentdb_data" style="height: 120px;"
 					placeholder="Paste as much text data here as you like. This text will populate the database that will be searched by TextDB."></textarea>
+			</div>
+
+			<div class="memtabcontainer" id="websearch_tab_container">
+				<div class="settinglabel" style="padding: 4px;">Search the Web for relavant information when using instruct mode<br>(Requires WebSearch enabled KoboldCpp)</div>
+				<div id="websearchunsupporteddiv" class="color_red hidden" style="font-weight:bold;padding:3px;font-size:12px">WebSearch Not Supported</div>
+				<div class="settinglabel" style="padding: 4px;">
+					<div class="justifyleft settingsmall" title="Enable WebSearch">Enable WebSearch </div>
+					<input title="Enable WebSearch" type="checkbox" id="websearch_enabled" style="margin:0px 0 0;">
+				</div>
 			</div>
 
 			<div class="memtabcontainer" id="token_tab_container">
