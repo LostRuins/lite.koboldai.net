@@ -19044,10 +19044,31 @@ pre code,td,th{padding:0}pre code,table{background-color:transparent}.table,inpu
 			});
 		}
 
-		//step 1: chunk the dbtext into paragraph chunks
-		let paragraphs = [];
-		let allText = cleanupSpecialTags(dbText);
-		allText = replaceAll(allText,recentTextStr,"");
+		let removeAndReplacePlaceholders = function(text) {
+			// Replace {{user}} and other placeholders
+			text = replace_placeholders(text);
+
+			// Remove any instruct tags as needed to ensure a more accurate search
+			text = replaceAll(text, get_instruct_starttag(false), "");
+			text = replaceAll(text, get_instruct_endtag(false), "");
+			text = replaceAll(text, get_instruct_systag(false), "");
+			text = replaceAll(text, get_instruct_starttag(false).trim(), "");
+			text = replaceAll(text, get_instruct_endtag(false).trim(), "");
+			text = replaceAll(text, get_instruct_systag(false).trim(), "");
+
+			return text;
+		}
+
+	        //step 1: chunk the dbtext into paragraph chunks
+	        let paragraphs = [];
+	        let allText = cleanupSpecialTags(dbText);
+	        allText = replaceAll(allText,recentTextStr,"");
+	        
+	        // Ensure placeholders are replaced to allow searching for user / character	
+	        allText = removeAndReplacePlaceholders(allText)
+	        searchStr = removeAndReplacePlaceholders(searchStr)
+	        recentTextStr = removeAndReplacePlaceholders(recentTextStr)
+		
 		let i = 0, startLoc = 0;
 		while (startLoc < allText.length && i < Number.MAX_SAFE_INTEGER) {
 			let actualChunkStart = Math.max(0, startLoc - chunkSizeOverlap);
