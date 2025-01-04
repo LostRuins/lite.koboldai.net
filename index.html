@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 199;
+	const LITEVER = 200;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -2972,6 +2972,7 @@ Current version indicated by LITEVER below.
 	var comfyui_is_connected = false;
 	var pending_storyjson_autosave = null;
 	var mainmenu_is_untab = false;
+	var websearch_in_progress = false;
 
 	var localsettings = {
 		my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
@@ -3899,9 +3900,7 @@ initializeInstructUIFunctionality();
 			return replace_all(localsettings.instruct_systag, "\\n", "\n");
 		}
 	}
-	function replace_placeholders(text) {
-		// Replace {{user}} and other placeholders
-		text = replace_placeholders(text);
+	function replace_search_placeholders(text) {
 
 		// Remove any instruct tags as needed to ensure a more accurate search
 		text = replace_all(text, get_instruct_starttag(false), "");
@@ -3912,7 +3911,55 @@ initializeInstructUIFunctionality();
 		text = replace_all(text, get_instruct_systag(false).trim(), "");
 		text = text.replace(/\{\{\[INPUT\]\}\}/g, "").replace(/\{\{\[OUTPUT\]\}\}/g, "");
 
+		// Replace {{user}} and other placeholders
+		text = replace_placeholders(text);
+
 		return text;
+	}
+	//we separate these 2 functions, as sometimes we only need to replace instruct
+	function replace_instruct_placeholders(inputtxt) //only for instruct placeholders first
+	{
+		inputtxt = replace_all(inputtxt,instructstartplaceholder,get_instruct_starttag(false));
+		inputtxt = replace_all(inputtxt,instructendplaceholder,get_instruct_endtag(false));
+		inputtxt = replace_all(inputtxt,instructsysplaceholder,get_instruct_systag(false));
+		//failsafe to handle removing newline tags
+		inputtxt = replace_all(inputtxt,instructstartplaceholder.trim(),get_instruct_starttag(false));
+		inputtxt = replace_all(inputtxt,instructendplaceholder.trim(),get_instruct_endtag(false));
+		inputtxt = replace_all(inputtxt,instructsysplaceholder.trim(),get_instruct_systag(false));
+		return inputtxt;
+	}
+	function replace_noninstruct_placeholders(inputtxt,escape=false)
+	{
+		if(escape)
+		{
+			inputtxt = replace_all(inputtxt,"{{user}}",escape_html(localsettings.chatname?localsettings.chatname:"User"),true);
+			inputtxt = replace_all(inputtxt,"{{char}}",escape_html(localsettings.chatopponent?localsettings.chatopponent:defaultchatopponent),true);
+		}
+		else
+		{
+			inputtxt = replace_all(inputtxt,"{{user}}",(localsettings.chatname?localsettings.chatname:"User"),true);
+			inputtxt = replace_all(inputtxt,"{{char}}",(localsettings.chatopponent?localsettings.chatopponent:defaultchatopponent),true);
+		}
+
+		for(let i=0;i<placeholder_tags_data.length;++i)
+		{
+			if(placeholder_tags_data[i].p && placeholder_tags_data[i].r)
+			{
+				inputtxt = replace_all(inputtxt,placeholder_tags_data[i].p,placeholder_tags_data[i].r);
+			}
+		}
+		return inputtxt;
+	}
+	//if alwaysreplace, then settings are not considered, otherwise checks settings
+	function replace_placeholders(inputtxt, escape=false, alwaysreplace=false)
+	{
+		//only do this for chat and instruct modes
+		if(alwaysreplace || localsettings.placeholder_tags)
+		{
+			inputtxt = replace_instruct_placeholders(inputtxt);
+			inputtxt = replace_noninstruct_placeholders(inputtxt,escape);
+		}
+		return inputtxt;
 	}
 
 	//saving and loading functionality
@@ -11328,52 +11375,7 @@ initializeInstructUIFunctionality();
 		render_gametext(false);
 	}
 
-	//we separate these 2 functions, as sometimes we only need to replace instruct
-	function replace_instruct_placeholders(inputtxt) //only for instruct placeholders first
-	{
-		inputtxt = replace_all(inputtxt,instructstartplaceholder,get_instruct_starttag(false));
-		inputtxt = replace_all(inputtxt,instructendplaceholder,get_instruct_endtag(false));
-		inputtxt = replace_all(inputtxt,instructsysplaceholder,get_instruct_systag(false));
-		//failsafe to handle removing newline tags
-		inputtxt = replace_all(inputtxt,instructstartplaceholder.trim(),get_instruct_starttag(false));
-		inputtxt = replace_all(inputtxt,instructendplaceholder.trim(),get_instruct_endtag(false));
-		inputtxt = replace_all(inputtxt,instructsysplaceholder.trim(),get_instruct_systag(false));
-		return inputtxt;
-	}
-	function replace_noninstruct_placeholders(inputtxt,escape=false)
-	{
-		if(escape)
-		{
-			inputtxt = replace_all(inputtxt,"{{user}}",escape_html(localsettings.chatname?localsettings.chatname:"User"),true);
-			inputtxt = replace_all(inputtxt,"{{char}}",escape_html(localsettings.chatopponent?localsettings.chatopponent:defaultchatopponent),true);
-		}
-		else
-		{
-			inputtxt = replace_all(inputtxt,"{{user}}",(localsettings.chatname?localsettings.chatname:"User"),true);
-			inputtxt = replace_all(inputtxt,"{{char}}",(localsettings.chatopponent?localsettings.chatopponent:defaultchatopponent),true);
-		}
 
-		for(let i=0;i<placeholder_tags_data.length;++i)
-		{
-			if(placeholder_tags_data[i].p && placeholder_tags_data[i].r)
-			{
-				inputtxt = replace_all(inputtxt,placeholder_tags_data[i].p,placeholder_tags_data[i].r);
-			}
-		}
-		return inputtxt;
-	}
-
-	//if alwaysreplace, then settings are not considered, otherwise checks settings
-	function replace_placeholders(inputtxt, escape=false, alwaysreplace=false)
-	{
-		//only do this for chat and instruct modes
-		if(alwaysreplace || localsettings.placeholder_tags)
-		{
-			inputtxt = replace_instruct_placeholders(inputtxt);
-			inputtxt = replace_noninstruct_placeholders(inputtxt,escape);
-		}
-		return inputtxt;
-	}
 
 	function apply_display_only_regex(inputtxt)
 	{
@@ -11530,6 +11532,7 @@ initializeInstructUIFunctionality();
 			document.getElementById("abortgen").classList.remove("hidden");
 			document.getElementById("chat_msg_send_btn_abort").classList.remove("hidden");
 			document.getElementById("corpo_chat_send_btn_abort").classList.remove("hidden");
+			websearch_in_progress = false;
 		}
 	}
 
@@ -16569,6 +16572,14 @@ initializeInstructUIFunctionality();
 
 		idle_timer = 0;
 		document.getElementById("token-budget").innerText = last_token_budget;
+		if(websearch_in_progress && websearch_enabled && is_using_kcpp_with_websearch())
+		{
+			document.getElementById("searchingtxt").classList.remove("hidden");
+		}
+		else
+		{
+			document.getElementById("searchingtxt").classList.add("hidden");
+		}
 	}
 
 	function render_corpo_welcome()
@@ -18634,8 +18645,14 @@ initializeInstructUIFunctionality();
 			if(webSearchQuery=="")
 			{
 				webSearchQuery = (gametext_arr.length > 0 ? gametext_arr.slice(-1)[0] : "");
+				webSearchQuery = replace_search_placeholders(webSearchQuery);
+				webSearchQuery = webSearchQuery.trim();
+				if(webSearchQuery=="")
+				{
+					webSearchQuery = (gametext_arr.length > 1 ? gametext_arr.slice(-2,-1)[0] : "");
+				}
 			}
-			webSearchQuery = replace_placeholders(webSearchQuery);
+			webSearchQuery = replace_search_placeholders(webSearchQuery);
 			webSearchQuery = webSearchQuery.trim();
 			webSearchQuery = webSearchQuery.replace(/(?:\r\n|\r|\n)/g, '. ');
 			if(webSearchQuery==lastSearchQuery || webSearchQuery=="")
@@ -18647,6 +18664,7 @@ initializeInstructUIFunctionality();
 				if(pending_response_id=="")
 				{
 					pending_response_id = "-1";
+					websearch_in_progress = true;
 					render_gametext(false);
 				}
 				let murl = `${custom_kobold_endpoint}${koboldcpp_websearch_endpoint}`;
@@ -18664,6 +18682,7 @@ initializeInstructUIFunctionality();
 					{
 						pending_response_id = "";
 					}
+					websearch_in_progress = false;
 					onDone();
 				})
 				.catch(error => {
@@ -18674,6 +18693,7 @@ initializeInstructUIFunctionality();
 					{
 						pending_response_id = "";
 					}
+					websearch_in_progress = false;
 					onDone();
 				});
 			}
@@ -18682,6 +18702,7 @@ initializeInstructUIFunctionality();
 		{
 			lastSearchResults = [];
 			lastSearchQuery = "";
+			websearch_in_progress = false;
 			onDone();
 		}
 	}
@@ -18770,9 +18791,9 @@ initializeInstructUIFunctionality();
 		allText = replace_all(allText,recentTextStr,"");
 
 		// Ensure placeholders are replaced to allow searching for user / character
-		allText = replace_placeholders(allText)
-		searchStr = replace_placeholders(searchStr)
-		recentTextStr = replace_placeholders(recentTextStr)
+		allText = replace_search_placeholders(allText)
+		searchStr = replace_search_placeholders(searchStr)
+		recentTextStr = replace_search_placeholders(recentTextStr)
 
 		let i = 0, startLoc = 0;
 		while (startLoc < allText.length && i < Number.MAX_SAFE_INTEGER) {
@@ -18993,6 +19014,7 @@ initializeInstructUIFunctionality();
 					<button type="button" class="btn wait mainnav" id="btnsend" disabled
 						onclick="submit_generation_button(false)" onmousedown="ptt_start()" onmouseup="ptt_end()">Loading</button>
 						<a href="#" id="abortgen" class="hidden bg_black mainnav" style="text-align: center;color: #ffaaaa;" onclick="abort_generation()"><b style="display: block;">[ABORT]</b></a>
+						<span id="searchingtxt" class="hidden bg_black mainnav" style="text-align: center;color: #49a8e4; font-size: 9px;"><b style="display: block;">WebSearch...</b></span>
 				</div>
 			</div>
 		</div>
