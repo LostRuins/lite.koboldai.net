@@ -3969,7 +3969,13 @@ initializeInstructUIFunctionality();
 		objdatastr = (objdatastr?String(objdatastr):"");
 		let fallbackSave = function()
 		{
-			localStorage.setItem(STORAGE_PREFIX + objkey, objdatastr);
+			try {
+				localStorage.setItem(STORAGE_PREFIX + objkey, objdatastr);
+			}
+			catch(error)
+			{
+				console.log(`Localstorage failed to save!`);
+			}
 			resolve();
 		}
 		const isIndexedDBSupported = !!window.indexedDB;
@@ -4010,7 +4016,12 @@ initializeInstructUIFunctionality();
 				const storeRequest = store.put({ key: objkey, value: objdatastr });
 
 				storeRequest.onsuccess = function () {
-					localStorage.setItem(STORAGE_PREFIX + objkey, "offload_to_indexeddb"); //indicate its been offloaded
+					try {
+						localStorage.setItem(STORAGE_PREFIX + objkey, "offload_to_indexeddb"); //indicate its been offloaded
+					}
+					catch (error) {
+						console.log(`Localstorage failed to save!`);
+					}
 					resolve();
 				};
 				storeRequest.onerror = function (event) {
@@ -4038,11 +4049,19 @@ initializeInstructUIFunctionality();
 
 		let fallbackResolveLoad = function() //if indexeddb fails
 		{
-			let fallbackval = localStorage.getItem(STORAGE_PREFIX + objkey, defaultvalue);
+			let fallbackval = null;
+			try {
+				fallbackval = localStorage.getItem(STORAGE_PREFIX + objkey, defaultvalue);
+			} catch (error) {
+				console.log(`Localstorage failed to load!`);
+				fallbackval = defaultvalue;
+			}
 			if(fallbackval=="offload_to_indexeddb") //value was offloaded but we cant read it. return default
 			{
-				resolve(defaultvalue);
+				fallbackval = defaultvalue;
 			}
+			resolve(fallbackval);
+			return;
 		}
 
 		const isIndexedDBSupported = !!window.indexedDB;
@@ -4054,7 +4073,14 @@ initializeInstructUIFunctionality();
 		}
 
 		//if value is not offloaded, return it immediately
-		let testval = localStorage.getItem(STORAGE_PREFIX + objkey, defaultvalue);
+		let testval = null;
+		try {
+			testval = localStorage.getItem(STORAGE_PREFIX + objkey, defaultvalue);
+		} catch (error) {
+			console.log(`Localstorage failed to load!`);
+			resolve(defaultvalue);
+			return;
+		}
 		if(testval!="offload_to_indexeddb")
 		{
 			console.log(`Value not offloaded to indexeddb! Fallback to localstorage.`);
