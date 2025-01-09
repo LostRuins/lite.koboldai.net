@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 201;
+	const LITEVER = 202;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3044,6 +3044,7 @@ Current version indicated by LITEVER below.
 		narrate_only_dialog: false,
 		voice_end_delay: 300,
 		voice_suppress_nonspeech: false,
+		voice_langcode: "auto",
 		tts_speed: 1.0,
 		image_styles: "",
 		image_negprompt: "",
@@ -10330,6 +10331,7 @@ initializeInstructUIFunctionality();
 		document.getElementById("tts_speed").value = localsettings.tts_speed;
 		document.getElementById("voice_end_delay").value = localsettings.voice_end_delay;
 		document.getElementById("voice_suppress_nonspeech").checked = localsettings.voice_suppress_nonspeech;
+		document.getElementById("voice_langcode").value = localsettings.voice_langcode;
 		toggle_opmode();
 
 		//sd models display
@@ -10618,6 +10620,7 @@ initializeInstructUIFunctionality();
 		localsettings.tts_speed = document.getElementById("tts_speed").value;
 		localsettings.voice_end_delay = document.getElementById("voice_end_delay").value;
 		localsettings.voice_suppress_nonspeech = (document.getElementById("voice_suppress_nonspeech").checked?true:false);
+		localsettings.voice_langcode = document.getElementById("voice_langcode").value;
 		localsettings.auto_ctxlen = (document.getElementById("auto_ctxlen").checked ? true : false);
 		localsettings.auto_genamt = (document.getElementById("auto_genamt").checked ? true : false);
 
@@ -15299,7 +15302,8 @@ initializeInstructUIFunctionality();
 		let payload = {
 			"audio_data": dataurl,
 			"prompt": "",
-			"suppress_non_speech": localsettings.voice_suppress_nonspeech
+			"suppress_non_speech": localsettings.voice_suppress_nonspeech,
+			"langcode": localsettings.voice_langcode,
 		};
 		fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_transcribe_endpoint), {
 			method: 'POST',
@@ -15349,7 +15353,8 @@ initializeInstructUIFunctionality();
 							let payload = {
 								"audio_data": dataurl,
 								"prompt": "",
-								"suppress_non_speech": (document.getElementById("voice_suppress_nonspeech").checked?true:false)
+								"suppress_non_speech": (document.getElementById("voice_suppress_nonspeech").checked?true:false),
+								"langcode": document.getElementById("voice_langcode").value
 							};
 							fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_transcribe_endpoint), {
 								method: 'POST',
@@ -20229,6 +20234,12 @@ initializeInstructUIFunctionality();
 							<div class="justifyleft" style="padding:2px"  title="Suppress non-speech (e.g. music and sounds) from transcription">Suppress Non-Speech </div>
 						  	<input title="Suppress Non-Speech" type="checkbox" id="voice_suppress_nonspeech" style="margin:0px 0px 0px auto;">
 						</div>
+						<div class="inlinelabel" style="font-size: 11px;">
+							<div class="justifyleft" style="padding:2px"  title="Language Code">Language </div>
+							<input class="settinglabel miniinput" type="text" placeholder="en" value="auto" id="voice_langcode" style="height:18px; width: 36px; padding: 2px;">
+
+						</div>
+
 						<div class="inlinelabel" style="font-size: 11px;">
 							<div class="justifyleft" style="padding:3px">Voice Delay: </div>
 							<input title="Voice Delay Milliseconds" type="text" inputmode="decimal" value="300" id="voice_end_delay" style="width:40px">
