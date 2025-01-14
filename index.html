@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 202;
+	const LITEVER = 203;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -11938,6 +11938,7 @@ initializeInstructUIFunctionality();
 			}else{
 				document.getElementById("nokcpptts").classList.remove("hidden");
 			}
+			adjust_kcpptts_controls();
 		}
 	}
 
@@ -11979,6 +11980,15 @@ initializeInstructUIFunctionality();
 		const rvcPitch = document.getElementById("alltalk_rvc_pitch");
 		rvcSelect.disabled = streamingMode;
 		rvcPitch.disabled = streamingMode;
+	}
+
+	function adjust_kcpptts_controls() {
+		if (document.getElementById("kcpp_tts_voice").value == "custom") {
+			document.getElementById("kcpp_tts_voice_custom").classList.remove("hidden");
+		} else {
+			document.getElementById("kcpp_tts_voice_custom").classList.add("hidden");
+		}
+
 	}
 
 	// Update set_xtts_url to use the new fetch_rvc_voices function
@@ -12073,7 +12083,7 @@ initializeInstructUIFunctionality();
 					payload =
 					{
 						"input": text,
-						"voice": document.getElementById("kcpp_tts_voice").value
+						"voice": (document.getElementById("kcpp_tts_voice").value == "custom")?document.getElementById("kcpp_tts_voice_custom").value:document.getElementById("kcpp_tts_voice").value
 					};
 					ttsheaders = get_kobold_header();
 				}
@@ -14496,7 +14506,7 @@ initializeInstructUIFunctionality();
 		gentxt = trim_extra_stop_seqs(gentxt,false);
 
 		//fix alpaca leakage
-		if(localsettings.fix_alpaca_leak && get_instruct_starttag(true).toLowerCase().includes("### instruction"))
+		if(localsettings.fix_alpaca_leak && (localsettings.opmode == 2 || localsettings.opmode == 3 || localsettings.opmode == 4) && get_instruct_starttag(true).toLowerCase().includes("### instruction"))
 		{
 			let matches = gentxt.match(/\n### (.+?):/g);
 			for(let m in matches)
@@ -20249,7 +20259,18 @@ initializeInstructUIFunctionality();
 								<div class="color_red hidden" id="nokcpptts">KoboldCpp Not Connected</div>
 								<div class="settinglabel">
 								<table width="100%">
-								<tr style="font-size:12px;padding:2px;margin:0px 0 0;"><td>TTS Voice </td><td><input class="settinglabel miniinput" type="text" value="kobo" placeholder="(Anything)" id="kcpp_tts_voice" style="margin-left:3px; height:18px; width: 80px; padding: 2px;"></td></tr>
+								<tr style="font-size:12px;padding:2px;margin:0px 0 0;"><td>TTS Voice </td><td>
+									<select onchange="adjust_kcpptts_controls();" class="form-control" id="kcpp_tts_voice" style="font-size:12px;height:20px;padding:0;margin:0px 0 0;">
+									<option value="kobo" selected>kobo</option>
+									<option value="cheery">cheery</option>
+									<option value="sleepy">sleepy</option>
+									<option value="tutor">tutor</option>
+									<option value="shouty">shouty</option>
+									<option value="bored">bored</option>
+									<option value="record">record</option>
+									<option value="custom">custom</option>
+									</select></td>
+									<td><input class="settinglabel miniinput" type="text" value="" placeholder="(Name)" id="kcpp_tts_voice_custom" style="margin-left:3px; height:18px; width:44px; padding: 2px;"></td></tr>
 								</table>
 								</div>
 							</div>
