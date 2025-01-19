@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 204;
+	const LITEVER = 205;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -9093,6 +9093,9 @@ initializeInstructUIFunctionality();
 		custom_cohere_key = "";
 
 		let epchoice = document.getElementById("customapidropdown").value;
+		document.getElementById("connectstatusproxied").classList.add("hidden");
+		document.getElementById("connectstatus").innerHTML = "Connecting";
+
 		if(epchoice==0) //ai horde
 		{
 			confirm_horde_models();
@@ -9125,6 +9128,7 @@ initializeInstructUIFunctionality();
 				custom_kobold_key = desiredkoboldkey;
 
 				let fetchedurl = apply_proxy_url(desiredkoboldendpoint + kobold_custom_mdl_endpoint);
+
 				fetch(fetchedurl,{
 					method: 'GET',
 					headers: get_kobold_header(),
@@ -9147,6 +9151,15 @@ initializeInstructUIFunctionality();
 						custom_kobold_endpoint = "";
 						render_gametext();
 					} else {
+
+						if(uses_cors_proxy && !is_local_url(fetchedurl))
+						{
+							document.getElementById("connectstatusproxied").classList.remove("hidden");
+						}else
+						{
+							document.getElementById("connectstatusproxied").classList.add("hidden");
+						}
+
 						//good to go
 						custom_kobold_endpoint = desiredkoboldendpoint;
 						custom_kobold_key = desiredkoboldkey;
@@ -9490,6 +9503,11 @@ initializeInstructUIFunctionality();
 			if(desired_claude_key!="" && desired_claude_ep!="")
 			{
 				dismiss_endpoint_container();
+
+				if(desired_claude_ep.toLowerCase().includes("api.anthropic.com"))
+				{
+					document.getElementById("connectstatusproxied").classList.remove("hidden");
+				}
 
 				//good to go
 				custom_claude_endpoint = desired_claude_ep;
@@ -9900,12 +9918,19 @@ initializeInstructUIFunctionality();
 		custom_palm_key = "";
 		custom_cohere_key = "";
 
-		if (selected_idx_arr.length > 0) {
-			let prep_sel_models = [];
-			let prep_sel_workers = []; //if selected, pick a specific worker ids to use
+		let prep_sel_models = [];
+		let prep_sel_workers = []; //if selected, pick a specific worker ids to use
 
-			let manualworker = (document.getElementById("manualworker").checked ? true : false);
+		let manualworker = (document.getElementById("manualworker").checked ? true : false);
 
+		if (selected_idx_arr.length == 0) { //select everything
+			manualworker = false;
+			for (let i = 0; i < models_data.length; ++i) {
+				prep_sel_models.push(models_data[i]);
+			}
+		}
+		else
+		{
 			for (var i = 0; i < selected_idx_arr.length; ++i) {
 				if (manualworker) //we are looping through selected workers
 				{
@@ -9925,24 +9950,24 @@ initializeInstructUIFunctionality();
 					prep_sel_models.push(addedmodel);
 				}
 			}
-
-			//remove undefined and nulls
-			prep_sel_models = prep_sel_models.filter(x=>x);
-			prep_sel_workers = prep_sel_workers.filter(x=>x);
-
-			selected_models = prep_sel_models;
-			selected_workers = prep_sel_workers;
-			localsettings.my_api_key = document.getElementById("apikey").value;
-			if(localsettings.my_api_key==null || localsettings.my_api_key=="")
-			{
-				localsettings.my_api_key = defaultsettings.my_api_key;
-			}
-
-			document.getElementById("connectstatus").innerHTML = "AI Horde";
-
-			render_gametext();
-			hide_popups();
 		}
+
+		//remove undefined and nulls
+		prep_sel_models = prep_sel_models.filter(x=>x);
+		prep_sel_workers = prep_sel_workers.filter(x=>x);
+
+		selected_models = prep_sel_models;
+		selected_workers = prep_sel_workers;
+		localsettings.my_api_key = document.getElementById("apikey").value;
+		if(localsettings.my_api_key==null || localsettings.my_api_key=="")
+		{
+			localsettings.my_api_key = defaultsettings.my_api_key;
+		}
+
+		render_gametext();
+		hide_popups();
+
+		document.getElementById("connectstatus").innerHTML = "AI Horde";
 	}
 
 	function delete_my_worker(index)
@@ -19062,6 +19087,7 @@ initializeInstructUIFunctionality();
 			<div id="connectstatusdiv">
 				<div id="connectstatus">Connecting</div>
 				<div class="hidden" style="font-size: 12px;" id="connectstatusmultiplayer"></div>
+				<div class="hidden color_orange" style="font-size: 12px;" id="connectstatusproxied">(Proxied)</div>
 			</div>
 		</div>
 
