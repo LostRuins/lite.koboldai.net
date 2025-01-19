@@ -2939,6 +2939,7 @@ Current version indicated by LITEVER below.
 	var temp_scenario = null;
 	var last_token_budget = ""; //to display token limits
 	var last_known_filename = "saved_story.json";
+	var backup_localmodeport = 5001; //sometimes we reattempt a different port, this stores a backup
 	var localmodeport = 5001;
 	var localmodehost = "localhost";
 	var localprotocol = "http://";
@@ -3639,6 +3640,7 @@ Current version indicated by LITEVER below.
 		if (inputport) {
 			localmodeport = parseInt(inputport);
 		}
+		backup_localmodeport = localmodeport;
 
 		let inputhost = urlParams.get('host');
 		sublocalpathname = "";
@@ -5142,10 +5144,10 @@ initializeInstructUIFunctionality();
 		}
 	}
 
-
-
-
-
+	function clear_cors_proxy_flag()
+	{
+		uses_cors_proxy = false;
+	}
 
 	// attempt to connect to the selected backend
 	function attempt_connect(popup_aiselect = true)
@@ -9384,34 +9386,40 @@ initializeInstructUIFunctionality();
 
 					let is_local = is_local_url(custom_kobold_endpoint);
 
-					if (uses_cors_proxy || is_local) {
-						if(is_local && sublocalpathname!="")
-						{
-							sublocalpathname = ""; //one more try
-							attempt_connect(false);
-						}
-						else if(reattempt_local_port80)
-						{
-							reattempt_local_port80 = false;
-							localmodeport = 80;
-							attempt_connect(false);
-						}
-						else
-						{
-							msgbox("Failed to connect to Custom KoboldAI Endpoint!<br><br>Please check if KoboldAI is running at the url: " + desiredkoboldendpoint + "<br><br>You can also <a href='#' class='color_blueurl' onclick='hide_popups();display_endpoint_container();'>try a different URL or API type</a>.","Error Encountered",true);
-							selected_models = [];
-							selected_workers = [];
-							custom_kobold_endpoint = "";
-							if(localflag)
-							{
-								document.getElementById("connectstatus").innerHTML = "Offline Mode";
-							}
-							render_gametext();
-						}
-					} else {
-						uses_cors_proxy = true; //fallback to cors proxy, this will remain for rest of session
+					//we will go down the fallbacks one by one until we run out of options
+					localmodeport = backup_localmodeport;
+					if(is_local && sublocalpathname!="")
+					{
+						sublocalpathname = ""; // first fallback, check subdir paths
+						attempt_connect(false);
+					}
+					else if(reattempt_local_port80) // second fallback, try port 80
+					{
+						reattempt_local_port80 = false;
+						localmodeport = 80;
+						attempt_connect(false);
+					}
+					else if(!is_local && !uses_cors_proxy) //third fallback, use cors proxy if not a local IP
+					{
+						uses_cors_proxy = true; // fallback to cors proxy, this will remain for rest of session
 						connect_custom_endpoint(); //one more try
 					}
+					else //finally, we give up
+					{
+						msgbox("Failed to connect to Custom KoboldAI Endpoint!<br><br>Please check if KoboldAI is running at the url: " + desiredkoboldendpoint + "<br><br>You can also <a href='#' class='color_blueurl' onclick='hide_popups();display_endpoint_container();'>try a different URL or API type</a>.","Error Encountered",true);
+						selected_models = [];
+						selected_workers = [];
+						custom_kobold_endpoint = "";
+						if(localflag)
+						{
+							document.getElementById("connectstatus").innerHTML = "Offline Mode";
+						}else{
+							document.getElementById("connectstatus").innerHTML = "Error";
+						}
+
+						render_gametext();
+					}
+
 				});
 			}
 		}
@@ -19623,7 +19631,7 @@ initializeInstructUIFunctionality();
 				</span>
 			</div>
 			<div class="popupfooter">
-				<button type="button" class="btn btn-primary" onclick="connect_custom_endpoint()">Ok</button>
+				<button type="button" class="btn btn-primary" onclick="clear_cors_proxy_flag();connect_custom_endpoint()">Ok</button>
 				<button type="button" class="btn btn-primary" onclick="dismiss_endpoint_container()">Cancel</button>
 			</div>
 		</div>
