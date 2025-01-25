@@ -11951,14 +11951,25 @@ initializeInstructUIFunctionality();
 
 	function test_tts()
 	{
-		inputBox("Enter phrase to speak.","Test TTS","","Input text to speak", ()=>{
+		let ssval = document.getElementById("ttsselect").value;
+		let speakprompt = "Enter phrase to speak.";
+
+		if(ssval==XTTS_ID || ssval==ALLTALK_ID || ssval==OAI_TTS_ID || ssval==KCPP_TTS_ID)
+		{
+			speakprompt = `Enter phrase to speak.<br><div><input type="checkbox" id="downloadtts" title="Add Endpoint Version Number"><div class="box-label">Download as .wav file</div></div>`;
+		}
+		inputBox(speakprompt,"Test TTS","","Input text to speak", ()=>{
 			let userinput = getInputBoxValue();
-			userinput = userinput.trim();
-			let ssval = document.getElementById("ttsselect").value;
-			if (userinput != null && userinput!="" && ssval > 0) {
-				tts_speak(userinput,ssval);
+			let downloadtts = false;
+			if(document.getElementById("downloadtts")!=null)
+			{
+				downloadtts = (document.getElementById("downloadtts").checked?true:false);
 			}
-		},false);
+			userinput = userinput.trim();
+			if (userinput != null && userinput!="" && ssval > 0) {
+				tts_speak(userinput,ssval,downloadtts);
+			}
+		},true);
 	}
 
 	function toggle_tts_mode()
@@ -12071,7 +12082,21 @@ initializeInstructUIFunctionality();
 		},false);
 	}
 
-	function tts_speak(text, speech_synth_override=null)
+	function tts_download(arrayBufferData)
+	{
+		var a = document.getElementById("tempfile");
+		var file = new Blob([arrayBufferData], { type: 'audio/wav' });
+		if (tempfileurl) {
+			window.URL.revokeObjectURL(tempfileurl);
+		}
+		tempfileurl = window.URL.createObjectURL(file);
+		a.href = tempfileurl;
+		a.target = '_blank';
+		a.download = "audio.wav";
+		setTimeout(function(){a.click()},20);
+	}
+
+	function tts_speak(text, speech_synth_override=null, do_download=false)
 	{
 		if(!text || text=="" || text.trim()=="")
 		{
@@ -12112,6 +12137,7 @@ initializeInstructUIFunctionality();
 			let is_oai_tts = (ssval==OAI_TTS_ID);
 			let is_kcpp_tts = (ssval==KCPP_TTS_ID);
 			const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+			let audiofile_ref = null;
 
 			if(is_oai_tts || is_kcpp_tts)
 			{
@@ -12149,9 +12175,14 @@ initializeInstructUIFunctionality();
 				})
 				.then(response => response.arrayBuffer())
 				.then(data => {
+					audiofile_ref = data.slice(0);
 					return audioContext.decodeAudioData(data);
 				})
 				.then(decodedData => {
+					if(do_download)
+					{
+						tts_download(audiofile_ref);
+					}
 					const playSound = audioContext.createBufferSource();
 					playSound.buffer = decodedData;
 					playSound.connect(audioContext.destination);
@@ -12187,9 +12218,14 @@ initializeInstructUIFunctionality();
 					})
 					.then(response => response.arrayBuffer())
 					.then(data => {
+						audiofile_ref = data.slice(0);
 						return audioContext.decodeAudioData(data);
 					})
 					.then(decodedData => {
+						if(do_download)
+						{
+							tts_download(audiofile_ref);
+						}
 						const playSound = audioContext.createBufferSource();
 						playSound.buffer = decodedData;
 						playSound.connect(audioContext.destination);
@@ -12245,9 +12281,14 @@ initializeInstructUIFunctionality();
 						fetch(streamingUrl)
 						.then(response => response.arrayBuffer())
 						.then(data => {
+							audiofile_ref = data.slice(0);
 							return audioContext.decodeAudioData(data);
 						})
 						.then(decodedData => {
+							if(do_download)
+							{
+								tts_download(audiofile_ref);
+							}
 							playDecodedAllTalkData(decodedData);
 						})
 						.catch((error) => {
@@ -12291,9 +12332,14 @@ initializeInstructUIFunctionality();
 										fetch(audioUrl)
 										.then(response => response.arrayBuffer())
 										.then(data => {
+											audiofile_ref = data.slice(0);
 											return audioContext.decodeAudioData(data);
 										})
 										.then(decodedData => {
+											if(do_download)
+											{
+												tts_download(audiofile_ref);
+											}
 											playDecodedAllTalkData(decodedData);
 										})
 										.catch((error) => {
@@ -12316,9 +12362,14 @@ initializeInstructUIFunctionality();
 							else //alltalk v1 audio
 							{
 								return response.arrayBuffer().then(data => {
+									audiofile_ref = data.slice(0);
 									return audioContext.decodeAudioData(data);
 								})
 								.then(decodedData => {
+									if(do_download)
+									{
+										tts_download(audiofile_ref);
+									}
 									playDecodedAllTalkData(decodedData);
 								}).catch((error) => {
 									console.log("AllTalk v1 Speak Error: " + error);
