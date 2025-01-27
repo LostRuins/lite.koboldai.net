@@ -2933,7 +2933,7 @@ Current version indicated by LITEVER below.
 	var synchro_polled_response = null;
 	var last_stop_reason = ""; //update stop reason if known
 	var synchro_pending_stream = ""; //used for token pseduo streaming for kobold api only
-	var waiting_for_autosummary = false;
+	var waiting_for_tool_call = 0; //0=not waiting, 1=autosummary, 2=websearchsummary
 	var oaiemulatecompletionscontent = "";
 	var italics_regex = new RegExp(/\*(\S[^*]+\S)\*/g); //the fallback regex
 	var bold_regex = new RegExp(/\*\*(\S[^*]+\S)\*\*/g); //the fallback regex
@@ -3241,6 +3241,13 @@ Current version indicated by LITEVER below.
 		"name":"Vicuna",
 		"user":"\\nUSER: ",
 		"assistant":"\\nASSISTANT: ",
+		"system":"",
+	},
+	{
+		"id":13,
+		"name":"Deepseek V2.5",
+		"user":"<｜end▁of▁sentence｜><｜User｜>",
+		"assistant":"<｜Assistant｜>",
 		"system":"",
 	}
 	];
@@ -11177,13 +11184,62 @@ initializeInstructUIFunctionality();
 		},false,true);
 	}
 
+	var on_searchsummary_done = null;
+	function generate_websearch_prompt(recentCtx, search_query, onDoneFn)
+	{
+		if (recentCtx.trim() == "") {
+			console.log("Cannot websearch nothing.");
+			onDoneFn("");
+		} else {
+			pending_response_id = "-1";
+			waiting_for_tool_call = 2;
+			let max_allowed_characters = Math.floor(localsettings.max_context_length * 3.0) - 100;
+			let truncated_context = recentCtx.substring(recentCtx.length - max_allowed_characters);
+
+			truncated_context = replace_placeholders(truncated_context);
+			truncated_context += `\n\n### New Task:\nFrom above text, rephrase the search engine query "${search_query}" as a single short phrase (for search engines) using proper nouns, references and names to avoid ambiguity.\n\n### Rephrased Search Query Created:\n`;
+
+			let submit_payload = {
+				"prompt": truncated_context,
+				"params": {
+					"n": 1,
+					"max_context_length": localsettings.max_context_length,
+					"max_length": 200,
+					"rep_pen": localsettings.rep_pen,
+					"temperature": localsettings.temperature,
+					"top_p": localsettings.top_p,
+					"top_k": localsettings.top_k,
+					"top_a": localsettings.top_a,
+					"typical": localsettings.typ_s,
+					"tfs": localsettings.tfs_s,
+					"rep_pen_range": localsettings.rep_pen_range,
+					"rep_pen_slope": localsettings.rep_pen_slope,
+					"sampler_order": localsettings.sampler_order
+				},
+				"models": selected_models.map((m) => { return m.name }),
+			};
+
+			if (localsettings.sampler_seed >= 1) {
+				submit_payload.params.sampler_seed = localsettings.sampler_seed;
+			}
+
+			//v2 api specific fields
+			submit_payload.workers = selected_workers.map((m) => { return m.id });
+
+			on_searchsummary_done = onDoneFn;
+
+			dispatch_submit_generation(submit_payload, false);
+			render_gametext();
+		}
+	}
+
 	let temp_automem_store = "";
 	function autogenerate_summary_memory()
 	{
 		temp_automem_store = document.getElementById("memorytext").value;
 		let onOk = ()=>{
 			pending_response_id = "-1";
-			waiting_for_autosummary = true;
+			waiting_for_tool_call = 1;
 			let max_allowed_characters = Math.floor(localsettings.max_context_length * 3.0)-100;
 			let truncated_context = concat_gametext(true, "");
 
@@ -11255,7 +11311,7 @@ initializeInstructUIFunctionality();
 	function handle_incoming_autosummary(gentxt)
 	{
 		retry_in_progress = false;
-		waiting_for_autosummary = false;
+		waiting_for_tool_call = 0;
 		gentxt = gentxt.trim();
 		gentxt = gentxt.split("###")[0];
 		gentxt = replaceAll(gentxt,"\n\n","\n");
@@ -11289,7 +11345,43 @@ initializeInstructUIFunctionality();
 		{
 			document.getElementById("memorytext").value = temp_automem_store + "\n\n[Summary Continued: "+gentxt+"]";
 		}
+	}
 
+	function handle_incoming_searchsummary(gentxt)
+	{
+		retry_in_progress = false;
+		waiting_for_tool_call = 0;
+		gentxt = gentxt.trim();
+		gentxt = gentxt.split("###")[0];
+		gentxt = replaceAll(gentxt,"\n\n","\n");
+		let gtar = gentxt.split("\n");
+
+		gentxt = gtar[0];
+		let deslen = 200; //deal with point form response
+		if(gentxt.length<100 && gtar.length>1)
+		{
+			for(var k=1;k<gtar.length;++k)
+			{
+				deslen -= gtar[k].length;
+				if(gtar[k].trim().length>5)
+				{
+					gentxt += "\n"+gtar[k];
+				}
+				if(deslen<=0)
+				{
+					break;
+				}
+			}
+		}
+
+		//clean up text
+		gentxt = end_trim_to_sentence(gentxt,true);
+		if(on_searchsummary_done!=null)
+		{
+			let cb = on_searchsummary_done;
+			on_searchsummary_done = null;
+			cb(gentxt);
+		}
 	}
 
 	function simplemodexample()
@@ -11361,7 +11453,7 @@ initializeInstructUIFunctionality();
 		synchro_polled_response = null;
 		last_stop_reason = "";
 		synchro_pending_stream = "";
-		waiting_for_autosummary = false;
+		waiting_for_tool_call = 0;
 		horde_poll_nearly_completed = false;
 		oaiemulatecompletionscontent = "";
 	}
@@ -11382,7 +11474,7 @@ initializeInstructUIFunctionality();
 		synchro_polled_response = null;
 		last_stop_reason = "";
 		synchro_pending_stream = "";
-		waiting_for_autosummary = false;
+		waiting_for_tool_call = 0;
 		oaiemulatecompletionscontent = "";
 		last_reply_was_empty = false;
 		pending_context_preinjection = "";
@@ -12553,7 +12645,7 @@ initializeInstructUIFunctionality();
 
 		if (!user_input_empty || gametext_arr.length > 0 || current_memory != "" || current_anote != "")
 		{
-			waiting_for_autosummary = false;
+			waiting_for_tool_call = 0;
 			idle_timer = 0;
 			idle_triggered_counter = 0;
 			if (localsettings.speech_synth > 0)
@@ -15722,7 +15814,7 @@ initializeInstructUIFunctionality();
 					{
 						//still waiting, do nothing until next poll
 						console.log("sync request: still awaiting reply");
-						let polledstreaming = (!waiting_for_autosummary && localsettings.tokenstreammode==1 && is_using_kcpp_with_streaming());
+						let polledstreaming = (waiting_for_tool_call==0 && localsettings.tokenstreammode==1 && is_using_kcpp_with_streaming());
 						//only check once every 2 ticks if remote
 						if (polledstreaming && (localflag?true:(poll_ticks_passed%2==0)))
 						{
@@ -15767,7 +15859,7 @@ initializeInstructUIFunctionality();
 						pending_response_id = "";
 						poll_in_progress = false;
 						let resp = synchro_polled_response;
-						if(!waiting_for_autosummary)
+						if(waiting_for_tool_call==0)
 						{
 							last_reply_was_empty = (resp=="" || resp.trim()=="");
 						}
@@ -15776,7 +15868,11 @@ initializeInstructUIFunctionality();
 							let genworker = "Custom Endpoint";
 							let genkudos = "0";
 							let genmdl = (selected_models.length>0?selected_models[0].name:"Unknown Model");
-							if(waiting_for_autosummary)
+							if(waiting_for_tool_call==2)
+							{
+								handle_incoming_searchsummary(gentxt);
+							}
+							else if(waiting_for_tool_call==1)
 							{
 								handle_incoming_autosummary(gentxt);
 							}
@@ -15838,7 +15934,9 @@ initializeInstructUIFunctionality();
 												let genworker = data.generations[0].worker_name;
 												let genmdl = data.generations[0].model;
 												let genkudos = data.kudos;
-												if (waiting_for_autosummary) {
+												if (waiting_for_tool_call == 2) {
+													handle_incoming_searchsummary(gentxt);
+												} else if (waiting_for_tool_call == 1) {
 													handle_incoming_autosummary(gentxt);
 												}
 												else {
@@ -16506,7 +16604,7 @@ initializeInstructUIFunctionality();
 			}
 
 			//streaming display
-			if(synchro_pending_stream!="")
+			if(synchro_pending_stream!="" && waiting_for_tool_call==0)
 			{
 				fulltxt += `<span class="color_yellow pending_text">${escape_html(pending_context_preinjection) + escape_html(synchro_pending_stream)}</span>`;
 			}
@@ -18848,24 +18946,9 @@ initializeInstructUIFunctionality();
 
 	function PerformWebsearch(webSearchQuery, onDone)
 	{
-		//websearch
-		if (websearch_enabled && is_using_kcpp_with_websearch())
+		let proceedSearching = function() //called once search query is prepared
 		{
-			webSearchQuery = webSearchQuery.trim();
-			if(webSearchQuery=="")
-			{
-				webSearchQuery = (gametext_arr.length > 0 ? gametext_arr.slice(-1)[0] : "");
-				webSearchQuery = replace_search_placeholders(webSearchQuery);
-				webSearchQuery = webSearchQuery.trim();
-				if(webSearchQuery=="")
-				{
-					webSearchQuery = (gametext_arr.length > 1 ? gametext_arr.slice(-2,-1)[0] : "");
-				}
-			}
-			webSearchQuery = replace_search_placeholders(webSearchQuery);
-			webSearchQuery = webSearchQuery.trim();
-			webSearchQuery = webSearchQuery.replace(/(?:\r\n|\r|\n)/g, '. ');
-			if(webSearchQuery==lastSearchQuery || webSearchQuery=="")
+			if(!websearch_multipass && (webSearchQuery==lastSearchQuery || webSearchQuery==""))
 			{
 				onDone(); //use cached results
 			}
@@ -18906,6 +18989,41 @@ initializeInstructUIFunctionality();
 					websearch_in_progress = false;
 					onDone();
 				});
+			}
+		}
+
+		//websearch
+		if (websearch_enabled && is_using_kcpp_with_websearch())
+		{
+			webSearchQuery = webSearchQuery.trim();
+
+			if(webSearchQuery=="")
+			{
+				webSearchQuery = (gametext_arr.length > 0 ? gametext_arr.slice(-1)[0] : "");
+				webSearchQuery = replace_search_placeholders(webSearchQuery);
+				webSearchQuery = webSearchQuery.trim();
+				if(webSearchQuery=="")
+				{
+					webSearchQuery = (gametext_arr.length > 1 ? gametext_arr.slice(-2,-1)[0] : "");
+				}
+			}
+			webSearchQuery = replace_search_placeholders(webSearchQuery);
+			webSearchQuery = webSearchQuery.trim();
+			webSearchQuery = webSearchQuery.replace(/(?:\r\n|\r|\n)/g, '. ');
+
+			if(websearch_multipass && gametext_arr.length > 0)
+			{
+				let search_context = concat_gametext(true, ""); //will be truncated later
+
+				//use tool call to generate the search prompt to be used
+				generate_websearch_prompt(search_context,webSearchQuery,(generated_searchstr)=>{
+					webSearchQuery = generated_searchstr;
+					proceedSearching();
+				});
+			}
+			else
+			{
+				proceedSearching();
 			}
 		}
 		else
@@ -20397,7 +20515,7 @@ initializeInstructUIFunctionality();
 								</table>
 							</div>
 							<div id="kcpp_tts_container" class="hidden">
-								<div class="color_red hidden" id="nokcpptts">KoboldCpp Not Connected</div>
+								<div class="color_red hidden" id="nokcpptts">KoboldCpp TTS Unavailable</div>
 								<div class="settinglabel">
 								<table width="100%">
 								<tr style="font-size:12px;padding:2px;margin:0px 0 0;"><td>TTS Voice </td><td>
