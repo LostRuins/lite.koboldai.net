@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 206;
+	const LITEVER = 207;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -5049,10 +5049,12 @@ initializeInstructUIFunctionality();
 		};
 		const replaceLatex = (input) =>{
 			//all latex patterns except inline tex
-			input = input.replace(/(^```math\n([\s\S]*?)\n```$|^\\\[\n([\s\S]*?)\n\\\]$|^\$\$\n([\s\S]*?)\n\$\$$|\$\$([^\n]+?)\$\$|\\\(([^\n]+?)\\\)|\\\[([^\n]+?)\\\])/gm, (match, p1, p2, p3, p4, p5, p6, p7) => {
+			input = input.replace(/(^```math\n([\s\S]*?)\n```$|^ {0,6}\\\[\n([\s\S]*?)\n {0,6}\\\]$|^\$\$\n([\s\S]*?)\n\$\$$|\$\$([^\n]+?)\$\$|\\\(([^\n]+?)\\\)|\\\[([^\n]+?)\\\])/gm, (match, p1, p2, p3, p4, p5, p6, p7) => {
 				let content = p2 || p3 || p4 || p5 || p6 || p7;
+				const matchedlw = match.match(/^[ \t]*/);
+				const leadingWhitespace = matchedlw ? matchedlw[0] : '';
 				content = unescape_html(content);
-				return temml.renderToString(content); // render LaTeX content
+				return leadingWhitespace + temml.renderToString(content); // render LaTeX content
 			});
 			input = input.replace(/(?:^|[^\\])\$(\S[^$\n]*?\S)\$(?!\d)/g, (match, p1) => {
 				let content = p1;
@@ -5064,6 +5066,32 @@ initializeInstructUIFunctionality();
 				content = unescape_html(content);
 				return temml.renderToString(content); // render LaTeX content
 			});
+			return input;
+		};
+		const replaceTabbedCodeblocks = (input) => {
+			let previousIndentation = 0;
+			let inCodeBlock = false;
+			input = input.replace(/\t/g, "    "); //replace tabs with 4 spaces
+			const lines = input.split("\n");
+			const regex = /^( {4,10})(.*)/;
+			let prevIsNewline = false;
+			let withinCodeBlock = false;
+			input = lines.map((line) => {
+				let isNewline = (line.trim()=="");
+				const match = line.match(regex);
+				if (match && (withinCodeBlock||prevIsNewline)) {
+					const [, spaces, content] = match;
+					let lessspaces = spaces.substring(4);
+					withinCodeBlock = true;
+					line = `<pre><code>${lessspaces}${escapeHTML(content)}</code></pre>`;
+				}
+				else
+				{
+					withinCodeBlock = false;
+				}
+				prevIsNewline = isNewline;
+				return line; // Return unmodified if no match or condition not met
+			}).join("\n");
 			return input;
 		};
 		const formatMarkdown = (md) => {
@@ -5122,12 +5150,9 @@ initializeInstructUIFunctionality();
 			.replace(/\{\{(\w.*?)\}\}/gm, "<mark>$1</mark>")
 			.replace(/^((?:\|[^|\r\n]*[^|\r\n\s]\s*)+\|(?:\r?\n|\r|))+/gm,
 				(matchedTable) => convertMarkdownTableToHtml(matchedTable))
-			.replace(/  \n/g, "\n<br/>")
-			.replace(/^ {4,10}(.*)/gm, (match, code) => {
-				return `<pre><code>${escapeHTML(code)}</code></pre>`;})
-			.replace(/^\t(.*)/gm, (match, code) => {
-				return `<pre><code>${escapeHTML(code)}</code></pre>`;})
-			.replace(/<\/code\><\/pre\>\n<pre\><code\>/g, "\n");
+			.replace(/  \n/g, "\n<br/>");
+			md = replaceTabbedCodeblocks(md);
+			md = md.replace(/<\/code\><\/pre\>\n<pre\><code\>/g, "\n");
 			md = replaceLatex(md);
 			md = md.replace(/\\([`_~\*\+\-\.\^\\\<\>\(\)\[\]])/gm, "$1");
 			return md;
