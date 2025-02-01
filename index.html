@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 208;
+	const LITEVER = 209;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -2766,7 +2766,7 @@ Current version indicated by LITEVER below.
 		"opmode":4,
 		"gui_type":0,
 		"prompt": "",
-		"memory": instructstartplaceholder+"You are a world class AI capable of using complex reasoning and reflection. Apply step-by-step reasoning and chain-of-thought. For your reply, begin with <thinking> and </thinking> tags, and then provide your final response inside <output> and </output> tags.\n",
+		"memory": instructstartplaceholder+"You are a world class AI capable of using complex reasoning and reflection. Apply step-by-step reasoning and chain-of-thought. For your reply, begin with <think> and </think> tags, and then provide your final response inside <output> and </output> tags.\n",
 		"authorsnote": "",
 		"worldinfo": []
 	},
@@ -2998,6 +2998,8 @@ Current version indicated by LITEVER below.
 	var logitbiasdict = {};
 	var regexreplace_data = [];
 	var placeholder_tags_data = [];
+	var thinking_pattern = "<think>[\\s\\S]+?</think>";
+	var thinking_action = 1; //0=display, 1=collapse, 2=hide, 3=remove
 	var voice_typing_mode = 0; //0=off, 1=on, 2=ptt
 	var koboldcpp_has_whisper = false; //does backend support voice typing
 	var voice_is_recording = false; //currently recording voice?
@@ -6337,6 +6339,8 @@ Current version indicated by LITEVER below.
 		new_save_storyobj.documentdb_data = documentdb_data;
 		new_save_storyobj.websearch_enabled = websearch_enabled;
 		new_save_storyobj.websearch_multipass = websearch_multipass;
+		new_save_storyobj.thinking_pattern = thinking_pattern;
+		new_save_storyobj.thinking_action = thinking_action;
 
 		if (export_settings) {
 			new_save_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
@@ -6651,6 +6655,14 @@ Current version indicated by LITEVER below.
 				if(storyobj.websearch_multipass)
 				{
 					websearch_multipass = storyobj.websearch_multipass;
+				}
+				if(storyobj.thinking_pattern)
+				{
+					thinking_pattern = storyobj.thinking_pattern;
+				}
+				if(storyobj.thinking_action)
+				{
+					thinking_action = storyobj.thinking_action;
 				}
 			} else {
 				//v2 load
@@ -8500,7 +8512,7 @@ Current version indicated by LITEVER below.
 
 	function expand_tokens_section(targetid)
 	{
-		let tablist = ["expandregexreplace","expandtokenbans","expandlogitbias","expandplaceholdertags"];
+		let tablist = ["expandregexreplace","expandthinking","expandtokenbans","expandlogitbias","expandplaceholdertags"];
 
 		for(let i=0;i<tablist.length;++i)
 		{
@@ -11384,9 +11396,6 @@ Current version indicated by LITEVER below.
 		//bit of a hack to save modified placeholders
 		document.getElementById("chatname").value = document.getElementById("placeholder_replace_hc0").value;
 		document.getElementById("chatopponent").value = document.getElementById("placeholder_replace_hc1").value;
-		document.getElementById("instruct_starttag").value = document.getElementById("placeholder_replace_hc2").value;
-		document.getElementById("instruct_endtag").value = document.getElementById("placeholder_replace_hc3").value;
-		document.getElementById("instruct_systag").value = document.getElementById("placeholder_replace_hc4").value;
 		confirm_chat_and_instruct_tags();
 		placeholder_tags_data = [];
 		for(let i=0;i<num_regex_rows;++i)
@@ -11420,6 +11429,15 @@ Current version indicated by LITEVER below.
 		documentdb_chunksize = cleannum(documentdb_chunksize,32,2048);
 		websearch_enabled = document.getElementById("websearch_enabled").checked?true:false;
 		websearch_multipass = document.getElementById("websearch_multipass").checked?true:false;
+		if(validate_regex(thinking_pattern))
+		{
+			thinking_pattern = document.getElementById("thinking_pattern").value;
+		}
+		else
+		{
+			thinking_pattern = "<think>[\\s\\S]+?</think>";
+		}
+		thinking_action = parseInt(document.getElementById("thinking_action").value);
 	}
 
 	function set_personal_notes()
@@ -11764,6 +11782,8 @@ Current version indicated by LITEVER below.
 			documentdb_data = "";
 			websearch_enabled = false;
 			websearch_multipass = false;
+			thinking_pattern = "<think>[\\s\\S]+?</think>";
+			thinking_action = 1;
 		}
 		warn_on_quit = false;
 		show_corpo_leftpanel(false);
@@ -11826,6 +11846,17 @@ Current version indicated by LITEVER below.
 		render_gametext(false);
 	}
 
+	function toggle_hide_thinking(button) {
+		// Get the parent div of the button
+		const targetDiv = button.nextElementSibling;
+		if (targetDiv.classList.contains('hidden')) {
+			targetDiv.classList.remove('hidden');
+			button.classList.add("bg_green");
+		} else {
+			targetDiv.classList.add('hidden');
+			button.classList.remove("bg_green");
+		}
+	}
 	function apply_display_only_regex(inputtxt)
 	{
 		//apply regex transforms
@@ -11844,6 +11875,32 @@ Current version indicated by LITEVER below.
 				}
 			}
 			inputtxt = escape_html(inputtxt);
+		}
+		if((thinking_action==1 || thinking_action==2) && thinking_pattern!="") //removal of cot
+		{
+			inputtxt = unescape_html(inputtxt);
+			let pat = new RegExp(thinking_pattern, "gm");
+			if(thinking_action==1)
+			{
+				let matches = inputtxt.match(pat) || []; // Captures matches in an array
+				if(matches.length > 0)
+				{
+					let matchiter = 0;
+					inputtxt = inputtxt.replace(pat, "%ExpandBtn%");
+					inputtxt = escape_html(inputtxt);
+					inputtxt = inputtxt.replace(/%ExpandBtn%/g, function (m) {
+						let curr = matches[matchiter];
+						let expandedhtml = `<span><button type="button" title="Show Thoughts" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="toggle_hide_thinking(this)">Show Thoughts (${curr.length} characters)</button><span class="hidden">${curr}</span></span>`;
+						++matchiter;
+						return expandedhtml;
+					});
+				}
+			}
+			else //just hide
+			{
+				inputtxt = inputtxt.replace(pat, "");
+				inputtxt = escape_html(inputtxt);
+			}
 		}
 		return inputtxt;
 	}
@@ -15028,6 +15085,11 @@ Current version indicated by LITEVER below.
 					gentxt = gentxt.replace(pat, rep);
 				}
 			}
+		}
+		if(thinking_action==3 && thinking_pattern!="") //removal of cot
+		{
+			let pat = new RegExp(thinking_pattern, "gm");
+			gentxt = gentxt.replace(pat, "");
 		}
 
 		//trim trailing whitespace, and multiple newlines
@@ -18228,6 +18290,8 @@ Current version indicated by LITEVER below.
 				}
 			}
 		}
+		document.getElementById("thinking_pattern").value = thinking_pattern;
+		document.getElementById("thinking_action").value = thinking_action;
 	}
 
 	function populate_placeholder_tags()
@@ -18239,8 +18303,8 @@ Current version indicated by LITEVER below.
 		</tr>`;
 		let regextable = document.getElementById("placeholder_replace_table");
 
-		let hardcoded1 = ["{{user}}","{{char}}","{{[INPUT]}}","{{[OUTPUT]}}","{{[SYSTEM]}}"];
-		let hardcoded2 = [localsettings.chatname,localsettings.chatopponent,localsettings.instruct_starttag,localsettings.instruct_endtag,localsettings.instruct_systag];
+		let hardcoded1 = ["{{user}}","{{char}}"];
+		let hardcoded2 = [localsettings.chatname,localsettings.chatopponent];
 
 		for(let i=0;i<hardcoded1.length;++i)
 		{
@@ -21402,6 +21466,21 @@ Current version indicated by LITEVER below.
 					</table>
 				</div>
 
+				<div style="padding:3px;" class="justifyleft settinglabel">Thinking / Reasoning Tags <span class="helpicon">?<span
+					class="helptext">Allows hiding or removing thinking tags.</span></span>
+					<button type="button" title="Regex Replace" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('expandthinking')">Expand Section</button>
+				</div>
+				<div id="expandthinking" class="hidden">
+					<div class="settinglabel justifyleft">This allows you to specify regex to handle output from reasoning models, to hide, remove, or ignore the Chain-Of-Thought.</div>
+					<div style="padding:4px" class="settinglabel justifyleft">CoT Regex Pattern: <input class="settinglabel miniinput" style="margin-left:4px;width:calc(100% - 132px);" type="text" placeholder="(Inactive)" value="" id="thinking_pattern"></div>
+					<div style="padding:4px" class="settinglabel justifyleft">CoT Handling: <select class="form-control" style="margin-left:4px;height: 25px; font-size:12px; padding:2px;display:inline;width:120px" id="thinking_action">
+						<option value="0" selected>Display</option>
+						<option value="1">Collapse</option>
+						<option value="2">Hide</option>
+						<option value="3">Remove</option>
+					</select></div>
+				</div>
+
 				<div style="padding:3px;" class="justifyleft settinglabel">Placeholder Tags <span class="helpicon">?<span
 					class="helptext">Configure automatic substitutions for placeholders in text.</span></span>
 					<button type="button" title="Placeholder Tags" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('expandplaceholdertags')">Expand Section</button>
@@ -21415,6 +21494,7 @@ Current version indicated by LITEVER below.
 					</div>
 					<table id="placeholder_replace_table" class="settinglabel" style="text-align: center; border-spacing: 3px 2px; border-collapse: separate;">
 					</table>
+					<div class="settinglabel justifyleft">To modify {{[INPUT]}} or {{[OUTPUT]}} and other instruct tags, please edit them in the Settings &gt; Format page.</div>
 				</div>
 
 			</div>
