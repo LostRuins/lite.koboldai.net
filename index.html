@@ -3481,6 +3481,22 @@ Current version indicated by LITEVER below.
 			.replace(/&quot;/g, "\"")
 			.replace(/&#039;/g, "\'");
 	}
+	function escape_html_alternate(unsafe) //this provides alternative escapes in cases where the input is a mix of partially escaped and non-escaped sequences which must be preserved
+	{
+		return unsafe
+			.replace(/</g, "%EscHtml2%")
+			.replace(/>/g, "%EscHtml3%")
+			.replace(/"/g, "%EscHtml4%")
+			.replace(/'/g, "%EscHtml5%");
+	}
+	function unescape_html_alternate(input) //reverses escape html alternate
+	{
+		return input
+			.replace(/%EscHtml2%/g, "<")
+			.replace(/%EscHtml3%/g, ">")
+			.replace(/%EscHtml4%/g, "\"")
+			.replace(/%EscHtml5%/g, "\'");
+	}
 	function unescape_regex_newlines(input) //unescapes newlines and tab sequences in a regex string input
 	{
 		return input.replace(/\\\\/g, "[temp_rr_seq]")
@@ -11862,6 +11878,7 @@ Current version indicated by LITEVER below.
 		//apply regex transforms
 		if(regexreplace_data && regexreplace_data.length>0)
 		{
+			inputtxt = escape_html_alternate(inputtxt);
 			inputtxt = unescape_html(inputtxt);
 			for(let i=0;i<regexreplace_data.length;++i)
 			{
@@ -11875,9 +11892,11 @@ Current version indicated by LITEVER below.
 				}
 			}
 			inputtxt = escape_html(inputtxt);
+			inputtxt = unescape_html_alternate(inputtxt);
 		}
 		if((thinking_action==1 || thinking_action==2) && thinking_pattern!="") //removal of cot
 		{
+			inputtxt = escape_html_alternate(inputtxt);
 			inputtxt = unescape_html(inputtxt);
 			let pat = new RegExp(thinking_pattern, "gmi");
 			let matches = [];
@@ -11905,6 +11924,7 @@ Current version indicated by LITEVER below.
 				inputtxt = inputtxt.replace(pat, "");
 			}
 			inputtxt = escape_html(inputtxt);
+			inputtxt = unescape_html_alternate(inputtxt);
 			if(matches.length > 0)
 			{
 				let matchiter = 0;
