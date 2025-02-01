@@ -2998,7 +2998,7 @@ Current version indicated by LITEVER below.
 	var logitbiasdict = {};
 	var regexreplace_data = [];
 	var placeholder_tags_data = [];
-	var thinking_pattern = "<think>[\\s\\S]+?</think>";
+	var thinking_pattern = "<think>([\\s\\S]+?)<\/think>";
 	var thinking_action = 1; //0=display, 1=collapse, 2=hide, 3=remove
 	var voice_typing_mode = 0; //0=off, 1=on, 2=ptt
 	var koboldcpp_has_whisper = false; //does backend support voice typing
@@ -11435,7 +11435,7 @@ Current version indicated by LITEVER below.
 		}
 		else
 		{
-			thinking_pattern = "<think>[\\s\\S]+?</think>";
+			thinking_pattern = "<think>([\\s\\S]+?)<\/think>";
 		}
 		thinking_action = parseInt(document.getElementById("thinking_action").value);
 	}
@@ -11782,7 +11782,7 @@ Current version indicated by LITEVER below.
 			documentdb_data = "";
 			websearch_enabled = false;
 			websearch_multipass = false;
-			thinking_pattern = "<think>[\\s\\S]+?</think>";
+			thinking_pattern = "<think>([\\s\\S]+?)<\/think>";
 			thinking_action = 1;
 		}
 		warn_on_quit = false;
@@ -11879,27 +11879,41 @@ Current version indicated by LITEVER below.
 		if((thinking_action==1 || thinking_action==2) && thinking_pattern!="") //removal of cot
 		{
 			inputtxt = unescape_html(inputtxt);
-			let pat = new RegExp(thinking_pattern, "gm");
+			let pat = new RegExp(thinking_pattern, "gmi");
+			let matches = [];
 			if(thinking_action==1)
 			{
-				let matches = inputtxt.match(pat) || []; // Captures matches in an array
-				if(matches.length > 0)
+				let temp = inputtxt.match(pat) || []; // Captures matches in an array
+				if(temp.length > 0)
 				{
-					let matchiter = 0;
-					inputtxt = inputtxt.replace(pat, "%ExpandBtn%");
-					inputtxt = escape_html(inputtxt);
-					inputtxt = inputtxt.replace(/%ExpandBtn%/g, function (m) {
-						let curr = matches[matchiter];
-						let expandedhtml = `<span><button type="button" title="Show Thoughts" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="toggle_hide_thinking(this)">Show Thoughts (${curr.length} characters)</button><span class="hidden">${curr}</span></span>`;
-						++matchiter;
-						return expandedhtml;
+					temp.forEach(match => {
+						let pat2 = new RegExp(thinking_pattern, "gmi");
+						let execResult = pat2.exec(match);
+						if (execResult && execResult[1]) {
+							matches.push(execResult[1]); // Store only the capture group
+						}
+						else
+						{
+							matches.push(match);
+						}
 					});
+					inputtxt = inputtxt.replace(pat, "%ExpandBtn%");
 				}
 			}
 			else //just hide
 			{
 				inputtxt = inputtxt.replace(pat, "");
-				inputtxt = escape_html(inputtxt);
+			}
+			inputtxt = escape_html(inputtxt);
+			if(matches.length > 0)
+			{
+				let matchiter = 0;
+				inputtxt = inputtxt.replace(/%ExpandBtn%/g, function (m) {
+					let curr = matches[matchiter];
+					let expandedhtml = `<span><button type="button" title="Show Thoughts" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="toggle_hide_thinking(this)">Show Thoughts (${curr.length} characters)</button><span class="hidden">${escape_html(curr)}</span></span>`;
+					++matchiter;
+					return expandedhtml;
+				});
 			}
 		}
 		return inputtxt;
@@ -19348,14 +19362,7 @@ Current version indicated by LITEVER below.
 				});
 			}
 
-			if(gametext_arr.length==0 && !isPreview)
-			{
-				return bodyStr; //to allow html in the welcome text
-			}
-			else
-			{
-				return bodyStr.replaceAll('"', '&quot;');
-			}
+			return bodyStr;
 
 		}
 		function getStreamingText() {
