@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 210;
+	const LITEVER = 211;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -2830,6 +2830,8 @@ Current version indicated by LITEVER below.
 	const koboldcpp_perf_endpoint = "/api/extra/perf";
 	const koboldcpp_websearch_endpoint = "/api/extra/websearch";
 	const koboldcpp_tts_endpoint = "/api/extra/tts";
+	const koboldcpp_admin_list_endpoint = "/api/admin/list_options";
+	const koboldcpp_admin_reload_endpoint = "/api/admin/reload_config";
 
 	const oai_models_endpoint = "/models";
 	const oai_submit_endpoint = "/completions";
@@ -2979,6 +2981,7 @@ Current version indicated by LITEVER below.
 	var koboldcpp_has_vision = false;
 	var koboldcpp_has_multiplayer = false;
 	var koboldcpp_has_websearch = false;
+	var koboldcpp_admin_type = 0; //0 = no admin, 1=has admin, 2=protected admin
 	var lastSearchQuery = "";
 	var lastSearchResults = [];
 	var multiplayer_active = false;
@@ -6063,6 +6066,10 @@ Current version indicated by LITEVER below.
 	{
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.81") >= 0 && koboldcpp_has_tts);
 	}
+	function is_using_kcpp_with_admin()
+	{
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.83") >= 0 && koboldcpp_admin_type>0);
+	}
 	function is_using_web_lite()
 	{
 		return (window.location.hostname.includes("koboldai.net") || window.location.hostname.includes("lostruins.github.io"));
@@ -8411,7 +8418,8 @@ Current version indicated by LITEVER below.
 			document.getElementById("pasteimgcontainer").classList.contains("hidden") &&
 			document.getElementById("choosesharecontainer").classList.contains("hidden") &&
 			document.getElementById("advancedloadfile").classList.contains("hidden") &&
-			document.getElementById("welcomecontainer").classList.contains("hidden")
+			document.getElementById("welcomecontainer").classList.contains("hidden") &&
+			document.getElementById("admincontainer").classList.contains("hidden")
 		);
 	}
 
@@ -8446,6 +8454,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("choosesharecontainer").classList.add("hidden");
 		document.getElementById("advancedloadfile").classList.add("hidden");
 		document.getElementById("welcomecontainer").classList.add("hidden");
+		document.getElementById("admincontainer").classList.add("hidden");
 		mainmenu_untab(false);
 	}
 
@@ -9459,6 +9468,7 @@ Current version indicated by LITEVER below.
 									koboldcpp_has_multiplayer = (data.multiplayer?true:false);
 									koboldcpp_has_websearch = (data.websearch?true:false);
 									koboldcpp_has_tts = (data.tts?true:false);
+									koboldcpp_admin_type = (data.admin?data.admin:0);
 									let has_password = (data.protected?true:false);
 									let has_txt2img = (data.txt2img?true:false);
 									let no_txt_model = (mdlname=="inactive");
@@ -9504,7 +9514,7 @@ Current version indicated by LITEVER below.
 												kai_json_load(tmpstory, false);
 											}
 										}else{
-											if(koboldcpp_has_multiplayer)
+											if(koboldcpp_has_multiplayer || koboldcpp_admin_type>0)
 											{
 												//force refresh
 												render_gametext(false);
@@ -9835,6 +9845,99 @@ Current version indicated by LITEVER below.
 	{
 		mainmenu_untab(false);
 		document.getElementById("customendpointcontainer").classList.add("hidden");
+	}
+
+	var last_admin_key = "";
+	function display_admin_container()
+	{
+		mainmenu_untab(false);
+		let fetch_kcpps_configs = function(adminkey)
+		{
+			let header = {'Content-Type': 'application/json'};
+			last_admin_key = adminkey;
+			if(adminkey!="")
+			{
+				header['Authorization'] = 'Bearer ' + adminkey;
+			}
+			fetch(custom_kobold_endpoint + koboldcpp_admin_list_endpoint, {
+				method: 'GET',
+				headers: header,
+			})
+			.then(x => x.json())
+			.then(values => {
+				if(values && values.length>0)
+				{
+					//on values received
+					var dropdown = document.getElementById("adminconfigdropdown");
+					for (var i = dropdown.options.length; i >= 0; i--) {
+						var option = dropdown.options[i];
+						dropdown.remove(option);
+					}
+					for(var i=0;i<values.length;++i)
+					{
+						var el = document.createElement("option");
+						el.textContent = values[i];
+						el.value = values[i];
+						dropdown.appendChild(el);
+					}
+					document.getElementById("admincontainer").classList.remove("hidden");
+				}
+				else
+				{
+					msgbox("Error: No configurations were returned by the server.\n\nCheck that the .kcpps directory has been set with --admindir, and ensure that your password is correct, if used.","Error");
+				}
+			}).catch((error) => {
+				console.log("Error: " + error);
+				msgbox(error,"Error");
+			});
+		};
+
+		if (koboldcpp_admin_type == 2) {
+			inputBox("Please input admin password:", "Admin Password Required", "", "(Input Admin Password)", () => {
+				let userinput = getInputBoxValue();
+				userinput = userinput.trim();
+				if (userinput != null && userinput != "") {
+					fetch_kcpps_configs(userinput);
+				}
+			}, false, false, true);
+		} else {
+			fetch_kcpps_configs("");
+		}
+	}
+
+	function trigger_admin_reload()
+	{
+		document.getElementById("admincontainer").classList.add("hidden");
+		let targetfile = document.getElementById("adminconfigdropdown").value;
+		if(!targetfile)
+		{
+			msgbox("No config file was selected.");
+			return;
+		}
+		let header = {'Content-Type': 'application/json'};
+		if(last_admin_key!="")
+		{
+			header['Authorization'] = 'Bearer ' + last_admin_key;
+		}
+		fetch(custom_kobold_endpoint + koboldcpp_admin_reload_endpoint, {
+			method: 'POST',
+			headers: header,
+			body: JSON.stringify({
+				"filename": targetfile
+			})
+		})
+		.then(x => x.json())
+		.then(values => {
+			let success = (values && values.success);
+			if (success) {
+				msgbox("KoboldCpp is now restarting!\n\nIt may take some time before the new instance is ready to use.", "KoboldCpp Reload Started");
+			} else {
+				msgbox("The request to reload KoboldCpp with a new configuration failed!\n\nPlease check if the feature is enabled, the admin directory is set, and selected config and password are correct.", "KoboldCpp Reload Failed");
+			}
+		}).catch((error) => {
+			console.log("Error: " + error);
+			msgbox(error,"Error");
+		});
 	}
 
 	function display_saveloadcontainer()
@@ -17078,6 +17181,15 @@ Current version indicated by LITEVER below.
 			document.getElementById("gametext").innerHTML = fulltxt;
 		}
 
+		if(localflag && is_using_kcpp_with_admin())
+		{
+			document.getElementById("topbtn_admin").classList.remove("hidden");
+		}
+		else
+		{
+			document.getElementById("topbtn_admin").classList.add("hidden");
+		}
+
 		if (perfdata == null) {
 			document.getElementById("topbtn_reconnect").classList.remove("hidden");
 			if(localflag)
@@ -19722,6 +19834,10 @@ Current version indicated by LITEVER below.
 				</button>
 				<div class="navbar-collapse collapse" id="navbarNavDropdown">
 					<ul class="nav navbar-nav">
+						<li class="nav-item hidden" id="topbtn_admin">
+							<a class="nav-link mainnav" href="#" onclick="closeTopNav();display_admin_container()">Admin</a>
+						</li>
+
 						<li class="nav-item hidden" id="topbtn_reconnect">
 							<a class="nav-link mainnav" href="#" onclick="closeTopNav();attempt_connect()">Reconnect</a>
 						</li>
@@ -20302,6 +20418,28 @@ Current version indicated by LITEVER below.
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="clear_cors_proxy_flag();connect_custom_endpoint()">Ok</button>
 				<button type="button" class="btn btn-primary" onclick="dismiss_endpoint_container()">Cancel</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="admincontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup flexsizevsmall">
+			<div class="popuptitlebar">
+				<div class="popuptitletext">Change Loaded KoboldCpp Config</div>
+			</div>
+			<div class="menutext">
+				<b></b>Warning: This will terminate the current KoboldCpp instance and relaunch it with a new config.</b><br><br>
+				If an invalid configuration is selected, the new server may fail to relaunch!<br><br>
+				<div>
+					<select title="Select New Config" style="padding:4px;" class="form-control" id="adminconfigdropdown">
+					</select>
+				</div>
+				<br>
+			</div>
+			<div class="popupfooter">
+				<button type="button" style="width:200px" class="btn btn-primary" onclick="trigger_admin_reload()">Reload KoboldCpp</button>
+				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
 			</div>
 		</div>
 	</div>
