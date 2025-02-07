@@ -2897,6 +2897,7 @@ Current version indicated by LITEVER below.
 	const AVATAR_PX = 384;
 	const SAVE_SLOTS = 6;
 	const num_regex_rows = 4;
+	const default_websearch_template = `### New Task:\nFrom above text, rephrase the search engine query "{{QUERY}}" as a single short phrase (for search engines) using proper nouns, references and names to avoid ambiguity.\n\n### Rephrased Search Query Created:\n`;
 
 	//all configurable globals
 	var unique_uid = "LITE_UID_"+(Math.floor(100000 + Math.random() * 900000)).toString();
@@ -2938,6 +2939,7 @@ Current version indicated by LITEVER below.
 	var documentdb_data = "";
 	var websearch_enabled = false;
 	var websearch_multipass = false;
+	var websearch_template = "";
 	var generateimagesinterval = 750; //if generated images is enabled, it will trigger after every 700 new characters in context.
 	var nextgeneratedimagemilestone = generateimagesinterval; //used to keep track of when to generate the next image
 	var image_db = {}; //stores a dictionary of pending images
@@ -6362,6 +6364,7 @@ Current version indicated by LITEVER below.
 		new_save_storyobj.documentdb_data = documentdb_data;
 		new_save_storyobj.websearch_enabled = websearch_enabled;
 		new_save_storyobj.websearch_multipass = websearch_multipass;
+		new_save_storyobj.websearch_template = websearch_template;
 		new_save_storyobj.thinking_pattern = thinking_pattern;
 		new_save_storyobj.thinking_action = thinking_action;
 
@@ -6678,6 +6681,10 @@ Current version indicated by LITEVER below.
 				if(storyobj.websearch_multipass)
 				{
 					websearch_multipass = storyobj.websearch_multipass;
+				}
+				if(storyobj.websearch_template)
+				{
+					websearch_template = storyobj.websearch_template;
 				}
 				if(storyobj.thinking_pattern)
 				{
@@ -11548,6 +11555,7 @@ Current version indicated by LITEVER below.
 		documentdb_chunksize = cleannum(documentdb_chunksize,32,2048);
 		websearch_enabled = document.getElementById("websearch_enabled").checked?true:false;
 		websearch_multipass = document.getElementById("websearch_multipass").checked?true:false;
+		websearch_template = (document.getElementById("websearch_template").value==default_websearch_template?"":document.getElementById("websearch_template").value);
 		if(validate_regex(thinking_pattern))
 		{
 			thinking_pattern = document.getElementById("thinking_pattern").value;
@@ -11580,7 +11588,8 @@ Current version indicated by LITEVER below.
 			let truncated_context = recentCtx.substring(recentCtx.length - max_allowed_characters);
 
 			truncated_context = replace_placeholders(truncated_context);
-			truncated_context += `\n\n### New Task:\nFrom above text, rephrase the search engine query "${search_query}" as a single short phrase (for search engines) using proper nouns, references and names to avoid ambiguity.\n\n### Rephrased Search Query Created:\n`;
+			let wst = (websearch_template==""?default_websearch_template:websearch_template);
+			truncated_context += "\n\n" + wst.replaceAll('{{QUERY}}', search_query);
 
 			let submit_payload = {
 				"prompt": truncated_context,
@@ -11901,6 +11910,7 @@ Current version indicated by LITEVER below.
 			documentdb_data = "";
 			websearch_enabled = false;
 			websearch_multipass = false;
+			websearch_template = "";
 			thinking_pattern = "<think>([\\s\\S]+?)<\/think>";
 			thinking_action = 1;
 		}
@@ -14419,7 +14429,7 @@ Current version indicated by LITEVER below.
 					}
 
 					let sysinst = document.getElementById("gemini_system_instruction").value;
-					if(sysinst!="" && (mdlname.includes("gemini-1.5-") || mdlname.includes("gemini-exp-")))
+					if(sysinst!="" && (mdlname.includes("gemini-1.5-") || mdlname.includes("gemini-2") || mdlname.includes("gemini-exp-")))
 					{
 						payload["systemInstruction"] = {
 							"role": "system",
@@ -18342,6 +18352,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("documentdb_data").value = documentdb_data;
 		document.getElementById("websearch_enabled").checked = websearch_enabled;
 		document.getElementById("websearch_multipass").checked = websearch_multipass;
+		document.getElementById("websearch_template").value = (websearch_template==""?default_websearch_template:websearch_template);
 		if(is_using_kcpp_with_websearch())
 		{
 			document.getElementById("websearchunsupporteddiv").classList.add("hidden");
@@ -20365,6 +20376,8 @@ Current version indicated by LITEVER below.
 					<option value="gemini-1.5-flash-latest">gemini-1.5-flash-latest</option>
 					<option value="gemini-1.5-pro-exp-0801">gemini-1.5-pro-exp-0801</option>
 					<option value="gemini-1.5-pro-exp-0827">gemini-1.5-pro-exp-0827</option>
+					<option value="gemini-2.0-flash">gemini-2.0-flash</option>
+					<option value="gemini-2.0-pro-exp">gemini-2.0-pro-exp</option>
 					<option value="gemini-exp-1114">gemini-exp-1114</option>
 					<option value="gemini-exp-1121">gemini-exp-1121</option>
 					<option value="text-bison-001">text-bison-001</option>
@@ -21576,6 +21589,12 @@ Current version indicated by LITEVER below.
 					<div class="justifyleft settingsmall" title="Use Multiple Passes">Use Multiple Passes <span class="helpicon">?<span
 						class="helptext">Using this option will run a second LLM tool call to summarize context and create a more accurate search query. Slower but may be more accurate.</span></span></div>
 					<input title="Use Multiple Passes" type="checkbox" id="websearch_multipass" style="margin:0px 0 0;">
+				</div>
+				<div class="justifyleft settinglabel">Multipass WebSearch Template <span class="helpicon">?<span
+					class="helptext">The template used to generate the search query when multipass search is used</span></span></div>
+					<div style="display: flex; column-gap: 4px; margin-bottom: 4px;">
+					<textarea title="Multipass WebSearch Template" style="height: 80px;" class="form-control menuinput_multiline" id="websearch_template"
+					placeholder=""></textarea>
 				</div>
 			</div>
 
