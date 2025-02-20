@@ -1,10 +1,7 @@
-# KoboldAI Lite
-## [lite.koboldai.net](https://lite.koboldai.net)
+# Grid Chat
+## [chat.aipowergrid.io](https://chat.aipowergrid.io)
 
 This is a standalone Web UI for KoboldAI Client, KoboldCpp and the Grid, which requires no dependencies, installation or setup. It's also capable of connecting to custom endpoints, include OpenAI, Claude, and both local and remote Kobold instances.
-
-![Preview1](preview1.png)
-![Preview2](preview2.png)
 
 Features:
 - Fully featured text editor in a single HTML page, designed for use with generative LLMs.
@@ -28,4 +25,4 @@ Features:
 
 Simply open it in any browser, and it should work out of the box. All functionality is in a single static HTML file. You can run it directly from your desktop or throw it on some web server and serve it there too. E.g. Github pages, nginx, whatever.
 
-For assistance or feedback, look for Concedo in the KoboldAI Discord.
+For assistance or feedback, please reach out to us on Discord.
