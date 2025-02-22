@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 217;
+	const LITEVER = 218;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -462,13 +462,13 @@ Current version indicated by LITEVER below.
 	.saveloadpopup {
 		width: 660px;
 		background-color: #262626;
-		margin-top: 80px;
+		margin-top: 120px;
 	}
 	@media (max-width: 768px) {
 		.saveloadpopup {
 			width: 100%;
 			background-color: #262626;
-			margin-top: 80px;
+			margin-top: 120px;
 		}
 	}
 	.saveloadgrid
@@ -478,7 +478,7 @@ Current version indicated by LITEVER below.
 		margin-top: 4px;
 		padding: 4px;
 		display: grid;
-		gap: 4px;
+		gap: 2px;
 		font-size: 12px;
 	}
 	@media (max-width: 340px) {
@@ -2212,6 +2212,24 @@ Current version indicated by LITEVER below.
 	.bg_teal:disabled:hover {
 		background-color: #8a8a8a;
 	}
+	.bg_primary {
+		background-color: #337ab7;
+	}
+	.bg_primary:hover {
+		background-color: #286090;
+	}
+	.bg_primary:active:focus {
+		background-color: #23527c;
+	}
+	.bg_primary:focus {
+		background-color: #23527c;
+	}
+	.bg_primary:disabled {
+		background-color: #8a8a8a;
+	}
+	.bg_primary:disabled:hover {
+		background-color: #8a8a8a;
+	}
 
 	.bluebtn {
 		color: #fff;
@@ -2895,7 +2913,7 @@ Current version indicated by LITEVER below.
 	const HD_RES_PX = 768;
 	const NO_HD_RES_PX = 512;
 	const AVATAR_PX = 384;
-	const SAVE_SLOTS = 6;
+	const SAVE_SLOTS = 8;
 	const num_regex_rows = 4;
 	const default_websearch_template = `### New Task:\nFrom above text, rephrase the search engine query "{{QUERY}}" as a single short phrase (for search engines) using proper nouns, references and names to avoid ambiguity.\n\n### Rephrased Search Query Created:\n`;
 
@@ -9992,6 +10010,32 @@ Current version indicated by LITEVER below.
 		});
 	}
 
+	var cachedsaveslotlabels = [];
+	function saveloadchangeslot(updatelist=false)
+	{
+		let selectedslot = document.getElementById("saveslotselecteddropdown").value;
+		let selectedslotlabel = null;
+		let choices = "";
+		for(let i=0;i<cachedsaveslotlabels.length;++i)
+		{
+			let testslot = cachedsaveslotlabels[i];
+			if(selectedslot==i)
+			{
+				selectedslotlabel = testslot;
+			}
+			let lbl = (i+1);
+			let tsdesc = (testslot.length>50)?testslot.substring(0,50)+"...":testslot;
+			let slotname = (testslot?`Local Slot `+(lbl)+` - `+tsdesc+``:`Local Slot `+(lbl)+` - [ Empty ]`);
+			choices += `<option value=${i}${(selectedslot==i)?" selected":""}>${slotname}</option>`;
+		}
+		document.getElementById("loadfromslot").disabled = (selectedslotlabel?false:true);
+		document.getElementById("downloadslot").disabled = (selectedslotlabel?false:true);
+		document.getElementById("deleteslot").disabled = (selectedslotlabel?false:true);
+		if(updatelist)
+		{
+			document.getElementById("saveslotselecteddropdown").innerHTML = choices;
+		}
+	}
 	function display_saveloadcontainer()
 	{
 		mainmenu_untab(true);
@@ -10004,42 +10048,16 @@ Current version indicated by LITEVER below.
 		}
 		Promise.all(slotpromises).then(slotlabels=>
 		{
-			let filetable = ``;
-			let entry = `<div style="display:flex">
-					<button type="button" style="font-size:12px; margin:2px;width:33%" name="localsave" class="btn btn-primary" onclick="hide_popups();save_file_button()">`+"💾<br>Download File"+`</button>
-					<button type="button" style="font-size:12px; margin:2px;width:33%" name="localload" class="btn btn-primary" onclick="hide_popups();load_file_button()">`+"📁<br>Open File"+`</button>
-					<button type="button" style="font-size:12px; margin:2px;width:34%" name="shareurl" class="btn btn-primary" onclick="hide_popups();share_story_button()">`+"🌐<br>Share"+`</button>
-					</div>
-					<div style="margin-top:3px; text-align: center; align-self: center; width: calc(100% - 184px);">
-					<span style="font-weight:bold;text-decoration: underline;">Temporary Browser Storage</span>
-					</div>`;
-			filetable += entry;
-
-			for(let i=0;i<slotlabels.length;++i)
-			{
-				let testslot = slotlabels[i];
-				let lbl = (i+1);
-				entry = `<div style="display:flex; height:42px;">
-					<div style="margin:3px; text-align: center; align-self: center; width: calc(100% - 184px);">
-					`+(testslot?`[ Slot `+(lbl)+` - `+testslot+` ]`:`[ Slot `+(lbl)+` - Empty ]`)+`
-					</div>
-					<div style="text-align: right; align-self: center; width: 184px;">
-					<button type="button" title="Save To Slot ${lbl}" class="btn btn-primary" onclick="save_to_slot(${i})"><img class="btnicon-save"/></button>
-					<button type="button" title="Load From Slot ${lbl}" class="btn btn-primary" onclick="load_from_slot(${i})" `+(testslot?"":"disabled")+`><img class="btnicon-load"/></button>
-					<button type="button" title="Download Slot ${lbl}" class="btn btn-primary bg_green" onclick="download_from_slot(${i})" `+(testslot?"":"disabled")+`><img class="btnicon-download"/></button>
-					<button type="button" title="Delete Slot ${lbl}" class="btn btn-primary bg_red" onclick="delete_from_slot(${i})" `+(testslot?"":"disabled")+`><img class="btnicon-delete"/></button>
-					</div></div>`;
-				filetable += entry;
-			}
+			cachedsaveslotlabels = slotlabels;
+			saveloadchangeslot(true);
 			populate_corpo_leftpanel();
-			document.getElementById("saveloadentries").innerHTML = filetable;
 		});
 	}
 	function save_to_slot(slot)
 	{
 		let defaultsavename = (localsettings.opmode==1?"Untitled Story":(localsettings.opmode==2?"Untitled Adventure":(localsettings.opmode==3?"Untitled Chat":"Untitled Instruct")));
 		let savename = defaultsavename + " " + new Date().toLocaleString();
-		let slotnumshown = (slot+1);
+		let slotnumshown = (parseInt(slot)+1);
 		indexeddb_load("slot_"+slot+"_meta","").then(testslot=>{
 			if (testslot) {
 				savename = testslot;
@@ -10102,13 +10120,34 @@ Current version indicated by LITEVER below.
 	}
 	function delete_from_slot(slot)
 	{
-		let slotnumshown = (slot+1);
+		let slotnumshown = (parseInt(slot)+1);
 		msgboxYesNo("Delete story in Browser Storage Slot "+slotnumshown+"?","Delete Storage Slot "+slotnumshown,()=>{
 			indexeddb_save("slot_"+slot+"_data", "");
 			indexeddb_save("slot_"+slot+"_meta", "").then(()=>{display_saveloadcontainer()});
 		},()=>{
 			display_saveloadcontainer();
 		});
+	}
+
+	function save_to_curr_slot()
+	{
+		let selectedslot = document.getElementById("saveslotselecteddropdown").value;
+		save_to_slot(selectedslot);
+	}
+	function load_from_curr_slot()
+	{
+		let selectedslot = document.getElementById("saveslotselecteddropdown").value;
+		load_from_slot(selectedslot);
+	}
+	function download_from_curr_slot()
+	{
+		let selectedslot = document.getElementById("saveslotselecteddropdown").value;
+		download_from_slot(selectedslot);
+	}
+	function delete_from_curr_slot()
+	{
+		let selectedslot = document.getElementById("saveslotselecteddropdown").value;
+		delete_from_slot(selectedslot);
 	}
 
 	var cached_model_list = null;
@@ -20213,8 +20252,38 @@ Current version indicated by LITEVER below.
 
 			<div style="overflow: auto;">
 				<div id="saveloadentries" class="menutext saveloadgrid">
+					<div style="display:flex">
+						<button type="button" style="font-size:12px; margin:2px;width:33%" name="localsave" class="btn btn-primary" onclick="hide_popups();save_file_button()">💾<br>Download File</button>
+						<button type="button" style="font-size:12px; margin:2px;width:33%" name="localload" class="btn btn-primary" onclick="hide_popups();load_file_button()">📁<br>Open File</button>
+						<button type="button" style="font-size:12px; margin:2px;width:34%" name="shareurl" class="btn btn-primary" onclick="hide_popups();share_story_button()">🌐<br>Share</button>
+					</div>
+					<div style="margin-top:3px; text-align: center; align-self: center; width: 100%">
+						<span style="font-weight:bold;text-decoration: underline;">Slot Storage Option</span>
+					</div>
+					<div style="display:flex;">
+						<div style="width: 92px; margin:8px; margin-left: 4px; margin-right: 4px; font-size: 14px;">Data Location</div>
+						<div style="margin:3px; text-align: center; align-self: center; width: calc(100% - 94px);">
+						<select title="Select Slot Location" style="padding:4px;" class="form-control" id="saveslotlocationdropdown" onchange="saveloadchangeslot(false)">
+						<option value="1">Local Browser Cache</option>
+						<option value="2" style="display:none;">KoboldCpp Remote Storage</option>
+						</select>
+						</div>
+					</div>
+					<div style="display:flex;">
+						<div style="width: 92px; margin:8px; margin-left: 4px; margin-right: 4px; font-size: 14px;">Selected Slot</div>
+						<div style="margin:3px; text-align: center; align-self: center; width: calc(100% - 94px);">
+						<select title="Select Save Slot" style="padding:4px;" class="form-control" id="saveslotselecteddropdown" onchange="saveloadchangeslot(false)">
+						</select>
+						</div>
+					</div>
+					<div style="width:100%;align-self: center;">
+						<button type="button" id="savetoslot" title="Save To Slot" class="btn btn-primary bg_primary" onclick="save_to_curr_slot()"><img class="btnicon-save"/> Save Slot</button>
+						<button type="button" id="loadfromslot" title="Load From Slot" class="btn btn-primary bg_primary" onclick="load_from_curr_slot()"><img class="btnicon-load"/> Load Slot</button>
+						<button type="button" id="downloadslot" title="Download Slot" class="btn btn-primary bg_green" onclick="download_from_curr_slot()"><img class="btnicon-download"/> Download</button>
+						<button type="button" id="deleteslot" title="Delete Slot" class="btn btn-primary bg_red" onclick="delete_from_curr_slot()"><img class="btnicon-delete"/> Delete Slot</button>
+					</div>
 				</div>
-				<div class="menutext"><p style="padding:6px;font-size: 10px;" class="color_red">Caution: Storage Slots are saved to a temporary cache and can be deleted by your browser. To avoid losing data, use the download file button.</p></div>
+				<div class="menutext"><p style="padding:6px;font-size: 10px;" class="color_red">Caution: Local Storage Slots are saved to a temporary cache and can be deleted by your browser. KoboldCpp remote storage will save data to a file in your KoboldCpp server. To avoid losing data, use the download file button.</p></div>
 				<div class="popupfooter">
 					<button type="button" class="btn btn-primary" id=""
 						onclick="hide_popups()">Back</button>
