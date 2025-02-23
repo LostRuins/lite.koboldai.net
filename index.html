@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 218;
+	const LITEVER = 219;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -2850,6 +2850,9 @@ Current version indicated by LITEVER below.
 	const koboldcpp_tts_endpoint = "/api/extra/tts";
 	const koboldcpp_admin_list_endpoint = "/api/admin/list_options";
 	const koboldcpp_admin_reload_endpoint = "/api/admin/reload_config";
+	const koboldcpp_savedata_list_endpoint = "/api/extra/data/list";
+	const koboldcpp_savedata_save_endpoint = "/api/extra/data/save";
+	const koboldcpp_savedata_load_endpoint = "/api/extra/data/load";
 
 	const oai_models_endpoint = "/models";
 	const oai_submit_endpoint = "/completions";
@@ -3001,6 +3004,7 @@ Current version indicated by LITEVER below.
 	var koboldcpp_has_vision = false;
 	var koboldcpp_has_multiplayer = false;
 	var koboldcpp_has_websearch = false;
+	var koboldcpp_has_savedatafile = false;
 	var koboldcpp_admin_type = 0; //0 = no admin, 1=has admin, 2=protected admin
 	var lastSearchQuery = "";
 	var lastSearchResults = [];
@@ -6083,6 +6087,10 @@ Current version indicated by LITEVER below.
 	function is_using_kcpp_with_multiplayer()
 	{
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.78") >= 0 && koboldcpp_has_multiplayer);
+	}
+	function is_using_kcpp_with_savedatafile()
+	{
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.84") >= 0 && koboldcpp_has_savedatafile);
 	}
 	function is_using_kcpp_with_websearch()
 	{
@@ -9531,6 +9539,7 @@ Current version indicated by LITEVER below.
 									koboldcpp_has_websearch = (data.websearch?true:false);
 									koboldcpp_has_tts = (data.tts?true:false);
 									koboldcpp_admin_type = (data.admin?data.admin:0);
+									koboldcpp_has_savedatafile = (data.savedata?true:false)
 									let has_password = (data.protected?true:false);
 									let has_txt2img = (data.txt2img?true:false);
 									let no_txt_model = (mdlname=="inactive");
@@ -10011,26 +10020,51 @@ Current version indicated by LITEVER below.
 	}
 
 	var cachedsaveslotlabels = [];
+	var netsaveslotlabels = [];
 	function saveloadchangeslot(updatelist=false)
 	{
 		let selectedslot = document.getElementById("saveslotselecteddropdown").value;
+		let selectedlocation = document.getElementById("saveslotlocationdropdown").value;
 		let selectedslotlabel = null;
 		let choices = "";
-		for(let i=0;i<cachedsaveslotlabels.length;++i)
+		let foundoption = false;
+		if(selectedlocation=="1") //local
 		{
-			let testslot = cachedsaveslotlabels[i];
-			if(selectedslot==i)
+			for(let i=0;i<cachedsaveslotlabels.length;++i)
 			{
-				selectedslotlabel = testslot;
+				let testslot = cachedsaveslotlabels[i];
+				if(selectedslot==i)
+				{
+					selectedslotlabel = testslot;
+					foundoption = true;
+				}
+				let lbl = (i+1);
+				let tsdesc = (testslot.length>50)?testslot.substring(0,50)+"...":testslot;
+				let slotname = (testslot?`Local Slot `+(lbl)+` - `+tsdesc+``:`Local Slot `+(lbl)+` - [ Empty ]`);
+				choices += `<option value=${i}${(selectedslot==i)?" selected":""}>${slotname}</option>`;
 			}
-			let lbl = (i+1);
-			let tsdesc = (testslot.length>50)?testslot.substring(0,50)+"...":testslot;
-			let slotname = (testslot?`Local Slot `+(lbl)+` - `+tsdesc+``:`Local Slot `+(lbl)+` - [ Empty ]`);
-			choices += `<option value=${i}${(selectedslot==i)?" selected":""}>${slotname}</option>`;
+		} else if(selectedlocation=="2") { //remote saves
+			for(let i=0;i<netsaveslotlabels.length;++i)
+			{
+				let testslot = netsaveslotlabels[i];
+				if(selectedslot==i)
+				{
+					selectedslotlabel = testslot;
+					foundoption = true;
+				}
+				let lbl = (i+1);
+				let tsdesc = (testslot.length>50)?testslot.substring(0,50)+"...":testslot;
+				let slotname = (testslot?`Server Slot `+(lbl)+` - `+tsdesc+``:`Server Slot `+(lbl)+` - [ Empty ]`);
+				choices += `<option value=${i}${(selectedslot==i)?" selected":""}>${slotname}</option>`;
+			}
 		}
 		document.getElementById("loadfromslot").disabled = (selectedslotlabel?false:true);
 		document.getElementById("downloadslot").disabled = (selectedslotlabel?false:true);
 		document.getElementById("deleteslot").disabled = (selectedslotlabel?false:true);
+		if(!foundoption)
+		{
+			document.getElementById("saveslotselecteddropdown").selectedIndex = 0;
+		}
 		if(updatelist)
 		{
 			document.getElementById("saveslotselecteddropdown").innerHTML = choices;
@@ -10040,6 +10074,12 @@ Current version indicated by LITEVER below.
 	{
 		mainmenu_untab(true);
 		document.getElementById("saveloadcontainer").classList.remove("hidden");
+
+		if (is_using_kcpp_with_savedatafile()) {
+			document.getElementById("kcppsaveavailable").classList.remove("hidden");
+		} else {
+			document.getElementById("kcppsaveavailable").classList.add("hidden");
+		}
 
 		let slotpromises = [];
 		for(let i=0;i<SAVE_SLOTS;++i)
@@ -10052,102 +10092,273 @@ Current version indicated by LITEVER below.
 			saveloadchangeslot(true);
 			populate_corpo_leftpanel();
 		});
+		if(is_using_kcpp_with_savedatafile())
+		{
+			//grab saves
+			fetch(custom_kobold_endpoint + koboldcpp_savedata_list_endpoint, {
+			method: 'POST', // or 'PUT'
+			headers: get_kobold_header(),
+			})
+			.then((response) => response.json())
+			.then((data) => {
+				netsaveslotlabels = data;
+				saveloadchangeslot(true);
+				populate_corpo_leftpanel();
+			})
+			.catch((error) => {
+				console.error('Error:', error);
+			});
+		}
 	}
-	function save_to_slot(slot)
+	function save_to_slot(slot,islocal)
 	{
 		let defaultsavename = (localsettings.opmode==1?"Untitled Story":(localsettings.opmode==2?"Untitled Adventure":(localsettings.opmode==3?"Untitled Chat":"Untitled Instruct")));
 		let savename = defaultsavename + " " + new Date().toLocaleString();
 		let slotnumshown = (parseInt(slot)+1);
-		indexeddb_load("slot_"+slot+"_meta","").then(testslot=>{
+		let newcompressedstory = generate_compressed_story(true, true, true);
+		if(islocal)
+		{
+			indexeddb_load("slot_"+slot+"_meta","").then(testslot=>{
+				if (testslot) {
+					savename = testslot;
+				}
+				const slotwrite = function () {
+					warn_on_quit = false;
+					inputBox("Enter a label for this Browser Storage Slot data", "Enter a label", savename, defaultsavename, () => {
+						let userinput = getInputBoxValue();
+						if (userinput.trim() == "") {
+							userinput = defaultsavename;
+						}
+						indexeddb_save("slot_" + slot + "_data", newcompressedstory)
+						indexeddb_save("slot_" + slot + "_meta", userinput).then(()=>{display_saveloadcontainer()});
+					});
+				}
+
+				if (testslot) {
+					msgboxYesNo("Overwrite existing story in Browser Storage Slot " + slotnumshown + "?", "Overwrite Browser Storage Slot " + slotnumshown, () => {
+						slotwrite();
+					}, null);
+				}
+				else {
+					slotwrite();
+				}
+			});
+		} else { //remote save
+			let testslot = (slot<netsaveslotlabels.length?netsaveslotlabels[slot]:"");
 			if (testslot) {
 				savename = testslot;
 			}
-			let newcompressedstory = generate_compressed_story(true, true, true);
-
 			const slotwrite = function () {
 				warn_on_quit = false;
-				inputBox("Enter a label for this Browser Storage Slot data", "Enter a label", savename, defaultsavename, () => {
+				inputBox("Enter a label for this Server Storage Slot data", "Enter a label", savename, defaultsavename, () => {
 					let userinput = getInputBoxValue();
 					if (userinput.trim() == "") {
 						userinput = defaultsavename;
 					}
-					indexeddb_save("slot_" + slot + "_data", newcompressedstory)
-					indexeddb_save("slot_" + slot + "_meta", userinput).then(()=>{display_saveloadcontainer()});
+					//complete remote save
+					fetch(custom_kobold_endpoint + koboldcpp_savedata_save_endpoint, {
+					method: 'POST', // or 'PUT'
+					headers: get_kobold_header(),
+					body: JSON.stringify({
+						"slot": slot,
+						"format": "kcpp_lzma_b64",
+						"title": userinput,
+						"data": newcompressedstory,
+					}),
+					})
+					.then((response) => response.json())
+					.then((data) => {
+						if(!data.success)
+						{
+							msgbox(`Save Error: ${data.error}`,"Save Failed",false,false,()=>{
+								display_saveloadcontainer();
+							});
+						}
+						else
+						{
+							display_saveloadcontainer();
+						}
+					})
+					.catch((error) => {
+						console.error('Error:', error);
+						msgbox(`Save Error: ${error}`,"Save Failed",false,false,()=>{
+							display_saveloadcontainer();
+						});
+					});
 				});
 			}
-
 			if (testslot) {
-				msgboxYesNo("Overwrite existing story in Browser Storage Slot " + slotnumshown + "?", "Overwrite Storage Slot " + slotnumshown, () => {
+				msgboxYesNo("Overwrite existing story in Server Storage Slot " + slotnumshown + "?", "Overwrite Server Storage Slot " + slotnumshown, () => {
 					slotwrite();
 				}, null);
 			}
 			else {
 				slotwrite();
 			}
-		});
+		}
 	}
-	function load_from_slot(slot)
+	function load_from_slot(slot,islocal)
 	{
-		indexeddb_load("slot_"+slot+"_data","").then(loadedstorycompressed=>{
-			if(loadedstorycompressed)
-			{
-				hide_popups();
-				import_compressed_story(loadedstorycompressed,false);
-			}else{
-				msgbox("Unable to load story from browser storage","Browser Storage Load Failed");
-			}
-		});
-	}
-	function download_from_slot(slot)
-	{
-		indexeddb_load("slot_"+slot+"_data","").then(loadedstorycompressed=>{
-			if(loadedstorycompressed)
-			{
-				tempfileobj = decompress_story(loadedstorycompressed);
-				if(tempfileobj)
+		if(islocal)
+		{
+			indexeddb_load("slot_"+slot+"_data","").then(loadedstorycompressed=>{
+				if(loadedstorycompressed)
 				{
-					save_file_button(true);
+					hide_popups();
+					import_compressed_story(loadedstorycompressed,false);
+				}else{
+					msgbox("Unable to load story from browser storage","Browser Storage Load Failed");
+				}
+			});
+		} else {
+			fetch(custom_kobold_endpoint + koboldcpp_savedata_load_endpoint, {
+			method: 'POST', // or 'PUT'
+			headers: get_kobold_header(),
+			body: JSON.stringify({
+				"slot": slot,
+			}),
+			})
+			.then((response) => response.json())
+			.then((resp) => {
+				if(!resp.success || !resp.data)
+				{
+					msgbox("Error: Unable to load story from server storage","Server Storage Load Failed");
 				}
 				else
 				{
-					tempfileobj = generate_base_storyobj();
-					msgbox("Story could not be downloaded. Try loading it first.","Browser Storage Load Failed");
+					hide_popups();
+					import_compressed_story(resp.data.data,false);
 				}
-			}else{
-				msgbox("Unable to load story from browser storage","Browser Storage Load Failed");
-			}
-		});
+			})
+			.catch((error) => {
+				console.error('Error:', error);
+				msgbox("Error: Unable to load story from server storage","Server Storage Load Failed");
+			});
+		}
 	}
-	function delete_from_slot(slot)
+	function download_from_slot(slot,islocal)
+	{
+		let ondl = function (loadedstorycompressed) {
+			if (loadedstorycompressed) {
+				tempfileobj = decompress_story(loadedstorycompressed);
+				if (tempfileobj) {
+					save_file_button(true);
+				}
+				else {
+					tempfileobj = generate_base_storyobj();
+					msgbox("Story could not be downloaded. Try loading it first.", "Download Failed");
+				}
+			} else {
+				msgbox("Unable to download story.", "Download Load Failed");
+			}
+		};
+
+		if(islocal)
+		{
+			indexeddb_load("slot_"+slot+"_data","").then(loadedstorycompressed=>{
+				ondl(loadedstorycompressed);
+			});
+		}
+		else
+		{
+			fetch(custom_kobold_endpoint + koboldcpp_savedata_load_endpoint, {
+			method: 'POST', // or 'PUT'
+			headers: get_kobold_header(),
+			body: JSON.stringify({
+				"slot": slot,
+			}),
+			})
+			.then((response) => response.json())
+			.then((resp) => {
+				if(!resp.success || !resp.data)
+				{
+					msgbox("Error: Unable to load story from server storage","Server Storage Load Failed");
+				}
+				else
+				{
+					ondl(resp.data.data);
+				}
+			})
+			.catch((error) => {
+				console.error('Error:', error);
+				msgbox("Error: Unable to load story from server storage","Server Storage Load Failed");
+			});
+		}
+	}
+	function delete_from_slot(slot,islocal)
 	{
 		let slotnumshown = (parseInt(slot)+1);
-		msgboxYesNo("Delete story in Browser Storage Slot "+slotnumshown+"?","Delete Storage Slot "+slotnumshown,()=>{
-			indexeddb_save("slot_"+slot+"_data", "");
-			indexeddb_save("slot_"+slot+"_meta", "").then(()=>{display_saveloadcontainer()});
-		},()=>{
-			display_saveloadcontainer();
-		});
+		if (islocal) {
+			msgboxYesNo("Delete story in Browser Storage Slot " + slotnumshown + "?", "Delete Browser Storage Slot " + slotnumshown, () => {
+				indexeddb_save("slot_" + slot + "_data", "");
+				indexeddb_save("slot_" + slot + "_meta", "").then(() => { display_saveloadcontainer() });
+			}, () => {
+				display_saveloadcontainer();
+			});
+		} else {
+			msgboxYesNo("Delete story in Server Storage Slot " + slotnumshown + "?", "Delete Server Storage Slot " + slotnumshown, () => {
+				fetch(custom_kobold_endpoint + koboldcpp_savedata_save_endpoint, {
+				method: 'POST', // or 'PUT'
+				headers: get_kobold_header(),
+				body: JSON.stringify({
+					"slot": slot,
+					"format": "",
+					"title": "",
+					"data": "",
+				}),
+				})
+				.then((response) => response.json())
+				.then((data) => {
+					if(!data.success)
+					{
+						msgbox(`Delete Error: ${data.error}`,"Delete Failed",false,false,()=>{
+							display_saveloadcontainer();
+						});
+					}
+					else
+					{
+						display_saveloadcontainer();
+					}
+				})
+				.catch((error) => {
+					console.error('Error:', error);
+					msgbox(`Delete Error: ${error}`,"Delete Failed",false,false,()=>{
+						display_saveloadcontainer();
+					});
+				});
+			}, () => {
+				display_saveloadcontainer();
+			});
+		}
 	}
 
 	function save_to_curr_slot()
 	{
 		let selectedslot = document.getElementById("saveslotselecteddropdown").value;
-		save_to_slot(selectedslot);
+		let selectedlocation = document.getElementById("saveslotlocationdropdown").value;
+		let islocal = (selectedlocation=="1");
+		save_to_slot(selectedslot,islocal);
 	}
 	function load_from_curr_slot()
 	{
 		let selectedslot = document.getElementById("saveslotselecteddropdown").value;
-		load_from_slot(selectedslot);
+		let selectedlocation = document.getElementById("saveslotlocationdropdown").value;
+		let islocal = (selectedlocation=="1");
+		load_from_slot(selectedslot,islocal);
 	}
 	function download_from_curr_slot()
 	{
 		let selectedslot = document.getElementById("saveslotselecteddropdown").value;
-		download_from_slot(selectedslot);
+		let selectedlocation = document.getElementById("saveslotlocationdropdown").value;
+		let islocal = (selectedlocation=="1");
+		download_from_slot(selectedslot,islocal);
 	}
 	function delete_from_curr_slot()
 	{
 		let selectedslot = document.getElementById("saveslotselecteddropdown").value;
-		delete_from_slot(selectedslot);
+		let selectedlocation = document.getElementById("saveslotlocationdropdown").value;
+		let islocal = (selectedlocation=="1");
+		delete_from_slot(selectedslot,islocal);
 	}
 
 	var cached_model_list = null;
@@ -20263,9 +20474,9 @@ Current version indicated by LITEVER below.
 					<div style="display:flex;">
 						<div style="width: 92px; margin:8px; margin-left: 4px; margin-right: 4px; font-size: 14px;">Data Location</div>
 						<div style="margin:3px; text-align: center; align-self: center; width: calc(100% - 94px);">
-						<select title="Select Slot Location" style="padding:4px;" class="form-control" id="saveslotlocationdropdown" onchange="saveloadchangeslot(false)">
+						<select title="Select Slot Location" style="padding:4px;" class="form-control" id="saveslotlocationdropdown" onchange="saveloadchangeslot(true)">
 						<option value="1">Local Browser Cache</option>
-						<option value="2" style="display:none;">KoboldCpp Remote Storage</option>
+						<option value="2" id="kcppsaveavailable" class="hidden">KoboldCpp Server Storage</option>
 						</select>
 						</div>
 					</div>
