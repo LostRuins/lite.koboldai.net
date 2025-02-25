@@ -7199,7 +7199,7 @@ Current version indicated by LITEVER below.
 		return loadedwi;
 	}
 
-	function load_temp_scenario_from_tavernobj(obj,loadall)
+	function load_temp_scenario_from_tavernobj(obj)
 	{
 		if(obj!=null)
 		{
@@ -7209,47 +7209,44 @@ Current version indicated by LITEVER below.
 				obj = obj.data;
 			}
 
-			if(loadall)
+			let chatopponent = obj.name?obj.name:"Bot";
+			let memory = obj.description?("Persona: "+obj.description):"";
+			memory += obj.personality?("\nPersonality: "+obj.personality):"";
+			let scenario = obj.scenario?obj.scenario:"";
+			let examplemsg = obj.mes_example?obj.mes_example:"";
+			let greeting = obj.first_mes?obj.first_mes:"";
+			let sysprompt = obj.system_prompt?obj.system_prompt:"";
+
+			//aliases
+			if(examplemsg=="" && obj.mesExample!="")
 			{
-				let chatopponent = obj.name?obj.name:"Bot";
-				let memory = obj.description?("Persona: "+obj.description):"";
-				memory += obj.personality?("\nPersonality: "+obj.personality):"";
-				let scenario = obj.scenario?obj.scenario:"";
-				let examplemsg = obj.mes_example?obj.mes_example:"";
-				let greeting = obj.first_mes?obj.first_mes:"";
-				let sysprompt = obj.system_prompt?obj.system_prompt:"";
-
-				//aliases
-				if(examplemsg=="" && obj.mesExample!="")
-				{
-					examplemsg = obj.mesExample;
-				}
-				if(greeting=="" && obj.firstMes!="")
-				{
-					greeting = obj.firstMes;
-				}
-
-				if(scenario!="")
-				{
-					scenario = "\n[Scenario: "+scenario+"]";
-				}
-				if(examplemsg!="")
-				{
-					examplemsg = "\n"+examplemsg;
-				}
-				if(sysprompt!="")
-				{
-					sysprompt = sysprompt+"\n";
-				}
-				let combinedmem = sysprompt + memory + scenario + examplemsg;
-				temp_scenario.title = chatopponent;
-				let prev2 = replaceAll(obj.description,"{{char}}",chatopponent,true);
-				prev2 = replaceAll(prev2,"{{user}}","User",true);
-				temp_scenario.desc = prev2;
-				temp_scenario.chatopponent = chatopponent;
-				temp_scenario.prompt = ("\n{{char}}: "+ greeting);
-				temp_scenario.memory = combinedmem;
+				examplemsg = obj.mesExample;
 			}
+			if(greeting=="" && obj.firstMes!="")
+			{
+				greeting = obj.firstMes;
+			}
+
+			if(scenario!="")
+			{
+				scenario = "\n[Scenario: "+scenario+"]";
+			}
+			if(examplemsg!="")
+			{
+				examplemsg = "\n"+examplemsg;
+			}
+			if(sysprompt!="")
+			{
+				sysprompt = sysprompt+"\n";
+			}
+			let combinedmem = sysprompt + memory + scenario + examplemsg;
+			temp_scenario.title = chatopponent;
+			let prev2 = replaceAll(obj.description,"{{char}}",chatopponent,true);
+			prev2 = replaceAll(prev2,"{{user}}","User",true);
+			temp_scenario.desc = prev2;
+			temp_scenario.chatopponent = chatopponent;
+			temp_scenario.prompt = ("\n{{char}}: "+ greeting);
+			temp_scenario.memory = combinedmem;
 
 			//since cai format has no wi, try to grab it from tavern format
 			if(obj.character_book && obj.character_book.entries && obj.character_book.entries.length>0)
@@ -7261,53 +7258,6 @@ Current version indicated by LITEVER below.
 		}
 	}
 
-	function get_chubai_portrait(userinput, card_is_defective, original_no_exist)
-	{
-		//try to obtain the full portrait image
-		return fetch("https://api.chub.ai/api/characters/download", {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({
-				"format": "tavern",
-				"fullPath": userinput,
-				"version": "main"
-			}),
-			referrerPolicy: 'no-referrer',
-			})
-			.then(rb => {
-				if(rb.ok)
-				{
-					return rb.blob();
-				}else{
-					throw new Error('Cannot fetch tavern image');
-				}
-			})
-			.then(blob => {
-				preview_temp_scenario();
-
-				readTavernPngFromBlob(blob,(obj)=>{
-					load_temp_scenario_from_tavernobj(obj,card_is_defective);
-				});
-
-				const objectURL = URL.createObjectURL(blob);
-				const compressedImg = compressImage(objectURL, (compressedImageURI, aspectratio)=>{
-					temp_scenario.image = compressedImageURI;
-					temp_scenario.image_aspect = aspectratio;
-					preview_temp_scenario();
-				}, true, true, AVATAR_PX);
-			})
-			.catch(error => {
-				console.error(error);
-				if(original_no_exist)
-				{
-					throw new Error("Selected scenario is invalid.");
-				} else {
-					throw new Error("Error fetching tavern image.");
-				}
-		});
-	}
 
 	function leave_multiplayer()
 	{
@@ -7791,49 +7741,43 @@ Current version indicated by LITEVER below.
 					"worldinfo": [],
 				};
 
+				//try to obtain the full portrait image
 				return fetch("https://api.chub.ai/api/characters/download", {
 					method: 'POST',
 					headers: {
 						'Content-Type': 'application/json',
 					},
 					body: JSON.stringify({
-						"format": "cai",
+						"format": "tavern",
 						"fullPath": userInput,
 						"version": "main"
 					}),
 					referrerPolicy: 'no-referrer',
-				}).then(x => {
-					if(x.ok) {
-						return x.json();
+				})
+				.then(rb => {
+					if (rb.ok) {
+						return rb.blob();
 					} else {
-						console.log('Cannot fetch chub scenario: try fallback to tavern image');
-						//cai format failed, try fallback to portrait only
-						return get_chubai_portrait(userInput, true, true);
+						throw new Error('Cannot fetch tavern image');
 					}
-				}).then(data => {
-					if(!data) return;
+				})
+				.then(blob => {
+					preview_temp_scenario();
 
-					//if cai fetch was successful
-					console.log(data);
-					let botname = data.name?data.name:"Bot";
-					let cdef = data.definition?data.definition.replace("END_OF_DIALOG","").trim():"";
-					let cdesc = data.description?data.description:"";
-					let greeting = data.greeting?data.greeting:"";
-					let previewtxt = (data.title ? data.title + '\n\n' : '') + replaceAll(cdesc,"{{char}}",botname,true);
-					previewtxt = replaceAll(previewtxt,"{{user}}","User",true);
+					readTavernPngFromBlob(blob, (obj) => {
+						load_temp_scenario_from_tavernobj(obj);
+					});
 
-					temp_scenario.title = data.name?data.name:"";
-					temp_scenario.desc = previewtxt;
-					temp_scenario.chatopponent = botname;
-					temp_scenario.prompt = ("\n{{char}}: "+greeting);
-					temp_scenario.memory = cdesc +"\n"+ cdef;
-
-					let card_is_defective = (data.name==""&&previewtxt==""&&greeting==""&&cdesc==""&&cdef=="");
-
-					return get_chubai_portrait(userInput, card_is_defective, false);
-				}).catch((error) => {
+					const objectURL = URL.createObjectURL(blob);
+					const compressedImg = compressImage(objectURL, (compressedImageURI, aspectratio) => {
+						temp_scenario.image = compressedImageURI;
+						temp_scenario.image_aspect = aspectratio;
+						preview_temp_scenario();
+					}, true, true, AVATAR_PX);
+				})
+				.catch(error => {
 					console.error(error);
-					throw new Error("Selected scenario is invalid.");					
+					throw new Error("Error fetching tavern scenario.");
 				});
 			}
 		},
@@ -7882,14 +7826,14 @@ Current version indicated by LITEVER below.
 				.then(x => {
 					if(x.ok)
 						return x.json();
-					else 
+					else
 						throw new Error("Invalid HTTP status on response: " + x.status);
 				})
 				.then(data => {
 					console.log(data);
 					if(data && data.character) //if fetch was successful
 					{
-						load_temp_scenario_from_tavernobj(data.character,true);
+						load_temp_scenario_from_tavernobj(data.character);
 						if(data.character.data && data.character.data.avatar)
 						{
 							const compressedImg = compressImage(data.character.data.avatar, (compressedImageURI, aspectratio)=>{
@@ -7967,7 +7911,7 @@ Current version indicated by LITEVER below.
 						preview_temp_scenario();
 
 						readTavernPngFromBlob(blob,(obj)=>{
-							load_temp_scenario_from_tavernobj(obj,true);
+							load_temp_scenario_from_tavernobj(obj);
 						});
 
 						const objectURL = URL.createObjectURL(blob);
@@ -7984,7 +7928,7 @@ Current version indicated by LITEVER below.
 			}
 		},
 	];
-	
+
 	/**
 	 * @param {typeof scenario_sources[number]} scenario_source
 	 * @param {string} [scenario_id]
@@ -8026,7 +7970,7 @@ Current version indicated by LITEVER below.
 			"Import from " + scenario_source.inputBox.name,
 			"",
 			scenario_source.inputBox.placeholder,
-			(value) => { 
+			(value) => {
 				const input = getInputBoxValue().trim();
 				loadScenario(input);
 			}
