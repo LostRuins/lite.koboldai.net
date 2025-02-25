@@ -5427,7 +5427,7 @@ Current version indicated by LITEVER below.
 					display_endpoint_container();
 				}
 			}).catch((error) => {
-				console.log("Error: " + error);
+				console.error(error);
 				msgbox("Failed to connect to AI Horde Service!\nPlease check your network connection.<br><br>You may still be able to connect to an alternative service, <a href='#' class='color_blueurl' onclick='hide_popups();display_endpoint_container()'>click here to view options</a>.","Error Encountered",true);
 				document.body.classList.remove("connected");
 				document.getElementById("connectstatus").innerHTML = "Offline Mode";
@@ -5468,9 +5468,8 @@ Current version indicated by LITEVER below.
 		//read the url params, and autoload a shared story if found
 		const foundStory = urlParams.get('s');
 		const foundScenario = urlParams.get('scenario');
-		const foundChub = urlParams.get('chub');
-		const foundPyg = urlParams.get('pyg');
-		const foundAicc = urlParams.get('aicc');
+		const foundScenarioSource = scenario_sources.find(scenario => urlParams.get(scenario.urlParam))
+
 		let foundQuery = urlParams.get('query');
 		if (!foundQuery || foundQuery == "")
 		{
@@ -5496,19 +5495,10 @@ Current version indicated by LITEVER below.
 			}
 			//purge url params
 			window.history.replaceState(null, null, window.location.pathname);
-		} else if (foundChub && foundChub != "") {
+		} else if (foundScenarioSource) {
+			console.log(foundScenarioSource, urlParams.get(foundScenarioSource.urlParam));
 			display_scenarios();
-			get_chubai_scenario(foundChub);
-			//purge url params
-			window.history.replaceState(null, null, window.location.pathname);
-		} else if (foundPyg && foundPyg != "") {
-			display_scenarios();
-			get_pygchat_scenario(foundPyg);
-			//purge url params
-			window.history.replaceState(null, null, window.location.pathname);
-		} else if (foundAicc && foundAicc != "") {
-			display_scenarios();
-			get_aicc_scenario(foundAicc);
+			import_scenario(foundScenarioSource, urlParams.get(foundScenarioSource.urlParam));
 			//purge url params
 			window.history.replaceState(null, null, window.location.pathname);
 		}
@@ -7209,78 +7199,7 @@ Current version indicated by LITEVER below.
 		return loadedwi;
 	}
 
-	function get_aetherroom_scenario()
-	{
-		inputBox("Enter aetherroom.club prompt URL, or 4-digit prompt number","Import from aetherroom.club","","https://aetherroom.club/1234", ()=>{
-			let userinput = getInputBoxValue().toLowerCase().trim();
-			if(userinput=="")
-			{
-				//pass
-			}
-			else
-			{
-				if (userinput.includes("aetherroom.club/")) {
-					//is a url, extract the ID
-					userinput = userinput.replace("/api/","/");
-					userinput = userinput.split("aetherroom.club/")[1];
-					userinput = userinput.split("/")[0];
-					userinput = userinput.split("#")[0];
-					userinput = userinput.split("?")[0];
-				}
-				//remove common malformed ids to reduce load
-				if(userinput!="" && is_numeric(userinput) && userinput>0 && userinput<50000)
-				{
-					fetch(apply_proxy_url("https://aetherroom.club/api/"+userinput,true))
-					.then(x => x.json())
-					.then(data => {
-						console.log(data);
-						temp_scenario =
-						{
-							"title":data.title?data.title:"",
-							"desc":data.description?data.description:"",
-							"opmode":2,
-							"adventure_context_mod":false,
-							"adventure_switch_mode":1,
-							"prompt":data.promptContent?data.promptContent:"",
-							"memory": data.memory?data.memory:"",
-							"authorsnote": data.authorsNote?data.authorsNote:"",
-							"worldinfo": []
-						};
-						if (data.worldInfos)
-						{
-							for (let w = 0; w < data.worldInfos.length; ++w) {
-								let keys = data.worldInfos[w].keys;
-								let entry = data.worldInfos[w].entry;
-
-								let nwi = {
-									"key": (keys ? keys : ""),
-									"keysecondary": "",
-									"keyanti": "",
-									"content": (entry ? entry : ""),
-									"comment": "",
-									"folder": null,
-									"selective": false,
-									"constant": false,
-									"probability":100
-								};
-								temp_scenario.worldinfo.push(nwi);
-							}
-						}
-						preview_temp_scenario();
-					}).catch((error) => {
-						temp_scenario = null;
-						document.getElementById("scenariodesc").innerText = "Error: Selected scenario is invalid.";
-						console.log("Error: " + error);
-					});
-				}else{
-					temp_scenario = null;
-					document.getElementById("scenariodesc").innerText = "Error: User input is invalid\n\n Please ensure you have input a valid aetherroom.club URL or ID (e.g. https://aetherroom.club/1234 or just 1234)";
-				}
-			}
-		},false);
-	}
-
-	function load_temp_scenario_from_tavernobj(obj,loadall)
+	function load_temp_scenario_from_tavernobj(obj)
 	{
 		if(obj!=null)
 		{
@@ -7290,47 +7209,44 @@ Current version indicated by LITEVER below.
 				obj = obj.data;
 			}
 
-			if(loadall)
+			let chatopponent = obj.name?obj.name:"Bot";
+			let memory = obj.description?("Persona: "+obj.description):"";
+			memory += obj.personality?("\nPersonality: "+obj.personality):"";
+			let scenario = obj.scenario?obj.scenario:"";
+			let examplemsg = obj.mes_example?obj.mes_example:"";
+			let greeting = obj.first_mes?obj.first_mes:"";
+			let sysprompt = obj.system_prompt?obj.system_prompt:"";
+
+			//aliases
+			if(examplemsg=="" && obj.mesExample!="")
 			{
-				let chatopponent = obj.name?obj.name:"Bot";
-				let memory = obj.description?("Persona: "+obj.description):"";
-				memory += obj.personality?("\nPersonality: "+obj.personality):"";
-				let scenario = obj.scenario?obj.scenario:"";
-				let examplemsg = obj.mes_example?obj.mes_example:"";
-				let greeting = obj.first_mes?obj.first_mes:"";
-				let sysprompt = obj.system_prompt?obj.system_prompt:"";
-
-				//aliases
-				if(examplemsg=="" && obj.mesExample!="")
-				{
-					examplemsg = obj.mesExample;
-				}
-				if(greeting=="" && obj.firstMes!="")
-				{
-					greeting = obj.firstMes;
-				}
-
-				if(scenario!="")
-				{
-					scenario = "\n[Scenario: "+scenario+"]";
-				}
-				if(examplemsg!="")
-				{
-					examplemsg = "\n"+examplemsg;
-				}
-				if(sysprompt!="")
-				{
-					sysprompt = sysprompt+"\n";
-				}
-				let combinedmem = sysprompt + memory + scenario + examplemsg;
-				temp_scenario.title = chatopponent;
-				let prev2 = replaceAll(obj.description,"{{char}}",chatopponent,true);
-				prev2 = replaceAll(prev2,"{{user}}","User",true);
-				temp_scenario.desc = prev2;
-				temp_scenario.chatopponent = chatopponent;
-				temp_scenario.prompt = ("\n{{char}}: "+ greeting);
-				temp_scenario.memory = combinedmem;
+				examplemsg = obj.mesExample;
 			}
+			if(greeting=="" && obj.firstMes!="")
+			{
+				greeting = obj.firstMes;
+			}
+
+			if(scenario!="")
+			{
+				scenario = "\n[Scenario: "+scenario+"]";
+			}
+			if(examplemsg!="")
+			{
+				examplemsg = "\n"+examplemsg;
+			}
+			if(sysprompt!="")
+			{
+				sysprompt = sysprompt+"\n";
+			}
+			let combinedmem = sysprompt + memory + scenario + examplemsg;
+			temp_scenario.title = chatopponent;
+			let prev2 = replaceAll(obj.description,"{{char}}",chatopponent,true);
+			prev2 = replaceAll(prev2,"{{user}}","User",true);
+			temp_scenario.desc = prev2;
+			temp_scenario.chatopponent = chatopponent;
+			temp_scenario.prompt = ("\n{{char}}: "+ greeting);
+			temp_scenario.memory = combinedmem;
 
 			//since cai format has no wi, try to grab it from tavern format
 			if(obj.character_book && obj.character_book.entries && obj.character_book.entries.length>0)
@@ -7342,355 +7258,6 @@ Current version indicated by LITEVER below.
 		}
 	}
 
-	function get_chubai_portrait(userinput, card_is_defective, original_no_exist)
-	{
-		//try to obtain the full portrait image
-		fetch("https://api.chub.ai/api/characters/download", {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({
-			"format": "tavern",
-			"fullPath": userinput,
-			"version": "main"
-			}),
-			referrerPolicy: 'no-referrer',
-			})
-			.then(rb => {
-				if(rb.ok)
-				{
-					return rb.blob();
-				}else{
-					throw new Error('Cannot fetch tavern image');
-				}
-			})
-			.then(blob => {
-				preview_temp_scenario();
-
-				readTavernPngFromBlob(blob,(obj)=>{
-					load_temp_scenario_from_tavernobj(obj,card_is_defective);
-				});
-
-				const objectURL = URL.createObjectURL(blob);
-				const compressedImg = compressImage(objectURL, (compressedImageURI, aspectratio)=>{
-					temp_scenario.image = compressedImageURI;
-					temp_scenario.image_aspect = aspectratio;
-					preview_temp_scenario();
-				}, true, true, AVATAR_PX);
-			})
-			.catch(error => {
-				if(original_no_exist)
-				{
-					temp_scenario = null;
-					document.getElementById("scenariodesc").innerText = "Error: Selected scenario is invalid.";
-					console.log("Error: " + error);
-				}
-				else
-				{
-					preview_temp_scenario();
-					console.error("Error fetching tavern image:", error);
-				}
-
-		});
-	}
-
-	function get_pygchat_scenario(charstr="")
-	{
-		const loadpyg = function(userinput)
-		{
-			if(userinput=="")
-			{
-				//pass
-			}
-			else
-			{
-				if (userinput.match(/pygmalion\.chat\//i)) {
-					const urlParams = new URLSearchParams(userinput);
-					const cid = urlParams.get('id');
-					if(cid && cid!="")
-					{
-						userinput = cid;
-					}
-				}
-				userinput = userinput.endsWith('/') ? userinput.slice(0, -1) : userinput;
-				if(userinput!="")
-				{
-					temp_scenario = {
-						"title":"",
-						"desc": "",
-						"opmode":3,
-						"chatname": "User",
-						"chatopponent": "",
-						"gui_type":1,
-						"prompt":"",
-						"memory": "",
-						"authorsnote": "",
-						"worldinfo": [],
-					};
-
-					document.getElementById("scenariodesc").innerText = "Loading scenario from Pygmalion.Chat...";
-					let charurl = "https://server.pygmalion.chat/api/export/character/"+userinput+"/v2";
-					fetch(apply_proxy_url(charurl,true), {
-					method: 'GET',
-					headers: {
-						'Content-Type': 'application/json',
-					},
-				//	body: JSON.stringify({ "character_id": userinput }),
-					referrerPolicy: 'no-referrer',
-					})
-					.then(x => {
-						if(x.ok)
-						{
-							return x.json();
-						}else{
-							console.log('Cannot fetch pyg scenario: try fallback to tavern image');
-							throw new Error('Cannot fetch character from pygmalion.chat');
-							return null;
-						}
-					})
-					.then(data => {
-						console.log(data);
-						if(data && data.character) //if fetch was successful
-						{
-							load_temp_scenario_from_tavernobj(data.character,true);
-							if(data.character.data && data.character.data.avatar)
-							{
-								const compressedImg = compressImage(data.character.data.avatar, (compressedImageURI, aspectratio)=>{
-									temp_scenario.image = compressedImageURI;
-									temp_scenario.image_aspect = aspectratio;
-									preview_temp_scenario();
-								}, true, true, AVATAR_PX);
-							}
-						}else{
-							temp_scenario = null;
-							document.getElementById("scenariodesc").innerText = "Error: Selected scenario is invalid.";
-						}
-
-					}).catch((error) => {
-						temp_scenario = null;
-						document.getElementById("scenariodesc").innerText = "Error: Selected scenario is invalid.";
-						console.log("Error: " + error);
-					});
-				}else{
-					temp_scenario = null;
-					document.getElementById("scenariodesc").innerText = "Error: User input is invalid\n\n Please ensure you have input a valid Pygmalion.Chat UUID or URL.";
-				}
-			}
-		}
-
-		if(charstr=="")
-		{
-			inputBox("Enter pygmalion.chat character UUID","Import from pygmalion.chat","","d7950ca8-c241-4725-8de1-42866e389ebf", ()=>{
-				let userinput = getInputBoxValue().trim();
-				loadpyg(userinput);
-			},false);
-		}else{
-			loadpyg(charstr);
-		}
-	}
-
-	function get_aicc_scenario(inputstr="")
-	{
-		const loadaicc = function(userinput)
-		{
-			if(userinput=="")
-			{
-				//pass
-			}
-			else
-			{
-
-				let useraw = false;
-				if (userinput.match(/aicharactercards\.com\//i) && userinput.match(/sdm_process_download/i))
-				{
-					useraw = true;
-				}
-				else {
-					userinput = userinput.split("#")[0].split("?")[0];
-					userinput = userinput.endsWith('/') ? userinput.slice(0, -1) : userinput;
-					if (userinput.match(/aicharactercards\.com\//i) || userinput.match(/AICC\//i)) {
-						// is a URL, extract the character name
-						let tmp = userinput.split("/");
-						if(tmp.length >= 2)
-						{
-							userinput = tmp[tmp.length-2] + "/" + tmp[tmp.length-1];
-						}
-					}
-				}
-
-				if(userinput!="")
-				{
-					temp_scenario = {
-						"title":"",
-						"desc": "",
-						"opmode":3,
-						"chatname": "User",
-						"chatopponent": "",
-						"gui_type":1,
-						"prompt":"",
-						"memory": "",
-						"authorsnote": "",
-						"worldinfo": [],
-					};
-
-					let finalurl = useraw?userinput:"https://aicharactercards.com/wp-json/pngapi/v1/image/"+userinput;
-					finalurl = apply_proxy_url(finalurl,true);
-					//try to obtain the full portrait image
-					fetch(finalurl, {
-						method: 'GET',
-						redirect: 'follow',
-						referrerPolicy: 'no-referrer',
-						})
-						.then(rb => {
-							if(rb.ok)
-							{
-								return rb.blob();
-							}else{
-								throw new Error('Cannot fetch tavern image');
-							}
-						})
-						.then(blob => {
-							preview_temp_scenario();
-
-							readTavernPngFromBlob(blob,(obj)=>{
-								load_temp_scenario_from_tavernobj(obj,true);
-							});
-
-							const objectURL = URL.createObjectURL(blob);
-							const compressedImg = compressImage(objectURL, (compressedImageURI, aspectratio)=>{
-								temp_scenario.image = compressedImageURI;
-								temp_scenario.image_aspect = aspectratio;
-								preview_temp_scenario();
-							}, true, true, AVATAR_PX);
-						})
-						.catch(error => {
-							temp_scenario = null;
-							document.getElementById("scenariodesc").innerText = "Error: Selected scenario is invalid.";
-							console.log("Error: " + error);
-
-						});
-				} else {
-					temp_scenario = null;
-					document.getElementById("scenariodesc").innerText = "Error: User input is invalid\n\n Please ensure you have input a valid AICC URL or ID.";
-				}
-			}
-		}
-
-		if(inputstr=="")
-		{
-			inputBox("Enter aicharactercards.com prompt URL","Import from aicharactercards.com","","https://aicharactercards.com/character-cards/work-jobs/deffcolony/lara-lightland", ()=>{
-				let userinput = getInputBoxValue().trim();
-				loadaicc(userinput);
-			},false);
-		}else{
-			loadaicc(inputstr);
-		}
-	}
-
-	function get_chubai_scenario(chubstr="")
-	{
-		const loadchub = function(userinput)
-		{
-			if(userinput=="")
-			{
-				//pass
-			}
-			else
-			{
-				if (userinput.match(/chub\.ai\//i)) {
-					// is a URL, extract the character name
-					userinput = userinput.replace(/\/characters\//i, '/');
-					userinput = userinput.split(/chub\.ai\//i)[1].split("#")[0].split("?")[0];
-				} else if (userinput.match(/characterhub\.org\//i)) {
-					// is a URL, extract the character name
-					userinput = userinput.replace(/\/characters\//i, '/');
-					userinput = userinput.split(/characterhub\.org\//i)[1].split("#")[0].split("?")[0];
-				}
-				userinput = userinput.endsWith('/') ? userinput.slice(0, -1) : userinput;
-				if(userinput!="")
-				{
-					temp_scenario = {
-						"title":"",
-						"desc": "",
-						"opmode":3,
-						"chatname": "User",
-						"chatopponent": "",
-						"gui_type":1,
-						"prompt":"",
-						"memory": "",
-						"authorsnote": "",
-						"worldinfo": [],
-					};
-
-					document.getElementById("scenariodesc").innerText = "Loading scenario from CharacterHub / Chub...";
-					fetch("https://api.chub.ai/api/characters/download", {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify({
-					"format": "cai",
-					"fullPath": userinput,
-					"version": "main"
-					}),
-					referrerPolicy: 'no-referrer',
-					})
-					.then(x => {
-						if(x.ok)
-						{
-							return x.json();
-						}else{
-							console.log('Cannot fetch chub scenario: try fallback to tavern image');
-							//cai format failed, try fallback to portrait only
-							get_chubai_portrait(userinput, true, true);
-							return null;
-						}
-					})
-					.then(data => {
-						if(data) //if cai fetch was successful
-						{
-							console.log(data);
-							let botname = data.name?data.name:"Bot";
-							let cdef = data.definition?data.definition.replace("END_OF_DIALOG","").trim():"";
-							let cdesc = data.description?data.description:"";
-							let greeting = data.greeting?data.greeting:"";
-							let previewtxt = (data.title ? data.title + '\n\n' : '') + replaceAll(cdesc,"{{char}}",botname,true);
-							previewtxt = replaceAll(previewtxt,"{{user}}","User",true);
-
-							temp_scenario.title = data.name?data.name:"";
-							temp_scenario.desc = previewtxt;
-							temp_scenario.chatopponent = botname;
-							temp_scenario.prompt = ("\n{{char}}: "+greeting);
-							temp_scenario.memory = cdesc +"\n"+ cdef;
-
-							let card_is_defective = (data.name==""&&previewtxt==""&&greeting==""&&cdesc==""&&cdef=="");
-
-							get_chubai_portrait(userinput, card_is_defective, false);
-						}
-
-					}).catch((error) => {
-						temp_scenario = null;
-						document.getElementById("scenariodesc").innerText = "Error: Selected scenario is invalid.";
-						console.log("Error: " + error);
-					});
-				}else{
-					temp_scenario = null;
-					document.getElementById("scenariodesc").innerText = "Error: User input is invalid\n\n Please ensure you have input a valid CharacterHub / ChubAI URL or ID.";
-				}
-			}
-		}
-
-		if(chubstr=="")
-		{
-			inputBox("Enter characterhub.org or chub.ai prompt URL","Import from characterhub.org / chub.ai","","https://characterhub.org/characters/Anonymous/example-character", ()=>{
-				let userinput = getInputBoxValue().trim();
-				loadchub(userinput);
-			},false);
-		}else{
-			loadchub(chubstr);
-		}
-	}
 
 	function leave_multiplayer()
 	{
@@ -8060,17 +7627,370 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	/**
+	 * @type {{
+	 * 		name: string;
+	 * 		urlParam: string;
+	 *		inputBox: {
+	 *			text: string;
+	 *			placeholder: string;
+	 *		};
+	 *		extraction: (userInput: string) => string;
+	 *		fetch: (value: string) => Promise<void>;
+	 *	}[]}
+	 **/
+	const scenario_sources = [
+		// Aetherroom.club
+		{
+			name: "aetherroom.club",
+			urlParam: "aether",
+			inputBox: {
+				text: "Enter aetherroom.club prompt URL, or 4-digit prompt number",
+				placeholder: "https://aetherroom.club/1234"
+			},
+			extraction: (userInput) => {
+				userInput = userInput.toLowerCase();
+				if (userInput.includes("aetherroom.club/")) {
+					//is a url, extract the ID
+					userInput = userInput.replace("/api/","/");
+					userInput = userInput.split("aetherroom.club/")[1];
+					userInput = userInput.split("/")[0];
+					userInput = userInput.split("#")[0];
+					userInput = userInput.split("?")[0];
+				}
+				if(!(userInput!="" && is_numeric(userInput) && userInput>0 && userInput<50000))
+					throw new Error("User input is invalid\n\n Please ensure you have input a valid aetherroom.club URL or ID (e.g. https://aetherroom.club/1234 or just 1234)");
+				return userInput;
+			},
+			fetch: (userInput) => {
+				return fetch(apply_proxy_url("https://aetherroom.club/api/"+userInput,true))
+					.then(x => x.json())
+					.then(data => {
+						console.log(data);
+						temp_scenario =
+						{
+							"title":data.title?data.title:"",
+							"desc":data.description?data.description:"",
+							"opmode":2,
+							"adventure_context_mod":false,
+							"adventure_switch_mode":1,
+							"prompt":data.promptContent?data.promptContent:"",
+							"memory": data.memory?data.memory:"",
+							"authorsnote": data.authorsNote?data.authorsNote:"",
+							"worldinfo": []
+						};
+						if (data.worldInfos)
+						{
+							for (let w = 0; w < data.worldInfos.length; ++w) {
+								let keys = data.worldInfos[w].keys;
+								let entry = data.worldInfos[w].entry;
+
+								let nwi = {
+									"key": (keys ? keys : ""),
+									"keysecondary": "",
+									"keyanti": "",
+									"content": (entry ? entry : ""),
+									"comment": "",
+									"folder": null,
+									"selective": false,
+									"constant": false,
+									"probability":100
+								};
+								temp_scenario.worldinfo.push(nwi);
+							}
+						}
+						preview_temp_scenario();
+					}).catch((error) => {
+						console.error(error);
+						throw new Error("Error: Selected scenario is invalid.");
+					});
+			}
+		},
+		// Chub.ai
+		{
+			name: "characterhub.org / chub.ai",
+			urlParam: "chub",
+			inputBox: {
+				text: "Enter characterhub.org or chub.ai prompt URL",
+				placeholder: "https://characterhub.org/characters/Anonymous/example-character"
+			},
+			extraction: (userInput) => {
+				if (userInput.match(/chub\.ai\//i)) {
+					// is a URL, extract the character name
+					userInput = userInput.replace(/\/characters\//i, '/');
+					userInput = userInput.split(/chub\.ai\//i)[1].split("#")[0].split("?")[0];
+				} else if (userInput.match(/characterhub\.org\//i)) {
+					// is a URL, extract the character name
+					userInput = userInput.replace(/\/characters\//i, '/');
+					userInput = userInput.split(/characterhub\.org\//i)[1].split("#")[0].split("?")[0];
+				}
+				userInput = userInput.endsWith('/') ? userInput.slice(0, -1) : userInput;
+				return userInput;
+			},
+			fetch: (userInput) => {
+				temp_scenario = {
+					"title":"",
+					"desc": "",
+					"opmode":3,
+					"chatname": "User",
+					"chatopponent": "",
+					"gui_type":1,
+					"prompt":"",
+					"memory": "",
+					"authorsnote": "",
+					"worldinfo": [],
+				};
+
+				//try to obtain the full portrait image
+				return fetch("https://api.chub.ai/api/characters/download", {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify({
+						"format": "tavern",
+						"fullPath": userInput,
+						"version": "main"
+					}),
+					referrerPolicy: 'no-referrer',
+				})
+				.then(rb => {
+					if (rb.ok) {
+						return rb.blob();
+					} else {
+						throw new Error('Cannot fetch tavern image');
+					}
+				})
+				.then(blob => {
+					preview_temp_scenario();
+
+					readTavernPngFromBlob(blob, (obj) => {
+						load_temp_scenario_from_tavernobj(obj);
+					});
+
+					const objectURL = URL.createObjectURL(blob);
+					const compressedImg = compressImage(objectURL, (compressedImageURI, aspectratio) => {
+						temp_scenario.image = compressedImageURI;
+						temp_scenario.image_aspect = aspectratio;
+						preview_temp_scenario();
+					}, true, true, AVATAR_PX);
+				})
+				.catch(error => {
+					console.error(error);
+					throw new Error("Error fetching tavern scenario.");
+				});
+			}
+		},
+		// Pygmalion.chat
+		{
+			name: "pygmalion.chat",
+			urlParam: "pyg",
+			inputBox: {
+				text: "Enter pygmalion.chat character UUID",
+				placeholder: "d7950ca8-c241-4725-8de1-42866e389ebf",
+			},
+			extraction: (userInput) => {
+				if (userInput.match(/pygmalion\.chat\//i)) {
+					const urlParams = new URLSearchParams(userInput);
+					const cid = urlParams.get('id');
+					if(cid && cid!="")
+					{
+						userInput = cid;
+					}
+				}
+				userInput = userInput.endsWith('/') ? userInput.slice(0, -1) : userInput;
+				userInput = userInput.trim().toLowerCase().replace("https://pygmalion.chat/character/","");
+				userInput = userInput.trim().toLowerCase().replace("https://pygmalion.chat//character/","");
+				return userInput;
+			},
+			fetch: (userInput) => {
+				temp_scenario = {
+					"title":"",
+					"desc": "",
+					"opmode":3,
+					"chatname": "User",
+					"chatopponent": "",
+					"gui_type":1,
+					"prompt":"",
+					"memory": "",
+					"authorsnote": "",
+					"worldinfo": [],
+				};
+
+				let charurl = "https://server.pygmalion.chat/api/export/character/"+userInput+"/v2";
+				return fetch(apply_proxy_url(charurl,true), {
+					method: 'GET',
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					referrerPolicy: 'no-referrer',
+				})
+				.then(x => {
+					if(x.ok)
+						return x.json();
+					else
+						throw new Error("Invalid HTTP status on response: " + x.status);
+				})
+				.then(data => {
+					console.log(data);
+					if(data && data.character) //if fetch was successful
+					{
+						load_temp_scenario_from_tavernobj(data.character);
+						if(data.character.data && data.character.data.avatar)
+						{
+							const compressedImg = compressImage(data.character.data.avatar, (compressedImageURI, aspectratio)=>{
+								temp_scenario.image = compressedImageURI;
+								temp_scenario.image_aspect = aspectratio;
+								preview_temp_scenario();
+							}, true, true, AVATAR_PX);
+						}
+					}else{
+						throw new Error("Selected scenario is invalid.");
+					}
+
+				}).catch((error) => {
+					console.error(error);
+					throw new Error("Selected scenario is invalid.");
+				});
+			}
+		},
+		// aicharactercards.com
+		{
+			name: "aicharactercards.com",
+			urlParam: "aicc",
+			inputBox: {
+				text: "Enter aicharactercards.com prompt URL",
+				placeholder: "https://aicharactercards.com/character-cards/work-jobs/deffcolony/lara-lightland",
+			},
+			extraction: (userInput) => {
+				if (userInput.match(/aicharactercards\.com\//i) && userInput.match(/sdm_process_download/i))
+				{
+					return userInput;
+				} else {
+					userInput = userInput.split("#")[0].split("?")[0];
+					userInput = userInput.endsWith('/') ? userInput.slice(0, -1) : userInput;
+					if (userInput.match(/aicharactercards\.com\//i) || userInput.match(/AICC\//i)) {
+						// is a URL, extract the character name
+						let tmp = userInput.split("/");
+						if(tmp.length >= 2)
+						{
+							userInput = tmp[tmp.length-2] + "/" + tmp[tmp.length-1];
+						}
+					}
+					return "https://aicharactercards.com/wp-json/pngapi/v1/image/"+userInput;
+				}
+			},
+			fetch: (userInput) => {
+				temp_scenario = {
+					"title":"",
+					"desc": "",
+					"opmode":3,
+					"chatname": "User",
+					"chatopponent": "",
+					"gui_type":1,
+					"prompt":"",
+					"memory": "",
+					"authorsnote": "",
+					"worldinfo": [],
+				};
+
+				finalurl = apply_proxy_url(userInput,true);
+				//try to obtain the full portrait image
+				return fetch(finalurl, {
+					method: 'GET',
+					redirect: 'follow',
+					referrerPolicy: 'no-referrer',
+					})
+					.then(rb => {
+						if(rb.ok)
+						{
+							return rb.blob();
+						}else{
+							throw new Error('Cannot fetch tavern image');
+						}
+					})
+					.then(blob => {
+						preview_temp_scenario();
+
+						readTavernPngFromBlob(blob,(obj)=>{
+							load_temp_scenario_from_tavernobj(obj);
+						});
+
+						const objectURL = URL.createObjectURL(blob);
+						const compressedImg = compressImage(objectURL, (compressedImageURI, aspectratio)=>{
+							temp_scenario.image = compressedImageURI;
+							temp_scenario.image_aspect = aspectratio;
+							preview_temp_scenario();
+						}, true, true, AVATAR_PX);
+					})
+					.catch(error => {
+						throw new Error("Selected scenario is invalid.");
+						console.error(error);
+					});
+			}
+		},
+	];
+
+	/**
+	 * @param {typeof scenario_sources[number]} scenario_source
+	 * @param {string} [scenario_id]
+	 */
+	function import_scenario(scenario_source, scenario_id) {
+		if(!scenario_source) return;
+
+		function extractionWrapper(userInput) {
+			try {
+				return scenario_source.extraction(userInput)
+			} catch (error) {
+				console.error(error);
+				document.getElementById("scenariodesc").innerText = "Error: Error while extracting value from input: " + (error.message ?? "Unknown error");
+				temp_scenario = null;
+			}
+			return "";
+		}
+
+		function fetchWrapper(userInput) {
+			// Fetch should return a promise, so we catch it like that instead of try catch block.
+			scenario_source.fetch(userInput)
+				.catch(error => {
+					console.error(error);
+					document.getElementById("scenariodesc").innerText = "Error: Error while fetching and parsing remote values: " + (error.message ?? "Unknown error");
+					temp_scenario = null;
+				});
+		}
+
+		function loadScenario(input) {
+			if(!input) return;
+			document.getElementById("scenariodesc").innerText = `Loading scenario from ${scenario_source.name}...`;
+			const extracted = extractionWrapper(input);
+			if(extracted) return fetchWrapper(extracted);
+		}
+
+		if(scenario_id) loadScenario(scenario_id);
+		else inputBox(
+			scenario_source.inputBox.text,
+			"Import from " + scenario_source.inputBox.name,
+			"",
+			scenario_source.inputBox.placeholder,
+			(value) => {
+				const input = getInputBoxValue().trim();
+				loadScenario(input);
+			}
+		);
+	}
+
 	function display_scenarios()
 	{
 		mainmenu_untab(true);
 		temp_scenario = null;
 		document.getElementById("quickstartcontainer").classList.remove("hidden");
 
-		let scenarios = `<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_aetherroom_scenario()">Import from<br>aetherroom.club</button>`+
-		`<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_chubai_scenario()">Import from<br>characterhub.org / chub.ai</button>` +
-		`<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_pygchat_scenario()">Import from<br>pygmalion.chat</button>` +
-		`<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_aicc_scenario()">Import from<br>aicharactercards.com</button>` +
-		`<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="character_creator()">New Character Creator</button>`;
+		let scenarios = ``;
+		for(let i=0;i<scenario_sources.length;++i) {
+			scenarios += `<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="import_scenario(scenario_sources[${i}])">Import from<br>${scenario_sources[i].name}</button>`
+		}
+
+		scenarios += `<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="character_creator()">New Character Creator</button>`;
 		for(let i=0;i<scenario_db.length;++i)
 		{
 			let curr = scenario_db[i];
