@@ -3033,6 +3033,7 @@ Current version indicated by LITEVER below.
 	var thinking_action = 1; //0=display, 1=collapse, 2=hide, 3=remove
 	var start_thinking_tag = "<think>";
 	var force_thinking_tag = false;
+	var strip_past_thinking = true;
 	var voice_typing_mode = 0; //0=off, 1=on, 2=ptt
 	var koboldcpp_has_whisper = false; //does backend support voice typing
 	var voice_is_recording = false; //currently recording voice?
@@ -6395,6 +6396,7 @@ Current version indicated by LITEVER below.
 		new_save_storyobj.thinking_action = thinking_action;
 		new_save_storyobj.start_thinking_tag = start_thinking_tag;
 		new_save_storyobj.force_thinking_tag = force_thinking_tag;
+		new_save_storyobj.strip_past_thinking = strip_past_thinking;
 
 		if (export_settings) {
 			new_save_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
@@ -6725,6 +6727,10 @@ Current version indicated by LITEVER below.
 				if(storyobj.force_thinking_tag)
 				{
 					force_thinking_tag = storyobj.force_thinking_tag;
+				}
+				if(storyobj.strip_past_thinking)
+				{
+					strip_past_thinking = storyobj.strip_past_thinking;
 				}
 				if(storyobj.start_thinking_tag)
 				{
@@ -11861,6 +11867,7 @@ Current version indicated by LITEVER below.
 		}
 		thinking_action = parseInt(document.getElementById("thinking_action").value);
 		force_thinking_tag = document.getElementById("force_thinking_tag").checked?true:false;
+		strip_past_thinking = document.getElementById("strip_past_thinking").checked?true:false;
 		start_thinking_tag = document.getElementById("start_thinking_tag").value;
 	}
 
@@ -12215,6 +12222,7 @@ Current version indicated by LITEVER below.
 			thinking_pattern = "<think>([\\s\\S]+?)<\/think>";
 			thinking_action = 1;
 			force_thinking_tag = false;
+			strip_past_thinking = true;
 			start_thinking_tag = "<think>";
 		}
 		warn_on_quit = false;
@@ -13577,6 +13585,13 @@ Current version indicated by LITEVER below.
 
 			let truncated_context = concat_gametext(true, "","","",false,true); //no need to truncate if memory is empty
 			truncated_context = truncated_context.replace(/\xA0/g,' '); //replace non breaking space nbsp
+
+			//remove past thoughts
+			if(strip_past_thinking && thinking_action>0 && thinking_pattern!="") //removal of cot
+			{
+				let pat = new RegExp(thinking_pattern, "gm");
+				truncated_context = truncated_context.replace(pat, "");
+			}
 
 			let max_allowed_characters = getMaxAllowedCharacters(truncated_context, maxctxlen, maxgenamt);
 
@@ -18827,6 +18842,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("thinking_pattern").value = thinking_pattern;
 		document.getElementById("thinking_action").value = thinking_action;
 		document.getElementById("force_thinking_tag").checked = force_thinking_tag;
+		document.getElementById("strip_past_thinking").checked = strip_past_thinking;
 		document.getElementById("start_thinking_tag").value = start_thinking_tag;
 	}
 
@@ -22087,6 +22103,7 @@ Current version indicated by LITEVER below.
 						<option value="2">Hide</option>
 						<option value="3">Remove</option>
 					</select></div>
+					<div style="padding:4px" class="settinglabel justifyleft">Don't Submit Old Thoughts <input title="Do not submit Past Thoughts" type="checkbox" id="strip_past_thinking" style="margin:4px;"></div>
 					<div style="padding:4px" class="settinglabel justifyleft">Force Insert Thinking Tag <input title="Force Insert Thinking Tag" type="checkbox" id="force_thinking_tag" style="margin:4px;"><input class="settinglabel miniinput" style="margin-left:4px;width:100px;" type="text" placeholder="" value="" id="start_thinking_tag"></div>
 					<div style="padding:4px" class="settinglabel justifyleft">Note: 'Force Insert Thinking Tags' does not work with the 'Remove' option of CoT handling regex.</div>
 				</div>
