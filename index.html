@@ -2067,6 +2067,9 @@ Current version indicated by LITEVER below.
 	.color_green {
 		color: #3bf723;
 	}
+	.color_lightgreen {
+		color: #b6ffa6;
+	}
 	.color_offwhite {
 		color: #bedae9;
 	}
@@ -2864,6 +2867,7 @@ Current version indicated by LITEVER below.
 
 	const claude_submit_endpoint = "/complete";
 	const claude_submit_endpoint_v3 = "/messages";
+	const claude_models_endpoint = "/v1/models";
 
 	const default_openrouter_base = "https://openrouter.ai/api/v1";
 	const default_mistralai_base = "https://api.mistral.ai/v1";
@@ -8918,6 +8922,73 @@ Current version indicated by LITEVER below.
 		}
 		toggleoaichatcompl();
 	}
+	function claude_fetch_models()
+	{
+		let desired_claude_key = document.getElementById("custom_claude_key").value.trim();
+		let claude_ep = document.getElementById("custom_claude_endpoint").value.trim();
+		if(claude_ep.toLowerCase().includes("api.anthropic.com"))
+		{
+			//official API has broken cors settings
+			claude_ep = apply_proxy_url(claude_ep,true);
+		}
+		if(desired_claude_key=="")
+		{
+			msgbox("Claude requires an API key to fetch model list!");
+			return;
+		}
+
+		let dropdown = document.getElementById("custom_claude_model");
+		fetch((claude_ep + claude_models_endpoint), {
+			method: 'GET',
+			headers: {
+				'Content-Type': 'application/json',
+				'anthropic-version':'2023-06-01',
+				'x-api-key': desired_claude_key,
+			},
+			referrerPolicy: 'no-referrer',
+		})
+		.then((response) => response.json())
+		.then((data) => {
+			console.log(data);
+			if (data && data.data.length > 0)
+			{
+				for (var i = dropdown.options.length - 1; i >= 0; i--) {
+					var option = dropdown.options[i];
+					dropdown.remove(option);
+				}
+				let selidx = 0;
+				for(var i = 0; i < data.data.length; i++) {
+					var opt = data.data[i];
+					var el = document.createElement("option");
+					let optname = opt.id;
+					el.textContent = optname;
+					el.value = optname;
+					dropdown.appendChild(el);
+				}
+				dropdown.selectedIndex = selidx;
+				togglepalmmodel();
+			}
+			else
+			{
+				let errmsg = "";
+				if(data && data.error)
+				{
+					errmsg = data.error;
+				}
+				else
+				{
+					errmsg = data;
+				}
+				msgbox(JSON.stringify(errmsg),"Error Encountered",false,false);
+			}
+		})
+		.catch(error => {
+			console.log("Error: " + error);
+			msgbox("Error: " + error,"Error Encountered",false,false,()=>{
+				hide_msgbox();
+			});
+		});
+	}
 	function gemini_fetch_models()
 	{
 		let desired_gemini_key = document.getElementById("custom_palm_key").value.trim();
@@ -9082,6 +9153,13 @@ Current version indicated by LITEVER below.
 			document.getElementById("claudesystemprompt").classList.add("hidden");
 			document.getElementById("claudejailbreakprompt").classList.add("hidden");
 			document.getElementById("clauderenamecompatdiv").classList.remove("hidden");
+		}
+		if(document.getElementById("custom_claude_model").value.toLowerCase().includes("claude-3-7"))
+		{
+			document.getElementById("claudethinkingbox").classList.remove("hidden");
+		}else
+		{
+			document.getElementById("claudethinkingbox").classList.add("hidden");
 		}
 	}
 
@@ -12273,7 +12351,7 @@ Current version indicated by LITEVER below.
 				let matchiter = 0;
 				inputtxt = inputtxt.replace(/%ExpandBtn%/g, function (m) {
 					let curr = matches[matchiter];
-					let expandedhtml = `<span><button type="button" title="Show Thoughts" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="toggle_hide_thinking(this)">Show Thoughts (${curr.length} characters)</button><span class="hidden">${escape_html(curr)}</span></span>`;
+					let expandedhtml = `<span><button type="button" title="Show Thoughts" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="toggle_hide_thinking(this)">Show Thoughts (${curr.length} characters)</button><span class="color_lightgreen hidden"><br>${escape_html(curr)}</span></span>`;
 					++matchiter;
 					return expandedhtml;
 				});
@@ -14436,20 +14514,37 @@ Current version indicated by LITEVER below.
 				{
 					let sysprompt = document.getElementById("claudesystemprompt").value;
 					let assistantprompt = document.getElementById("claudejailbreakprompt").value;
+					let claudethinking = (document.getElementById("claudethinking").checked?true:false);
+
 					claude_payload =
 					{
 						"model": custom_claude_model,
 						"messages": [],
 						"max_tokens": submit_payload.params.max_length,
-						"top_k": (submit_payload.params.top_k<1?300:submit_payload.params.top_k),
 						"temperature": submit_payload.params.temperature,
-						"top_p": submit_payload.params.top_p,
 					};
 					claude_payload.messages.push({"role": "user", "content": submit_payload.prompt})
 					if(sysprompt)
 					{
 						claude_payload.system = sysprompt;
 					}
+
+					if(claudethinking)
+					{
+						claude_payload.thinking = {
+							"type": "enabled",
+							"budget_tokens": 1024
+						}
+						claude_payload.max_tokens += 1024;
+						claude_payload.temperature = 1;
+					}
+					else
+					{
+						//unsupported with thinking
+						claude_payload.top_k = (submit_payload.params.top_k<1?300:submit_payload.params.top_k);
+						claude_payload.top_p = submit_payload.params.top_p;
+					}
+
 					if(localsettings.opmode==1)
 					{
 						claude_payload.system = "Always respond with a direct partial continuation of the story immediately from the latest word.";
@@ -14526,9 +14621,24 @@ Current version indicated by LITEVER below.
 					.then((response) => response.json())
 					.then((data) => {
 						console.log("sync finished response: " + JSON.stringify(data));
-						if(custom_claude_key != "" && data.content && data.content.length > 0 && data.content[0].text)
+						if(custom_claude_key != "" && data.content && data.content.length > 0)
 						{
-							data.completion = data.content[0].text; //for claudev3
+							let comp = "";
+							for(let i=0;i<data.content.length;++i)
+							{
+								if(data.content[i].text)
+								{
+									comp += data.content[i].text; //for claudev3
+								}
+								if(data.content[i].thinking)
+								{
+									comp += `<think>${data.content[i].thinking}</think>\n\n`; //for claudev3
+								}
+							}
+							if(comp!="")
+							{
+								data.completion = comp;
+							}
 							if(localsettings.opmode==1 && gametext_arr.length>0 && data.completion!="")
 							{
 								data.completion = cleanup_story_completion(data.completion);
@@ -20641,7 +20751,7 @@ Current version indicated by LITEVER below.
 				<input class="form-control" type="text" id="custom_claude_endpoint" placeholder="Claude API URL" value="">
 				<input class="form-control" type="password" id="custom_claude_key" placeholder="Claude API Key (Required)" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
 				Model Choice:<br>
-				<select style="padding:4px;" class="form-control" id="custom_claude_model"  onload="toggleclaudemodel()"  onchange="toggleclaudemodel()">
+				<select style="padding:4px; width:calc(100% - 110px); display:inline-block" class="form-control" id="custom_claude_model"  onload="toggleclaudemodel()"  onchange="toggleclaudemodel()">
 					<option value="claude-v1">claude-v1</option>
 					<option value="claude-v1-100k">claude-v1-100k</option>
 					<option value="claude-instant-v1">claude-instant-v1</option>
@@ -20656,7 +20766,9 @@ Current version indicated by LITEVER below.
 					<option value="claude-3-5-sonnet-20241022">claude-3-5-sonnet-20241022</option>
 					<option value="claude-3-5-sonnet-latest" selected="selected">claude-3-5-sonnet-latest</option>
 					<option value="claude-3-5-haiku-20241022">claude-3-5-haiku-20241022</option>
+					<option value="claude-3-7-sonnet-20250219">claude-3-7-sonnet-20250219</option>
 				</select>
+				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="claudefetchlist" onclick="claude_fetch_models()">Fetch List</button>
 				<input type="checkbox" id="claudeaddversion" onchange="" checked>
 				<div class="box-label" title="Add endpoint version">Add Endpoint Version</div>
 				<span id="clauderenamecompatdiv">
@@ -20668,6 +20780,11 @@ Current version indicated by LITEVER below.
 				value="" onload=""></textarea>
 				<textarea class="form-control hidden" rows="2" style="resize: vertical; line-height:1.1; padding:4px; display:inline; width: 100%" type="text" id="claudejailbreakprompt" placeholder="(Enter Assistant Postfix)"
 				value="" onload=""></textarea>
+
+				<div id="claudethinkingbox" class="hidden">
+				<div class="box-label" title="Enable Thinking">Enable Thinking </div>
+				<input type="checkbox" style="display:inline;" id="claudethinking">
+				</div>
 
 			</div>
 			<div id="palmcustom" class="menutext hidden">
