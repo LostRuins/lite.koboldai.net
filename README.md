@@ -7,8 +7,8 @@ Features:
 - Fully featured text editor in a single HTML page, designed for use with generative LLMs.
 - Compatible with both KoboldAI United (UI1 and UI2) and KoboldAI Client as a backend. Save files are cross compatible with KoboldAI.
 - Comes bundled together with KoboldCPP.
-- Integrates with the the Grid, allowing you to generate text via Grid workers. Easily pick and choose the models or workers you wish to use. Also has a lightweight dashboard for managing your own grid workers.
-- Generate images with Stable Diffusion via the the Grid, and display them inline in the story.
+- Integrates with the Grid, allowing you to generate text via Grid workers. Easily pick and choose the models or workers you wish to use. Also has a lightweight dashboard for managing your own grid workers.
+- Generate images with Stable Diffusion via the Grid, and display them inline in the story.
 - Switch between four modes:
     - Story Mode - For creative fiction and novel writing
     - Adventure Mode - AIDungeon styled interactive fiction, choose-your-own-adventure.

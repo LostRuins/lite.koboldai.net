@@ -871,8 +871,8 @@ Current version indicated by LITEVER below.
 		chat_context_mod: true, //extra injection for chat mode
 		chatname: "User", //name to use in chat
 		chatopponent: defaultchatopponent,
-		instruct_starttag: "\\n### Instruction:\\n",
-		instruct_endtag: "\\n### Response:\\n",
+		instruct_starttag: "<｜end▁of▁sentence｜><｜User｜>",
+		instruct_endtag: "<｜end▁of▁sentence｜><｜Assistant｜>",
 		instruct_systag: "",
 		instruct_starttag_end: "",
 		instruct_endtag_end: "",
@@ -897,7 +897,7 @@ Current version indicated by LITEVER below.
 		image_negprompt: "",
 		grammar:"",
 		tokenstreammode: (localflag?2:0), //0=off,1=pollstream,2=sse
-		generate_images_model: "stable_diffusion", //"" is disabled and "*" is all, anything else is the model name pulled from stable horde
+		generate_images_model: "*", //"" is disabled and "*" is all, anything else is the model name pulled from stable horde
 		img_gen_from_instruct: true,
 		img_autogen: false,
 		img_allownsfw: true,
@@ -908,7 +908,7 @@ Current version indicated by LITEVER below.
 		img_clipskip: -1,
 		img_steps: 20,
 		img_sampler: "Euler",
-		img_aspect:0, //0=square,1=portrait,2=landscape,3=bigsquare,4=portrait_long,5=landscape_long
+		img_aspect:6, //0=square,1=portrait,2=landscape,3=bigsquare,4=portrait_long,5=landscape_long
 		save_images: true,
 		save_remote_images: false,
 		prompt_for_savename: false,
@@ -1115,7 +1115,7 @@ Current version indicated by LITEVER below.
 	},
 	{
 		"id":13,
-		"name":"Deepseek V2.5",
+		"name":"Deepseek",
 		"user":"<｜User｜>",
 		"user_end":"<｜end▁of▁sentence｜>",
 		"assistant":"<｜Assistant｜>",
@@ -3187,7 +3187,7 @@ Current version indicated by LITEVER below.
 				perfdata.queued_tokens += data.queued_tokens;
 				perfdata.past_minute_tokens += data.past_minute_tokens;
 				document.body.classList.add("connected");
-				document.getElementById("connectstatus").innerHTML = "тнє gяι∂";
+				document.getElementById("connectstatus").innerHTML = '<img src="images/grid-image.png" alt="The Grid" style="width: 50px; height: auto;" />';
 				document.getElementById("connectstatus").classList.add("color_offwhite");
 				render_gametext(false);
 
@@ -6311,7 +6311,7 @@ Current version indicated by LITEVER below.
 
 	function explain_horde()
 	{
-		msgbox("The the Grid generates text and images using crowdsourced GPUs by incentivized workers. By default your inputs are not logged, but as Grid workers are open source, they can be modified to do so. <br><br>In all cases, the sender will *always be anonymous*, however you are still advised to avoid sending privacy sensitive information.<br>","Disclaimer",true);
+		msgbox("the Grid generates text and images using crowdsourced GPUs by incentivized workers. By default your inputs are not logged, but as Grid workers are open source, they can be modified to do so. <br><br>In all cases, the sender will *always be anonymous*, however you are still advised to avoid sending privacy sensitive information.<br>","Disclaimer",true);
 	}
 
 	function go_to_stableui()
@@ -7965,6 +7965,9 @@ Current version indicated by LITEVER below.
 		document.getElementById("modelquicksearch").value = "";
 		let manualworker = (document.getElementById("manualworker").checked ? true : false);
 
+		// Define our default model
+		const defaultHordeModel = "koboldcpp/DeepSeek-R1-Distill-Qwen-32B-Q8_0";
+
 		let modelsdone = false;
 		let workersdone = false;
 		let postfetchdone = false;
@@ -7975,8 +7978,17 @@ Current version indicated by LITEVER below.
 
 				if (manualworker) {
 					let model_choices = "";
+					let defaultModelFound = false;
+                    let defaultModelIndex = -1;
+
 					for (let i = 0; i < worker_data.length; ++i) {
 						let curr = worker_data[i];
+						// Check if this is our default model
+						if (curr.name === defaultHordeModel) {
+							defaultModelFound = true;
+							defaultModelIndex = i;
+							}
+
 						let cm = (curr.models && curr.models.length > 0) ? curr.models[0] : "None";
 						let cn = curr.name;
 						let style = (curr.trusted ? "style=\"color:#b700ff;\"" : "");
@@ -7987,6 +7999,11 @@ Current version indicated by LITEVER below.
 						model_choices += "<option " + style + " value=\"" + i + "\" " + alrselected + ">" + escape_html(cn) + " (" + escape_html(cm) + ")" + extratag + "</option>";
 					}
 					document.getElementById("pickedmodel").innerHTML = model_choices;
+					// After populating the dropdown, select our default model if it exists
+					if (defaultModelFound) {
+					const selectElement = document.getElementById("pickedmodel");
+					selectElement.value = defaultModelIndex;
+					}
 				} else {
 					let model_choices = "";
 					for (let i = 0; i < models_data.length; ++i) {
@@ -8116,8 +8133,7 @@ Current version indicated by LITEVER below.
 		render_gametext();
 		hide_popups();
 
-		document.getElementById("connectstatus").innerHTML = "тнє gяι∂";
-	}
+		document.getElementById("connectstatus").innerHTML = '<img src="images/grid-image.png" alt="The Grid" style="width: 50px; height: auto;" />';	}
 
 	function delete_my_worker(index)
 	{
@@ -15128,7 +15144,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("fvico").href = favivon_normal;
 		}
 		else if (selected_models.length == 0 && selected_workers.length == 0) {
-			let perfinfo = `There are <span class="color_orange">${perfdata.worker_count}</span> total <a class="color_green mainnav" tabindex="${mainmenu_is_untab?`-1`:`0`}" href="#" onclick="get_and_show_workers()">workers(s)</a> in the the Grid, and <span class="color_orange">${perfdata.queued_requests}</span> request(s) in queues.<br>A total of <span class="color_orange">${perfdata.past_minute_tokens}</span> tokens were generated in the last minute.<br><br>`;
+			let perfinfo = `There are <span class="color_orange">${perfdata.worker_count}</span> total <a class="color_green mainnav" tabindex="${mainmenu_is_untab?`-1`:`0`}" href="#" onclick="get_and_show_workers()">workers(s)</a> in the Grid, and <span class="color_orange">${perfdata.queued_requests}</span> request(s) in queues.<br>A total of <span class="color_orange">${perfdata.past_minute_tokens}</span> tokens were generated in the last minute.<br><br>`;
 			document.getElementById("gametext").innerHTML = `Welcome to <span class="color_cyan">KoboldAI Lite</span>!<br><br>${perfinfo}<a href="#" class="color_blueurl" onclick="display_endpoint_container()">Please select an AI service to use!</a><br>`;
 			document.getElementById("fvico").href = favivon_normal;
 		}
@@ -15589,7 +15605,78 @@ Current version indicated by LITEVER below.
 		corpo_editing_turn = -1;
 		render_gametext(needsave);
 	}
+// Simple animated loading indicators
+const loadingAnimations = [
+    "⣾⣽⣻⢿⡿⣟⣯⣷ ⠁⠂⠄⡀⢀⠠⠐⠈", // Spinner
+];
 
+// Simple messages that appear with the animation
+const loadingMessages = [
+    "Thinking",
+];
+
+// Variables to control the animation
+let animationFrame = 0;
+let animationInterval = null;
+let selectedAnimation = 0;
+let selectedMessage = 0;
+
+// Function to start the loading animation
+function startLoadingAnimation() {
+    if (animationInterval === null) {
+        // Select a random animation and message
+        selectedAnimation = Math.floor(Math.random() * loadingAnimations.length);
+        selectedMessage = Math.floor(Math.random() * loadingMessages.length);
+        animationFrame = 0;
+        
+        // Start the animation interval
+        animationInterval = setInterval(() => {
+            updateLoadingAnimation();
+        }, 150); // Update every 150ms for a smooth animation
+    }
+}
+
+// Function to stop the loading animation
+function stopLoadingAnimation() {
+    if (animationInterval !== null) {
+        clearInterval(animationInterval);
+        animationInterval = null;
+    }
+}
+
+// Function to update the loading animation
+function updateLoadingAnimation() {
+    const elements = document.querySelectorAll(".pending_text");
+    
+    if (elements && elements.length > 0) {
+        // Get the current animation character
+        const animation = loadingAnimations[selectedAnimation];
+        const char = animation[animationFrame % animation.length];
+        const message = loadingMessages[selectedMessage];
+        
+        // Increment the animation frame
+        animationFrame++;
+        
+        // Every 20 frames, change the message
+        if (animationFrame % 20 === 0) {
+            selectedMessage = (selectedMessage + 1) % loadingMessages.length;
+        }
+        
+        elements.forEach(function (element) {
+            // Only update if it's a placeholder, not actual content
+            if (element.textContent === "..." || 
+                element.textContent.includes("Thinking") ||
+                element.textContent.includes("Processing") ||
+                element.textContent.includes("Working") ||
+                element.textContent.includes("Generating") ||
+                /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⣾⣽⣻⢿⡿⣟⣯⣷▰▱▪▫●○◐◓◑◒◢◣◤◥◰◳◲◱]/.test(element.textContent)) {
+                
+                element.textContent = `${message} ${char}`;
+            }
+        });
+    }
+}
+		// Now modify just the relevant part of render_corpo_ui
 	var cosmetic_corpo_ai_nick = "The Grid";
 	function corpo_click_avatar()
 	{
@@ -15630,6 +15717,13 @@ Current version indicated by LITEVER below.
 
 		let incomplete_resp = (synchro_pending_stream!="" || pending_response_id!="");
 
+		// Start or stop the loading animation based on response status
+		if (incomplete_resp && animationInterval === null) {
+		startLoadingAnimation();
+		} else if (!incomplete_resp && animationInterval !== null) {
+		stopLoadingAnimation();
+		}
+
 		for(var i=0;i<chatunits.length;++i)
 		{
 			let curr = chatunits[i];
@@ -15642,7 +15736,58 @@ Current version indicated by LITEVER below.
 				if(codeblockcount>0 && codeblockcount%2!=0 )
 				{
 					processed_msg += "```"; //force end code block
+				}		const loadingMessages = [
+		"Thinking...",
+		"Processing...",
+		"Generating ideas...",
+		"Crafting response...",
+		"Pondering...",
+		"Contemplating...",
+		"Analyzing context...",
+		"Formulating thoughts...",
+		"Connecting concepts...",
+		"Exploring possibilities..."
+		];
+		let currentLoadingMessageIndex = 0;
+		let loadingMessageInterval = null;
+
+
+		// Function to start the loading message rotation
+		function startLoadingMessageRotation() {
+		if (loadingMessageInterval === null) {
+			// Initialize with a random message
+			currentLoadingMessageIndex = Math.floor(Math.random() * loadingMessages.length);
+			loadingMessageInterval = setInterval(() => {
+				currentLoadingMessageIndex = (currentLoadingMessageIndex + 1) % loadingMessages.length;
+				updateLoadingMessage();
+			}, 2000); // Change message every 2 seconds
+		}
+		}
+
+
+		// Function to stop the loading message rotation
+		function stopLoadingMessageRotation() {
+		if (loadingMessageInterval !== null) {
+			clearInterval(loadingMessageInterval);
+			loadingMessageInterval = null;
+		}
+		}
+
+		// Function to update all loading message placeholders
+		function updateLoadingMessage() {
+		const loadingMessage = loadingMessages[currentLoadingMessageIndex];
+		const elements = document.querySelectorAll(".pending_text");
+
+		if (elements && elements.length > 0) {
+			elements.forEach(function (element) {
+				// Only update if it's a placeholder, not actual content
+				if (element.textContent === "..." || 
+					loadingMessages.some(msg => element.textContent === msg)) {
+					element.textContent = loadingMessage;
 				}
+			});
+		}
+		}
 				processed_msg = simpleMarkdown(processed_msg);
 
 				//convert the msg into images
@@ -15749,7 +15894,12 @@ Current version indicated by LITEVER below.
 		if(incomplete_resp)
 		{
 			let namepart = cosmetic_corpo_ai_nick;
-			let futuretext = (synchro_pending_stream!=""?(escape_html(pending_context_preinjection) + escape_html(synchro_pending_stream)):"...");
+			        // Use a simple initial loading indicator if there's no stream content
+			let initialAnimation = loadingAnimations[0][0];
+			let initialMessage = loadingMessages[0];
+			let futuretext = (synchro_pending_stream!="" ? 
+				(escape_html(pending_context_preinjection) + escape_html(synchro_pending_stream)) : 
+				`${initialMessage}${initialAnimation}`);
 			if(localsettings.opmode==3)
 			{
 				namepart = "";
@@ -15762,9 +15912,32 @@ Current version indicated by LITEVER below.
 			</div>
 			</div>`;
 		}
-
 		return newbodystr;
 	}
+	// Also update the pending stream display function to work with our loading animation
+
+
+
+function update_pending_stream_displays()
+{
+    //lightweight function to only update pending streamed text
+    var elements = document.querySelectorAll(".pending_text");
+    if(elements && elements.length>0)
+    {
+        elements.forEach(function (element) {
+            // If we have actual content, update with that
+            if (synchro_pending_stream != "") {
+                element.innerHTML = escape_html(pending_context_preinjection) + escape_html(synchro_pending_stream);
+                // If we have actual content, stop the animation
+                stopLoadingAnimation();
+            }
+            // Otherwise, the animation will continue automatically
+        });
+    } else {
+        render_gametext(false);
+    }
+    handle_autoscroll(false);
+}
 
 	function update_toggle_lightmode(toggle=false)
 	{
@@ -17982,7 +18155,7 @@ Current version indicated by LITEVER below.
 			<div style="padding: 4px;">
 			<select id="unusedcustomapidropdown" style="display: none;"></select>
 			<select title="Select your AI provider" style="padding:4px;" class="form-control" id="customapidropdown" onchange="customapi_dropdown(true)">
-				<option value="0">the Grid</option>
+				<option value="0">AI Power Grid</option>
 				<option value="1">KoboldAI Remote API</option>
 				<option value="2">OpenAI Compatible API</option>
 				<option value="3">OpenRouter API</option>
@@ -17999,7 +18172,7 @@ Current version indicated by LITEVER below.
 				The Grid is a service that generates text using crowdsourced GPUs run by independent workers. Avoid sending privacy sensitive information. <a href="#" class="color_blueurl" onclick="explain_horde()">Click here for more info</a>
 				<div class="menutext" style="text-align: left;">
 					<span style="float:left; text-align: left;">
-					Your the Grid API Key <span class="helpicon">?
+					Your AI Power Grid API Key <span class="helpicon">?
 						<span class="helptext">You need an API key to use the Grid to generate text. Get one at
 							https://dashboard.aipowergrid.io/</span>
 					</span>
@@ -18888,7 +19061,7 @@ Current version indicated by LITEVER below.
 				<div id="settingsmenumedia" class="settingsmenu hidden" onchange="setting_tweaked()">
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Generate Images <span class="helpicon">?<span class="helptext">Use the the Grid or a local KoboldCpp / Forge / A1111 instance to insert AI generated images into your story.</span></span></div>
+							<div class="justifyleft settingsmall">Generate Images <span class="helpicon">?<span class="helptext">Use the Grid or a local KoboldCpp / Forge / A1111 instance to insert AI generated images into your story.</span></span></div>
 						</div>
 							<select title="Generate Images" class="form-control" id="generate_images_mode" style="height:20px;padding:0;margin:0px 0 0;" onchange="toggle_generate_images_mode(true)">
 								<option value="0">[Disabled]</option>
