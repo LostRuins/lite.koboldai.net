@@ -2882,7 +2882,7 @@ Current version indicated by LITEVER below.
 
 	const oai_models_endpoint = "/models";
 	const oai_submit_endpoint = "/completions";
-	const oai_submit_endpoint_turbo = "/chat/completions";
+	const oai_submit_endpoint_chat = "/chat/completions";
 
 	const default_oai_image_endpoint = "/images/generations";
 	const default_oai_tts_endpoint = "/audio/speech";
@@ -3103,7 +3103,7 @@ Current version indicated by LITEVER below.
 		saved_cohere_preamble: "", //cohere preamble
 		saved_palm_jailbreak:"", //gemini system prompt
 		saved_oai_custommodel: "", //customized oai custom model
-		saved_oai_role: 0, //0=user,1=assistant,2=system
+		saved_oai_role: 0, //0=user,1=assistant,2=system, 3=auto
 		saved_a1111_url: default_a1111_base,
 		saved_comfy_url: default_comfy_base,
 		saved_xtts_url: default_xtts_base,
@@ -14526,15 +14526,29 @@ Current version indicated by LITEVER below.
 							mainoaibody.push(oaiimg);
 						}
 					}
-					let myrole = (localsettings.saved_oai_role==2)?"system":(localsettings.saved_oai_role==1?"assistant":"user");
+
 					oai_payload.messages = [];
-					targetep = (custom_oai_endpoint + oai_submit_endpoint_turbo);
+					targetep = (custom_oai_endpoint + oai_submit_endpoint_chat);
 					if (document.getElementById("jailbreakprompt") && document.getElementById("jailbreakprompt").checked && document.getElementById("jailbreakprompttext").value!="") {
 						let addrole = document.getElementById("jailbreakprompttextrole").value;
 						addrole = ((addrole==2)?"system":(addrole==1?"assistant":"user"));
 						oai_payload.messages.push({ "role": addrole, "content": document.getElementById("jailbreakprompttext").value });
 					}
-					oai_payload.messages.push({ "role": myrole, "content": mainoaibody });
+
+					if(localsettings.saved_oai_role!=3) //except auto role
+					{
+						let myrole = (localsettings.saved_oai_role==2)?"system":(localsettings.saved_oai_role==1?"assistant":"user");
+						oai_payload.messages.push({ "role": myrole, "content": mainoaibody });
+					}
+					else //auto role
+					{
+						let mhistory = repack_instruct_history(mainoaibody);
+						for(let i=0;i<mhistory.length;++i)
+						{
+							oai_payload.messages.push({ "role": (mhistory[i].myturn?"user":"assistant"), "content": mhistory[i].msg });
+						}
+					}
+
 					if (document.getElementById("jailbreakprompt2") && document.getElementById("jailbreakprompt2").checked && document.getElementById("jailbreakprompttext2").value!="") {
 						let addrole = document.getElementById("jailbreakprompttext2role").value;
 						addrole = ((addrole==2)?"system":(addrole==1?"assistant":"user"));
@@ -22179,6 +22193,7 @@ Current version indicated by LITEVER below.
 						<option value="0" selected>User</option>
 						<option value="1">Assistant</option>
 						<option value="2">System</option>
+						<option value="3">AutoRole</option>
 					</select>
 					<input type="checkbox" id="jailbreakprompt" onchange="togglejailbreak()">
 					<div class="box-label" title="Adds extra text at the start to improve AI response">Add Prefix</div>
