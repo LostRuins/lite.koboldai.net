@@ -3159,6 +3159,7 @@ Current version indicated by LITEVER below.
 		img_cfgscale: 7,
 		img_allowhd: true,
 		img_crop: false,
+		img_newturn: false,
 		img_img2imgstr: 0.6,
 		img_clipskip: -1,
 		img_steps: 20,
@@ -5794,6 +5795,16 @@ Current version indicated by LITEVER below.
 			{
 				let imgid = resp.prompt_id.toString();
 				let nimgtag = "[<|p|" + imgid + "|p|>]";
+				if (localsettings.img_newturn) {
+					if(localsettings.opmode == 4)
+					{
+						nimgtag = wrap_newgen_instruct_format(nimgtag,false);
+					}
+					else if(localsettings.opmode == 3)
+					{
+						nimgtag = wrap_newgen_chat_format(nimgtag);
+					}
+				}
 				gametext_arr.push(nimgtag);
 				image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:prompt, poll_category:2 };
 				image_db[imgid].aspect = (req_payload.params.width>=req_payload.params.height*2?5:(req_payload.params.height>=req_payload.params.width*2?4:(req_payload.params.width>req_payload.params.height?2:(req_payload.params.width<req_payload.params.height?1:0))));
@@ -11078,6 +11089,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("tokenstreammode").value = localsettings.tokenstreammode;
 		document.getElementById("img_allowhd").checked = localsettings.img_allowhd;
 		document.getElementById("img_crop").checked = localsettings.img_crop;
+		document.getElementById("img_newturn").checked = localsettings.img_newturn;
 		document.getElementById("img_autogen").checked = localsettings.img_autogen;
 		document.getElementById("img_gen_from_instruct").checked = localsettings.img_gen_from_instruct;
 		document.getElementById("save_images").checked = localsettings.save_images;
@@ -11455,6 +11467,7 @@ Current version indicated by LITEVER below.
 		localsettings.grammar = pendinggrammar;
 		localsettings.tokenstreammode = document.getElementById("tokenstreammode").value;
 		localsettings.img_crop = (document.getElementById("img_crop").checked ? true : false);
+		localsettings.img_newturn = (document.getElementById("img_newturn").checked ? true : false);
 		localsettings.img_allowhd = (document.getElementById("img_allowhd").checked ? true : false);
 		localsettings.img_autogen = (document.getElementById("img_autogen").checked ? true : false);
 		localsettings.img_gen_from_instruct = (document.getElementById("img_gen_from_instruct").checked ? true : false);
@@ -12739,6 +12752,16 @@ Current version indicated by LITEVER below.
 	{
 		let imgid = "selfuploadimg"+(Math.floor(10000 + Math.random() * 90000)).toString();
 		let nimgtag = "[<|p|" + imgid + "|p|>]";
+		if (localsettings.img_newturn) {
+			if(localsettings.opmode == 4)
+			{
+				nimgtag = wrap_newgen_instruct_format(nimgtag,false);
+			}
+			else if(localsettings.opmode == 3)
+			{
+				nimgtag = wrap_newgen_chat_format(nimgtag);
+			}
+		}
 		gametext_arr.push(nimgtag);
 		image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:"", poll_category:0 };
 		image_db[imgid].aspect = 0;
@@ -13480,6 +13503,80 @@ Current version indicated by LITEVER below.
 		return Math.max(1, Math.floor(((maxctxlen - maxgenamt)) * chars_per_token) - 12);
 	}
 
+	function wrap_newgen_instruct_format(newgen, addendtag)
+	{
+		let ist = instructstartplaceholder;
+		let iet = instructendplaceholder;
+		let iste = instructstartplaceholder_end;
+		if (!localsettings.placeholder_tags) {
+			ist = get_instruct_starttag(false);
+			iet = get_instruct_endtag(false);
+			iste = get_instruct_starttag_end(false);
+		}
+		let prev_et = get_instruct_latest_end(false);
+
+		if(newgen != "")
+		{
+			if(localsettings.inject_chatnames_instruct)
+			{
+				newgen = get_my_multiplayer_chatname() + ": " + newgen;
+			}
+			if(localsettings.inject_timestamps)
+			{
+				newgen = "["+(new Date().toLocaleTimeString([], {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'}))+"] " + newgen;
+			}
+
+			//append instruction for instruct mode
+			if(localsettings.separate_end_tags)
+			{
+				newgen = prev_et + ist + newgen + iste + (addendtag?iet:"");
+			}
+			else
+			{
+				newgen = ist + newgen + (addendtag?iet:"");
+			}
+
+			if(localsettings.inject_jailbreak_instruct)
+			{
+				newgen = newgen + localsettings.custom_jailbreak_text.replaceAll("\\n", "\n");
+			}
+			if(force_thinking_tag && start_thinking_tag!="")
+			{
+				newgen = newgen + start_thinking_tag.replaceAll("\\n", "\n");
+			}
+		}
+		else //may be continuting existing instruction OR starting a brand new session. check if first action
+		{
+			if (is_impersonate_user) {
+				is_impersonate_user = false;
+				if (localsettings.separate_end_tags) {
+					pending_context_preinjection = prev_et + ist; //bot response as first msg
+					pending_context_postinjection = iste + iet;
+				} else {
+					pending_context_preinjection = ist; //bot response as first msg
+					pending_context_postinjection = iet;
+				}
+			} else {
+				if (gametext_arr.length == 0) {
+					newgen = iet;
+				}
+			}
+		}
+		return newgen;
+	}
+
+	function wrap_newgen_chat_format(newgen)
+	{
+		//append chatname for chatmode
+		let injecttime = "";
+		if(localsettings.inject_timestamps)
+		{
+			injecttime = " ["+(new Date().toLocaleTimeString([], {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'}))+"]";
+		}
+		newgen = "\n" + get_my_multiplayer_chatname() + ":"+ injecttime +" "+ newgen + "";
+		return newgen;
+	}
+
 	function prepare_submit_generation() //wrap websearch into this
 	{
 		let senttext = document.getElementById("input_text").value;
@@ -13542,72 +13639,10 @@ Current version indicated by LITEVER below.
 
 			if (localsettings.opmode == 4)
 			{
-				let ist = instructstartplaceholder;
-				let iet = instructendplaceholder;
-				let iste = instructstartplaceholder_end;
-				if (!localsettings.placeholder_tags) {
-					ist = get_instruct_starttag(false);
-					iet = get_instruct_endtag(false);
-					iste = get_instruct_starttag_end(false);
-				}
-				let prev_et = get_instruct_latest_end(false);
-
-				if(newgen != "")
-				{
-					if(localsettings.inject_chatnames_instruct)
-					{
-						newgen = get_my_multiplayer_chatname() + ": " + newgen;
-					}
-					if(localsettings.inject_timestamps)
-					{
-						newgen = "["+(new Date().toLocaleTimeString([], {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'}))+"] " + newgen;
-					}
-
-					//append instruction for instruct mode
-					if(localsettings.separate_end_tags)
-					{
-						newgen = prev_et + ist + newgen + iste + iet;
-					}
-					else
-					{
-						newgen = ist + newgen + iet;
-					}
-
-					if(localsettings.inject_jailbreak_instruct)
-					{
-						newgen = newgen + localsettings.custom_jailbreak_text.replaceAll("\\n", "\n");
-					}
-					if(force_thinking_tag && start_thinking_tag!="")
-					{
-						newgen = newgen + start_thinking_tag.replaceAll("\\n", "\n");
-					}
-				}
-				else //may be continuting existing instruction OR starting a brand new session. check if first action
-				{
-					if (is_impersonate_user) {
-						is_impersonate_user = false;
-						if (localsettings.separate_end_tags) {
-							pending_context_preinjection = prev_et + ist; //bot response as first msg
-							pending_context_postinjection = iste + iet;
-						} else {
-							pending_context_preinjection = ist; //bot response as first msg
-							pending_context_postinjection = iet;
-						}
-					} else {
-						if (gametext_arr.length == 0) {
-							newgen = iet;
-						}
-					}
-				}
+				newgen = wrap_newgen_instruct_format(newgen,true);
 			}
 			if (localsettings.opmode == 3 && newgen != "") {
-				//append chatname for chatmode
-				let injecttime = "";
-				if(localsettings.inject_timestamps)
-				{
-					injecttime = " ["+(new Date().toLocaleTimeString([], {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'}))+"]";
-				}
-				newgen = "\n" + get_my_multiplayer_chatname() + ":"+ injecttime +" "+ newgen + "";
+				newgen = wrap_newgen_chat_format(newgen);
 			}
 			else if(localsettings.opmode==3 && newgen.trim()=="")
 			{
@@ -15287,6 +15322,16 @@ Current version indicated by LITEVER below.
 				if (data.id && data.id != "") {
 					//for now, append the new image directly into the gtarr
 					let nimgtag = "[<|p|" + data.id + "|p|>]";
+					if (localsettings.img_newturn) {
+						if(localsettings.opmode == 4)
+						{
+							nimgtag = wrap_newgen_instruct_format(nimgtag,false);
+						}
+						else if(localsettings.opmode == 3)
+						{
+							nimgtag = wrap_newgen_chat_format(nimgtag);
+						}
+					}
 					gametext_arr.push(nimgtag);
 					image_db[data.id] = { done: false, queue: "Starting", result: "", prompt:sentence, poll_category:1 };
 					image_db[data.id].aspect = (iwidth>=iheight*2?5:(iheight>=iwidth*2?4:(iwidth>iheight?2:(iwidth<iheight?1:0))));
@@ -15309,6 +15354,16 @@ Current version indicated by LITEVER below.
 			genimg_payload.models = [desired_model];
 			let imgid = "A1111img"+(Math.floor(10000 + Math.random() * 90000)).toString();
 			let nimgtag = "[<|p|" + imgid + "|p|>]";
+			if (localsettings.img_newturn) {
+				if(localsettings.opmode == 4)
+				{
+					nimgtag = wrap_newgen_instruct_format(nimgtag,false);
+				}
+				else if(localsettings.opmode == 3)
+				{
+					nimgtag = wrap_newgen_chat_format(nimgtag);
+				}
+			}
 			gametext_arr.push(nimgtag);
 			image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:sentence, poll_category:0 };
 			image_db[imgid].aspect = (iwidth>=iheight*2?5:(iheight>=iwidth*2?4:(iwidth>iheight?2:(iwidth<iheight?1:0))));
@@ -15339,6 +15394,16 @@ Current version indicated by LITEVER below.
 			{
 				let imgid = "DALLEimg"+(Math.floor(10000 + Math.random() * 90000)).toString();
 				let nimgtag = "[<|p|" + imgid + "|p|>]";
+				if (localsettings.img_newturn) {
+					if(localsettings.opmode == 4)
+					{
+						nimgtag = wrap_newgen_instruct_format(nimgtag,false);
+					}
+					else if(localsettings.opmode == 3)
+					{
+						nimgtag = wrap_newgen_chat_format(nimgtag);
+					}
+				}
 				gametext_arr.push(nimgtag);
 				image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:sentence, poll_category:0 };
 				image_db[imgid].aspect = 0;
@@ -20692,7 +20757,7 @@ Current version indicated by LITEVER below.
 			</div>
 
 			<div class="context_tab_container" id="websearch_tab_container">
-				<div class="settinglabel" style="padding: 4px;">Search the Web for relavant information when using instruct mode<br>(Requires WebSearch enabled KoboldCpp)</div>
+				<div class="settinglabel" style="padding: 4px;">Search the Web for relevant information when using instruct mode<br>(Requires WebSearch enabled KoboldCpp)</div>
 				<div id="websearchunsupporteddiv" class="color_red hidden" style="font-weight:bold;padding:3px;font-size:12px">WebSearch Not Supported</div>
 				<div class="settinglabel" style="padding: 4px;">
 					<div class="justifyleft settingsmall" title="Enable WebSearch">Enable WebSearch </div>
@@ -21560,6 +21625,12 @@ Current version indicated by LITEVER below.
 									<span class="helptext">If enabled, oversized imported images will be cropped to fit. If disabled, images will be letterboxed instead.</span>
 								</span>: </div>
 								<input title="Crop Images" type="checkbox" id="img_crop" style="margin:0px 0 0;">
+							</div>
+							<div class="inlinelabel">
+								<div class="justifyleft rowitem">Insert Images as New Message <span class="helpicon">?
+									<span class="helptext">If enabled, images will be added in a new turn message instead of the existing one.</span>
+								</span>: </div>
+								<input title="Insert Images as New Message" type="checkbox" id="img_newturn" style="margin:0px 0 0;">
 							</div>
 						</div>
 					</div>
@@ -22578,10 +22649,10 @@ Current version indicated by LITEVER below.
 				<button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_upload()">Upload Image File</button>
 			</div>
 			<div class="menutext">
-				<button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_paste()">Paste from Clipboard</button>
+				<button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_paste()">Drag Drop / Paste from Clipboard</button>
 			</div>
 			<div class="menutext">
-				<button type="button" class="btn btn-primary" onclick="hide_popups();display_settings();display_settings_tab(2);">Customize Settings</button>
+				<button type="button" class="btn btn-primary" onclick="hide_popups();display_settings();display_settings_tab(2);">Customize Image Settings</button>
 			</div>
 			<div class="menutext hidden" id="btn_open_stableui">
 				<button type="button" class="btn btn-primary bg_purple" onclick="go_to_stableui()">Go To StableUI</button>
