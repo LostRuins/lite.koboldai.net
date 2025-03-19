@@ -10046,6 +10046,7 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	var adminrebootflag = 0;
 	function trigger_admin_reload()
 	{
 		document.getElementById("admincontainer").classList.add("hidden");
@@ -10071,9 +10072,32 @@ Current version indicated by LITEVER below.
 		.then(values => {
 			let success = (values && values.success);
 			if (success) {
-				msgbox("KoboldCpp is now restarting!\n\nIt may take some time before the new instance is ready to use. Please wait a moment, then press OK to refresh the page.", "KoboldCpp Reload Started", false,false,()=>{
-					location.reload(true);
-				});
+				msgbox("KoboldCpp is now restarting!\n\nIt may take some time before the new instance is ready to use.\n\nYour browser should automatically refresh after a few moments...", "KoboldCpp Reload Started", false,true);
+
+				setInterval(function () {
+					++adminrebootflag;
+					if(adminrebootflag>1 && adminrebootflag<20)
+					{
+						fetch(apply_proxy_url(custom_kobold_endpoint + kobold_custom_version_endpoint),
+						{
+							method: 'GET',
+							headers: get_kobold_header(),
+						})
+						.then(response => response.json())
+						.then((data) => {
+							adminrebootflag = 999;
+							location.reload(true);
+						})
+						.catch((error) => {
+							if(adminrebootflag>2)
+							{
+								adminrebootflag -= 1;
+							}
+							console.error('Not Ready to Restart:', error);
+						});
+					}
+				}, 3000);
+
 			} else {
 				msgbox("The request to reload KoboldCpp with a new configuration failed!\n\nPlease check if the feature is enabled, the admin directory is set, and selected config and password are correct.", "KoboldCpp Reload Failed");
 			}
