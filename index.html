@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 225;
+	const LITEVER = 226;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -7385,7 +7385,8 @@ Current version indicated by LITEVER below.
 	{
 		if(is_using_kcpp_with_multiplayer())
 		{
-			inputBox(`You're about to enter a Multiplayer Session.<br><br><span class="color_red">Note that stories or messages sent by other users are <b>unfiltered</b>, and may contain <b>offensive or disturbing content</b>. You assume full responsibility and participate at your own discretion.</span><br><br>Enter a unique nickname to use for chat mode (only yourself), or leave it blank to share the same common chatname with other users.`,"Join Multiplayer - Override Chat Nickname?","","[No Override]", ()=>{
+			const fn = ()=>{
+				inputBox(`You're about to enter a Multiplayer Session.<br><br><span class="color_red">Note that stories or messages sent by other users are <b>unfiltered</b>, and may contain <b>offensive or disturbing content</b>. You assume full responsibility and participate at your own discretion.</span><br><br>Enter a unique nickname to use for chat mode (only yourself), or leave it blank to share the same common chatname with other users.`,"Join Multiplayer - Override Chat Nickname?","","[No Override]", ()=>{
 				let userinput = getInputBoxValue().trim();
 				multiplayer_active = true;
 				multiplayer_pinged = false;
@@ -7396,6 +7397,18 @@ Current version indicated by LITEVER below.
 				schedule_multiplayer_major_change = false;
 				render_gametext(false);
 			},true);
+			};
+
+			if(safe_to_overwrite())
+			{
+				fn();
+			}
+			else
+			{
+				msgboxYesNo("Entering multiplayer mode may overwrite your current session. Proceed?","Join Multiplayer?",()=>{
+					fn();
+				},null,false);
+			}
 
 		}else{
 			leave_multiplayer();
