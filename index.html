@@ -19330,8 +19330,13 @@ Current version indicated by LITEVER below.
 		var ce = pending_wi_obj[idx];
 		if (idx > 0 && idx < pending_wi_obj.length) {
 			const temp = pending_wi_obj[idx - 1];
-			pending_wi_obj[idx - 1] = pending_wi_obj[idx];
-			pending_wi_obj[idx] = temp;
+			let g1 = temp.wigroup?temp.wigroup:"";
+			let g2 = ce.wigroup?ce.wigroup:"";
+			if(g1==g2) //only allow swap if same group
+			{
+				pending_wi_obj[idx - 1] = pending_wi_obj[idx];
+				pending_wi_obj[idx] = temp;
+			}
    		}
 		update_wi();
 	}
@@ -19341,8 +19346,13 @@ Current version indicated by LITEVER below.
 		var ce = pending_wi_obj[idx];
 		if (idx >= 0 && idx+1 < pending_wi_obj.length) {
 			const temp = pending_wi_obj[idx + 1];
-			pending_wi_obj[idx + 1] = pending_wi_obj[idx];
-			pending_wi_obj[idx] = temp;
+			let g1 = temp.wigroup?temp.wigroup:"";
+			let g2 = ce.wigroup?ce.wigroup:"";
+			if(g1==g2) //only allow swap if same group
+			{
+				pending_wi_obj[idx + 1] = pending_wi_obj[idx];
+				pending_wi_obj[idx] = temp;
+			}
    		}
 		update_wi();
 	}
@@ -19398,6 +19408,7 @@ Current version indicated by LITEVER below.
 	{
 		save_wi();
 		curr_wi_tab = groupname;
+		//make sure sorted into groups, while preserving order within the group
 		update_wi();
 	}
 
@@ -19430,6 +19441,19 @@ Current version indicated by LITEVER below.
 	function start_editing_wi()
 	{
 		pending_wi_obj = JSON.parse(JSON.stringify(current_wi));
+
+		//make sure sorted into groups, while preserving order within the group
+		pending_wi_obj = stableSort(pending_wi_obj, (a, b) => {
+			const nameA = a.wigroup ? "" : a.wigroup;
+			const nameB = b.wigroup ? "" : b.wigroup;
+			if (nameA < nameB) {
+				return -1;
+			}
+			if (nameA > nameB) {
+				return 1;
+			}
+			return 0;
+		});
 	}
 
 	function wi_quick_search()
@@ -19439,6 +19463,19 @@ Current version indicated by LITEVER below.
 	}
 
 	function update_wi() {
+		//ensure sorted so reordering wi works
+		pending_wi_obj = stableSort(pending_wi_obj, (a, b) => {
+			const nameA = a.wigroup ? a.wigroup:"";
+			const nameB = b.wigroup ? b.wigroup:"";
+			if (nameA < nameB) {
+				return -1;
+			}
+			if (nameA > nameB) {
+				return 1;
+			}
+			return 0;
+		});
+
 		document.getElementById("case_sensitive_wi").checked = (localsettings.case_sensitive_wi?true:false);
 
 		let wigroupbtns = `<span class="justifyleft"><button type="button" style="padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;" class="btn ${curr_wi_tab==""?"lightpurplebtn":"purplebtn"} widelbtn" onclick="select_wi_group('')">General</button></span>`;
@@ -19522,6 +19559,49 @@ Current version indicated by LITEVER below.
 		wilist.innerHTML = selectionhtml;
 		document.getElementById("wi_searchdepth").value = wi_searchdepth;
 		document.getElementById("wi_insertlocation").value = wi_insertlocation;
+	}
+
+	function wi_group_export()
+	{
+		save_wi();
+		let currwis_cloned = [];
+		let currwis = [];
+		//collate matching entries
+		for (var i = 0; i < pending_wi_obj.length; ++i) {
+			var curr = pending_wi_obj[i];
+			var cg = curr.wigroup?curr.wigroup:"";
+			if(curr_wi_tab!=cg)
+			{
+				continue;
+			}
+			const copiedObj = JSON.parse(JSON.stringify(curr));
+			delete copiedObj.wigroup;
+			currwis_cloned.push(copiedObj);
+			currwis.push(curr);
+		}
+		let wijson = JSON.stringify(currwis_cloned,null,2);
+		inputBoxOkCancel("Copy or paste World Info JSON to modify the entries in this group","World Info Import / Export",wijson,"Paste JSON Here",()=>{
+		let userinput = getInputBoxValue().trim();
+		try
+		{
+			if(userinput!="")
+			{
+				let newjson = JSON.parse(userinput);
+				pending_wi_obj = pending_wi_obj.filter(item => !currwis.includes(item));
+				for (var i = 0; i < newjson.length; ++i) {
+					newjson[i].wigroup = curr_wi_tab;
+					pending_wi_obj.push(newjson[i]);
+				}
+				update_wi();
+			}
+		} catch (e) {
+			console.log("WI JSON not correctly formatted!");
+		}
+
+		},
+		()=>{
+			//do nothing on cancel
+		},true,true);
 	}
 
 	var backLongPressTimer = null;
@@ -19824,6 +19904,11 @@ Current version indicated by LITEVER below.
 	function sanitizeAlphanumeric(str) {
 		return str.replace(/[^a-zA-Z0-9]/g, '');
 	}
+	const stableSort = (arr, compare) => {
+	return arr.map((item, index) => ({ item, index }))
+     .sort((a, b) => compare(a.item, b.item) || a.index - b.index)
+     .map(({ item }) => item);
+	};
 	</script>
 
 	<!-- Aesthetic UI scripts -->
@@ -20943,7 +21028,7 @@ Current version indicated by LITEVER below.
 				</div>
 
 				<div style="float:right;">
-					<div class="settinglabel"><button type="button" class="btn purplebtn widelbtn" style="padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;font-size:8px" id="wiexport" onclick="">[Export / Import Group]</button></div>
+					<div class="settinglabel"><button type="button" class="btn purplebtn widelbtn" style="padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;font-size:8px" id="wiexport" onclick="wi_group_export()">[Export / Import Group]</button></div>
 					<div class="settinglabel" style="padding: 4px;">
 						<div class="justifyleft settingsmall" title="Toggles all entries in entire group on/off">Toggle Group </div>
 						<input title="Toggle Entire Group" type="checkbox" id="toggle_wi_group" style="margin:0px 0 0;" onchange="toggle_wi_group_enabled()" checked>
@@ -23002,7 +23087,7 @@ Current version indicated by LITEVER below.
 			</div>
 			<input class="form-control" type="text" placeholder="" value=""
 			id="inputboxcontainerinput" onfocus="inputboxfocus()" onblur="inputboxblur()">
-			<textarea class="form-control hidden" style="line-height:1.1" id="inputboxcontainerinputarea" placeholder="" rows="5"></textarea>
+			<textarea class="form-control hidden" style="line-height:1.1; resize:vertical;" id="inputboxcontainerinputarea" placeholder="" rows="5"></textarea>
 
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="onInputboxOk()">OK</button>
