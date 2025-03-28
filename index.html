@@ -6861,7 +6861,9 @@ Current version indicated by LITEVER below.
 								"folder": null,
 								"selective": itm.selective,
 								"constant": itm.constant,
-								"probability":100
+								"probability":100,
+								"wigroup":"",
+								"widisabled":false
 							};
 							current_wi.push(nwi);
 						}
@@ -7020,7 +7022,9 @@ Current version indicated by LITEVER below.
 				"folder": null,
 				"selective": false,
 				"constant": false,
-				"probability":100
+				"probability":100,
+				"wigroup":"",
+				"widisabled":false
 			};
 			loadedwi.push(nwi);
 		}
@@ -7051,7 +7055,9 @@ Current version indicated by LITEVER below.
 				"folder": null,
 				"selective": itm.selective,
 				"constant": itm.constant,
-				"probability":100
+				"probability":100,
+				"wigroup":"",
+				"widisabled":false
 			};
 			loadedwi.push(nwi);
 		}
@@ -7273,7 +7279,9 @@ Current version indicated by LITEVER below.
 				"folder": null,
 				"selective": false,
 				"constant": false,
-				"probability":100
+				"probability":100,
+				"wigroup":"",
+				"widisabled":false
 			};
 			loadedwi.push(nwi);
 		}
@@ -7301,7 +7309,9 @@ Current version indicated by LITEVER below.
 				"folder": null,
 				"selective": false,
 				"constant": false,
-				"probability":100
+				"probability":100,
+				"wigroup":"",
+				"widisabled":false
 			};
 			loadedwi.push(nwi);
 		}
@@ -7818,7 +7828,9 @@ Current version indicated by LITEVER below.
 									"folder": null,
 									"selective": false,
 									"constant": false,
-									"probability":100
+									"probability":100,
+									"wigroup":"",
+									"widisabled":false
 								};
 								temp_scenario.worldinfo.push(nwi);
 							}
@@ -19270,6 +19282,42 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	function toggle_wi_enabled(idx) {
+		var ce = pending_wi_obj[idx];
+		ce.widisabled = !ce.widisabled;
+		var tgt = document.getElementById("wienabled" + idx);
+		if (!ce.widisabled) {
+			tgt.classList.add("witoggleron");
+			tgt.classList.remove("witoggleroff");
+		} else {
+			tgt.classList.remove("witoggleron");
+			tgt.classList.add("witoggleroff");
+		}
+	}
+
+	function toggle_wi_group_enabled()
+	{
+		let enablegroup = document.getElementById("toggle_wi_group").checked;
+		for(let idx=0;idx<pending_wi_obj.length;++idx)
+		{
+			let ce = pending_wi_obj[idx];
+			let cg = ce.wigroup?ce.wigroup:"";
+			if(curr_wi_tab!=cg)
+			{
+				continue;
+			}
+			ce.widisabled = !enablegroup;
+			var tgt = document.getElementById("wienabled" + idx);
+			if (!ce.widisabled) {
+				tgt.classList.add("witoggleron");
+				tgt.classList.remove("witoggleroff");
+			} else {
+				tgt.classList.remove("witoggleron");
+				tgt.classList.add("witoggleroff");
+			}
+		}
+	}
+
 	function del_wi(idx) {
 		save_wi();
 		var ce = pending_wi_obj[idx];
@@ -19310,26 +19358,57 @@ Current version indicated by LITEVER below.
 			"folder": null,
 			"selective": false,
 			"constant": false,
-			"probability":100
+			"probability":100,
+			"wigroup":curr_wi_tab,
+			"widisabled":false
 		};
 		pending_wi_obj.push(ne);
 		update_wi();
 	}
 
-	function add_wi_page()
+	function add_wi_group()
 	{
-		inputBox("Enter New WorldInfo Page Title","Add New WorldInfo Page","","(Enter Page Title)", ()=>{
+		inputBox("WorldInfo Groups can be used to segment data, e.g. entries for a specific place, person or event. Each entire group can be toggled on/off on demand. You cannot rename a group after creation.\n\nEnter name of New WorldInfo Group","Add New WorldInfo Group","","(Enter Group Name)", ()=>{
 				let userinput = getInputBoxValue();
-				userinput = userinput.trim();
+				userinput = sanitizeAlphanumeric(userinput).trim();
 				if(userinput!="")
 				{
-
+					save_wi();
+					var ne = {
+						"key": "",
+						"keysecondary": "",
+						"keyanti": "",
+						"content": "",
+						"comment": "",
+						"folder": null,
+						"selective": false,
+						"constant": false,
+						"probability":100,
+						"wigroup":userinput,
+						"widisabled":false
+					};
+					pending_wi_obj.push(ne);
+					curr_wi_tab = userinput;
+					update_wi();
 				}
 			},false);
 	}
 
+	function select_wi_group(groupname)
+	{
+		save_wi();
+		curr_wi_tab = groupname;
+		update_wi();
+	}
+
 	function save_wi() {
 		for (var i = 0; i < pending_wi_obj.length; ++i) {
+			let ce = pending_wi_obj[i];
+			let cg = ce.wigroup?ce.wigroup:"";
+			if(curr_wi_tab!=cg)
+			{
+				continue;
+			}
 			pending_wi_obj[i].key = document.getElementById("wikey" + i).value;
 			pending_wi_obj[i].keysecondary = document.getElementById("wikeysec" + i).value;
 			pending_wi_obj[i].keyanti = document.getElementById("wikeyanti" + i).value;
@@ -19342,7 +19421,8 @@ Current version indicated by LITEVER below.
 		wi_insertlocation = document.getElementById("wi_insertlocation").value;
 	}
 
-	let pending_wi_obj = []; //only the pending copy is edited until committed
+	var pending_wi_obj = []; //only the pending copy is edited until committed
+	var curr_wi_tab = ""; //for switching between tabs
 	function commit_wi_changes()
 	{
 		current_wi = JSON.parse(JSON.stringify(pending_wi_obj));
@@ -19361,11 +19441,37 @@ Current version indicated by LITEVER below.
 	function update_wi() {
 		document.getElementById("case_sensitive_wi").checked = (localsettings.case_sensitive_wi?true:false);
 
+		let wigroupbtns = `<span class="justifyleft"><button type="button" style="padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;" class="btn ${curr_wi_tab==""?"lightpurplebtn":"purplebtn"} widelbtn" onclick="select_wi_group('')">General</button></span>`;
+		let grpnamesdict = {};
+		for(let i=0;i<pending_wi_obj.length;++i)
+		{
+			let cg = pending_wi_obj[i].wigroup;
+			if(cg && cg!="")
+			{
+				grpnamesdict[cg] = true;
+			}
+		}
+		for(g in grpnamesdict)
+		{
+			wigroupbtns += `<span class="justifyleft"><button type="button" style="padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;" class="btn ${curr_wi_tab==g?"lightpurplebtn":"purplebtn"} widelbtn" onclick="select_wi_group('${g}')">${g}</button></span>`;
+		}
+		wigroupbtns += `<span class="justifyleft"><button type="button" style="padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;" class="btn purplebtn widelbtn" id="wiadd" onclick="add_wi_group()">[+]</button></span>`
+
+		document.getElementById("wigroupsbuttons").innerHTML = wigroupbtns;
+
 		let wilist = document.getElementById("wilist");
 		let qsval = document.getElementById("wiquicksearch").value;
 		let selectionhtml = `<table style="border-collapse: separate; border-spacing: 1.5pt;">`;
+		let entrycount = 0;
 		for (var i = 0; i < pending_wi_obj.length; ++i) {
 			var curr = pending_wi_obj[i];
+			var cg = curr.wigroup?curr.wigroup:"";
+			if(curr_wi_tab!=cg)
+			{
+				continue;
+			}
+			entrycount += 1;
+
 			var winame = escape_html(curr.key);
 			var witxt = escape_html(curr.content);
 			var wisec = (curr.keysecondary?curr.keysecondary:"");
@@ -19380,21 +19486,22 @@ Current version indicated by LITEVER below.
 
 			let probarr = [100,90,75,50,25,10,5,1];
 
-			selectionhtml += `<tr class='`+ (ishidden?"hidden":"") +`' id="wirow` + i + `"><td style="font-size: 10px;">`
-			+`<button type="button" class="btn redbtn widelbtn" id="widel` + i + `" onclick="return del_wi(` + i + `)">X</button></td>`
-			+`<td><button type="button" class="btn btn-primary wiarrowbtn" id="wiup` + i + `" onclick="return up_wi(` + i + `)">▲</button>`
-			+`<button type="button" class="btn btn-primary wiarrowbtn" id="widown` + i + `" onclick="return down_wi(` + i + `)">▼</button></td>` +
+			selectionhtml += `<tr class='`+ (ishidden?"hidden":"") +`' id="wirow${i}"><td style="font-size: 10px;">`
+			+`<a id="wienabled${i}" href="#" class=` + (curr.widisabled ? "witoggleroff" : "witoggleron") + ` title="Toggle this entry enabled or disabled. Disabled entries are always ignored." onclick="return toggle_wi_enabled(${i})">⚡</a>`
+			+`<button type="button" class="btn redbtn widelbtn" id="widel${i}" onclick="return del_wi(${i})">X</button></td>`
+			+`<td><button type="button" class="btn btn-primary wiarrowbtn" id="wiup${i}" onclick="return up_wi(${i})">▲</button>`
+			+`<button type="button" class="btn btn-primary wiarrowbtn" id="widown${i}" onclick="return down_wi(${i})">▼</button></td>` +
 			`<td class="wiinputkeycol">
-			<input class="form-control wiinputkey" id="wikey`+ i + `" placeholder="Key(s)" value="` + winame + `">
-			<input class="form-control wiinputkey `+ (curr.selective ? `` : `hidden`) + `" id="wikeysec` + i + `" placeholder="Sec. Key(s)" value="` + wisec + `">` + `
-			<input class="form-control wiinputkey `+ (curr.selective ? `` : `hidden`) + `" id="wikeyanti` + i + `" placeholder="Anti Key(s)" value="` + wianti + `">` + `</td>
+			<input class="form-control wiinputkey" id="wikey${i}" placeholder="Key(s)" value="${winame}">
+			<input class="form-control wiinputkey `+ (curr.selective ? `` : `hidden`) + `" id="wikeysec${i}" placeholder="Sec. Key(s)" value="${wisec}">` + `
+			<input class="form-control wiinputkey `+ (curr.selective ? `` : `hidden`) + `" id="wikeyanti${i}" placeholder="Anti Key(s)" value="${wianti}">` + `</td>
 			<td class="wiinputvalcol">
-			<textarea class="form-control wiinputval" style="line-height:1.1" id="wival`+ i + `" placeholder="What To Remember" rows="4">` + witxt + `</textarea>
+			<textarea class="form-control wiinputval" style="line-height:1.1" id="wival${i}" placeholder="What To Remember" rows="4">${witxt}</textarea>
 			</td>
 			<td>
-			<a id="wiskt`+ i + `" href="#" class=` + (curr.selective ? "witoggleron" : "witoggleroff") + ` title="Toggle Selective Key mode (if enabled, this world info entry will be included in memory only if at least one PRIMARY KEY and at least one SECONDARY KEY are both present in the story)" onclick="return toggle_wi_sk(` + i + `)">📑</a>
-			<a id="wickt`+ i + `" href="#" class=` + (curr.constant ? "witoggleron" : "witoggleroff") + ` title="Toggle Constant Key mode (if enabled, this world info entry will always be included in memory)" onclick="return toggle_wi_ck(` + i + `)">📌</a>
-			<select id="wirng`+i+`" style="padding:1px; height:auto; width: 30px; appearance: none; font-size: 7pt;" class="form-control" title="Chance to trigger if allowed">`;
+			<a id="wiskt${i}" href="#" class=` + (curr.selective ? "witoggleron" : "witoggleroff") + ` title="Toggle Selective Key mode (if enabled, this world info entry will be included in memory only if at least one PRIMARY KEY and at least one SECONDARY KEY are both present in the story)" onclick="return toggle_wi_sk(${i})">📑</a>
+			<a id="wickt${i}" href="#" class=` + (curr.constant ? "witoggleron" : "witoggleroff") + ` title="Toggle Constant Key mode (if enabled, this world info entry will always be included in memory)" onclick="return toggle_wi_ck(${i})">📌</a>
+			<select id="wirng${i}" style="padding:1px; height:auto; width: 30px; appearance: none; font-size: 7pt;" class="form-control" title="Chance to trigger if allowed">`;
 
 			let opts = "";
 			for(let n=0;n<probarr.length;++n)
@@ -19407,8 +19514,8 @@ Current version indicated by LITEVER below.
 		</tr>
 		`;
 		}
-		if (pending_wi_obj.length == 0) {
-			selectionhtml = "<div class=\"menutext\">No world info.<br>Click [+Entry] to add a new entry to current WorldInfo page.</div>"
+		if (entrycount == 0) {
+			selectionhtml = "<div class=\"menutext\">No world info.<br>Click [+Entry] to add a new entry to current WorldInfo group.</div>"
 		}
 
 		selectionhtml += "</table>"
@@ -19714,6 +19821,9 @@ Current version indicated by LITEVER below.
 		let v = isNaN(val) ? 0 : val;
 		return clamp(v, min, max);
 	};
+	function sanitizeAlphanumeric(str) {
+		return str.replace(/[^a-zA-Z0-9]/g, '');
+	}
 	</script>
 
 	<!-- Aesthetic UI scripts -->
@@ -20821,13 +20931,24 @@ Current version indicated by LITEVER below.
 
 			<div class="context_tab_container" id="wi_tab_container">
 				<div style="display: flex;">
-				<span class="justifyleft"><button type="button" style="padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;" class="btn purplebtn widelbtn" id="wipage1" onclick="">General</button></span>
-				<span class="justifyleft"><button type="button" style="padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;" class="btn lightpurplebtn widelbtn" id="wiadd" onclick="add_wi_page()">[+]</button></span>
+				<span id="wigroupsbuttons">
+				</span>
+				<span class="helpicon" style="margin:2px;margin-top:5px;margin-bottom:5px;font-size: 9px;">?<span
+					class="helptext">WorldInfo Groups can be used to segment data, e.g. entries for a specific place, person or event. Each entire group can be toggled on/off on demand.</span></span>
 				<span class="justifyright flex-push-right">
 				<button type="button" style="padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;" class="btn bluebtn widelbtn" id="wiadd" onclick="add_wi()">[+Entry]</button>
 				</span>
 				</div>
 				<div class="wilist" id="wilist">
+				</div>
+
+				<div style="float:right;">
+					<div class="settinglabel"><button type="button" class="btn purplebtn widelbtn" style="padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;font-size:8px" id="wiexport" onclick="">[Export / Import Group]</button></div>
+					<div class="settinglabel" style="padding: 4px;">
+						<div class="justifyleft settingsmall" title="Toggles all entries in entire group on/off">Toggle Group </div>
+						<input title="Toggle Entire Group" type="checkbox" id="toggle_wi_group" style="margin:0px 0 0;" onchange="toggle_wi_group_enabled()" checked>
+					</div>
+					<input title="World Info Quick Search" class="settinglabel miniinput" style="margin: 3px; width: 90px;" type="text" placeholder="Quick Search" value="" id="wiquicksearch" oninput="wi_quick_search()">
 				</div>
 
 				<div class="settinglabel" style="padding: 4px;">
@@ -20837,6 +20958,7 @@ Current version indicated by LITEVER below.
 					<option value="0">After Memory</option>
 					<option value="1">Before A/N</option>
 				</select></div>
+
 				<div class="settinglabel" style="padding: 4px;">
 					<div class="justifyleft settingsmall">WI Search Depth <span class="helpicon">?<span
 						class="helptext">Controls how far back in the text to search for World Info Keys</span></span></div>
@@ -20850,13 +20972,9 @@ Current version indicated by LITEVER below.
 					<option value="256">Last 256</option>
 				</select></div>
 
-
-				<div style="float:right;">
-					<input title="World Info Quick Search" class="settinglabel miniinput" style="margin: 3px; width: 90px;" type="text" placeholder="Quick Search" value="" id="wiquicksearch" oninput="wi_quick_search()">
-				</div>
 				<div class="settinglabel" style="padding: 4px;">
 					<div class="justifyleft settingsmall" title="Controls whether the world info keys are matched in a case-sensitive way.">Case Sensitive Keys </div>
-				<input title="World Info Case Sensitive" type="checkbox" id="case_sensitive_wi" style="margin:0px 0 0;">
+					<input title="World Info Case Sensitive" type="checkbox" id="case_sensitive_wi" style="margin:0px 0 0;">
 				</div>
 			</div>
 
