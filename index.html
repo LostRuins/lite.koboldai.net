@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 226;
+	const LITEVER = 227;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -2943,7 +2943,6 @@ Current version indicated by LITEVER below.
 	const default_grok_base = "https://api.x.ai/v1";
 	const default_oai_base = "https://api.openai.com";
 	const default_claude_base = "https://api.anthropic.com";
-	const default_palm_base = "https://generativelanguage.googleapis.com/v1beta2/models/text-bison-001:generateText?key=";
 	const default_gemini_base = "https://generativelanguage.googleapis.com/v1beta/models/";
 	const default_gemini_suffix = ":generateContent?key=";
 	const default_cohere_base = "https://api.cohere.ai/v1/chat";
@@ -3047,7 +3046,7 @@ Current version indicated by LITEVER below.
 	var custom_oai_endpoint = "";
 	var custom_oai_key = ""; //if set, uses the OpenAI API to generate
 	var custom_oai_model = "";
-	var custom_palm_key = "";
+	var custom_gemini_key = "";
 	var custom_cohere_key = "";
 	var custom_cohere_model = "";
 	var custom_claude_endpoint = "";
@@ -6136,7 +6135,7 @@ Current version indicated by LITEVER below.
 	}
 	function is_using_custom_ep()
 	{
-		return (custom_oai_key!=""||custom_kobold_endpoint!=""||custom_claude_key!=""||custom_palm_key!=""||custom_cohere_key!="");
+		return (custom_oai_key!=""||custom_kobold_endpoint!=""||custom_claude_key!=""||custom_gemini_key!=""||custom_cohere_key!="");
 	}
 	function is_using_kcpp_with_streaming()
 	{
@@ -8963,10 +8962,10 @@ Current version indicated by LITEVER below.
 		}
 	}
 
-	function togglepalmmodel()
+	function togglegeminimodel()
 	{
-		let mdlname = document.getElementById("custom_palm_model").value;
-		if(mdlname.includes("gemini-2.") || mdlname.includes("gemini-1.5-") || mdlname.includes("gemini-exp-"))
+		let mdlname = document.getElementById("custom_gemini_model").value;
+		if(mdlname.includes("gemini-2") || mdlname.includes("gemini-1.5-") || mdlname.includes("gemini-exp-"))
 		{
 			document.getElementById("gemini_system_instruction").classList.remove("hidden");
 			document.getElementById("gemini_role_options").classList.remove("hidden");
@@ -9094,7 +9093,7 @@ Current version indicated by LITEVER below.
 					dropdown.appendChild(el);
 				}
 				dropdown.selectedIndex = selidx;
-				togglepalmmodel();
+				togglegeminimodel();
 			}
 			else
 			{
@@ -9119,14 +9118,14 @@ Current version indicated by LITEVER below.
 	}
 	function gemini_fetch_models()
 	{
-		let desired_gemini_key = document.getElementById("custom_palm_key").value.trim();
+		let desired_gemini_key = document.getElementById("custom_gemini_key").value.trim();
 		if(desired_gemini_key=="")
 		{
 			msgbox("Gemini requires an API key to fetch model list!");
 			return;
 		}
 
-		let dropdown = document.getElementById("custom_palm_model");
+		let dropdown = document.getElementById("custom_gemini_model");
 		fetch((default_gemini_base + "?key=" + desired_gemini_key), {
 			method: 'GET',
 			referrerPolicy: 'no-referrer',
@@ -9154,7 +9153,7 @@ Current version indicated by LITEVER below.
 					dropdown.appendChild(el);
 				}
 				dropdown.selectedIndex = selidx;
-				togglepalmmodel();
+				togglegeminimodel();
 			}
 			else
 			{
@@ -9316,7 +9315,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("oaicustom").classList.add("hidden");
 		document.getElementById("koboldcustom").classList.add("hidden");
 		document.getElementById("claudecustom").classList.add("hidden");
-		document.getElementById("palmcustom").classList.add("hidden");
+		document.getElementById("geminicustom").classList.add("hidden");
 		document.getElementById("custom_oai_model").classList.add("hidden");
 		document.getElementById("custom_openrouter_model").classList.add("hidden");
 		document.getElementById("custom_mistralai_model").classList.add("hidden");
@@ -9418,10 +9417,10 @@ Current version indicated by LITEVER below.
 		}
 		else if(epchoice==5)
 		{
-			document.getElementById("palmcustom").classList.remove("hidden");
-			document.getElementById("custom_palm_key").value = localsettings.saved_palm_key;
+			document.getElementById("geminicustom").classList.remove("hidden");
+			document.getElementById("custom_gemini_key").value = localsettings.saved_palm_key;
 			document.getElementById("gemini_system_instruction").value = localsettings.saved_palm_jailbreak;
-			togglepalmmodel();
+			togglegeminimodel();
 		}
 		else if(epchoice==6)
 		{
@@ -9507,7 +9506,7 @@ Current version indicated by LITEVER below.
 		custom_kobold_key = "";
 		custom_oai_key = "";
 		custom_claude_key = "";
-		custom_palm_key = "";
+		custom_gemini_key = "";
 		custom_cohere_key = "";
 
 		let epchoice = document.getElementById("customapidropdown").value;
@@ -9973,18 +9972,18 @@ Current version indicated by LITEVER below.
 
 			}
 		}
-		else if(epchoice==5) //palm endpoint
+		else if(epchoice==5) //gemini endpoint
 		{
-			let desired_palm_key = document.getElementById("custom_palm_key").value.trim();
-			let mdlname = document.getElementById("custom_palm_model").value;
+			let desired_gemini_key = document.getElementById("custom_gemini_key").value.trim();
+			let mdlname = document.getElementById("custom_gemini_model").value;
 
-			if(desired_palm_key!="")
+			if(desired_gemini_key!="")
 			{
 				dismiss_endpoint_container();
 
 				//good to go
-				custom_palm_key = desired_palm_key;
-				localsettings.saved_palm_key = custom_palm_key;
+				custom_gemini_key = desired_gemini_key;
+				localsettings.saved_palm_key = custom_gemini_key;
 				localsettings.saved_palm_jailbreak = document.getElementById("gemini_system_instruction").value;
 
 				selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": mdlname, "count": 1 }];
@@ -10694,7 +10693,7 @@ Current version indicated by LITEVER below.
 		custom_kobold_endpoint = "";
 		custom_oai_key = "";
 		custom_claude_key = "";
-		custom_palm_key = "";
+		custom_gemini_key = "";
 		custom_cohere_key = "";
 
 		let prep_sel_models = [];
@@ -10906,7 +10905,7 @@ Current version indicated by LITEVER below.
 		if (x && x.type === "password") {
 			x.type = "text";
 		}
-		x = document.getElementById("custom_palm_key");
+		x = document.getElementById("custom_gemini_key");
 		if (x && x.type === "password") {
 			x.type = "text";
 		}
@@ -10932,7 +10931,7 @@ Current version indicated by LITEVER below.
 		if (x && x.type === "text") {
 			x.type = "password";
 		}
-		x = document.getElementById("custom_palm_key");
+		x = document.getElementById("custom_gemini_key");
 		if (x && x.type === "text") {
 			x.type = "password";
 		}
@@ -14970,136 +14969,106 @@ Current version indicated by LITEVER below.
 						msgbox("Error while submitting prompt: " + error);
 					});
 			}
-			else if (custom_palm_key != "")//handle for PaLM
+			else if (custom_gemini_key != "")//handle for Gemini
 			{
-				let urlbase = default_palm_base;
-				let geminitopk = (submit_payload.params.top_k<1?40:submit_payload.params.top_k);
-				geminitopk = geminitopk>40?40:geminitopk; //gemini limits topk to 40, not 300 for some models.
-				let payload = {"prompt":{"text":submit_payload.prompt},
-				"temperature":submit_payload.params.temperature,
-				"maxOutputTokens": submit_payload.params.max_length,
-				"topP": submit_payload.params.top_p,
-				"topK": geminitopk,
-				"candidateCount":1};
-
-				let mdlname = document.getElementById("custom_palm_model").value;
-
-				if(mdlname=="text-bison-001")
+				let mdlname = document.getElementById("custom_gemini_model").value;
+				let urlbase = default_gemini_base + mdlname + default_gemini_suffix;
+				let geminitopk = (submit_payload.params.top_k<1?100:submit_payload.params.top_k);
+				geminitopk = geminitopk>100?100:geminitopk;
+				if(mdlname.includes("flash-8b"))
 				{
-					payload.safetySettings = [
-						{
-						"category": "HARM_CATEGORY_TOXICITY",
-						"threshold": "BLOCK_NONE"
-						},
-						{
-						"category": "HARM_CATEGORY_UNSPECIFIED",
-						"threshold": "BLOCK_NONE"
-						},
-						{
-						"category": "HARM_CATEGORY_VIOLENCE",
-						"threshold": "BLOCK_NONE"
-						},
-						{
-						"category": "HARM_CATEGORY_SEXUAL",
-						"threshold": "BLOCK_NONE"
-						},
-						{
-						"category": "HARM_CATEGORY_DEROGATORY",
-						"threshold": "BLOCK_NONE"
-						}
-					];
+					geminitopk = geminitopk>40?40:geminitopk; //gemini 8b limits topk to 40
 				}
-				else //assume gemini
-				{
-					if(localsettings.opmode==1)
-					{
-						submit_payload.prompt = submit_payload.prompt + " \nASSISTANT: Here is a direct partial continuation of the story without repeating it: \nASSISTANT:";
-						submit_payload.params.max_length += 100; //add length
-					}
 
-					urlbase = default_gemini_base + mdlname + default_gemini_suffix;
-					payload = {
-					"contents": [
+				if(localsettings.opmode==1)
+				{
+					submit_payload.prompt = submit_payload.prompt + " \nASSISTANT: Here is a direct partial continuation of the story without repeating it: \nASSISTANT:";
+					submit_payload.params.max_length += 100; //add length
+				}
+
+				urlbase = default_gemini_base + mdlname + default_gemini_suffix;
+				let payload = {
+				"contents": [
+					{
+					"parts": [
 						{
-						"parts": [
+						"text": submit_payload.prompt
+						}
+					]
+					}
+				],
+				"safetySettings": [
+					{
+					"category": "HARM_CATEGORY_HARASSMENT",
+					"threshold": "BLOCK_NONE"
+					},
+					{
+					"category": "HARM_CATEGORY_HATE_SPEECH",
+					"threshold": "BLOCK_NONE"
+					},
+					{
+					"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+					"threshold": "BLOCK_NONE"
+					},
+					{
+					"category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+					"threshold": "BLOCK_NONE"
+					},
+					{
+					"category":"HARM_CATEGORY_CIVIC_INTEGRITY",
+					"threshold":"BLOCK_NONE"
+					}
+				],
+				"generationConfig": {
+					"temperature":submit_payload.params.temperature,
+					"maxOutputTokens": submit_payload.params.max_length,
+					"topP": submit_payload.params.top_p,
+					"topK": geminitopk,
+					"candidateCount":1,
+					"stopSequences": []
+				}
+				};
+				let sentrole = document.getElementById("geminiroledropdown").value;
+				if(sentrole!="")
+				{
+					payload.contents = [{
+						"role":sentrole,
+						"parts":[
 							{
 							"text": submit_payload.prompt
 							}
 						]
-						}
-					],
-					"safetySettings": [
-						{
-						"category": "HARM_CATEGORY_HARASSMENT",
-						"threshold": "BLOCK_NONE"
-						},
-						{
-						"category": "HARM_CATEGORY_HATE_SPEECH",
-						"threshold": "BLOCK_NONE"
-						},
-						{
-						"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-						"threshold": "BLOCK_NONE"
-						},
-						{
-						"category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-						"threshold": "BLOCK_NONE"
-						},
-						{
-						"category":"HARM_CATEGORY_CIVIC_INTEGRITY",
-						"threshold":"BLOCK_NONE"
-						}
-					],
-					"generationConfig": {
-						"temperature":submit_payload.params.temperature,
-						"maxOutputTokens": submit_payload.params.max_length,
-						"topP": submit_payload.params.top_p,
-						"topK": geminitopk,
-						"candidateCount":1,
-						"stopSequences": []
-					}
-					};
-					let sentrole = document.getElementById("geminiroledropdown").value;
-					if(sentrole!="")
-					{
-						payload.contents = [{
-							"role":sentrole,
-							"parts":[
-								{
-								"text": submit_payload.prompt
-								}
-							]
-						}];
-					}
-					let postfixrole = document.getElementById("gemini_postfix_role").value;
-					let postfixtext = document.getElementById("gemini_postfix_text").value;
-					if(postfixtext!="" && sentrole!="")
-					{
-						payload.contents.push({
-							"role":postfixrole,
-							"parts":[
-								{
-								"text": postfixtext
-								}
-							]
-						});
-					}
-
-					let sysinst = document.getElementById("gemini_system_instruction").value;
-					if(sysinst!="" && (mdlname.includes("gemini-1.5-") || mdlname.includes("gemini-2") || mdlname.includes("gemini-exp-")))
-					{
-						payload["systemInstruction"] = {
-							"role": "system",
-							"parts": [
+					}];
+				}
+				let postfixrole = document.getElementById("gemini_postfix_role").value;
+				let postfixtext = document.getElementById("gemini_postfix_text").value;
+				if(postfixtext!="" && sentrole!="")
+				{
+					payload.contents.push({
+						"role":postfixrole,
+						"parts":[
 							{
-								"text": sysinst
+							"text": postfixtext
 							}
-							]
-						};
-					}
+						]
+					});
 				}
 
-				let targetep = urlbase + custom_palm_key;
+				let sysinst = document.getElementById("gemini_system_instruction").value;
+				if(sysinst!="" && (mdlname.includes("gemini-1.5-") || mdlname.includes("gemini-2") || mdlname.includes("gemini-exp-")))
+				{
+					payload["systemInstruction"] = {
+						"role": "system",
+						"parts": [
+						{
+							"text": sysinst
+						}
+						]
+					};
+				}
+
+
+				let targetep = urlbase + custom_gemini_key;
 				last_request_str = JSON.stringify(payload);
 				last_response_obj = null;
 
@@ -15114,9 +15083,9 @@ Current version indicated by LITEVER below.
 					.then((response) => response.json())
 					.then((data) => {
 						console.log("sync finished response: " + JSON.stringify(data));
-						if (custom_palm_key != "" && data.candidates != null && data.candidates.length>0 && data.candidates[0].output && data.candidates[0].output != "") {
+						if (custom_gemini_key != "" && data.candidates != null && data.candidates.length>0 && data.candidates[0].output && data.candidates[0].output != "") {
 							synchro_polled_response = data.candidates[0].output;
-						}else if (custom_palm_key != "" && data.candidates != null && data.candidates.length>0 && data.candidates[0].content && data.candidates[0].content.parts != null && data.candidates[0].content.parts.length>0) {
+						}else if (custom_gemini_key != "" && data.candidates != null && data.candidates.length>0 && data.candidates[0].content && data.candidates[0].content.parts != null && data.candidates[0].content.parts.length>0) {
 							synchro_polled_response = data.candidates[0].content.parts[0].text;
 							//try to handle the stripping of spaces
 							if(localsettings.opmode==1 && gametext_arr.length>0 && synchro_polled_response!="")
@@ -15126,7 +15095,7 @@ Current version indicated by LITEVER below.
 						}
 						else {
 							//error occurred, maybe captcha failed
-							console.error("error occurred in PaLM generation");
+							console.error("error occurred in Gemini generation");
 							clear_poll_flags();
 							render_gametext();
 							msgbox("Error occurred during text generation: " + format_json_error(data));
@@ -17680,9 +17649,9 @@ Current version indicated by LITEVER below.
 				{
 					whorun = "<br>You're using the Claude API";
 				}
-				else if(custom_palm_key!="")
+				else if(custom_gemini_key!="")
 				{
-					whorun = "<br>You're using the PaLM API";
+					whorun = "<br>You're using the Gemini API";
 				}
 				else if(custom_cohere_key!="")
 				{
@@ -18980,7 +18949,7 @@ Current version indicated by LITEVER below.
 		{
 			localsettings.prev_custom_endpoint_type = 4;
 		}
-		else if(custom_palm_key!="")
+		else if(custom_gemini_key!="")
 		{
 			localsettings.prev_custom_endpoint_type = 5;
 		}
@@ -22469,7 +22438,7 @@ Current version indicated by LITEVER below.
 				<option value="2">OpenAI Compatible API</option>
 				<option value="3">OpenRouter API</option>
 				<option value="4">Claude By Anthropic API</option>
-				<option value="5">PaLM/Gemini By Google API</option>
+				<option value="5">Gemini By Google API</option>
 				<option value="6">Cohere API</option>
 				<option value="7">MistralAI API</option>
 				<option value="8">Featherless API</option>
@@ -22710,28 +22679,24 @@ Current version indicated by LITEVER below.
 				</div>
 
 			</div>
-			<div id="palmcustom" class="menutext hidden">
-				Uses Gemini or PaLM Text Bison by Google.<br><br>
+			<div id="geminicustom" class="menutext hidden">
+				Uses Gemini by Google.<br><br>
 				Note that KoboldAI Lite takes no responsibility for your usage or consequences of this feature. Your API key is used directly with the Gemini API and is not transmitted to us.<br><br>
 				<div>
-				<select style="padding:4px; width:calc(100% - 110px); display:inline-block" class="form-control" id="custom_palm_model" onchange="togglepalmmodel()">
-					<option value="gemini-pro" selected="selected">gemini-pro</option>
+				<select style="padding:4px; width:calc(100% - 110px); display:inline-block" class="form-control" id="custom_gemini_model" onchange="togglegeminimodel()">
+					<option value="gemini-1.5-flash-latest" selected="selected">gemini-1.5-flash-latest</option>
 					<option value="gemini-1.5-pro-001">gemini-1.5-pro-001</option>
 					<option value="gemini-1.5-pro-002">gemini-1.5-pro-002</option>
 					<option value="gemini-1.5-pro-latest">gemini-1.5-pro-latest</option>
-					<option value="gemini-1.5-flash-latest">gemini-1.5-flash-latest</option>
-					<option value="gemini-1.5-pro-exp-0801">gemini-1.5-pro-exp-0801</option>
-					<option value="gemini-1.5-pro-exp-0827">gemini-1.5-pro-exp-0827</option>
 					<option value="gemini-2.0-flash">gemini-2.0-flash</option>
+					<option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite</option>
 					<option value="gemini-2.0-pro-exp">gemini-2.0-pro-exp</option>
-					<option value="gemini-exp-1114">gemini-exp-1114</option>
-					<option value="gemini-exp-1121">gemini-exp-1121</option>
-					<option value="text-bison-001">text-bison-001</option>
+					<option value="gemma-3-27b-it">gemma-3-27b-it</option>
 				</select>
 				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="geminifetchlist" onclick="gemini_fetch_models()">Fetch List</button>
 				</div>
-				<span class="color_green" style="font-weight: bold;">Please input Gemini or PaLM API Key.</span><br><br>
-				<input class="form-control" type="password" id="custom_palm_key" placeholder="PaLM/Gemini API Key (Required)" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
+				<span class="color_green" style="font-weight: bold;">Please input Gemini API Key.</span><br><br>
+				<input class="form-control" type="password" id="custom_gemini_key" placeholder="Gemini API Key (Required)" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
 				<div id="gemini_role_options">
 				<div>
 					Main Message Role:
