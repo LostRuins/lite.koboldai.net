@@ -14987,14 +14987,26 @@ Current version indicated by LITEVER below.
 				}
 
 				urlbase = default_gemini_base + mdlname + default_gemini_suffix;
+				let geminiparts = [];
+
+				if (insertAIVisionImages.length > 0) {
+					for (let i = 0; i < insertAIVisionImages.length; ++i) {
+						let oaiimg = {
+							"inline_data": {
+								"mime_type": "image/jpeg",
+								"data": insertAIVisionImages[i]
+							}
+						};
+						geminiparts.push(oaiimg);
+					}
+				}
+
+				geminiparts.push({"text": submit_payload.prompt});
+
 				let payload = {
 				"contents": [
 					{
-					"parts": [
-						{
-						"text": submit_payload.prompt
-						}
-					]
+					"parts": geminiparts
 					}
 				],
 				"safetySettings": [
@@ -15675,7 +15687,8 @@ Current version indicated by LITEVER below.
 			if(savedmeta.visionmode==4)
 			{
 				let isoai = (custom_oai_key!="" && document.getElementById("useoaichatcompl").checked);
-				visionstatus = isoai?`<span class="color_green">OpenAI API (Conditional)</span>`:`<span class="color_yellow">Unsupported</span>`;
+				let isgemini = (custom_gemini_key!="");
+				visionstatus = (isoai?`<span class="color_green">OpenAI API (Conditional)</span>`:(isgemini?`<span class="color_green">Gemini API (Conditional)</span>`:`<span class="color_yellow">Unsupported</span>`));
 			}
 			else if(savedmeta.visionmode==3)
 			{
