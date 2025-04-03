@@ -15699,15 +15699,18 @@ Current version indicated by LITEVER below.
 			latest_orig_prompt = origprompt;
 			let hasllava = is_using_kcpp_with_llava();
 			let visionstatus = "";
-			if(savedmeta.visionmode==4)
+			if(savedmeta.visionmode==3)
 			{
-				let isoai = (custom_oai_key!="" && document.getElementById("useoaichatcompl").checked);
-				let isgemini = (custom_gemini_key!="");
-				visionstatus = (isoai?`<span class="color_green">OpenAI API (Conditional)</span>`:(isgemini?`<span class="color_green">Gemini API (Conditional)</span>`:`<span class="color_yellow">Unsupported</span>`));
-			}
-			else if(savedmeta.visionmode==3)
-			{
-				visionstatus = ((!savedmeta.visionmode || savedmeta.visionmode==0)?`<span class="color_red">Inactive</span>`:(hasllava?`<span class="color_green">Active</span>`:`<span class="color_yellow">Unsupported</span>`));
+				if(custom_kobold_endpoint!="") //on a kobo endpoint
+				{
+					visionstatus = ((!savedmeta.visionmode || savedmeta.visionmode==0)?`<span class="color_red">Inactive</span>`:(hasllava?`<span class="color_green">Active</span>`:`<span class="color_yellow">Unsupported</span>`));
+				}
+				else
+				{
+					let isoai = (custom_oai_key!="" && document.getElementById("useoaichatcompl").checked);
+					let isgemini = (custom_gemini_key!="");
+					visionstatus = (isoai?`<span class="color_green">OpenAI API (Conditional)</span>`:(isgemini?`<span class="color_green">Gemini API (Conditional)</span>`:`<span class="color_yellow">Unsupported</span>`));
+				}
 			}
 			else
 			{
@@ -15717,12 +15720,11 @@ Current version indicated by LITEVER below.
 			let togglebtn = `<select class="form-control" id="aivisionmode" style="display:inline;height:24px;width: 140px; padding: 2px; margin: 3px; font-size:12px;" onchange="toggle_ai_vision(\'`+imghash+`\')">
 								<option value="0">Disabled</option>
 								<option value="1">Interrogate (Horde)</option>
-								<option value="2">Interrogate (KCPP / Forge / A1111)</option>
-								<option value="3">Multimodal (KCPP Mmproj)</option>
-								<option value="4">OpenAI Vision (API)</option>
+								<option value="2">Interrogate (Local)</option>
+								<option value="3">Multimodal Vision</option>
 							</select>`;
 			document.getElementById("zoomedimgdesc").innerHTML = `
-			AI Vision: `+visionstatus+` <span class="helpicon">?<span class="helptext">Allows the AI to see and react to this image. On KoboldCpp, LLaVA models can be used. Horde or Local KoboldCpp / Forge / A1111 use image interrogation if enabled. For OpenAI API, only works with Vision Models like Gpt4o.</span></span>
+			AI Vision: `+visionstatus+` <span class="helpicon">?<span class="helptext">Allows the AI to see and react to this image. Interrogate gets a simple description of the image (Horde or Local A1111 API), while Multimodal Vision provides true image understanding (KCPP/OpenAI/Gemini).</span></span>
 			`+togglebtn+`
 			<br><button type="button" class="btn btn-primary" style="width: 140px; padding: 2px; margin: 3px; font-size:12px;" onclick="show_orig_prompt()">View Original Prompt</button>
 			<button type="button" class="btn btn-primary" style="width: 110px; padding: 2px; margin: 3px; font-size:12px;" onclick="add_img2img()">Create Img2Img</button>
@@ -17460,7 +17462,7 @@ Current version indicated by LITEVER below.
 						{
 							return "\n(Attached Image: " + foundmeta.desc + ")\n";
 						}
-						else if(foundmeta.visionmode==3 || foundmeta.visionmode==4)
+						else if(foundmeta.visionmode==3)
 						{
 							let parts = inner.split(',');
 							if (parts.length === 2 && parts[0].startsWith('data:image')) {
