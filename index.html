@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 228;
+	const LITEVER = 229;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local');
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -2418,7 +2418,7 @@ Current version indicated by LITEVER below.
 
 	// whitelisted auto selected horde model names
 	const defaultmodels = ["gpt4all","supercot","pygmalion-6","pygmalion-v8","pygmalion-2","hermes","airoboros","chrono","wizard","mantis","vicuna","manticore","alpaca","myth","xwin","spicyboros","mlewd","mxlewd","westlake","anubis","skyfall","llama2","llama3","llama-2","llama-3-","llama-3.","mistral","maid","mixtral","estopia","fighter","fimbul","euryale","nemo","gemma","lunaris","stheno","magnum","cydonia","qwen2.5-32b","behemoth","exaone"];
-	const ignoredmodels = ["tinyllama","debug-","llama-3.2-1b-"]; //blacklisted model names
+	const ignoredmodels = ["tinyllama","debug-","-1b"]; //blacklisted model names
 
 	const instructstartplaceholder = "\n{{[INPUT]}}\n";
 	const instructendplaceholder = "\n{{[OUTPUT]}}\n";
@@ -3017,8 +3017,7 @@ Current version indicated by LITEVER below.
 	var current_memory = ""; //stored memory
 	var current_anote = ""; //stored author note
 	var current_anotetemplate = "[Author\'s note: <|>]";
-	var extrastopseq = "";
-	var tokenbans = "";
+
 	var anote_strength = 320; //distance from end
 	var newlineaftermemory = true;
 	var current_wi = []; //each item stores a wi object.
@@ -3030,9 +3029,6 @@ Current version indicated by LITEVER below.
 	var documentdb_searchrange = 300;
 	var documentdb_chunksize = 800;
 	var documentdb_data = "";
-	var websearch_enabled = false;
-	var websearch_multipass = false;
-	var websearch_template = "";
 	var generateimagesinterval = 750; //if generated images is enabled, it will trigger after every 700 new characters in context.
 	var nextgeneratedimagemilestone = generateimagesinterval; //used to keep track of when to generate the next image
 	var image_db = {}; //stores a dictionary of pending images
@@ -3094,14 +3090,6 @@ Current version indicated by LITEVER below.
 	var passed_ai_warning_local = false;
 	var welcome = "";
 	var personal_notes = "";
-	var logitbiasdict = {};
-	var regexreplace_data = [];
-	var placeholder_tags_data = [];
-	var thinking_pattern = "<think>([\\s\\S]+?)<\/think>";
-	var thinking_action = 1; //0=display, 1=collapse, 2=hide, 3=remove
-	var start_thinking_tag = "<think>";
-	var force_thinking_tag = false;
-	var strip_past_thinking = true;
 	var voice_typing_mode = 0; //0=off, 1=on, 2=ptt
 	var koboldcpp_has_whisper = false; //does backend support voice typing
 	var voice_is_recording = false; //currently recording voice?
@@ -3241,6 +3229,21 @@ Current version indicated by LITEVER below.
 		passed_ai_warning: false, //used to store AI safety panel acknowledgement state
 		entersubmit: true, //enter sends the prompt
 		darkmode: true,
+
+		//section migrated from story itself
+		extrastopseq: "",
+		tokenbans: "",
+		logitbiasdict: {},
+		regexreplace_data: [],
+		placeholder_tags_data: [],
+		thinking_pattern: "<think>([\\s\\S]+?)<\/think>",
+		thinking_action: 1, //0=display, 1=collapse, 2=hide, 3=remove
+		start_thinking_tag: "<think>",
+		force_thinking_tag: false,
+		strip_past_thinking: true,
+		websearch_enabled: false,
+		websearch_multipass: false,
+		websearch_template: "",
 
 		max_context_length: (localflag?4096:1800),
 		max_length: (localflag?240:200),
@@ -4260,11 +4263,11 @@ Current version indicated by LITEVER below.
 			inputtxt = replaceAll(inputtxt,"{{char}}",(localsettings.chatopponent?firstopponent:defaultchatopponent),true);
 		}
 
-		for(let i=0;i<placeholder_tags_data.length;++i)
+		for(let i=0;i<localsettings.placeholder_tags_data.length;++i)
 		{
-			if(placeholder_tags_data[i].p && placeholder_tags_data[i].r)
+			if(localsettings.placeholder_tags_data[i].p && localsettings.placeholder_tags_data[i].r)
 			{
-				inputtxt = replaceAll(inputtxt,placeholder_tags_data[i].p,placeholder_tags_data[i].r);
+				inputtxt = replaceAll(inputtxt,localsettings.placeholder_tags_data[i].p,localsettings.placeholder_tags_data[i].r);
 			}
 		}
 		return inputtxt;
@@ -6479,29 +6482,16 @@ Current version indicated by LITEVER below.
 		new_save_storyobj.worldinfo = current_wi;
 
 		//extra unofficial fields for the story
-		new_save_storyobj.extrastopseq = extrastopseq;
-		new_save_storyobj.tokenbans = tokenbans;
 		new_save_storyobj.anotestr = anote_strength;
 		new_save_storyobj.wisearchdepth = wi_searchdepth;
 		new_save_storyobj.wiinsertlocation = wi_insertlocation;
 		new_save_storyobj.personal_notes = personal_notes;
-		new_save_storyobj.logitbiasdict = JSON.parse(JSON.stringify(logitbiasdict));
-		new_save_storyobj.regexreplace_data = JSON.parse(JSON.stringify(regexreplace_data));
-		new_save_storyobj.placeholder_tags_data = JSON.parse(JSON.stringify(placeholder_tags_data));
 		new_save_storyobj.documentdb_enabled = documentdb_enabled;
 		new_save_storyobj.documentdb_searchhistory = documentdb_searchhistory;
 		new_save_storyobj.documentdb_numresults = documentdb_numresults;
 		new_save_storyobj.documentdb_searchrange = documentdb_searchrange;
 		new_save_storyobj.documentdb_chunksize = documentdb_chunksize;
 		new_save_storyobj.documentdb_data = documentdb_data;
-		new_save_storyobj.websearch_enabled = websearch_enabled;
-		new_save_storyobj.websearch_multipass = websearch_multipass;
-		new_save_storyobj.websearch_template = websearch_template;
-		new_save_storyobj.thinking_pattern = thinking_pattern;
-		new_save_storyobj.thinking_action = thinking_action;
-		new_save_storyobj.start_thinking_tag = start_thinking_tag;
-		new_save_storyobj.force_thinking_tag = force_thinking_tag;
-		new_save_storyobj.strip_past_thinking = strip_past_thinking;
 
 		if (export_settings) {
 			new_save_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
@@ -6690,11 +6680,18 @@ Current version indicated by LITEVER below.
 			let old_current_anotetemplate = current_anotetemplate;
 			let old_current_memory = current_memory;
 			let old_current_wi = current_wi;
-			let old_extrastopseq = extrastopseq;
-			let old_tokenbans = tokenbans;
 			let old_notes = personal_notes;
-			let old_regexreplace_data = regexreplace_data;
-			let old_placeholder_tags_data = placeholder_tags_data;
+
+			let old_extrastopseq = localsettings.extrastopseq;
+			let old_regexreplace_data = localsettings.regexreplace_data;
+			let old_tokenbans = localsettings.tokenbans;
+			let old_placeholder_tags_data = localsettings.placeholder_tags_data;
+			let old_logitbiasdict = localsettings.logitbiasdict;
+			let old_thinking_pattern = localsettings.thinking_pattern;
+			let old_thinking_action = localsettings.thinking_action;
+			let old_start_thinking_tag = localsettings.start_thinking_tag;
+			let old_force_thinking_tag = localsettings.force_thinking_tag;
+			let old_strip_past_thinking = localsettings.strip_past_thinking;
 
 			//determine if oldui file or newui file format
 			restart_new_game(false);
@@ -6721,7 +6718,7 @@ Current version indicated by LITEVER below.
 					current_wi = storyobj.cwi;
 				}
 				if (storyobj.ess && storyobj.ess != "") {
-					extrastopseq = storyobj.ess;
+					localsettings.extrastopseq = storyobj.ess;
 				}
 			} else if (is_oldui) {
 				//v1 load
@@ -6731,7 +6728,6 @@ Current version indicated by LITEVER below.
 				for (var i = 0; i < storyobj.actions.length; ++i) {
 					gametext_arr.push(storyobj.actions[i]);
 				}
-
 				if (storyobj.anotetemplate) {
 					current_anotetemplate = storyobj.anotetemplate;
 				}
@@ -6744,18 +6740,8 @@ Current version indicated by LITEVER below.
 				if (storyobj.worldinfo) {
 					current_wi = storyobj.worldinfo;
 				}
-				if (storyobj.extrastopseq) {
-					extrastopseq = storyobj.extrastopseq;
-				}
-				if(storyobj.tokenbans)
-				{
-					tokenbans = storyobj.tokenbans;
-				}
 				if (storyobj.anotestr) {
 					anote_strength = storyobj.anotestr;
-				}
-				if (storyobj.logitbiasdict) {
-					logitbiasdict = storyobj.logitbiasdict;
 				}
 				if (storyobj.wisearchdepth) {
 					wi_searchdepth = storyobj.wisearchdepth;
@@ -6768,23 +6754,6 @@ Current version indicated by LITEVER below.
 				}
 				if (storyobj.personal_notes) {
 					personal_notes = storyobj.personal_notes;
-				}
-				//todo: remove temporary backwards compatibility for regex
-				if (storyobj.regexreplace_pattern && storyobj.regexreplace_replacement) {
-					let pat = storyobj.regexreplace_pattern;
-					let rep = storyobj.regexreplace_replacement;
-					let ll = Math.min(pat.length,rep.length)
-					for(let i=0;i<ll;++i)
-					{
-						regexreplace_data.push({"p":pat[i],"r":rep[i],"b":false,"d":false});
-					}
-				}
-				if (storyobj.regexreplace_data) {
-					regexreplace_data = storyobj.regexreplace_data;
-				}
-				if(storyobj.placeholder_tags_data)
-				{
-					placeholder_tags_data = storyobj.placeholder_tags_data;
 				}
 				if(storyobj.documentdb_enabled)
 				{
@@ -6810,38 +6779,59 @@ Current version indicated by LITEVER below.
 				{
 					documentdb_data = storyobj.documentdb_data;
 				}
+
+
+				// adapting legacy fields - these are all now moved to SETTINGS
+				if (storyobj.extrastopseq) {
+					localsettings.extrastopseq = storyobj.extrastopseq;
+				}
+				if(storyobj.tokenbans)
+				{
+					localsettings.tokenbans = storyobj.tokenbans;
+				}
+				if (storyobj.logitbiasdict) {
+					localsettings.logitbiasdict = storyobj.logitbiasdict;
+				}
+				if (storyobj.regexreplace_data) {
+					localsettings.regexreplace_data = storyobj.regexreplace_data;
+				}
+				if(storyobj.placeholder_tags_data)
+				{
+					localsettings.placeholder_tags_data = storyobj.placeholder_tags_data;
+				}
 				if(storyobj.websearch_enabled)
 				{
-					websearch_enabled = storyobj.websearch_enabled;
+					localsettings.websearch_enabled = storyobj.websearch_enabled;
 				}
 				if(storyobj.websearch_multipass)
 				{
-					websearch_multipass = storyobj.websearch_multipass;
+					localsettings.websearch_multipass = storyobj.websearch_multipass;
 				}
 				if(storyobj.websearch_template)
 				{
-					websearch_template = storyobj.websearch_template;
+					localsettings.websearch_template = storyobj.websearch_template;
 				}
 				if(storyobj.thinking_pattern)
 				{
-					thinking_pattern = storyobj.thinking_pattern;
+					localsettings.thinking_pattern = storyobj.thinking_pattern;
 				}
 				if(storyobj.thinking_action)
 				{
-					thinking_action = storyobj.thinking_action;
+					localsettings.thinking_action = storyobj.thinking_action;
 				}
 				if(storyobj.force_thinking_tag)
 				{
-					force_thinking_tag = storyobj.force_thinking_tag;
+					localsettings.force_thinking_tag = storyobj.force_thinking_tag;
 				}
 				if(storyobj.strip_past_thinking===false || storyobj.strip_past_thinking===true)
 				{
-					strip_past_thinking = storyobj.strip_past_thinking;
+					localsettings.strip_past_thinking = storyobj.strip_past_thinking;
 				}
 				if(storyobj.start_thinking_tag)
 				{
-					start_thinking_tag = storyobj.start_thinking_tag;
+					localsettings.start_thinking_tag = storyobj.start_thinking_tag;
 				}
+
 			} else {
 				//v2 load
 				if(storyobj.prompt != "")
@@ -6901,13 +6891,6 @@ Current version indicated by LITEVER below.
 				{
 					current_wi = old_current_wi;
 				}
-				if(!loadstopseq)
-				{
-					extrastopseq = old_extrastopseq;
-					regexreplace_data = old_regexreplace_data;
-					tokenbans = old_tokenbans;
-					placeholder_tags_data = old_placeholder_tags_data;
-				}
 
 				if (storyobj.savedsettings && storyobj.savedsettings != "")
 				{
@@ -6951,6 +6934,20 @@ Current version indicated by LITEVER below.
 							document.getElementById("entersubmit").checked = localsettings.entersubmit;
 						}
 					}
+					if(!loadstopseq)
+					{
+						localsettings.extrastopseq = old_extrastopseq;
+						localsettings.regexreplace_data = old_regexreplace_data;
+						localsettings.tokenbans = old_tokenbans;
+						localsettings.placeholder_tags_data = old_placeholder_tags_data;
+						localsettings.logitbiasdict = old_logitbiasdict;
+						localsettings.thinking_pattern = old_thinking_pattern;
+						localsettings.thinking_action = old_thinking_action;
+						localsettings.start_thinking_tag = old_start_thinking_tag;
+						localsettings.force_thinking_tag = old_force_thinking_tag;
+						localsettings.strip_past_thinking = old_strip_past_thinking;
+					}
+
 					localsettings.my_api_key = tmpapikey1;
 					localsettings.saved_oai_key = tmp_oai1;
 					localsettings.saved_oai_addr = tmp_oai2;
@@ -7004,7 +7001,7 @@ Current version indicated by LITEVER below.
 				document.getElementById("advset_mainstory").checked,
 				document.getElementById("advset_memanote").checked,
 				document.getElementById("advset_worldinfo").checked,
-				document.getElementById("advset_stopseq").checked,
+				document.getElementById("advset_tokens").checked,
 				document.getElementById("advset_gensettings").checked,
 				document.getElementById("advset_aessettings").checked
 				);
@@ -7610,7 +7607,7 @@ Current version indicated by LITEVER below.
 		localsettings.opmode = temp_scenario.opmode;
 
 		if (temp_scenario.hide_user_inputs===true) {
-			regexreplace_data.push({"p":`{{\\[INPUT\\]}}\\n.+?\\n{{\\[OUTPUT\\]}}`,"r":"","b":false,"d":true});
+			localsettings.regexreplace_data.push({"p":`{{\\[INPUT\\]}}\\n.+?\\n{{\\[OUTPUT\\]}}`,"r":"","b":false,"d":true});
 		}
 
 		if(temp_scenario.opmode == 2)
@@ -10967,11 +10964,13 @@ Current version indicated by LITEVER below.
 		document.getElementById("settingsmenusamplers_tab").classList.remove("active");
 		document.getElementById("settingsmenuformat_tab").classList.remove("active");
 		document.getElementById("settingsmenumedia_tab").classList.remove("active");
+		document.getElementById("settingsmenutokens_tab").classList.remove("active");
 		document.getElementById("settingsmenuadvanced_tab").classList.remove("active");
 
 		document.getElementById("settingsmenusamplers").classList.add("hidden");
 		document.getElementById("settingsmenuformat").classList.add("hidden");
 		document.getElementById("settingsmenumedia").classList.add("hidden");
+		document.getElementById("settingsmenutokens").classList.add("hidden");
 		document.getElementById("settingsmenuadvanced").classList.add("hidden");
 
 		switch (tabidx) {
@@ -10987,7 +10986,11 @@ Current version indicated by LITEVER below.
 				document.getElementById("settingsmenumedia").classList.remove("hidden");
 				document.getElementById("settingsmenumedia_tab").classList.add("active");
 			break;
-			case 3: //advanced
+			case 3: //tokens
+				document.getElementById("settingsmenutokens").classList.remove("hidden");
+				document.getElementById("settingsmenutokens_tab").classList.add("active");
+			break;
+			case 4: //advanced
 				document.getElementById("settingsmenuadvanced").classList.remove("hidden");
 				document.getElementById("settingsmenuadvanced_tab").classList.add("active");
 			break;
@@ -11190,6 +11193,52 @@ Current version indicated by LITEVER below.
 		document.getElementById("voice_suppress_nonspeech").checked = localsettings.voice_suppress_nonspeech;
 		document.getElementById("voice_langcode").value = localsettings.voice_langcode;
 		toggle_opmode();
+
+		//stop seq and tokens
+		document.getElementById("extrastopseq").value = localsettings.extrastopseq;
+		document.getElementById("tokenbans").value = localsettings.tokenbans;
+		document.getElementById("logitbiastxtarea").value = JSON.stringify(localsettings.logitbiasdict,null,2);
+		if(custom_kobold_endpoint!="" || !is_using_custom_ep() )
+		{
+			document.getElementById("noextrastopseq").classList.add("hidden");
+		}
+		else
+		{
+			document.getElementById("noextrastopseq").classList.remove("hidden");
+		}
+		document.getElementById("websearch_enabled").checked = localsettings.websearch_enabled;
+		document.getElementById("websearch_multipass").checked = localsettings.websearch_multipass;
+		document.getElementById("websearch_template").value = (localsettings.websearch_template==""?default_websearch_template:localsettings.websearch_template);
+		if(is_using_kcpp_with_websearch())
+		{
+			document.getElementById("websearchunsupporteddiv").classList.add("hidden");
+		}
+		else
+		{
+			document.getElementById("websearchunsupporteddiv").classList.remove("hidden");
+		}
+		if(is_using_custom_ep())
+		{
+			document.getElementById("nologitbias").classList.add("hidden");
+			document.getElementById("notokenbans").classList.add("hidden");
+			if(is_using_kcpp_with_added_memory())
+			{
+				document.getElementById("newlogitbiasstringtogglesection").classList.remove("hidden");
+			}else{
+				document.getElementById("newlogitbiasstringtogglesection").classList.add("hidden");
+				document.getElementById("newlogitbiasstringtoggle").checked = false;
+			}
+		}
+		else
+		{
+			document.getElementById("nologitbias").classList.remove("hidden");
+			document.getElementById("notokenbans").classList.remove("hidden");
+			document.getElementById("newlogitbiasstringtogglesection").classList.add("hidden");
+			document.getElementById("newlogitbiasstringtoggle").checked = false;
+		}
+		toggle_logit_bias_string();
+		populate_placeholder_tags();
+		populate_regex_replacers();
 
 		//sd models display
 		update_horde_sdmodels();
@@ -11423,7 +11472,7 @@ Current version indicated by LITEVER below.
 
 	function update_websearch_button_visibility()
 	{
-		if(websearch_enabled)
+		if(localsettings.websearch_enabled)
 		{
 			document.getElementById("btn_togglesearch").classList.remove("inactive");
 			document.getElementById("btn_togglesearch2").classList.remove("inactive");
@@ -11555,6 +11604,85 @@ Current version indicated by LITEVER below.
 		localsettings.xtc_threshold = parseFloat(document.getElementById("xtc_threshold").value);
 		localsettings.xtc_probability = parseFloat(document.getElementById("xtc_probability").value);
 		localsettings.token_count_multiplier = parseInt(document.getElementById("token_count_multiplier").value);
+
+
+		localsettings.extrastopseq = document.getElementById("extrastopseq").value;
+		localsettings.tokenbans = document.getElementById("tokenbans").value;
+		try
+		{
+			let lb = document.getElementById("logitbiastxtarea").value;
+			let dict = {};
+			if(lb!="")
+			{
+				dict = JSON.parse(lb);
+			}
+			localsettings.logitbiasdict = dict;
+		} catch (e) {
+			console.log("Your logit bias JSON dictionary was not correctly formatted!");
+		}
+		localsettings.regexreplace_data = [];
+		for(let i=0;i<num_regex_rows;++i)
+		{
+			let v1 = "";
+			let v2 = "";
+			let bothways = false;
+			let box1 = document.getElementById("regexreplace_pattern"+i);
+			let box2 = document.getElementById("regexreplace_replacement"+i);
+			let bw = document.getElementById("regexreplace_bothways"+i).checked;
+			let disponly = document.getElementById("regexreplace_displayonly"+i).checked;
+			if(!box1 || !box2)
+			{
+				break;
+			}
+			if(validate_regex(box1.value))
+			{
+				v1 = box1.value;
+			}
+			if(validate_regex(box2.value))
+			{
+				v2 = box2.value;
+			}
+
+			if(v1)
+			{
+				localsettings.regexreplace_data.push({"p":v1,"r":v2,"b":bw,"d":disponly});
+			}
+		}
+
+		localsettings.placeholder_tags_data = [];
+		for(let i=0;i<num_regex_rows;++i)
+		{
+			let v1 = "";
+			let v2 = "";
+			let box1 = document.getElementById("placeholder_pattern"+i);
+			let box2 = document.getElementById("placeholder_replace"+i);
+			if(!box1 || !box2)
+			{
+				break;
+			}
+			v1 = box1.value;
+			v2 = box2.value;
+			if(v1 && v2)
+			{
+				localsettings.placeholder_tags_data.push({"p":v1,"r":v2});
+			}
+		}
+		localsettings.websearch_enabled = document.getElementById("websearch_enabled").checked?true:false;
+		localsettings.websearch_multipass = document.getElementById("websearch_multipass").checked?true:false;
+		localsettings.websearch_template = (document.getElementById("websearch_template").value==default_websearch_template?"":document.getElementById("websearch_template").value);
+		if(validate_regex(localsettings.thinking_pattern))
+		{
+			localsettings.thinking_pattern = document.getElementById("thinking_pattern").value;
+		}
+		else
+		{
+			localsettings.thinking_pattern = "<think>([\\s\\S]+?)<\/think>";
+		}
+		localsettings.thinking_action = parseInt(document.getElementById("thinking_action").value);
+		localsettings.force_thinking_tag = document.getElementById("force_thinking_tag").checked?true:false;
+		localsettings.strip_past_thinking = document.getElementById("strip_past_thinking").checked?true:false;
+		localsettings.start_thinking_tag = document.getElementById("start_thinking_tag").value;
+
 
 		localsettings.speech_synth = document.getElementById("ttsselect").value;
 		localsettings.xtts_voice = document.getElementById("xtts_voices").value;
@@ -12012,73 +12140,7 @@ Current version indicated by LITEVER below.
 		current_anote = document.getElementById("anotetext").value;
 		current_anotetemplate = document.getElementById("anotetemplate").value;
 		anote_strength = document.getElementById("anote_strength").value;
-		extrastopseq = document.getElementById("extrastopseq").value;
-		tokenbans = document.getElementById("tokenbans").value;
 		newlineaftermemory = (document.getElementById("newlineaftermemory").checked?true:false);
-		try
-		{
-			let lb = document.getElementById("logitbiastxtarea").value;
-			let dict = {};
-			if(lb!="")
-			{
-				dict = JSON.parse(lb);
-			}
-			logitbiasdict = dict;
-		} catch (e) {
-			console.log("Your logit bias JSON dictionary was not correctly formatted!");
-		}
-		regexreplace_data = [];
-		for(let i=0;i<num_regex_rows;++i)
-		{
-			let v1 = "";
-			let v2 = "";
-			let bothways = false;
-			let box1 = document.getElementById("regexreplace_pattern"+i);
-			let box2 = document.getElementById("regexreplace_replacement"+i);
-			let bw = document.getElementById("regexreplace_bothways"+i).checked;
-			let disponly = document.getElementById("regexreplace_displayonly"+i).checked;
-			if(!box1 || !box2)
-			{
-				break;
-			}
-			if(validate_regex(box1.value))
-			{
-				v1 = box1.value;
-			}
-			if(validate_regex(box2.value))
-			{
-				v2 = box2.value;
-			}
-
-			if(v1)
-			{
-				regexreplace_data.push({"p":v1,"r":v2,"b":bw,"d":disponly});
-			}
-		}
-
-		localsettings.placeholder_tags = (document.getElementById("placeholder_tags2").checked?true:false);
-		//bit of a hack to save modified placeholders
-		document.getElementById("chatname").value = document.getElementById("placeholder_replace_hc0").value;
-		document.getElementById("chatopponent").value = document.getElementById("placeholder_replace_hc1").value;
-		confirm_chat_and_instruct_tags();
-		placeholder_tags_data = [];
-		for(let i=0;i<num_regex_rows;++i)
-		{
-			let v1 = "";
-			let v2 = "";
-			let box1 = document.getElementById("placeholder_pattern"+i);
-			let box2 = document.getElementById("placeholder_replace"+i);
-			if(!box1 || !box2)
-			{
-				break;
-			}
-			v1 = box1.value;
-			v2 = box2.value;
-			if(v1 && v2)
-			{
-				placeholder_tags_data.push({"p":v1,"r":v2});
-			}
-		}
 		documentdb_enabled = document.getElementById("documentdb_enabled").checked?true:false;
 		documentdb_searchhistory = document.getElementById("documentdb_searchhistory").checked?true:false;
 		documentdb_numresults = document.getElementById("documentdb_numresults").value;
@@ -12091,21 +12153,6 @@ Current version indicated by LITEVER below.
 		documentdb_searchrange = cleannum(documentdb_searchrange,0,1024);
 		documentdb_chunksize = parseInt(documentdb_chunksize);
 		documentdb_chunksize = cleannum(documentdb_chunksize,32,2048);
-		websearch_enabled = document.getElementById("websearch_enabled").checked?true:false;
-		websearch_multipass = document.getElementById("websearch_multipass").checked?true:false;
-		websearch_template = (document.getElementById("websearch_template").value==default_websearch_template?"":document.getElementById("websearch_template").value);
-		if(validate_regex(thinking_pattern))
-		{
-			thinking_pattern = document.getElementById("thinking_pattern").value;
-		}
-		else
-		{
-			thinking_pattern = "<think>([\\s\\S]+?)<\/think>";
-		}
-		thinking_action = parseInt(document.getElementById("thinking_action").value);
-		force_thinking_tag = document.getElementById("force_thinking_tag").checked?true:false;
-		strip_past_thinking = document.getElementById("strip_past_thinking").checked?true:false;
-		start_thinking_tag = document.getElementById("start_thinking_tag").value;
 	}
 
 	function set_personal_notes()
@@ -12129,7 +12176,7 @@ Current version indicated by LITEVER below.
 			let truncated_context = recentCtx.substring(recentCtx.length - max_allowed_characters);
 
 			truncated_context = replace_placeholders(truncated_context);
-			let wst = (websearch_template==""?default_websearch_template:websearch_template);
+			let wst = (localsettings.websearch_template==""?default_websearch_template:localsettings.websearch_template);
 			truncated_context += "\n\n" + wst.replaceAll('{{QUERY}}', search_query);
 
 			let submit_payload = {
@@ -12459,29 +12506,16 @@ Current version indicated by LITEVER below.
 			current_memory = "";
 			current_anote = "";
 			current_wi = [];
-			extrastopseq = "";
-			tokenbans = "";
 			anote_strength = 320;
-			logitbiasdict = {};
 			wi_searchdepth = 0;
 			wi_insertlocation = 0;
 			current_anotetemplate = "[Author's note: <|>]";
-			regexreplace_data = [];
-			placeholder_tags_data = [];
 			documentdb_enabled = false;
 			documentdb_searchhistory = false;
 			documentdb_numresults = 3;
 			documentdb_searchrange = 300;
 			documentdb_chunksize = 800;
 			documentdb_data = "";
-			websearch_enabled = false;
-			websearch_multipass = false;
-			websearch_template = "";
-			thinking_pattern = "<think>([\\s\\S]+?)<\/think>";
-			thinking_action = 1;
-			force_thinking_tag = false;
-			strip_past_thinking = true;
-			start_thinking_tag = "<think>";
 		}
 		warn_on_quit = false;
 		show_corpo_leftpanel(false);
@@ -12558,17 +12592,17 @@ Current version indicated by LITEVER below.
 	function apply_display_only_regex(inputtxt)
 	{
 		//apply regex transforms
-		if(regexreplace_data && regexreplace_data.length>0)
+		if(localsettings.regexreplace_data && localsettings.regexreplace_data.length>0)
 		{
 			inputtxt = escape_html_alternate(inputtxt);
 			inputtxt = unescape_html(inputtxt);
-			for(let i=0;i<regexreplace_data.length;++i)
+			for(let i=0;i<localsettings.regexreplace_data.length;++i)
 			{
-				if(regexreplace_data[i].d && regexreplace_data[i].p!="")
+				if(localsettings.regexreplace_data[i].d && localsettings.regexreplace_data[i].p!="")
 				{
-					let escapedpat = regexreplace_data[i].p;
+					let escapedpat = localsettings.regexreplace_data[i].p;
 					let pat = new RegExp(escapedpat, "gm");
-					let rep = regexreplace_data[i].r;
+					let rep = localsettings.regexreplace_data[i].r;
 					rep = unescape_regex_newlines(rep);
 					inputtxt = inputtxt.replace(pat, rep);
 				}
@@ -12576,19 +12610,19 @@ Current version indicated by LITEVER below.
 			inputtxt = escape_html(inputtxt);
 			inputtxt = unescape_html_alternate(inputtxt);
 		}
-		if((thinking_action==1 || thinking_action==2) && thinking_pattern!="") //removal of cot
+		if((localsettings.thinking_action==1 || localsettings.thinking_action==2) && localsettings.thinking_pattern!="") //removal of cot
 		{
 			inputtxt = escape_html_alternate(inputtxt);
 			inputtxt = unescape_html(inputtxt);
-			let pat = new RegExp(thinking_pattern, "gmi");
+			let pat = new RegExp(localsettings.thinking_pattern, "gmi");
 			let matches = [];
-			if(thinking_action==1)
+			if(localsettings.thinking_action==1)
 			{
 				let temp = inputtxt.match(pat) || []; // Captures matches in an array
 				if(temp.length > 0)
 				{
 					temp.forEach(match => {
-						let pat2 = new RegExp(thinking_pattern, "gmi");
+						let pat2 = new RegExp(localsettings.thinking_pattern, "gmi");
 						let execResult = pat2.exec(match);
 						if (execResult && execResult[1]) {
 							matches.push(execResult[1]); // Store only the capture group
@@ -13022,11 +13056,12 @@ Current version indicated by LITEVER below.
 	function toggle_websearch()
 	{
 		if (is_using_kcpp_with_websearch()) {
-			websearch_enabled = !websearch_enabled;
+			localsettings.websearch_enabled = !localsettings.websearch_enabled;
 		} else {
-			websearch_enabled = false;
+			localsettings.websearch_enabled = false;
 		}
 		update_websearch_button_visibility();
+		render_gametext();
 	}
 
 	var xtts_is_connected = false;
@@ -13684,9 +13719,9 @@ Current version indicated by LITEVER below.
 			{
 				newgen = newgen + localsettings.custom_jailbreak_text.replaceAll("\\n", "\n");
 			}
-			if(force_thinking_tag && start_thinking_tag!="")
+			if(localsettings.force_thinking_tag && localsettings.start_thinking_tag!="")
 			{
-				newgen = newgen + start_thinking_tag.replaceAll("\\n", "\n");
+				newgen = newgen + localsettings.start_thinking_tag.replaceAll("\\n", "\n");
 			}
 		}
 		else //may be continuting existing instruction OR starting a brand new session. check if first action
@@ -13751,14 +13786,14 @@ Current version indicated by LITEVER below.
 		}
 
 		//apply regex transforms
-		if(regexreplace_data && regexreplace_data.length>0)
+		if(localsettings.regexreplace_data && localsettings.regexreplace_data.length>0)
 		{
-			for(let i=0;i<regexreplace_data.length;++i)
+			for(let i=0;i<localsettings.regexreplace_data.length;++i)
 			{
-				if(regexreplace_data[i].b && !(regexreplace_data[i].d) && regexreplace_data[i].p!="")
+				if(localsettings.regexreplace_data[i].b && !(localsettings.regexreplace_data[i].d) && localsettings.regexreplace_data[i].p!="")
 				{
-					let pat = new RegExp(regexreplace_data[i].p, "gm");
-					let rep = regexreplace_data[i].r;
+					let pat = new RegExp(localsettings.regexreplace_data[i].p, "gm");
+					let rep = localsettings.regexreplace_data[i].r;
 					rep = unescape_regex_newlines(rep);
 					newgen = newgen.replace(pat, rep);
 				}
@@ -13880,9 +13915,9 @@ Current version indicated by LITEVER below.
 			truncated_context = truncated_context.replace(/\xA0/g,' '); //replace non breaking space nbsp
 
 			//remove past thoughts
-			if(strip_past_thinking && thinking_action>0 && thinking_pattern!="") //removal of cot
+			if(localsettings.strip_past_thinking && localsettings.thinking_action>0 && localsettings.thinking_pattern!="") //removal of cot
 			{
-				let pat = new RegExp(thinking_pattern, "gm");
+				let pat = new RegExp(localsettings.thinking_pattern, "gm");
 				truncated_context = truncated_context.replace(pat, "");
 			}
 
@@ -14186,7 +14221,7 @@ Current version indicated by LITEVER below.
 			}
 
 			//use newest websearch results
-			if (websearch_enabled && is_using_kcpp_with_websearch() && lastSearchResults && lastSearchResults.length>0)
+			if (localsettings.websearch_enabled && is_using_kcpp_with_websearch() && lastSearchResults && lastSearchResults.length>0)
 			{
 				for(let i=0;i<lastSearchResults.length;++i)
 				{
@@ -14475,8 +14510,8 @@ Current version indicated by LITEVER below.
 				}
 			}
 		}
-		if (extrastopseq != "") {
-			let rep = replaceAll(extrastopseq, "\\n", "\n");
+		if (localsettings.extrastopseq != "") {
+			let rep = replaceAll(localsettings.extrastopseq, "\\n", "\n");
 			let srep = rep.split("||$||");
 			if (srep.length > 0 && !seqs) {
 				seqs = [];
@@ -14494,8 +14529,8 @@ Current version indicated by LITEVER below.
 	function get_token_bans()
 	{
 		let seqs = [];
-		if (tokenbans != "") {
-			let rep = replaceAll(tokenbans, "\\n", "\n");
+		if (localsettings.tokenbans != "") {
+			let rep = replaceAll(localsettings.tokenbans, "\\n", "\n");
 			let srep = rep.split("||$||");
 			if (srep.length > 0 && !seqs) {
 				seqs = [];
@@ -14595,7 +14630,7 @@ Current version indicated by LITEVER below.
 		if((custom_kobold_endpoint != "" && is_using_kcpp_with_mirostat()) || custom_oai_endpoint!="")
 		{
 			submit_payload.params.presence_penalty = localsettings.presence_penalty;
-			submit_payload.params.logit_bias = JSON.parse(JSON.stringify(logitbiasdict));
+			submit_payload.params.logit_bias = JSON.parse(JSON.stringify(localsettings.logitbiasdict));
 		}
 
 		start_time_taken(); //timestamp start request
@@ -15851,9 +15886,9 @@ Current version indicated by LITEVER below.
 
 	function trim_extra_stop_seqs(gentxt, includeStopToken)
 	{
-		if(extrastopseq!="")
+		if(localsettings.extrastopseq!="")
 		{
-			let rep = replaceAll(extrastopseq,"\\n","\n");
+			let rep = replaceAll(localsettings.extrastopseq,"\\n","\n");
 			let srep = rep.split("||$||");
 			if (srep.length > 0) {
 				for (let i = 0; i < srep.length; ++i) {
@@ -15917,22 +15952,22 @@ Current version indicated by LITEVER below.
 		}
 
 		//apply regex transform
-		if(regexreplace_data && regexreplace_data.length>0)
+		if(localsettings.regexreplace_data && localsettings.regexreplace_data.length>0)
 		{
-			for(let i=0;i<regexreplace_data.length;++i)
+			for(let i=0;i<localsettings.regexreplace_data.length;++i)
 			{
-				if(regexreplace_data[i].p!="" && !(regexreplace_data[i].d))
+				if(localsettings.regexreplace_data[i].p!="" && !(localsettings.regexreplace_data[i].d))
 				{
-					let pat = new RegExp(regexreplace_data[i].p, "gm");
-					let rep = regexreplace_data[i].r;
+					let pat = new RegExp(localsettings.regexreplace_data[i].p, "gm");
+					let rep = localsettings.regexreplace_data[i].r;
 					rep = unescape_regex_newlines(rep);
 					gentxt = gentxt.replace(pat, rep);
 				}
 			}
 		}
-		if(thinking_action==3 && thinking_pattern!="") //removal of cot
+		if(localsettings.thinking_action==3 && localsettings.thinking_pattern!="") //removal of cot
 		{
-			let pat = new RegExp(thinking_pattern, "gm");
+			let pat = new RegExp(localsettings.thinking_pattern, "gm");
 			gentxt = gentxt.replace(pat, "");
 		}
 
@@ -18170,7 +18205,7 @@ Current version indicated by LITEVER below.
 
 		idle_timer = 0;
 		document.getElementById("token-budget").innerText = last_token_budget;
-		if(websearch_in_progress && websearch_enabled && is_using_kcpp_with_websearch())
+		if(websearch_in_progress && localsettings.websearch_enabled && is_using_kcpp_with_websearch())
 		{
 			document.getElementById("searchingtxt").classList.remove("hidden");
 		}
@@ -19071,19 +19106,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("anotetext").value = current_anote;
 		document.getElementById("anotetemplate").value = current_anotetemplate;
 		document.getElementById("anote_strength").value = anote_strength;
-		document.getElementById("extrastopseq").value = extrastopseq;
-		document.getElementById("tokenbans").value = tokenbans;
 		document.getElementById("newlineaftermemory").checked = (newlineaftermemory?true:false);
-		document.getElementById("logitbiastxtarea").value = JSON.stringify(logitbiasdict,null,2);
-
-		if(custom_kobold_endpoint!="" || !is_using_custom_ep() )
-		{
-			document.getElementById("noextrastopseq").classList.add("hidden");
-		}
-		else
-		{
-			document.getElementById("noextrastopseq").classList.remove("hidden");
-		}
 
 		//setup wi tab
 		start_editing_wi();
@@ -19095,41 +19118,6 @@ Current version indicated by LITEVER below.
 		document.getElementById("documentdb_searchrange").value = documentdb_searchrange;
 		document.getElementById("documentdb_chunksize").value = documentdb_chunksize;
 		document.getElementById("documentdb_data").value = documentdb_data;
-		document.getElementById("websearch_enabled").checked = websearch_enabled;
-		document.getElementById("websearch_multipass").checked = websearch_multipass;
-		document.getElementById("websearch_template").value = (websearch_template==""?default_websearch_template:websearch_template);
-		if(is_using_kcpp_with_websearch())
-		{
-			document.getElementById("websearchunsupporteddiv").classList.add("hidden");
-		}
-		else
-		{
-			document.getElementById("websearchunsupporteddiv").classList.remove("hidden");
-		}
-
-		populate_placeholder_tags();
-		populate_regex_replacers();
-
-		if(is_using_custom_ep())
-		{
-			document.getElementById("nologitbias").classList.add("hidden");
-			document.getElementById("notokenbans").classList.add("hidden");
-			if(is_using_kcpp_with_added_memory())
-			{
-				document.getElementById("newlogitbiasstringtogglesection").classList.remove("hidden");
-			}else{
-				document.getElementById("newlogitbiasstringtogglesection").classList.add("hidden");
-				document.getElementById("newlogitbiasstringtoggle").checked = false;
-			}
-		}
-		else
-		{
-			document.getElementById("nologitbias").classList.remove("hidden");
-			document.getElementById("notokenbans").classList.remove("hidden");
-			document.getElementById("newlogitbiasstringtogglesection").classList.add("hidden");
-			document.getElementById("newlogitbiasstringtoggle").checked = false;
-		}
-		toggle_logit_bias_string();
 	}
 
 	function toggle_logit_bias_string()
@@ -19177,12 +19165,12 @@ Current version indicated by LITEVER below.
 			let a4 = document.getElementById("regexreplace_displayonly"+i);
 			if(a1 && a2 && a3 && a4)
 			{
-				if(i<regexreplace_data.length)
+				if(i<localsettings.regexreplace_data.length)
 				{
-					a1.value = regexreplace_data[i].p;
-					a2.value = regexreplace_data[i].r;
-					a3.checked = (regexreplace_data[i].b?true:false);
-					a4.checked = (regexreplace_data[i].d?true:false);
+					a1.value = localsettings.regexreplace_data[i].p;
+					a2.value = localsettings.regexreplace_data[i].r;
+					a3.checked = (localsettings.regexreplace_data[i].b?true:false);
+					a4.checked = (localsettings.regexreplace_data[i].d?true:false);
 				}
 				else
 				{
@@ -19192,11 +19180,11 @@ Current version indicated by LITEVER below.
 				}
 			}
 		}
-		document.getElementById("thinking_pattern").value = thinking_pattern;
-		document.getElementById("thinking_action").value = thinking_action;
-		document.getElementById("force_thinking_tag").checked = force_thinking_tag;
-		document.getElementById("strip_past_thinking").checked = strip_past_thinking;
-		document.getElementById("start_thinking_tag").value = start_thinking_tag;
+		document.getElementById("thinking_pattern").value = localsettings.thinking_pattern;
+		document.getElementById("thinking_action").value = localsettings.thinking_action;
+		document.getElementById("force_thinking_tag").checked = localsettings.force_thinking_tag;
+		document.getElementById("strip_past_thinking").checked = localsettings.strip_past_thinking;
+		document.getElementById("start_thinking_tag").value = localsettings.start_thinking_tag;
 	}
 
 	function populate_placeholder_tags()
@@ -19207,19 +19195,6 @@ Current version indicated by LITEVER below.
 		<th>Replacement <span class="helpicon">?<span class="helptext">The text to substitude on display. Actual context is unchanged.</span></span></th>
 		</tr>`;
 		let regextable = document.getElementById("placeholder_replace_table");
-
-		let hardcoded1 = ["{{user}}","{{char}}"];
-		let hardcoded2 = [localsettings.chatname,localsettings.chatopponent];
-
-		for(let i=0;i<hardcoded1.length;++i)
-		{
-			regextablehtml += `
-			<tr>
-			<td>${hardcoded1[i]}</td>
-			<td><input class="settinglabel miniinput" type="text" placeholder="" value="${hardcoded2[i]}" id="placeholder_replace_hc${i}"></td>
-			</tr>
-			`;
-		}
 
 		for(let i=0;i<num_regex_rows;++i)
 		{
@@ -19233,18 +19208,16 @@ Current version indicated by LITEVER below.
 
 		regextable.innerHTML = regextablehtml;
 
-		document.getElementById("placeholder_tags2").checked = localsettings.placeholder_tags;
-
 		for(let i=0;i<num_regex_rows;++i)
 		{
 			let a1 = document.getElementById("placeholder_pattern"+i);
 			let a2 = document.getElementById("placeholder_replace"+i);
 			if(a1 && a2)
 			{
-				if(i<placeholder_tags_data.length)
+				if(i<localsettings.placeholder_tags_data.length)
 				{
-					a1.value = placeholder_tags_data[i].p;
-					a2.value = placeholder_tags_data[i].r;
+					a1.value = localsettings.placeholder_tags_data[i].p;
+					a2.value = localsettings.placeholder_tags_data[i].r;
 				}
 				else
 				{
@@ -20486,7 +20459,7 @@ Current version indicated by LITEVER below.
 	{
 		let proceedSearching = function() //called once search query is prepared
 		{
-			if(!websearch_multipass && (webSearchQuery==lastSearchQuery || webSearchQuery==""))
+			if(!localsettings.websearch_multipass && (webSearchQuery==lastSearchQuery || webSearchQuery==""))
 			{
 				onDone(); //use cached results
 			}
@@ -20531,7 +20504,7 @@ Current version indicated by LITEVER below.
 		}
 
 		//websearch
-		if (websearch_enabled && is_using_kcpp_with_websearch())
+		if (localsettings.websearch_enabled && is_using_kcpp_with_websearch())
 		{
 			webSearchQuery = webSearchQuery.trim();
 
@@ -20549,7 +20522,7 @@ Current version indicated by LITEVER below.
 			webSearchQuery = webSearchQuery.trim();
 			webSearchQuery = webSearchQuery.replace(/(?:\r\n|\r|\n)/g, '. ');
 
-			if(websearch_multipass && gametext_arr.length > 0)
+			if(localsettings.websearch_multipass && gametext_arr.length > 0)
 			{
 				let search_context = concat_gametext(true, ""); //will be truncated later
 
@@ -21112,111 +21085,11 @@ Current version indicated by LITEVER below.
 			</div>
 
 			<div class="context_tab_container" id="websearch_tab_container">
-				<div class="settinglabel" style="padding: 4px;">Search the Web for relevant information when using instruct mode<br>(Requires WebSearch enabled KoboldCpp)</div>
-				<div id="websearchunsupporteddiv" class="color_red hidden" style="font-weight:bold;padding:3px;font-size:12px">WebSearch Not Supported</div>
-				<div class="settinglabel" style="padding: 4px;">
-					<div class="justifyleft settingsmall" title="Enable WebSearch">Enable WebSearch </div>
-					<input title="Enable WebSearch" type="checkbox" id="websearch_enabled" style="margin:0px 0 0;">
-				</div>
-				<div class="settinglabel" style="padding: 4px;">
-					<div class="justifyleft settingsmall" title="Use Multiple Passes">Use Multiple Passes <span class="helpicon">?<span
-						class="helptext">Using this option will run a second LLM tool call to summarize context and create a more accurate search query. Slower but may be more accurate.</span></span></div>
-					<input title="Use Multiple Passes" type="checkbox" id="websearch_multipass" style="margin:0px 0 0;">
-				</div>
-				<div class="justifyleft settinglabel">Multipass WebSearch Template <span class="helpicon">?<span
-					class="helptext">The template used to generate the search query when multipass search is used</span></span></div>
-					<div style="display: flex; column-gap: 4px; margin-bottom: 4px;">
-					<textarea title="Multipass WebSearch Template" style="height: 80px;" class="form-control menuinput_multiline" id="websearch_template"
-					placeholder=""></textarea>
-				</div>
+				<div class="settinglabel" style="padding: 4px;">WebSearch Moved to Settings Panel (Media Tab). This section will be removed in future.</div>
 			</div>
 
 			<div class="context_tab_container" id="token_tab_container">
-				<div class="justifyleft settinglabel">Extra Stopping Sequences <span class="helpicon">?<span
-					class="helptext">Triggers the text generator to stop generating early if this sequence appears, in addition to default stop sequences. If you want multiple sequences, separate them with the following delimiter: ||$||</span></span></div>
-					<div class="color_red hidden" id="noextrastopseq">Stop Sequences may be unavailable.</div>
-					<div style="display: flex; column-gap: 4px; margin-bottom: 4px;">
-					<input title="Extra Stopping Sequences" class="form-control menuinput_inline" type="text" placeholder="None" value="" id="extrastopseq">
-					<button type="button" class="btn btn-primary" style="width:90px;padding:6px 6px;" onclick="add_stop_seq()">Add New</button>
-				</div>
-
-				<div style="padding:3px;" class="justifyleft settinglabel">Logit Biases <span class="helpicon">?<span
-					class="helptext">Specify a dictionary of token IDs to modify the probability of occuring.</span></span>
-					<button type="button" title="Logit Biases" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('expandlogitbias')">Expand Section</button>
-				</div>
-				<div id="expandlogitbias" class="hidden">
-					<div class="color_red hidden" id="nologitbias">Logit bias may be unavailable.</div>
-					<div style="color:#ffffff;">Enter OpenAI-formatted logit bias dictionary. Each key is the integer token IDs and their values are the biases (-100.0 to 100.0). Leave blank to disable.<br><a href='https://platform.openai.com/docs/api-reference/chat/create#chat-create-logit_bias' target='_blank' class='color_blueurl'>Input is a JSON object, reference here.</a><br></div>
-					<textarea class="form-control menuinput_multiline" style="height: 80px;line-height:1.1;margin-bottom: 4px;" id="logitbiastxtarea" placeholder="" rows="5"></textarea>
-					<div style="display: flex; column-gap: 4px; margin-bottom: 4px;">
-					<input style="padding:2px" class="form-control menuinput_inline hidden" inputmode="text" type="text" placeholder="Token String" value="" id="newlogitbiasstring">
-					<input style="padding:2px" class="form-control menuinput_inline" inputmode="numeric" type="text" placeholder="Token ID" value="" id="newlogitbiasid">
-					<input style="padding:2px" class="form-control menuinput_inline" inputmode="text" type="text" placeholder="Bias Value" value="" id="newlogitbiasval">
-					<button type="button" class="btn btn-primary" style="width:90px;padding:6px 6px;" onclick="add_logit_bias()">Add New</button>
-					</div>
-					<div class="settinglabel hidden" id="newlogitbiasstringtogglesection">
-						<div class="justifyleft settingsmall">Input Strings Instead of IDs (Uses KCPP Tokenizer) <span class="helpicon">?<span
-							class="helptext">If enabled, allows you to input strings instead of only token IDs, and tokenizes them for you.</span></span></div>
-						<input type="checkbox" id="newlogitbiasstringtoggle" onclick="toggle_logit_bias_string()">
-					</div>
-				</div>
-
-				<div style="padding:3px;" class="justifyleft settinglabel">Phrase / Word Ban (Anti-Slop) <span class="helpicon">?<span
-					class="helptext">Prevents specific words or phrases from being generated, either modifying model vocab or by backtracking and regenerating when they appear. If you want multiple sequences, separate them with the following delimiter: ||$||</span></span>
-					<button type="button" title="Phrase / Token Ban (Anti-Slop)" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('expandtokenbans')">Expand Section</button>
-				</div>
-				<div id="expandtokenbans" class="hidden">
-					<div class="color_red hidden" id="notokenbans">Phrase banning may be unavailable.</div>
-					<div style="color:#ffffff;">Prevents specific words or phrases from being generated, either modifying model vocab or by backtracking and regenerating when they appear. If you want multiple sequences, separate them with the following delimiter: ||$||<br><em>Note: If you're trying to ban a specific token by ID, you should use Logit Bias instead!</em><br></div>
-					<div style="display: flex; column-gap: 4px; margin-bottom: 4px;">
-					<input class="form-control menuinput_inline" type="text" placeholder="None" value="" id="tokenbans">
-					<button type="button" class="btn btn-primary" style="width:90px;padding:6px 6px;" onclick="add_token_ban()">Add New</button>
-					</div>
-				</div>
-
-				<div style="padding:3px;" class="justifyleft settinglabel">Regex Replace <span class="helpicon">?<span
-					class="helptext">Allows transforming incoming text with regex patterns, modifying all matches. Replacements will be applied in sequence.</span></span>
-					<button type="button" title="Regex Replace" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('expandregexreplace')">Expand Section</button>
-				</div>
-				<div id="expandregexreplace" class="hidden">
-					<table id="regex_replace_table" class="settinglabel" style="border-spacing: 3px 2px; border-collapse: separate; text-align: center;">
-					</table>
-				</div>
-
-				<div style="padding:3px;" class="justifyleft settinglabel">Thinking / Reasoning Tags <span class="helpicon">?<span
-					class="helptext">Allows hiding or removing thinking tags.</span></span>
-					<button type="button" title="Regex Replace" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('expandthinking')">Expand Section</button>
-				</div>
-				<div id="expandthinking" class="hidden">
-					<div class="settinglabel justifyleft">This allows you to specify regex to handle output from reasoning models, to hide, remove, or ignore the Chain-Of-Thought.</div>
-					<div style="padding:4px" class="settinglabel justifyleft">CoT Regex Pattern: <input class="settinglabel miniinput" style="margin-left:4px;width:calc(100% - 132px);" type="text" placeholder="(Inactive)" value="" id="thinking_pattern"></div>
-					<div style="padding:4px" class="settinglabel justifyleft">CoT Handling: <select class="form-control" style="margin-left:4px;height: 25px; font-size:12px; padding:2px;display:inline;width:120px" id="thinking_action">
-						<option value="0" selected>Display</option>
-						<option value="1">Collapse</option>
-						<option value="2">Hide</option>
-						<option value="3">Remove</option>
-					</select></div>
-					<div style="padding:4px" class="settinglabel justifyleft">Don't Submit Old Thoughts <input title="Do not submit Past Thoughts" type="checkbox" id="strip_past_thinking" style="margin:4px;"></div>
-					<div style="padding:4px" class="settinglabel justifyleft">Force Insert Thinking Tag <input title="Force Insert Thinking Tag" type="checkbox" id="force_thinking_tag" style="margin:4px;"><input class="settinglabel miniinput" style="margin-left:4px;width:100px;" type="text" placeholder="" value="" id="start_thinking_tag"></div>
-					<div style="padding:4px" class="settinglabel justifyleft">Note: 'Force Insert Thinking Tags' does not work with the 'Remove' option of CoT handling regex.</div>
-				</div>
-
-				<div style="padding:3px;" class="justifyleft settinglabel">Placeholder Tags <span class="helpicon">?<span
-					class="helptext">Configure automatic substitutions for placeholders in text.</span></span>
-					<button type="button" title="Placeholder Tags" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('expandplaceholdertags')">Expand Section</button>
-				</div>
-				<div id="expandplaceholdertags" class="hidden">
-					<div class="settinglabel justifyleft">Stories can use placeholders like {{user}} and {{[INPUT]}} that require dynamic substitution. If disabled, uses plaintext tags verbatim.</div>
-					<div class="settinglabel">
-						<div class="justifyleft settingsmall">Enable Placeholder Tags <span class="helpicon">?<span
-							class="helptext">If enabled, uses placeholders that get swapped on submit. If disabled, uses plaintext verbatim.</span></span></div>
-					<input type="checkbox" id="placeholder_tags2">
-					</div>
-					<table id="placeholder_replace_table" class="settinglabel" style="text-align: center; border-spacing: 3px 2px; border-collapse: separate;">
-					</table>
-					<div class="settinglabel justifyleft">To modify {{[INPUT]}} or {{[OUTPUT]}} and other instruct tags, please edit them in the Settings &gt; Format page.</div>
-				</div>
-
+				<div class="settinglabel" style="padding: 4px;">Token Configs Moved to Settings Panel (tokens Tab). This section will be removed in future.</div>
 			</div>
 
 			<div id="memorycontainerfooter" class="popupfooter">
@@ -21239,7 +21112,8 @@ Current version indicated by LITEVER below.
 				<li id="settingsmenuformat_tab" class="active"><a class="" href="#" title="Open Format Menu" onclick="display_settings_tab(0)">Format</a></li>
 				<li id="settingsmenusamplers_tab" ><a class="" href="#" title="Open Samplers Menu" onclick="display_settings_tab(1)">Samplers</a></li>
 				<li id="settingsmenumedia_tab" ><a class="" href="#" title="Open Media Menu" onclick="display_settings_tab(2)">Media</a></li>
-				<li id="settingsmenuadvanced_tab" ><a class="" href="#" title="Open Advanced Menu" onclick="display_settings_tab(3)">Advanced</a></li>
+				<li id="settingsmenutokens_tab" ><a class="" href="#" title="Open Tokens Menu" onclick="display_settings_tab(3)">Tokens</a></li>
+				<li id="settingsmenuadvanced_tab" ><a class="" href="#" title="Open Advanced Menu" onclick="display_settings_tab(4)">Advanced</a></li>
 			</ul></div>
 
 			<div class="settingsbody">
@@ -21915,11 +21789,9 @@ Current version indicated by LITEVER below.
 							<input type="file" id="transcribe_file_input" accept="audio/*,video/*" style="display:none;">
 							<button id="transcribe_file_btn" type="button" class="bg_green btn btn-primary" style="height:20px; padding:2px 3px; font-size:11px;margin-top: 3px;" onclick="transcribe_file_btn()">Transcribe File</button>
 						</div>
-
 					</div>
 
-
-					<div class="settingitem wide">
+					<div class="settingitem">
 						<div style="font-size:12px; line-height: 1.2;">
 							<div class="settingsdesctxt">Style tags to use for generating images:<br>(E.g. Sketch, Realistic, Anime, 3D Render, Drawing)<br></div>
 							<input class="settinglabel miniinput" title="Style Tags" type="text" placeholder="Default Style" value="" id="imagestyleinput">
@@ -21991,11 +21863,120 @@ Current version indicated by LITEVER below.
 							</div>
 						</div>
 					</div>
+
+					<div class="settingitem">
+						<div style="font-size:12px; line-height: 1.2;">
+							<div class="settinglabel" style="padding: 4px;">Search the Web for relevant information when using instruct mode<br>(Requires WebSearch enabled KoboldCpp)</div>
+							<div id="websearchunsupporteddiv" class="color_red hidden" style="font-weight:bold;padding:3px;font-size:12px">WebSearch Not Supported</div>
+							<div class="settinglabel" style="padding: 4px;">
+								<div class="justifyleft settingsmall" title="Enable WebSearch">Enable WebSearch </div>
+								<input title="Enable WebSearch" type="checkbox" id="websearch_enabled" style="margin:0px 0 0;">
+							</div>
+							<div class="settinglabel" style="padding: 4px;">
+								<div class="justifyleft settingsmall" title="Use Multiple Passes">Use Multiple Passes <span class="helpicon">?<span
+									class="helptext">Using this option will run a second LLM tool call to summarize context and create a more accurate search query. Slower but may be more accurate.</span></span></div>
+								<input title="Use Multiple Passes" type="checkbox" id="websearch_multipass" style="margin:0px 0 0;">
+							</div>
+							<div class="justifyleft settinglabel">Multipass WebSearch Template <span class="helpicon">?<span
+								class="helptext">The template used to generate the search query when multipass search is used</span></span></div>
+								<div style="display: flex; column-gap: 4px; margin-bottom: 4px;">
+								<textarea title="Multipass WebSearch Template" style="height: 80px;" class="form-control menuinput_multiline" id="websearch_template"
+								placeholder=""></textarea>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<!--tokens settings menu top-->
+				<div id="settingsmenutokens" class="settingsmenu hidden" onchange="setting_tweaked()">
+					<div class="settingitem wide" style="font-size:12px">
+					<div class="justifyleft settinglabel">Extra Stopping Sequences <span class="helpicon">?<span
+						class="helptext">Triggers the text generator to stop generating early if this sequence appears, in addition to default stop sequences. If you want multiple sequences, separate them with the following delimiter: ||$||</span></span></div>
+						<div class="color_red hidden" id="noextrastopseq">Stop Sequences may be unavailable.</div>
+						<div style="display: flex; column-gap: 4px; margin-bottom: 4px;">
+						<input title="Extra Stopping Sequences" class="form-control menuinput_inline" type="text" placeholder="None" value="" id="extrastopseq">
+						<button type="button" class="btn btn-primary" style="width:90px;padding:6px 6px;" onclick="add_stop_seq()">Add New</button>
+					</div>
+
+					<div style="padding:3px;" class="justifyleft settinglabel">Logit Biases <span class="helpicon">?<span
+						class="helptext">Specify a dictionary of token IDs to modify the probability of occuring.</span></span>
+						<button type="button" title="Logit Biases" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('expandlogitbias')">Expand Section</button>
+					</div>
+					<div id="expandlogitbias" class="hidden">
+						<div class="color_red hidden" id="nologitbias">Logit bias may be unavailable.</div>
+						<div style="color:#ffffff;">Enter OpenAI-formatted logit bias dictionary. Each key is the integer token IDs and their values are the biases (-100.0 to 100.0). Leave blank to disable.<br><a href='https://platform.openai.com/docs/api-reference/chat/create#chat-create-logit_bias' target='_blank' class='color_blueurl'>Input is a JSON object, reference here.</a><br></div>
+						<textarea class="form-control menuinput_multiline" style="height: 80px;line-height:1.1;margin-bottom: 4px;" id="logitbiastxtarea" placeholder="" rows="5"></textarea>
+						<div style="display: flex; column-gap: 4px; margin-bottom: 4px;">
+						<input style="padding:2px" class="form-control menuinput_inline hidden" inputmode="text" type="text" placeholder="Token String" value="" id="newlogitbiasstring">
+						<input style="padding:2px" class="form-control menuinput_inline" inputmode="numeric" type="text" placeholder="Token ID" value="" id="newlogitbiasid">
+						<input style="padding:2px" class="form-control menuinput_inline" inputmode="text" type="text" placeholder="Bias Value" value="" id="newlogitbiasval">
+						<button type="button" class="btn btn-primary" style="width:90px;padding:6px 6px;" onclick="add_logit_bias()">Add New</button>
+						</div>
+						<div class="settinglabel hidden" id="newlogitbiasstringtogglesection">
+							<div class="justifyleft settingsmall">Input Strings Instead of IDs (Uses KCPP Tokenizer) <span class="helpicon">?<span
+								class="helptext">If enabled, allows you to input strings instead of only token IDs, and tokenizes them for you.</span></span></div>
+							<input type="checkbox" id="newlogitbiasstringtoggle" onclick="toggle_logit_bias_string()">
+						</div>
+					</div>
+
+					<div style="padding:3px;" class="justifyleft settinglabel">Phrase / Word Ban (Anti-Slop) <span class="helpicon">?<span
+						class="helptext">Prevents specific words or phrases from being generated, either modifying model vocab or by backtracking and regenerating when they appear. If you want multiple sequences, separate them with the following delimiter: ||$||</span></span>
+						<button type="button" title="Phrase / Token Ban (Anti-Slop)" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('expandtokenbans')">Expand Section</button>
+					</div>
+					<div id="expandtokenbans" class="hidden">
+						<div class="color_red hidden" id="notokenbans">Phrase banning may be unavailable.</div>
+						<div style="color:#ffffff;">Prevents specific words or phrases from being generated, either modifying model vocab or by backtracking and regenerating when they appear. If you want multiple sequences, separate them with the following delimiter: ||$||<br><em>Note: If you're trying to ban a specific token by ID, you should use Logit Bias instead!</em><br></div>
+						<div style="display: flex; column-gap: 4px; margin-bottom: 4px;">
+						<input class="form-control menuinput_inline" type="text" placeholder="None" value="" id="tokenbans">
+						<button type="button" class="btn btn-primary" style="width:90px;padding:6px 6px;" onclick="add_token_ban()">Add New</button>
+						</div>
+					</div>
+
+					<div style="padding:3px;" class="justifyleft settinglabel">Regex Replace <span class="helpicon">?<span
+						class="helptext">Allows transforming incoming text with regex patterns, modifying all matches. Replacements will be applied in sequence.</span></span>
+						<button type="button" title="Regex Replace" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('expandregexreplace')">Expand Section</button>
+					</div>
+					<div id="expandregexreplace" class="hidden">
+						<table id="regex_replace_table" class="settinglabel" style="border-spacing: 3px 2px; border-collapse: separate; text-align: center;">
+						</table>
+					</div>
+
+					<div style="padding:3px;" class="justifyleft settinglabel">Thinking / Reasoning Tags <span class="helpicon">?<span
+						class="helptext">Allows hiding or removing thinking tags.</span></span>
+						<button type="button" title="Regex Replace" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('expandthinking')">Expand Section</button>
+					</div>
+					<div id="expandthinking" class="hidden">
+						<div class="settinglabel justifyleft">This allows you to specify regex to handle output from reasoning models, to hide, remove, or ignore the Chain-Of-Thought.</div>
+						<div style="padding:4px" class="settinglabel justifyleft">CoT Regex Pattern: <input class="settinglabel miniinput" style="margin-left:4px;width:calc(100% - 132px);" type="text" placeholder="(Inactive)" value="" id="thinking_pattern"></div>
+						<div style="padding:4px" class="settinglabel justifyleft">CoT Handling: <select class="form-control" style="margin-left:4px;height: 25px; font-size:12px; padding:2px;display:inline;width:120px" id="thinking_action">
+							<option value="0" selected>Display</option>
+							<option value="1">Collapse</option>
+							<option value="2">Hide</option>
+							<option value="3">Remove</option>
+						</select></div>
+						<div style="padding:4px" class="settinglabel justifyleft">Don't Submit Old Thoughts <input title="Do not submit Past Thoughts" type="checkbox" id="strip_past_thinking" style="margin:4px;"></div>
+						<div style="padding:4px" class="settinglabel justifyleft">Force Insert Thinking Tag <input title="Force Insert Thinking Tag" type="checkbox" id="force_thinking_tag" style="margin:4px;"><input class="settinglabel miniinput" style="margin-left:4px;width:100px;" type="text" placeholder="" value="" id="start_thinking_tag"></div>
+						<div style="padding:4px" class="settinglabel justifyleft">Note: 'Force Insert Thinking Tags' does not work with the 'Remove' option of CoT handling regex.</div>
+					</div>
+
+					<div style="padding:3px;" class="justifyleft settinglabel">Placeholder Tags <span class="helpicon">?<span
+						class="helptext">Configure automatic substitutions for placeholders in text.</span></span>
+						<button type="button" title="Placeholder Tags" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('expandplaceholdertags')">Expand Section</button>
+					</div>
+					<div id="expandplaceholdertags" class="hidden">
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Enable Placeholder Tags <span class="helpicon">?<span
+								class="helptext">If enabled, uses universal {{user}} and {{[INPUT]}} and other custom placeholders here that get swapped on submit. If disabled, uses plaintext chat or instruct tags verbatim.</span></span></div>
+						<input type="checkbox" id="placeholder_tags">
+						</div>
+						<table id="placeholder_replace_table" class="settinglabel" style="text-align: center; border-spacing: 3px 2px; border-collapse: separate;">
+						</table>
+					</div>
+					</div>
 				</div>
 
 				<!--advanced settings menu top-->
 				<div id="settingsmenuadvanced" class="settingsmenu hidden" onchange="setting_tweaked()">
-
 					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" id="tokenstreaminglabel">Token Streaming <span class="helpicon">?<span
@@ -22034,11 +22015,6 @@ Current version indicated by LITEVER below.
 							<div class="justifyleft settingsmall">Never Escape HTML <span class="helpicon">?<span
 								class="helptext">Avoids escaping any HTML tags, allowing HTML injections. Not recommended!</span></span></div>
 						   <input title="Never Escape HTML" type="checkbox" id="no_escape_html" style="margin:0px 0px 0px auto;">
-						</div>
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Placeholder Tags <span class="helpicon">?<span
-								class="helptext">If enabled, uses universal {{user}} and {{[INPUT]}} placeholders that get swapped on submit. If disabled, uses plaintext chat or instruct tags verbatim.</span></span></div>
-						   <input title="Placeholder Tags" type="checkbox" id="placeholder_tags" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Render Sp.Tags <span class="helpicon">?<span
@@ -22139,7 +22115,6 @@ Current version indicated by LITEVER below.
 					<div class="settingitem wide">
 						<button title="Reset All Settings" id="resetallsettings" type="button" class="btn btn-primary bg_red" style="padding:2px 3px;margin-top:2px;font-size:11px;" onclick="reset_all_settings()">Reset ALL Settings</button>
 					</div>
-
 				</div>
 
 			</div>
@@ -22618,6 +22593,7 @@ Current version indicated by LITEVER below.
 				</select>
 				<select title="Grok AI Model Selection" style="padding:4px;display:inline;width:calc(100% - 220px)" class="form-control hidden" id="custom_grok_model" onchange="oai_model_change(true)">
 					<option value="grok-beta">grok-beta</option>
+					<option value="grok-3">grok-3</option>
 					<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
 				</select>
 				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaifetchlist" onclick="oai_fetch_models()">Fetch List</button>
@@ -22853,8 +22829,8 @@ Current version indicated by LITEVER below.
 				<table style="width:90%; margin:8px auto;">
 				<tr><td><span style="vertical-align: middle;">Main Story</span></td><td><input type="checkbox" id="advset_mainstory" style=" vertical-align: top;" checked></td></tr>
 				<tr><td><span style="vertical-align: middle;">Memory and Author's Note</span></td><td><input type="checkbox" id="advset_memanote" style=" vertical-align: top;" checked></td></tr>
-				<tr><td><span style="vertical-align: middle;">World Info</span></td><td><input type="checkbox" id="advset_worldinfo" style=" vertical-align: top;" checked></td></tr>
-				<tr><td><span style="vertical-align: middle;">Stop Sequences</span></td><td><input type="checkbox" id="advset_stopseq" style=" vertical-align: top;" checked></td></tr>
+				<tr><td><span style="vertical-align: middle;">World Info and TextDB</span></td><td><input type="checkbox" id="advset_worldinfo" style=" vertical-align: top;" checked></td></tr>
+				<tr><td><span style="vertical-align: middle;">Tokens and Regex Settings</span></td><td><input type="checkbox" id="advset_tokens" style=" vertical-align: top;" checked></td></tr>
 				<tr><td><span style="vertical-align: middle;">General Settings</span></td><td><input type="checkbox" id="advset_gensettings" style=" vertical-align: top;" checked></td></tr>
 				<tr><td><span style="vertical-align: middle;">Aesthetic Settings</span></td><td><input type="checkbox" id="advset_aessettings" style=" vertical-align: top;" checked></td></tr>
 				</table>
