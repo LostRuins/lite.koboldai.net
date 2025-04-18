@@ -19,7 +19,7 @@ Features:
     - Instruct Mode - ChatGPT styled instruction-response
 - Mobile friendly, runs on practically any device.
 - Compatible with many file formats, including Tavern AI cards, both versions of KoboldAI save formats, KAISTORY exports, and Ooba export files.
-- Inbuilt library of customized premade scenarios, also supports custom scenarios from Aetherroom.
+- Inbuilt library of customized premade scenarios, also supports custom scenarios from third party sites.
 - Easily export and share your stories with embedded sharable links.
 - Supports KoboldAI features such as memory, author's note, and world info, entirely within this UI.
 - Undo, redo, retry or edit any part of the text at any time.
