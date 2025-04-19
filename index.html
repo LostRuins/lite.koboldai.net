@@ -3160,6 +3160,7 @@ Current version indicated by LITEVER below.
 		fix_alpaca_leak: true, //prevents leaking when Alpaca instruct format is used on crappy models
 		chat_context_mod: true, //extra injection for chat mode
 		chatname: "User", //name to use in chat
+        usecharactertemplate: true, //create new character adding the template to memory
 		chatopponent: defaultchatopponent,
 		instruct_starttag: "\\n### Instruction:\\n",
 		instruct_endtag: "\\n### Response:\\n",
@@ -7484,11 +7485,11 @@ Current version indicated by LITEVER below.
 			console.log("Failed to access multiplayer status: " + error);
 		});
 	}
-
 	function character_creator()
 	{
 		hide_popups();
-		document.getElementById("charcreator_name").value = document.getElementById("charcreator_persona").value = document.getElementById("charcreator_scenario").value = document.getElementById("charcreator_greeting").value = "";
+		document.getElementById("charcreator_name").value = "";
+        document.getElementById("usecharactertemplate").checked = localsettings.usecharactertemplate;
 		document.getElementById("charactercreator").classList.remove("hidden");
 		tempAestheticInstructUISettings = deepCopyAestheticSettings(aestheticInstructUISettings);
 		character_creator_updateimg();
@@ -7497,53 +7498,52 @@ Current version indicated by LITEVER below.
 	{
 		document.getElementById("charcreator_avatar").style.backgroundImage = `url(` + (aestheticInstructUISettings.AI_portrait != "default" ? aestheticInstructUISettings.AI_portrait : niko_square) + `)`;
 	}
-	function character_creator_done(confirm)
-	{
-		if (!confirm)
-		{
-			aestheticInstructUISettings = deepCopyAestheticSettings(tempAestheticInstructUISettings);
-			updateUIFromData();
-		}
-		else
-		{
-			let chatopponent = document.getElementById("charcreator_name").value;
-			chatopponent = chatopponent?chatopponent:"Bot";
+    function character_creator_done(confirm)
+    {
+        localsettings.usecharactertemplate = document.getElementById("usecharactertemplate").checked; //temporarily abusing the confirm for saving the value
+        if (!confirm)
+        {
+            aestheticInstructUISettings = deepCopyAestheticSettings(tempAestheticInstructUISettings);
+            updateUIFromData();
+        }
+        else
+        {
+            let chatopponent = document.getElementById("charcreator_name").value;
+            chatopponent = chatopponent?chatopponent:"AI-Bot";
+            let combinedmem = "";
+            if (localsettings.usecharactertemplate){
+                let introduction = "[Overview: <give the AI a one sentence overview of what your intention is here>]";
+                let character = "\n\n["+chatopponent+"'s Character definition:\nAge:\nHeight:\nWeight:\nBuild:\nHair:\nEyes:\nEyebrows:\nClothing Preferences:\nPersonality:\nMind:\nSpeech:\nAccent:\nMannerisms:\nLikes:\nDislikes:\nHobbies:\nShort-term Goals:\nLong-term Goals:\n"+chatopponent+"’s primary goal is:\nChildhood memories of "+chatopponent+":\nLong-term memories of "+chatopponent+": <also add descriptions of friends and similar persons from the life of "+chatopponent+" here>\nShort-term Memories relevant for the scenario:  ]";
+                let genre = "\n\n[Genre: <add one or more genre definitions for your scenario here>]";
+                let tags = "\n\n[Tags: <add one or more tags describing your role-play for the AI here>]";
+                let scenario = "\n\n[Scenario: <add your scenario here>]";
+                let firstmessage = "\n\n"+chatopponent+": <add your first message for "+chatopponent+" here>";
+                combinedmem = introduction + character + genre + tags + scenario + firstmessage;
+            }
+            restart_new_game(false);
 
-			let persona = document.getElementById("charcreator_persona").value;
-			let scenario = document.getElementById("charcreator_scenario").value;
-			scenario = scenario?scenario:"";
-			let memory = persona?("{{char}} Persona: "+persona):"";
-			let greeting = document.getElementById("charcreator_greeting").value;
-			greeting = greeting?greeting:"Hello there!";
-			if(scenario!="")
-			{
-				scenario = "\n[Scenario: "+scenario+"]";
-			}
-			let combinedmem = memory + scenario;
-			greeting = "\n{{char}}: "+ greeting;
-			restart_new_game(false);
-
-			gametext_arr = [];
-			if(!localsettings.placeholder_tags) //do a one-time replace instead
-			{
-				greeting = replace_placeholders(greeting, false, true);
-				combinedmem = replace_placeholders(combinedmem, false, true);
-			}
-			gametext_arr.push(greeting);
-			if (combinedmem != "") {
-				current_memory = combinedmem;
-			}
-			localsettings.opmode = 3;
-			localsettings.gui_type_chat = 2;
-			localsettings.chatopponent = chatopponent;
-			update_for_sidepanel();
-			render_gametext();
-			sync_multiplayer(true);
-		}
-		tempAestheticInstructUISettings = null;
-		hide_popups();
-	}
-
+            gametext_arr = [];
+            if(!localsettings.placeholder_tags) //do a one-time replace instead
+            {
+                greeting = replace_placeholders("", false, true);
+                combinedmem = replace_placeholders(combinedmem, false, true);
+            }
+            gametext_arr.push("");
+            current_memory = combinedmem;
+            localsettings.opmode = 3;
+            localsettings.gui_type_chat = 2;
+            localsettings.chatopponent = chatopponent;
+            update_for_sidepanel();
+            render_gametext();
+            sync_multiplayer(true);
+        }
+        tempAestheticInstructUISettings = null;
+        hide_popups();
+        if (confirm)
+        {
+            btn_memory();
+        }
+    }
 	function click_scenario(idx)
 	{
 		temp_scenario = scenario_db[idx];
@@ -20894,7 +20894,7 @@ Current version indicated by LITEVER below.
 						</div>
 					</span>
 				</div>
-				<textarea title="Edit Memory" class="form-control menuinput_multiline" id="memorytext" style="height: 120px;"
+				<textarea title="Edit Memory" class="form-control menuinput_multiline" id="memorytext" style="height: 250px;"
 					placeholder="Edit the memory to be sent with each request to the AI."></textarea>
 				<div class="settinglabel">
 					<div class="justifyleft"><br>Author's Note<span class="helpicon">?<span
@@ -22286,45 +22286,36 @@ Current version indicated by LITEVER below.
 		</div>
 	</div>
 
-	<div class="popupcontainer flex hidden" id="charactercreator">
-		<div class="popupbg flex"></div>
-		<div class="nspopup flexsize higher">
-			<div class="popuptitlebar">
-				<div class="popuptitletext">Roleplay Character Creator</div>
-			</div>
-			<div class="menutext">
-				This tool is an easy way to create your own roleplay characters.<br>Alternatively, you can <a href="#" class="color_blueurl" onclick="hide_popups();document.getElementById('loadfileinput').click()"><b>click here to import an existing Tavern Character Card</b></a>.<br><br>
+    <div class="popupcontainer flex hidden" id="charactercreator">
+        <div class="popupbg flex"></div>
+        <div class="nspopup flexsize higher">
+            <div class="popuptitlebar">
+                <div class="popuptitletext">Roleplay Character Creator</div>
+            </div>
+            <div class="menutext">
+                <i>Optionally:</i> <a href="#" class="color_blueurl" onclick="hide_popups();document.getElementById('loadfileinput').click()"><b>import an existing Tavern / SillyTavern Character Card from local filesystem</b></a><br><br>
 
-				<div class="inlinelabel">
-					<div class="justifyleft" style="padding:4px">Character Name: </div>
-					<input title="Character Name" style="width:calc(100% - 136px);" type="text" placeholder="Enter Bot's Name (e.g. Arthur Green)" value="" id="charcreator_name">
-				</div>
-				<div class="inlinelabel">
-					<div class="justifyleft" style="padding:4px">Character Avatar: </div>
-					<button type="button" class="btn btn-primary" style="padding:2px 4px;margin:2px;" onclick="selectAvatarImage(false)">Select Image</button>
-					<div id="charcreator_avatar" style="background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; width: 32px; height:32px; border-radius:100rem; background-clip: content-box; margin: 4px 4px; border:none;"></div>
-				</div>
-				<div class="inlinelabel">
-					<div class="justifyleft" style="padding:4px">Character Persona: </div>
-					<input title="Character Persona" style="width:calc(100% - 136px);" type="text" placeholder="Describe this character (e.g. 25yo Male Elf, Brave, Chatty)" value="" id="charcreator_persona">
-				</div>
-				<div class="inlinelabel">
-					<div class="justifyleft" style="padding:4px">Describe Scenario: </div>
-					<input title="Describe Scenario" style="width:calc(100% - 136px);" type="text" placeholder="Describe the scenario (e.g. A fireside chat at the spooky campsite)" value="" id="charcreator_scenario">
-				</div>
-				<div class="inlinelabel">
-					<div class="justifyleft" style="padding:4px">Character Greeting: </div>
-					<input title="Character Greeting" style="width:calc(100% - 136px);" type="text" placeholder="First message greeting (e.g. Hello, traveller!)" value="" id="charcreator_greeting">
-				</div>
-
-				After creating your character, you can edit it further at any time in the 'Context' memory window.
-			</div>
-			<div class="popupfooter">
-				<button type="button" class="btn btn-primary" onclick="character_creator_done(true);">Confirm</button>
-				<button type="button" class="btn btn-primary" onclick="character_creator_done(false);">Cancel</button>
-			</div>
-		</div>
-	</div>
+                <div class="inlinelabel">
+                    <div class="justifyleft" style="padding:4px">Character Name: </div>
+                    <input title="Character Name" style="width:calc(100% - 136px);" type="text" placeholder="Enter Character's Name" value="" id="charcreator_name">
+                </div>
+                <div class="inlinelabel">
+                        <div class="justifyleft" style="padding:4px">Character Avatar: </div>
+                        <button type="button" class="btn btn-primary" style="padding:2px 4px;margin:2px;" onclick="selectAvatarImage(false)">Select Image</button>
+                        <div id="charcreator_avatar" style="background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; width: 32px; height:32px; border-radius:100rem; background-clip: content-box; margin: 4px 4px; border:none;"></div>
+                        </div>
+                <div class="inlinelabel">
+                    <div class="justify-center" style="margin:4px;">Use character template <span class="helpicon">?<span class="helptext">Adds a character template to memory while creating the character, otherwise leaves memory blank.</span></span>
+                    <input type="checkbox" title="Use character template" id="usecharactertemplate" style="margin:0px 0px 0px auto;"></div>
+                </div>
+                <br>After confirmation fill the 'Context Memory' or edit the template to your liking.<br><br>
+            </div>
+            <div class="popupfooter">
+                <button type="button" class="btn btn-primary" onclick="character_creator_done(true);">Confirm</button>
+                <button type="button" class="btn btn-primary" onclick="character_creator_done(false);">Cancel</button>
+            </div>
+        </div>
+    </div>
 
 	<div class="popupcontainer flex hidden" id="saveloadcontainer">
 		<div class="popupbg flex"></div>
