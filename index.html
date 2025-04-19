@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 230;
+	const LITEVER = 231;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -5084,15 +5084,14 @@ Current version indicated by LITEVER below.
 		.then((response) => response.json())
 		.then((data) => {
 			console.log("sync finished response: " + JSON.stringify(data));
+			last_response_obj = JSON.parse(JSON.stringify(data));
 			if (custom_oai_key != "" && data.choices != null && data.choices.length > 0) {
 				let dch = data.choices[0];
 				if (dch.text) {
 					synchro_polled_response = dch.text;
-					last_response_obj = JSON.parse(JSON.stringify(data));
 				}
 				else if (dch.message) {
 					synchro_polled_response = dch.message.content;
-					last_response_obj = JSON.parse(JSON.stringify(data));
 
 					if(oaiemulatecompletionscontent!="" && synchro_polled_response!="" && synchro_polled_response.startsWith(oaiemulatecompletionscontent))
 					{
@@ -7662,7 +7661,7 @@ Current version indicated by LITEVER below.
 	}
 	function togglescenarioautopick()
 	{
-		if(localflag)
+		if(localflag || is_using_custom_ep())
 		{
 			document.getElementById("scenarioautopickbox").classList.add("hidden");
 		}
@@ -12050,6 +12049,8 @@ Current version indicated by LITEVER below.
 
 	function display_newgame() {
 		mainmenu_untab(true);
+		document.getElementById("keep_ai_selected").checked = true;
+		document.getElementById("keep_memory").checked = false;
 		document.getElementById("newgamecontainer").classList.remove("hidden");
 	}
 
@@ -14917,6 +14918,7 @@ Current version indicated by LITEVER below.
 					.then((response) => response.json())
 					.then((data) => {
 						console.log("sync finished response: " + JSON.stringify(data));
+						last_response_obj = JSON.parse(JSON.stringify(data));
 						if(custom_claude_key != "" && data.content && data.content.length > 0)
 						{
 							let comp = "";
@@ -15087,6 +15089,7 @@ Current version indicated by LITEVER below.
 					.then((response) => response.json())
 					.then((data) => {
 						console.log("sync finished response: " + JSON.stringify(data));
+						last_response_obj = JSON.parse(JSON.stringify(data));
 						if (custom_gemini_key != "" && data.candidates != null && data.candidates.length>0 && data.candidates[0].output && data.candidates[0].output != "") {
 							synchro_polled_response = data.candidates[0].output;
 						}else if (custom_gemini_key != "" && data.candidates != null && data.candidates.length>0 && data.candidates[0].content && data.candidates[0].content.parts != null && data.candidates[0].content.parts.length>0) {
@@ -15160,6 +15163,7 @@ Current version indicated by LITEVER below.
 					.then((response) => response.json())
 					.then((data) => {
 						console.log("sync finished response: " + JSON.stringify(data));
+						last_response_obj = JSON.parse(JSON.stringify(data));
 						if (custom_cohere_key != "" && data && data.text) {
 							if (data.text) {
 								synchro_polled_response = data.text
