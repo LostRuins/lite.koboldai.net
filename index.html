@@ -7489,16 +7489,27 @@ Current version indicated by LITEVER below.
 	{
 		hide_popups();
 		document.getElementById("charcreator_name").value = document.getElementById("charcreator_persona").value = document.getElementById("charcreator_scenario").value = document.getElementById("charcreator_greeting").value = "";
+        document.getElementById("usecharactertemplate").checked = false;
 		document.getElementById("charactercreator").classList.remove("hidden");
 		tempAestheticInstructUISettings = deepCopyAestheticSettings(aestheticInstructUISettings);
 		character_creator_updateimg();
+		character_creator_template_toggle();
 	}
 	function character_creator_updateimg()
 	{
 		document.getElementById("charcreator_avatar").style.backgroundImage = `url(` + (aestheticInstructUISettings.AI_portrait != "default" ? aestheticInstructUISettings.AI_portrait : niko_square) + `)`;
 	}
+	function character_creator_template_toggle()
+	{
+		if (document.getElementById("usecharactertemplate").checked) {
+			document.getElementById("nocharactertemplate").classList.add("hidden");
+		} else {
+			document.getElementById("nocharactertemplate").classList.remove("hidden");
+		}
+	}
 	function character_creator_done(confirm)
 	{
+		let usingtemplate = document.getElementById("usecharactertemplate").checked; //are we using Peter's template?
 		if (!confirm)
 		{
 			aestheticInstructUISettings = deepCopyAestheticSettings(tempAestheticInstructUISettings);
@@ -7520,6 +7531,18 @@ Current version indicated by LITEVER below.
 				scenario = "\n[Scenario: "+scenario+"]";
 			}
 			let combinedmem = memory + scenario;
+
+			if(usingtemplate)
+			{
+				let introduction = "[Overview: <give the AI a one sentence overview of what your intention is here>]";
+				let character = "\n\n[" + chatopponent + "'s Character definition:\nAge:\nHeight:\nWeight:\nBuild:\nHair:\nEyes:\nEyebrows:\nClothing Preferences:\nPersonality:\nMind:\nSpeech:\nAccent:\nMannerisms:\nLikes:\nDislikes:\nHobbies:\nShort-term Goals:\nLong-term Goals:\n" + chatopponent + "’s primary goal is:\nChildhood memories of " + chatopponent + ":\nLong-term memories of " + chatopponent + ": <also add descriptions of friends and similar persons from the life of " + chatopponent + " here>\nShort-term Memories relevant for the scenario:  ]";
+				let genre = "\n\n[Genre: <add one or more genre definitions for your scenario here>]";
+				let tags = "\n\n[Tags: <add one or more tags describing your role-play for the AI here>]";
+				let scenario = "\n\n[Scenario: <add your scenario here>]";
+				let examples = "\n\n" + chatopponent + ": <add some example messages (hidden) for " + chatopponent + " here>";
+				combinedmem = introduction + character + genre + tags + scenario + examples;
+			}
+
 			greeting = "\n{{char}}: "+ greeting;
 			restart_new_game(false);
 
@@ -7542,6 +7565,10 @@ Current version indicated by LITEVER below.
 		}
 		tempAestheticInstructUISettings = null;
 		hide_popups();
+		if (confirm && usingtemplate)
+        {
+            btn_memory();
+        }
 	}
 
 	function click_scenario(idx)
@@ -20894,7 +20921,7 @@ Current version indicated by LITEVER below.
 						</div>
 					</span>
 				</div>
-				<textarea title="Edit Memory" class="form-control menuinput_multiline" id="memorytext" style="height: 120px;"
+				<textarea title="Edit Memory" class="form-control menuinput_multiline" id="memorytext" style="height: 160px;"
 					placeholder="Edit the memory to be sent with each request to the AI."></textarea>
 				<div class="settinglabel">
 					<div class="justifyleft"><br>Author's Note<span class="helpicon">?<span
@@ -22305,6 +22332,11 @@ Current version indicated by LITEVER below.
 					<div id="charcreator_avatar" style="background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; width: 32px; height:32px; border-radius:100rem; background-clip: content-box; margin: 4px 4px; border:none;"></div>
 				</div>
 				<div class="inlinelabel">
+                    <div class="justify-center" style="margin:4px;">Use Character Template <span class="helpicon">?<span class="helptext">Adds a character template to memory while creating the character instead.</span></span>
+                    <input type="checkbox" title="Use Character Template" id="usecharactertemplate" onchange="character_creator_template_toggle()" style="margin:0px 0px 0px auto;"></div>
+                </div>
+				<div id="nocharactertemplate">
+				<div class="inlinelabel">
 					<div class="justifyleft" style="padding:4px">Character Persona: </div>
 					<input title="Character Persona" style="width:calc(100% - 136px);" type="text" placeholder="Describe this character (e.g. 25yo Male Elf, Brave, Chatty)" value="" id="charcreator_persona">
 				</div>
@@ -22312,11 +22344,11 @@ Current version indicated by LITEVER below.
 					<div class="justifyleft" style="padding:4px">Describe Scenario: </div>
 					<input title="Describe Scenario" style="width:calc(100% - 136px);" type="text" placeholder="Describe the scenario (e.g. A fireside chat at the spooky campsite)" value="" id="charcreator_scenario">
 				</div>
+				</div>
 				<div class="inlinelabel">
 					<div class="justifyleft" style="padding:4px">Character Greeting: </div>
 					<input title="Character Greeting" style="width:calc(100% - 136px);" type="text" placeholder="First message greeting (e.g. Hello, traveller!)" value="" id="charcreator_greeting">
 				</div>
-
 				After creating your character, you can edit it further at any time in the 'Context' memory window.
 			</div>
 			<div class="popupfooter">
