@@ -2945,6 +2945,7 @@ Current version indicated by LITEVER below.
 	const default_claude_base = "https://api.anthropic.com";
 	const default_gemini_base = "https://generativelanguage.googleapis.com/v1beta/models/";
 	const default_gemini_suffix = ":generateContent?key=";
+	const default_gemini_stream_suffix = ":streamGenerateContent?alt=sse&key=";
 	const default_cohere_base = "https://api.cohere.ai/v1/chat";
 
 	const a1111_models_endpoint = "/sdapi/v1/sd-models";
@@ -5075,6 +5076,43 @@ Current version indicated by LITEVER below.
 			render_gametext();
 		});
 	}
+	function gemini_api_sync_req(targetep, payload, geminiheaders)
+	{
+		fetch(targetep, {
+			method: 'POST',
+			headers: geminiheaders,
+			body: JSON.stringify(payload),
+			referrerPolicy: 'no-referrer',
+		})
+		.then((response) => response.json())
+		.then((data) => {
+			console.log("sync finished response: " + JSON.stringify(data));
+			last_response_obj = JSON.parse(JSON.stringify(data));
+			if (custom_gemini_key != "" && data.candidates != null && data.candidates.length>0 && data.candidates[0].output && data.candidates[0].output != "") {
+				synchro_polled_response = data.candidates[0].output;
+			}else if (custom_gemini_key != "" && data.candidates != null && data.candidates.length>0 && data.candidates[0].content && data.candidates[0].content.parts != null && data.candidates[0].content.parts.length>0) {
+				synchro_polled_response = data.candidates[0].content.parts[0].text;
+				//try to handle the stripping of spaces
+				if(localsettings.opmode==1 && gametext_arr.length>0 && synchro_polled_response!="")
+				{
+					synchro_polled_response = cleanup_story_completion(synchro_polled_response);
+				}
+			}
+			else {
+				//error occurred, maybe captcha failed
+				console.error("error occurred in Gemini generation");
+				clear_poll_flags();
+				render_gametext();
+				msgbox("Error occurred during text generation: " + format_json_error(data));
+			}
+		})
+		.catch((error) => {
+			console.error('Error:', error);
+			clear_poll_flags();
+			render_gametext();
+			msgbox("Error while submitting prompt: " + error);
+		});
+	}
 	function oai_api_sync_req(targetep,oai_payload,oaiheaders)
 	{
 		fetch(targetep, {
@@ -5181,6 +5219,16 @@ Current version indicated by LITEVER below.
 					if(pending_response_id && pending_response_id != "-1" && pending_response_id != "")
 					{
 						for (let event of chunk) {
+							//for gemini
+							if (event.data && event.data.candidates && event.data.candidates.length>0) {
+								if(event.data.candidates[0].content && event.data.candidates[0].content.parts && event.data.candidates[0].content.parts.length>0 && event.data.candidates[0].content.parts[0].text)
+								{
+									synchro_pending_stream += event.data.candidates[0].content.parts[0].text;
+								}
+								continue;
+							}
+
+							//for oai
 							if (event.data && event.data.choices && event.data.choices.length>0) {
 								if(event.data.choices[0].text)
 								{
@@ -15025,7 +15073,6 @@ Current version indicated by LITEVER below.
 			else if (custom_gemini_key != "")//handle for Gemini
 			{
 				let mdlname = document.getElementById("custom_gemini_model").value;
-				let urlbase = default_gemini_base + mdlname + default_gemini_suffix;
 				let geminitopk = (submit_payload.params.top_k<1?100:submit_payload.params.top_k);
 				geminitopk = geminitopk>100?100:geminitopk;
 				if(mdlname.includes("flash-8b"))
@@ -15039,7 +15086,7 @@ Current version indicated by LITEVER below.
 					submit_payload.params.max_length += 100; //add length
 				}
 
-				urlbase = default_gemini_base + mdlname + default_gemini_suffix;
+
 				let geminiparts = [];
 
 				if (insertAIVisionImages.length > 0) {
@@ -15134,47 +15181,21 @@ Current version indicated by LITEVER below.
 					};
 				}
 
-
-				let targetep = urlbase + custom_gemini_key;
 				last_request_str = JSON.stringify(payload);
 				last_response_obj = null;
 
-				fetch(targetep, {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify(payload),
-					referrerPolicy: 'no-referrer',
-				})
-					.then((response) => response.json())
-					.then((data) => {
-						console.log("sync finished response: " + JSON.stringify(data));
-						last_response_obj = JSON.parse(JSON.stringify(data));
-						if (custom_gemini_key != "" && data.candidates != null && data.candidates.length>0 && data.candidates[0].output && data.candidates[0].output != "") {
-							synchro_polled_response = data.candidates[0].output;
-						}else if (custom_gemini_key != "" && data.candidates != null && data.candidates.length>0 && data.candidates[0].content && data.candidates[0].content.parts != null && data.candidates[0].content.parts.length>0) {
-							synchro_polled_response = data.candidates[0].content.parts[0].text;
-							//try to handle the stripping of spaces
-							if(localsettings.opmode==1 && gametext_arr.length>0 && synchro_polled_response!="")
-							{
-								synchro_polled_response = cleanup_story_completion(synchro_polled_response);
-							}
-						}
-						else {
-							//error occurred, maybe captcha failed
-							console.error("error occurred in Gemini generation");
-							clear_poll_flags();
-							render_gametext();
-							msgbox("Error occurred during text generation: " + format_json_error(data));
-						}
-					})
-					.catch((error) => {
-						console.error('Error:', error);
-						clear_poll_flags();
-						render_gametext();
-						msgbox("Error while submitting prompt: " + error);
-					});
+				let geminiheaders = { 'Content-Type': 'application/json' };
+				if(is_browser_supports_sse() && document.getElementById("geministreaming").checked)
+				{
+					let targetep = default_gemini_base + mdlname + default_gemini_stream_suffix + custom_gemini_key;
+					oai_api_stream_sse(targetep,payload,geminiheaders);
+				}
+				else
+				{
+					let targetep = default_gemini_base + mdlname + default_gemini_suffix + custom_gemini_key;
+					gemini_api_sync_req(targetep,payload,geminiheaders);
+				}
+
 			}
 			else if (custom_cohere_key != "")//handle for Cohere
 			{
@@ -22727,8 +22748,15 @@ Current version indicated by LITEVER below.
 				</div>
 				<textarea title="Gemini System Prompt" class="form-control" rows="3" style="resize: vertical; line-height:1.1; padding:4px; display:inline; width: 100%" type="text" id="gemini_system_instruction" placeholder="(Enter System Instruction)"
 				value=""></textarea><br>
-				<input type="checkbox" title="Use Gemini WebSearch" id="usegeminiweb">
-				<div class="box-label">Use WebSearch</div><br>
+				<div style="display:inline-flex">
+					<div>
+						<input type="checkbox" title="Use Gemini WebSearch" id="usegeminiweb">
+						<div class="box-label">Use WebSearch</div>
+					</div>
+					<div><input type="checkbox" id="geministreaming" title="Enable SSE Streaming" onchange="">
+						<div class="box-label">Streaming</div>
+					</div>
+				</div>
 			</div>
 			<div id="coherecustom" class="menutext hidden">
 				Uses Cohere's models through their own API.<br><br>
