@@ -6142,7 +6142,10 @@ Current version indicated by LITEVER below.
 			"prompt": prompt,
 			"n": 1,
 			"size": "1024x1024",
-			"response_format":"b64_json",
+		}
+		if(localsettings.saved_dalle_model!="gpt-image-1")
+		{
+			dalle_payload["response_format"] = "b64_json";
 		}
 
 		//remove all null fields
@@ -6164,17 +6167,17 @@ Current version indicated by LITEVER below.
 			console.log(resp);
 			if(resp.data && resp.data.length>0)
 			{
-				onImagesDone(resp.data[0].b64_json);
+				onImagesDone(resp.data[0].b64_json,null);
 			}
 			else
 			{
 				console.log("Generation Error!");
-				onImagesDone(null);
+				onImagesDone(null,JSON.stringify(resp));
 			}
 
 		}).catch((error) => {
 			console.log("Generation Error: " + error);
-			onImagesDone(null);
+			onImagesDone(null,null);
 		});
 
 	}
@@ -15595,7 +15598,7 @@ Current version indicated by LITEVER below.
 				image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:sentence, poll_category:0 };
 				image_db[imgid].aspect = 0;
 				image_db[imgid].imsource = 0; //0=generated,1=uploaded
-				generate_dalle_image(genimg_payload,(outputimg)=>{
+				generate_dalle_image(genimg_payload,(outputimg,outputerr)=>{
 					if(outputimg)
 					{
 						//console.log(outputimg);
@@ -15607,7 +15610,7 @@ Current version indicated by LITEVER below.
 						}, true, imgres);
 					}else{
 						image_db[imgid].queue = "Failed";
-						msgbox("Image Generation Failed!\n\nPlease make sure your OpenAI key is set correctly and you are allowed to use DALL-E.\n");
+						msgbox(`Image Generation Failed!\n\n${outputerr?(outputerr+"\n\n"):""}Please make sure your OpenAI key is set correctly and you are allowed to use DALL-E.\n`);
 					}
 				});
 			}
