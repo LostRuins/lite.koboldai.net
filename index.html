@@ -20724,8 +20724,451 @@ Current version indicated by LITEVER below.
 		searchResults = searchResults.slice(0, valuesToReturn);
 		return searchResults;
 	}
+
+	/** start script section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer */
+	const wordsFrequencyTableTitleText = "Words Frequency Table"
+	let wfo = {
+		"words_frequency": {},
+		"nTotalRows": null
+	}
+	const editorFieldLabel = "gametext"
+	const remoteWebServer = "http://localhost:7860"
+	const underlinedPrimary = "underlinedYellow"
+	const underlinedClicked = "underlinedViolet"
+
+	/**
+	 * Retrieves the value of a form field by its key from a FormData object.
+	 *
+	 * @param {string} formId - The ID of the HTML form element that contains the field.
+	 * @param {string} key - The name attribute of the form field to retrieve.
+	 * @returns {*} The value of the form field, or null if it does not exist in the FormData object.
+	 */
+	function getFormDataByKey(formId, key) {
+		let formElement = document.getElementById(formId)
+		const data = new FormData(formElement);
+		let dataValue = data.get(key)
+		return dataValue
+	}
+
+	/**
+	 * Read and preview a selected text file.
+	 *
+	 * @function previewFile
+	 * @description Displays the contents of a selected text file within an element with id 'editor'.
+	 * @param {none}
+	 */
+	function previewFile() {
+		const editor = document.getElementById(editorFieldLabel);
+		const [file] = document.querySelector("input[type=file]").files;
+		const reader = new FileReader();
+		reader.addEventListener("load", () => {
+				// this will then display a text file
+				editor.innerText = reader.result;
+			}, false
+		);
+		if (file) {
+			reader.readAsText(file);
+		}
+	}
+
+	/**
+	 * Scrolls an editor element to a specific y coordinate (calculated using given lines/rows number).
+	 *
+	 * @function scrollToGivenPoint
+	 * @param {HTMLElement} editorElement The HTML element id of the editor.
+	 * @param {number} line The line/row number to scroll to (0-indexed).
+	 * @param {number} nTotalRows The total number of text lines/rows.
+	 * @param {number} [negativeOffsetPerc=0.12] An optional percentage value to add a negative offset, preventing scrolling beyond the end of the viewport.
+	 */
+	function scrollToGivenPoint(editorElement, line, nTotalRows, negativeOffsetPerc=0.12) {
+		// try to scroll div to row... font-size on div is 12px
+		let scrollHeight = parseFloat(editorElement.scrollHeight, 10)
+		let offsetToScrollPerc = line / nTotalRows
+		let offsetToScroll = scrollHeight * offsetToScrollPerc
+		// if already at the end of the page, don't scroll anymore to avoid missing words in the upper side of the viewport
+		if (offsetToScrollPerc < (1 - negativeOffsetPerc)) {
+			offsetToScroll -= offsetToScroll * negativeOffsetPerc
+		}
+		let offsetToScrollInt = parseInt(offsetToScroll, 10)
+		editorElement.scrollTo(0, offsetToScrollInt)
+	}
+
+	/**
+	 * Scrolls the editor to a specified position and sets the caret at that point.
+	 *
+	 * @param {number} line - The line/row number (0-indexed) where the caret should be placed.
+	 * @param {Array<number>} offsetColumn - A number array containing two numbers representing the column offsets for the start and end of the selection range.
+	 * @param {number} nTotalRows - The total number of lines/rows in the editor for scrolling purposes.
+	 * @param {number} [negativeOffsetPerc=0.12] - A percentage value used to offset the vertical scroll position (default: 0.12).
+	 */
+	function setCaret(line, offsetColumn, nTotalRows, negativeOffsetPerc=0.12) {
+		let editorElement = document.getElementById(editorFieldLabel);
+		let validChildNodes = []
+		// use a for loop because of better performance
+		for (let i=0; i < editorElement.childNodes.length; i++) {
+			let childNode = editorElement.childNodes[i]
+			if (childNode.innerHTML !== "") {
+				validChildNodes.push(childNode)
+			}
+		}
+		let rng = document.createRange();
+		let sel = window.getSelection();
+		let col0 = offsetColumn[0]
+		let col1 = offsetColumn[1]
+		rng.setStart(validChildNodes[line], col0);
+		rng.setEnd(validChildNodes[line], col1)
+		sel.removeAllRanges();
+		sel.addRange(rng);
+		editorElement.focus();
+		scrollToGivenPoint(editorElement, line, nTotalRows, negativeOffsetPerc);
+	}
+
+	/**
+	 * Updates the CSS class of an HTML element with the specified ID.
+	 *
+	 * @param {string} elementId - The ID of the HTML element to update.
+	 * @param {string} currentClass - The new CSS class to apply to the element.
+	 */
+	const setElementCssClass = (elementId, currentClass) => {
+		let spanWaitingFor = document.getElementById(elementId)
+		spanWaitingFor.setAttribute("class", currentClass)
+	}
+
+	/**
+	 * Fetches words frequency data from the server and populates the words frequency tables.
+	 * 
+	 * @async
+	 * @function getWordsFrequency
+	 */
+	async function getWordsFrequency() {
+		let text = document.getElementById(editorFieldLabel)
+		// replace repeated newlines to prepare setCaret() use
+		text.innerText = text.innerText.replace(/[\r\n]+/g, '\n')
+		let bodyRequest = {"text": text.innerText}
+		setElementCssClass("waiting-for-be-error", "display-none")
+		setElementCssClass("waiting-for-be", "display-block")
+		let wordsFrequencyTableTitleEl = document.getElementById("id-words-frequency-table-title")
+		wordsFrequencyTableTitleEl.innerText = wordsFrequencyTableTitleText
+		let wordsFrequency = document.getElementById("words-frequency")
+		wordsFrequency.innerHTML = ""
+		try {
+			let response = await fetch(`${remoteWebServer}/words-frequency`, {
+				method: "POST",
+				body: JSON.stringify(bodyRequest)
+			})
+			console.assert(response.status, 200)
+			let bodyResponseJson = await response.json()
+			setElementCssClass("waiting-for-be", "display-none")
+			let freq = bodyResponseJson["words_frequency"]
+			let nTotalRows = bodyResponseJson["n_total_rows"]
+			console.log(`getWordsFreq::nTotalRows: '${nTotalRows}'`)
+			populateWordsFrequencyTables(freq, bodyResponseJson["n_total_rows"])
+		} catch (err) {
+			console.error("getWordsFrequency::err:", err, "#")
+			setElementCssClass("waiting-for-be", "display-none")
+			setElementCssClass("waiting-for-be-error", "display-block")
+		}
+	}
+
+	/**
+	 * Returns a sorting function for the given property and order.
+	 *
+	 * @param {string} property - The property to sort by.
+	 * @param {string} order - The order of sorting ('asc' or 'desc').
+	 * @returns {function} A comparison function that sorts data in the specified order.
+	 */
+	function dynamicSort(property, order) {
+		let sort_order = order === "desc" ? -1 : 1
+		return function (a, b){
+			// a should come before b in the sorted order
+			if(a[property] < b[property]){
+				return -1 * sort_order;
+			// a should come after b in the sorted order
+			}else if(a[property] > b[property]){
+				return 1 * sort_order;
+			// a and b are the same
+			}
+			return 0 * sort_order;
+		}
+	}
+
+	/**
+	 * This function filters an array based on a property key and the value to use for filter.
+	 *
+	 * @description
+	 *   The function iterates over each element in the array.
+	 *   If the element's value for the specified key matches the search value (it's included, case-insensitive), it is added to the new array.
+	 *
+	 * @param {array} arr - The array to filter.
+	 * @param {string} key - The property key to match against.
+	 * @param {string} value - The value to search for in the array elements.
+	 * @returns {array} A new array containing only the elements that match the specified value.
+	 */
+	function arrayFilter(arr, key, value) {
+		const newArray = [];
+		for(let i=0, l=arr.length; i<l; i++) {
+			let currentElement = arr[i]
+			let currentValue = currentElement[key]
+			if(currentValue.toLowerCase().includes(value)) {
+				newArray.push(arr[i]);
+			}
+		}
+	return newArray;
+	}
+
+	/**
+	 * Updates the words frequency tables with new data.
+	 *
+	 * @description
+	 *   This function is called whenever a change in form input fields or the uploaded text file affects the words frequency table's content.
+	 *   It sorts and filters the word groups based on user preferences, and updates the HTML elements containing these tables.
+	 *
+	 * @async
+	 * @function updateWordsFrequencyTables
+	 */
+	async function updateWordsFrequencyTables() {
+		let nTotalRows = wfo["nTotalRows"]
+		if (nTotalRows === null || nTotalRows < 1) {
+			alert("let's get some data before updating the result table...")
+		}
+
+		let _wfo = wfo["words_frequency"]
+		let reduced = Object.values(_wfo)
+		let order = getFormDataByKey("id-form-order-by", "order")
+		let sort = getFormDataByKey("id-form-sort-by", "sort")
+		reduced.sort(dynamicSort(sort, order))
+
+		let inputFilter = document.getElementById("filter-words-frequency")
+		let inputFilterValue = inputFilter.value
+		if (inputFilterValue != undefined && inputFilter.value !== "") {
+			reduced = arrayFilter(reduced, "word_prefix", inputFilterValue)
+		}
+
+		let wordsFrequency = document.getElementById("words-frequency")
+		wordsFrequency.innerHTML = ""
+		let wordsFrequencyTableTitleEl = document.getElementById("id-words-frequency-table-title")
+		wordsFrequencyTableTitleEl.innerText = `${wordsFrequencyTableTitleText} (${reduced.length} word groups, ${nTotalRows} rows)`
+		for (let i=0; i<reduced.length; i++ ) {
+			insertCurrentTable(i, reduced[i], nTotalRows, wordsFrequency);
+		}
+	}
+
+	/**
+	 * Populate the words frequency tables in the UI with data from the provided JSON object.
+	 *
+	 * @param {string} wordsFrequencyObj - The JSON string containing word frequencies.
+	 * @param {number} nTotalRows - The total number of lines/rows to display for each word group.
+	 */
+	function populateWordsFrequencyTables(wordsFrequencyObj, nTotalRows) {
+		wfo["words_frequency"] = JSON.parse(wordsFrequencyObj)
+		wfo["nTotalRows"] = nTotalRows
+		updateWordsFrequencyTables()
+	}
+
+	/**
+	 * Inserts a table into the DOM displaying the frequency of word prefixes and their corresponding row nths and offsets.
+	 *
+	 * @param {number} i - The current index being processed (needed for adding unique HTML id/aria-labels).
+	 * @param {object} iReduced - An object containing the reduced data for the current index, including word prefix, count, and offsets array.
+	 * @param {number} nTotalRows - The total number of lines/rows in the table.
+	 * @param {object} wordsFrequency - A container element to hold all tables representing word frequencies.
+	 */
+	function insertCurrentTable(i, iReduced, nTotalRows, wordsFrequency) {
+		let currentTableWordsFreq = document.createElement("table")
+		currentTableWordsFreq.setAttribute("class", "border-black")
+		currentTableWordsFreq.setAttribute("id", `id-table-${i}-nth`)
+		currentTableWordsFreq.setAttribute("aria-label", `id-table-${i}-nth`)
+
+		let currentCaption = currentTableWordsFreq.createCaption()
+		currentCaption.setAttribute("aria-label", `id-table-${i}-caption`)
+		currentCaption.innerText = `${iReduced["word_prefix"]}: ${iReduced["count"]} repetitions`
+
+		let currentTHead = document.createElement("thead")
+		let currentTHeadRow = currentTHead.insertRow()
+		currentTHeadRow.insertCell().textContent = 'word'
+		currentTHeadRow.insertCell().textContent = 'row nth'
+		currentTHeadRow.insertCell().textContent = 'offsets'
+
+		let currentTBody = document.createElement("tbody")
+		let offsetsArray = iReduced.offsets_array
+		for (let ii = 0; ii < offsetsArray.length; ii++) {
+			insertCellIntoTRow(currentTBody, i, ii, offsetsArray[ii], nTotalRows)
+		}
+		currentTableWordsFreq.appendChild(currentTHead)
+		currentTableWordsFreq.appendChild(currentTBody)
+		wordsFrequency.appendChild(currentTableWordsFreq)
+	}
+
+	/**
+	 * Inserts a new table row into the specified tbody with an associated click event listener.
+	 *
+	 * @param {HTMLTableSectionElement} currentTBody - The tbody element where the new row will be inserted.
+	 * @param {number} i - A reference number for the parent's position in the DOM (needed for adding unique HTML id/aria-labels).
+	 * @param {number} ii - A counter of how many lines/rows have been added to the table (needed for adding unique HTML id/aria-labels).
+	 * @param {object} nthOffset - An object containing information about a single offset word, including its row number and word text.
+	 * @param {number} nTotalRows - The total number of lines/rows in the table.
+	 */
+	function insertCellIntoTRow(currentTBody, i, ii, nthOffset, nTotalRows) {
+		let nthRowBody = currentTBody.insertRow()
+		nthRowBody.setAttribute("id", `id-table-${i}-row-${ii}-nth`)
+		nthRowBody.setAttribute("aria-label", `id-table-${i}-row-${ii}-nth`)
+		let currentCell = nthRowBody.insertCell()
+		let currentUrl = document.createElement("a")
+		currentUrl.addEventListener("click", function() {
+			let nRow = nthOffset["n_row"]
+			let offsetWord = nthOffset["offsets"]
+			setCaret(nRow, offsetWord, nTotalRows)
+			try {
+				let oldClassElement = document.getElementsByClassName('underlinedDarkViolet')
+				oldClassElement[0].className = underlinedPrimary
+			} catch {
+				console.log("first click...")
+			}
+			currentUrl.className = underlinedClicked
+		})
+		currentUrl.className = underlinedPrimary
+		currentUrl.innerText = nthOffset["word"]
+		currentCell.appendChild(currentUrl)
+		nthRowBody.insertCell().textContent = nthOffset["n_row"]
+		nthRowBody.insertCell().textContent = nthOffset["offsets"]
+	}
+	/** end script section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer */
 	</script>
 
+	<style>
+	/** start style section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer */
+	#id-title.h1 {
+		font-size: 24px;
+		margin-left: 10px;
+		margin-right: 10px;
+		margin-block-start: 5px;
+		margin-block-end: 5px;
+	}
+	#id-col1-editor > h4,#id-col2-words-frequency > div > div > h4 {
+		font-size: 18px;
+		margin-block-start: 2px;
+		margin-block-end: 2px;
+	}
+	#words-frequency > table > caption {
+		margin-left: 12px;
+		margin-top: 10px; 
+		text-align: left;
+		font-weight: bold;
+	}
+	#words-frequency > table > thead > tr > td, #words-frequency > table > tbody > tr > td {
+		padding-left: 10px;
+		padding-right: 10px;
+	}
+	.display-none {
+		display: none;
+	}
+	.display-block {
+		display: block;
+	}
+	.underlinedDarkTurquoise {
+		text-decoration: underline;
+		text-decoration-color: darkturquoise;
+		text-decoration-style: wavy;
+	}
+	.underlinedYellow {
+		color: yellow;
+		text-decoration: underline;
+		text-decoration-color: yellow;
+	}
+	.underlinedViolet {
+		color: violet;
+		text-decoration: underline;
+		text-decoration-color: violet;
+	}
+	.display-flex {
+		display: flex;
+	}
+	.col-flex30 {
+		flex: 30%;
+	}
+	.col-flex50 {
+		flex: 50%;
+	}
+	.border-green {
+		border: 1px solid green;
+	}
+	.border-blue {
+		border: 1px solid blue;
+	}
+	.border-black {
+		border: 1px solid black;
+	}
+	.padding10px {
+		padding: 10px;
+	}
+	.margin10px {
+		margin: 10px;
+	}
+	.margin5px-left {
+		margin-left: 10px;
+	}
+	.margin5px-right {
+		margin-right: 10px;
+	}
+	.margin5px-top {
+		margin-top: 5px;
+	}
+	.margin2px-bottom {
+		margin-bottom: 2px;
+	}
+	.background-color-lightgray {
+		background-color: lightgray;
+	}
+	.background-color-whitesmoke {
+		background-color: whitesmoke;
+	}
+	.max-height-90vh {
+		max-height: 90vh;
+	}
+	.max-height-80vh {
+		max-height: 80vh;
+	}
+	.max-height-80perc {
+		max-height: 80%;
+	}
+	.overflow-hidden {
+		/* needed for scroll bar*/
+		overflow: hidden;
+	}
+	.overflow-auto {
+		/* needed for scroll bar*/
+		overflow: auto;
+	}
+	.width-50perc {
+		width: 50%;
+	}
+	.width-80perc {
+		width: 80%;
+	}
+	#id-landscape-message {
+		display: none;
+	}
+	.id-orientation-message {
+		display: none;
+	}
+	.background-color-verydarkgrey {
+		background-color: #404040;
+	}
+	.font-size-12px {
+		font-size: small;
+	}
+	@media screen and (max-width: 1024px) and (orientation: portrait) {
+		.id-orientation-message {
+			display: block;
+			text-align: center;
+		}
+		.id-orientation-message:before {
+			color: red;
+			content: "(Mobile users: use this in landscape mode!)"
+		}
+	}
+	/* end style section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer */
+	</style>
 </head>
 
 <body id="outerbody" class="darkmode" onkeydown="handle_escape_button(event)" onbeforeunload="return handle_quit()">
@@ -20840,6 +21283,49 @@ Current version indicated by LITEVER below.
 					<p id="tempgtloadtxt">Loading...</p>
 					<noscript><style>#tempgtloadtxt { display: none; } #gametext { white-space: normal!important; }</style><p>Sorry, KoboldAI Lite requires Javascript to function.</p></noscript>
 				</span>
+				
+				<!-- start HTML section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer -->
+				<div id="id-col2-words-frequency" class="col-flex50 border-blue padding10px margin10px overflow-hidden font-size-12px">
+					<div class="display-flex">
+						<div class="width-50perc">
+							<h4 id="id-words-frequency-table-title">Words Freq. Table</h4>
+							<input type="text" id="filter-words-frequency" aria-label="filter-words-frequency" placeholder="Filter the output table..." class="width-80perc background-color-verydarkgrey" />
+							<button type="button" class="btn btn-primary mainnav" id="btn4-get-words-frequency" aria-label="btn4-get-words-frequency" onclick="getWordsFrequency()">Words Freq</button>
+							<button type="submit" class="btn btn-primary bg_green mainnav" id="btn-filter-words-frequency" aria-label="btn-filter-words-frequency" onclick="updateWordsFrequencyTables()">Submit</button>
+						</div>
+						<div class="display-flex width-50perc margin2px-bottom">
+							<form id="id-form-sort-by" aria-label="id-form-sort-by">
+								<fieldset>
+									<legend>Sort:</legend>
+									<div>
+										<input type="radio" id="sort-by-count" aria-label="sort-by-count" name="sort" value="count"/>
+										<label for="sort-by-count" id="sort-by-count-label" aria-label="sort-by-count-label">Count</label>
+										<input type="radio" id="sort-by-name" aria-label="sort-by-name" name="sort" value="word_prefix" />
+										<label for="sort-by-name" id="sort-by-name-label" aria-label="sort-by-name-label">Name</label>
+									</div>
+								</fieldset>
+							</form>
+							<form id="id-form-order-by" aria-label="id-form-order-by">
+								<fieldset>
+									<legend>Order:</legend>
+									<div>
+										<input type="radio" id="order-by-asc" aria-label="order-by-asc" name="order" value="asc" />
+										<label for="order-by-asc" id="order-by-asc-label" aria-label="order-by-asc-label">Ascend</label>
+										<input type="radio" id="order-by-desc" aria-label="order-by-desc" name="order" value="desc" checked/>
+										<label for="order-desc" id="order-by-desc-label" aria-label="order-by-desc-label">Descend</label>
+									</div>
+								</fieldset>
+							</form>
+						</div>
+					</div>
+					<span id="id-n-total-rows" aria-label="id-n-total-rows" class="display-none"></span>
+					<span id="waiting-for-be" class="display-none">waiting for backend response...</span>
+					<span id="waiting-for-be-error" class="display-none">Error!</span>
+					<!-- max-height-50vh instead of max-height-80vh -->
+					<div id="words-frequency" class="max-height-80perc overflow-auto" aria-label="words-frequency"></div>
+				</div>
+				<!-- end HTML section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer -->
+
 			</div>
 		</div>
 
