@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 234;
+	const LITEVER = 235;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3242,7 +3242,8 @@ Current version indicated by LITEVER below.
 		thinking_pattern: "<think>([\\s\\S]+?)<\/think>",
 		thinking_action: 1, //0=display, 1=collapse, 2=hide
 		start_thinking_tag: "<think>",
-		force_thinking_tag: false,
+		stop_thinking_tag: "</think>",
+		think_injected: 0, //0=normal, 1=force, 2=prevent
 		strip_thinking_mode: 1, //0=no stripping, 1=strip except recent, 2=strip all
 		websearch_enabled: false,
 		websearch_multipass: false,
@@ -3310,7 +3311,6 @@ Current version indicated by LITEVER below.
 
 	const instructpresets = [
 	{
-		"id":1,
 		"name":"Alpaca",
 		"user":"\\n### Instruction:\\n",
 		"user_end":"",
@@ -3320,7 +3320,6 @@ Current version indicated by LITEVER below.
 		"system_end":"",
 	},
 	{
-		"id":2,
 		"name":"ChatML",
 		"user":"<|im_start|>user\\n",
 		"user_end":"<|im_end|>\\n",
@@ -3330,17 +3329,6 @@ Current version indicated by LITEVER below.
 		"system_end":"<|im_end|>\\n",
 	},
 	{
-		"id":3,
-		"name":"ChatML (No Think)",
-		"user":"<|im_start|>user\\n",
-		"user_end":"<|im_end|>\\n",
-		"assistant":"<|im_start|>assistant\\n<think>\\n\\n</think>\\n",
-		"assistant_end":"<|im_end|>\\n",
-		"system":"<|im_start|>system\\n",
-		"system_end":"<|im_end|>\\n",
-	},
-	{
-		"id":4,
 		"name":"CommandR",
 		"user":"<|START_OF_TURN_TOKEN|><|USER_TOKEN|>",
 		"user_end":"<|END_OF_TURN_TOKEN|>",
@@ -3350,7 +3338,6 @@ Current version indicated by LITEVER below.
 		"system_end":"<|END_OF_TURN_TOKEN|>",
 	},
 	{
-		"id":5,
 		"name":"Gemma 2 & 3",
 		"user":"<start_of_turn>user\\n",
 		"user_end":"<end_of_turn>\\n",
@@ -3360,7 +3347,6 @@ Current version indicated by LITEVER below.
 		"system_end":"<end_of_turn>\\n",
 	},
 	{
-		"id":6,
 		"name":"Llama 2 Chat",
 		"user":"[INST] ",
 		"user_end":"",
@@ -3370,7 +3356,6 @@ Current version indicated by LITEVER below.
 		"system_end":"",
 	},
 	{
-		"id":7,
 		"name":"Llama 3 Chat",
 		"user":"<|start_header_id|>user<|end_header_id|>\\n\\n",
 		"user_end":"<|eot_id|>",
@@ -3380,7 +3365,6 @@ Current version indicated by LITEVER below.
 		"system_end":"<|eot_id|>",
 	},
 	{
-		"id":8,
 		"name":"Llama 4 Chat",
 		"user":"<|header_start|>user<|header_end|>\\n\\n",
 		"user_end":"<|eot|>",
@@ -3390,7 +3374,6 @@ Current version indicated by LITEVER below.
 		"system_end":"<|eot|>",
 	},
 	{
-		"id":9,
 		"name":"Metharme",
 		"user":"<|user|>",
 		"user_end":"",
@@ -3400,7 +3383,6 @@ Current version indicated by LITEVER below.
 		"system_end":"",
 	},
 	{
-		"id":10,
 		"name":"Mistral V1",
 		"user":" [INST] ",
 		"user_end":"",
@@ -3410,7 +3392,6 @@ Current version indicated by LITEVER below.
 		"system_end":"",
 	},
 	{
-		"id":11,
 		"name":"Mistral V2 & V3",
 		"user":"[INST] ",
 		"user_end":"",
@@ -3420,17 +3401,15 @@ Current version indicated by LITEVER below.
 		"system_end":"",
 	},
 	{
-		"id":12,
 		"name":"Mistral V7 & V3-Tekken",
 		"user":"[INST]",
 		"user_end":"",
 		"assistant":"[/INST]",
 		"assistant_end":"</s>",
-		"system":"[SYSTEM_PROMPT]", //if not sysprompt provided, treat as V3 tekken
+		"system":"[SYSTEM_PROMPT]", //if no sysprompt provided, treat as V3 tekken
 		"system_end":"[/SYSTEM_PROMPT]",
 	},
 	{
-		"id":13,
 		"name":"Phi-3 Mini",
 		"user":"<|user|>\\n",
 		"user_end":"<|end|>\\n",
@@ -3440,7 +3419,6 @@ Current version indicated by LITEVER below.
 		"system_end":"<|end|>\\n",
 	},
 	{
-		"id":14,
 		"name":"Vicuna",
 		"user":"\\nUSER: ",
 		"user_end":"",
@@ -3450,7 +3428,6 @@ Current version indicated by LITEVER below.
 		"system_end":"",
 	},
 	{
-		"id":15,
 		"name":"Deepseek V2.5",
 		"user":"<｜User｜>",
 		"user_end":"<｜end▁of▁sentence｜>",
@@ -3460,7 +3437,6 @@ Current version indicated by LITEVER below.
 		"system_end":"",
 	},
 	{
-		"id":16,
 		"name":"GLM-4",
 		"user":"<|user|>\\n",
 		"user_end":"",
@@ -3470,7 +3446,6 @@ Current version indicated by LITEVER below.
 		"system_end":"",
 	},
 	{
-		"id":100,
 		"name":"KoboldCppAutomatic",
 		"user":"{{[INPUT]}}",
 		"user_end":"",
@@ -6445,7 +6420,7 @@ Current version indicated by LITEVER below.
 
 	function save_file_button(use_existing_save=false) //for triggering an optional popup. if use save is true, assume temp obj is set
 	{
-		warn_on_quit = false;
+		warn_unsaved = false;
 		const save_file = function()
 		{
 			if(!use_existing_save)
@@ -6766,7 +6741,8 @@ Current version indicated by LITEVER below.
 			let old_thinking_pattern = localsettings.thinking_pattern;
 			let old_thinking_action = localsettings.thinking_action;
 			let old_start_thinking_tag = localsettings.start_thinking_tag;
-			let old_force_thinking_tag = localsettings.force_thinking_tag;
+			let old_stop_thinking_tag = localsettings.stop_thinking_tag;
+			let old_think_injected = localsettings.think_injected;
 			let old_strip_thinking_mode = localsettings.strip_thinking_mode;
 
 			//determine if oldui file or newui file format
@@ -6897,7 +6873,7 @@ Current version indicated by LITEVER below.
 				}
 				if(storyobj.force_thinking_tag)
 				{
-					localsettings.force_thinking_tag = storyobj.force_thinking_tag;
+					localsettings.think_injected = (storyobj.force_thinking_tag?1:0);
 				}
 				if(storyobj.start_thinking_tag)
 				{
@@ -7016,7 +6992,8 @@ Current version indicated by LITEVER below.
 						localsettings.thinking_pattern = old_thinking_pattern;
 						localsettings.thinking_action = old_thinking_action;
 						localsettings.start_thinking_tag = old_start_thinking_tag;
-						localsettings.force_thinking_tag = old_force_thinking_tag;
+						localsettings.stop_thinking_tag = old_stop_thinking_tag;
+						localsettings.think_injected = old_think_injected;
 						localsettings.strip_thinking_mode = old_strip_thinking_mode;
 					}
 
@@ -10330,7 +10307,7 @@ Current version indicated by LITEVER below.
 					savename = testslot;
 				}
 				const slotwrite = function () {
-					warn_on_quit = false;
+					warn_unsaved = false;
 					inputBox("Enter a label for this Browser Storage Slot data", "Enter a label", savename, defaultsavename, () => {
 						let userinput = getInputBoxValue();
 						if (userinput.trim() == "") {
@@ -10356,7 +10333,7 @@ Current version indicated by LITEVER below.
 				savename = testslot;
 			}
 			const slotwrite = function () {
-				warn_on_quit = false;
+				warn_unsaved = false;
 				inputBox("Enter a label for this Server Storage Slot data", "Enter a label", savename, defaultsavename, () => {
 					let userinput = getInputBoxValue();
 					if (userinput.trim() == "") {
@@ -10406,41 +10383,51 @@ Current version indicated by LITEVER below.
 	}
 	function load_from_slot(slot,islocal)
 	{
-		if(islocal)
-		{
-			indexeddb_load("slot_"+slot+"_data","").then(loadedstorycompressed=>{
-				if(loadedstorycompressed)
-				{
-					hide_popups();
-					import_compressed_story(loadedstorycompressed,false);
-				}else{
-					msgbox("Unable to load story from browser storage","Browser Storage Load Failed");
-				}
-			});
-		} else {
-			fetch(custom_kobold_endpoint + koboldcpp_savedata_load_endpoint, {
-			method: 'POST', // or 'PUT'
-			headers: get_kobold_header(),
-			body: JSON.stringify({
-				"slot": slot,
-			}),
-			})
-			.then((response) => response.json())
-			.then((resp) => {
-				if(!resp.success || !resp.data)
-				{
+		const proceed_load_from_slot = function() {
+			if(islocal)
+			{
+				indexeddb_load("slot_"+slot+"_data","").then(loadedstorycompressed=>{
+					if(loadedstorycompressed)
+					{
+						hide_popups();
+						import_compressed_story(loadedstorycompressed,false);
+					}else{
+						msgbox("Unable to load story from browser storage","Browser Storage Load Failed");
+					}
+				});
+			} else {
+				fetch(custom_kobold_endpoint + koboldcpp_savedata_load_endpoint, {
+				method: 'POST', // or 'PUT'
+				headers: get_kobold_header(),
+				body: JSON.stringify({
+					"slot": slot,
+				}),
+				})
+				.then((response) => response.json())
+				.then((resp) => {
+					if(!resp.success || !resp.data)
+					{
+						msgbox("Error: Unable to load story from server storage","Server Storage Load Failed");
+					}
+					else
+					{
+						hide_popups();
+						import_compressed_story(resp.data.data,false);
+					}
+				})
+				.catch((error) => {
+					console.error('Error:', error);
 					msgbox("Error: Unable to load story from server storage","Server Storage Load Failed");
-				}
-				else
-				{
-					hide_popups();
-					import_compressed_story(resp.data.data,false);
-				}
-			})
-			.catch((error) => {
-				console.error('Error:', error);
-				msgbox("Error: Unable to load story from server storage","Server Storage Load Failed");
-			});
+				});
+			}
+		}
+		if (!safe_to_overwrite() && warn_unsaved) {
+			msgboxYesNo("Unsaved changes will be lost, proceed?", "Confirm Load Slot", () => {
+				proceed_load_from_slot();
+			}, null);
+		}
+		else {
+			proceed_load_from_slot();
 		}
 	}
 	function download_from_slot(slot,islocal)
@@ -11198,7 +11185,7 @@ Current version indicated by LITEVER below.
 		let inspresets = `<option value="0">[Custom]</option>`;
 		for(let i=0;i<instructpresets.length;++i)
 		{
-			inspresets += `<option value="${instructpresets[i].id}">${instructpresets[i].name}</option>`
+			inspresets += `<option value="${i}">${instructpresets[i].name}</option>`
 		}
 		document.getElementById("instruct_tag_format").innerHTML = inspresets;
 		edit_instruct_tag_format();
@@ -11722,10 +11709,10 @@ Current version indicated by LITEVER below.
 			localsettings.thinking_pattern = "<think>([\\s\\S]+?)<\/think>";
 		}
 		localsettings.thinking_action = parseInt(document.getElementById("thinking_action").value);
-		localsettings.force_thinking_tag = document.getElementById("force_thinking_tag").checked?true:false;
+		localsettings.think_injected = parseInt(document.getElementById("think_injected").value);
 		localsettings.strip_thinking_mode = parseInt(document.getElementById("strip_thinking_mode").value);
 		localsettings.start_thinking_tag = document.getElementById("start_thinking_tag").value;
-
+		localsettings.stop_thinking_tag = document.getElementById("stop_thinking_tag").value;
 
 		localsettings.speech_synth = document.getElementById("ttsselect").value;
 		localsettings.xtts_voice = document.getElementById("xtts_voices").value;
@@ -11868,7 +11855,7 @@ Current version indicated by LITEVER below.
 
 		for(let i=0;i<instructpresets.length;++i)
 		{
-			if(instructpresets[i].id==sel)
+			if(i==sel)
 			{
 				st = instructpresets[i].user;
 				et = instructpresets[i].assistant;
@@ -12564,7 +12551,7 @@ Current version indicated by LITEVER below.
 			documentdb_chunksize = 800;
 			documentdb_data = "";
 		}
-		warn_on_quit = false;
+		warn_unsaved = false;
 		show_corpo_leftpanel(false);
 		update_toggle_lightmode(false); //load theme but dont save or toggle it
 		render_gametext(save); //necessary to trigger an autosave to wipe out current story in case they exit browser after newgame.
@@ -12776,12 +12763,12 @@ Current version indicated by LITEVER below.
 		}
 	}
 
-	var warn_on_quit = false;
+	var warn_unsaved = false;
 	function handle_quit()
 	{
-		if(warn_on_quit)
+		if(warn_unsaved)
 		{
-			warn_on_quit = false;
+			warn_unsaved = false;
 			return "Unsaved changes will be lost!"; //the actual message will not be shown in new browsers
 		}
 		return undefined;
@@ -12806,7 +12793,7 @@ Current version indicated by LITEVER below.
 	function handle_typing(event) {
 		var event = event || window.event;
 		var charCode = event.keyCode || event.which;
-		warn_on_quit = true;
+		warn_unsaved = true;
 
 		if (!event.shiftKey && (charCode == 13||(charCode == 10 && event.ctrlKey))) {
 			let willsubmit = (document.getElementById("entersubmit").checked ? true : false);
@@ -13768,9 +13755,13 @@ Current version indicated by LITEVER below.
 				{
 					newgen = newgen + localsettings.custom_jailbreak_text.replaceAll("\\n", "\n");
 				}
-				if(localsettings.force_thinking_tag && localsettings.start_thinking_tag!="")
+				if(localsettings.think_injected==1 && localsettings.start_thinking_tag!="")
 				{
 					newgen = newgen + localsettings.start_thinking_tag.replaceAll("\\n", "\n");
+				}
+				else if(localsettings.think_injected==2 && localsettings.start_thinking_tag!="" && localsettings.stop_thinking_tag!="")
+				{
+					newgen = newgen + localsettings.start_thinking_tag.replaceAll("\\n", "\n") + "\n\n" + localsettings.stop_thinking_tag.replaceAll("\\n", "\n");
 				}
 			}
 		}
@@ -13817,7 +13808,7 @@ Current version indicated by LITEVER below.
 
 	function submit_generation(senttext)
 	{
-		warn_on_quit = true;
+		warn_unsaved = true;
 		let newgen = senttext;
 		let img_gen_trigger_prompt = "";
 		let doNotGenerate = false;
@@ -17308,7 +17299,7 @@ Current version indicated by LITEVER below.
 			const isSupported = typeof window.getSelection !== "undefined";
 			if (isSupported) {
 				gametext_focused = true;
-				warn_on_quit = true;
+				warn_unsaved = true;
 				const selection = window.getSelection();
 				let foundparent = null;
 				if (selection.focusNode != null && selection.focusNode.parentElement != null
@@ -18957,7 +18948,7 @@ Current version indicated by LITEVER below.
 	{
 		var event = event || window.event;
 		var charCode = event.keyCode || event.which;
-		warn_on_quit = true;
+		warn_unsaved = true;
 
 		if (!event.shiftKey && charCode == 13) {
 			let willsubmit = (document.getElementById("entersubmit").checked ? true : false);
@@ -19218,9 +19209,10 @@ Current version indicated by LITEVER below.
 		}
 		document.getElementById("thinking_pattern").value = localsettings.thinking_pattern;
 		document.getElementById("thinking_action").value = localsettings.thinking_action;
-		document.getElementById("force_thinking_tag").checked = localsettings.force_thinking_tag;
+		document.getElementById("think_injected").value = localsettings.think_injected;
 		document.getElementById("strip_thinking_mode").value = localsettings.strip_thinking_mode;
 		document.getElementById("start_thinking_tag").value = localsettings.start_thinking_tag;
+		document.getElementById("stop_thinking_tag").value = localsettings.stop_thinking_tag;
 	}
 
 	function populate_placeholder_tags()
@@ -19624,7 +19616,7 @@ Current version indicated by LITEVER below.
 
 		console.log("Clear story");
 		if (!document.getElementById("btnsend").disabled && pending_response_id == "" && gametext_arr.length > 0) {
-			warn_on_quit = true;
+			warn_unsaved = true;
 			last_reply_was_empty = false;
 			while(gametext_arr.length > 0)
 			{
@@ -19652,7 +19644,7 @@ Current version indicated by LITEVER below.
 	}
 	function btn_back() {
 		if (!document.getElementById("btnsend").disabled && pending_response_id == "" && gametext_arr.length > 0) {
-			warn_on_quit = true;
+			warn_unsaved = true;
 			last_reply_was_empty = false;
 			retry_preserve_last = false;
 			if(retry_prev_text.length>0)
@@ -19677,7 +19669,7 @@ Current version indicated by LITEVER below.
 
 		console.log("Redo All story");
 		if (!document.getElementById("btnsend").disabled && pending_response_id == "" && redo_arr.length > 0) {
-			warn_on_quit = true;
+			warn_unsaved = true;
 			last_reply_was_empty = false;
 			retry_preserve_last = false;
 			while(redo_arr.length > 0)
@@ -19701,7 +19693,7 @@ Current version indicated by LITEVER below.
 	}
 	function btn_redo() {
 		if (!document.getElementById("btnsend").disabled && pending_response_id == "") {
-			warn_on_quit = true;
+			warn_unsaved = true;
 			if (redo_arr.length > 0) {
 				last_reply_was_empty = false;
 				retry_preserve_last = false;
@@ -19723,7 +19715,7 @@ Current version indicated by LITEVER below.
 	function btn_retry() {
 		if (!document.getElementById("btnsend").disabled && pending_response_id == "" && (gametext_arr.length > 1 ||
 		(gametext_arr.length > 0 && (current_memory != "" || current_anote != "")))) {
-			warn_on_quit = true;
+			warn_unsaved = true;
 			last_reply_was_empty = false;
 			let boxtextstash = document.getElementById("input_text").value;
 			document.getElementById("input_text").value = "";
@@ -22005,8 +21997,16 @@ Current version indicated by LITEVER below.
 							<option value="1" selected>Only Newest Thinking</option>
 							<option value="2">Exclude All Thinking</option>
 						</select></div>
-						<div style="padding:4px" class="settinglabel justifyleft">Force Insert Thinking Tag <input title="Force Insert Thinking Tag" type="checkbox" id="force_thinking_tag" style="margin:4px;"><input class="settinglabel miniinput" style="margin-left:4px;width:100px;" type="text" placeholder="" value="" id="start_thinking_tag"></div>
-						<div style="padding:4px" class="settinglabel justifyleft">Note: 'Force Insert Thinking Tags' does not work with the 'Remove' option of CoT handling regex.</div>
+						<div style="padding:4px" class="settinglabel justifyleft">Insert Thinking: <select title="Force Insert Thinking Tag" class="form-control" style="margin-left:4px;height: 25px; font-size:12px; padding:2px;display:inline;width:160px" id="think_injected">
+								<option value="0" selected>Normal</option>
+								<option value="1">Forced</option>
+								<option value="2">Prevented</option>
+							</select></div>
+						<div style="padding:4px" class="settinglabel justifyleft">
+							Start Think: <input class="settinglabel miniinput" style="margin-left:4px;width:70px;" type="text" placeholder="(StartTag)" value="" id="start_thinking_tag">
+							<span style="margin-left: 4px;">Stop Think: </span>
+							<input class="settinglabel miniinput" style="margin-left:4px;width:70px;" type="text" placeholder="(StopTag)" value="" id="stop_thinking_tag">
+						</div>
 					</div>
 
 					<div style="padding:3px;" class="justifyleft settinglabel">Placeholder Tags <span class="helpicon">?<span
