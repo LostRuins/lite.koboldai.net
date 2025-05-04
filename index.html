@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 235;
+	const LITEVER = 236;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -4193,31 +4193,17 @@ Current version indicated by LITEVER below.
 		let strA = instructstartplaceholder;
 		let strB = instructendplaceholder;
 		let strC = instructsysplaceholder;
-		if(!localsettings.placeholder_tags)
-		{
-			strA = get_instruct_starttag(true);
-			strB = get_instruct_endtag(true);
-			strC = get_instruct_systag(true);
-		}
 		let lastA = strA?truncated_context.lastIndexOf(strA):-1;
 		let lastB = strB?truncated_context.lastIndexOf(strB):-1;
 		let lastC = strC?truncated_context.lastIndexOf(strC):-1;
 
 		const maxIndex = Math.max(lastA, lastB, lastC);
-		if(localsettings.placeholder_tags)
-		{
-			if (maxIndex === -1) return "";
-			if (maxIndex === lastA) return instructstartplaceholder_end;
-			if (maxIndex === lastB) return instructendplaceholder_end;
-			return instructsysplaceholder_end;
-		}
-		else
-		{
-			if (maxIndex === -1) return "";
-			if (maxIndex === lastA) return get_instruct_starttag_end(doTrim);
-			if (maxIndex === lastB) return get_instruct_endtag_end(doTrim);
-			return get_instruct_systag_end(doTrim);
-		}
+
+		if (maxIndex === -1) return "";
+		if (maxIndex === lastA) return instructstartplaceholder_end;
+		if (maxIndex === lastB) return instructendplaceholder_end;
+		return instructsysplaceholder_end;
+
 	}
 
 	function replace_search_placeholders(text) {
@@ -4287,10 +4273,9 @@ Current version indicated by LITEVER below.
 	//if alwaysreplace, then settings are not considered, otherwise checks settings
 	function replace_placeholders(inputtxt, escape=false, alwaysreplace=false)
 	{
-		//only do this for chat and instruct modes
+		inputtxt = replace_instruct_placeholders(inputtxt);
 		if(alwaysreplace || localsettings.placeholder_tags)
 		{
-			inputtxt = replace_instruct_placeholders(inputtxt);
 			inputtxt = replace_noninstruct_placeholders(inputtxt,escape);
 		}
 		return inputtxt;
@@ -6270,6 +6255,10 @@ Current version indicated by LITEVER below.
 	function is_using_kcpp_with_admin()
 	{
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.83") >= 0 && koboldcpp_admin_type>0);
+	}
+	function is_using_kcpp_with_autotags()
+	{
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.88") >= 0);
 	}
 	function is_using_web_lite()
 	{
@@ -13738,11 +13727,6 @@ Current version indicated by LITEVER below.
 		let ist = instructstartplaceholder;
 		let iet = instructendplaceholder;
 		let iste = instructstartplaceholder_end;
-		if (!localsettings.placeholder_tags) {
-			ist = get_instruct_starttag(false);
-			iet = get_instruct_endtag(false);
-			iste = get_instruct_starttag_end(false);
-		}
 		let prev_et = get_instruct_latest_end(false);
 
 		if(newgen != "")
@@ -13967,7 +13951,7 @@ Current version indicated by LITEVER below.
 				}
 				else if(localsettings.strip_thinking_mode==1) //strip except recent
 				{
-					let endmatcher = (localsettings.placeholder_tags ? instructendplaceholder : get_instruct_endtag(true));
+					let endmatcher = instructendplaceholder;
 					let lastInstructIdx = truncated_context.lastIndexOf(endmatcher);
 					if (lastInstructIdx !== -1) {
 						let beforePart = truncated_context.slice(0, lastInstructIdx); // Split into two parts
@@ -14109,7 +14093,7 @@ Current version indicated by LITEVER below.
 			{
 				if (pending_context_preinjection == "" && truncated_context != "")
 				{
-					let endmatcher = (localsettings.placeholder_tags ? instructendplaceholder : get_instruct_endtag(false));
+					let endmatcher = instructendplaceholder;
 					if (truncated_context.toLowerCase().trim().endsWith(endmatcher.toLowerCase().trim())) {
 						if (localsettings.inject_timestamps) {
 							pending_context_preinjection += "[" + (new Date().toLocaleTimeString([], { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })) + "]";
@@ -16624,11 +16608,8 @@ Current version indicated by LITEVER below.
 				{
 					if(!localsettings.allow_continue_chat)
 					{
-						if (!localsettings.placeholder_tags) {
-							pending_context_preinjection =  get_instruct_endtag(false);
-						} else {
-							pending_context_preinjection =  instructendplaceholder;
-						}
+						pending_context_preinjection =  instructendplaceholder;
+
 						if(localsettings.inject_timestamps)
 						{
 							pending_context_preinjection += "["+(new Date().toLocaleTimeString([], {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'}))+"]";
@@ -17713,9 +17694,8 @@ Current version indicated by LITEVER below.
 		}
 	}
 
-	function render_gametext(save = true)
+	function render_gametext(save=true, force_scroll=true)
 	{
-
 		document.getElementById("gametext").contentEditable = (document.getElementById("allowediting").checked && pending_response_id=="");
 		let inEditMode = (document.getElementById("allowediting").checked ? true : false);
 
@@ -18213,7 +18193,7 @@ Current version indicated by LITEVER below.
 			autosave();
 		}
 
-		handle_autoscroll(true);
+		handle_autoscroll(force_scroll);
 
 		if(localsettings.printer_view)
 		{
@@ -18417,22 +18397,14 @@ Current version indicated by LITEVER below.
 			}
 			else
 			{
-				let st = get_instruct_starttag(false);
-				let et = get_instruct_endtag(false);
+
 				let ste = "";
 				let ete = "";
+				let st = instructstartplaceholder;
+				let et = instructendplaceholder;
 				if (localsettings.separate_end_tags) {
-					ste = get_instruct_starttag_end(false);
-					ete = get_instruct_endtag_end(false);
-				}
-				if(localsettings.placeholder_tags)
-				{
-					st = instructstartplaceholder;
-					et = instructendplaceholder;
-					if (localsettings.separate_end_tags) {
-						ste = instructstartplaceholder_end;
-						ete = instructendplaceholder_end;
-					}
+					ste = instructstartplaceholder_end;
+					ete = instructendplaceholder_end;
 				}
 
 				for(let i=0;i<=idx;++i)
@@ -18464,7 +18436,7 @@ Current version indicated by LITEVER below.
 		if (incomplete_resp) { return; }
 
 		corpo_editing_turn = idx;
-		render_gametext(false);
+		render_gametext(false,false);
 	}
 	function corpo_edit_chunk_delete()
 	{
@@ -18524,22 +18496,13 @@ Current version indicated by LITEVER below.
 			}
 			else //instruct and the rest
 			{
-				let st = get_instruct_starttag(false);
-				let et = get_instruct_endtag(false);
 				let ste = "";
 				let ete = "";
+				let st = instructstartplaceholder;
+				let et = instructendplaceholder;
 				if (localsettings.separate_end_tags) {
-					ste = get_instruct_starttag_end(false);
-					ete = get_instruct_endtag_end(false);
-				}
-				if(localsettings.placeholder_tags)
-				{
-					st = instructstartplaceholder;
-					et = instructendplaceholder;
-					if (localsettings.separate_end_tags) {
-						ste = instructstartplaceholder_end;
-						ete = instructendplaceholder_end;
-					}
+					ste = instructstartplaceholder_end;
+					ete = instructendplaceholder_end;
 				}
 
 				let finalturnai = false;
@@ -18563,7 +18526,7 @@ Current version indicated by LITEVER below.
 		}
 
 		corpo_editing_turn = -1;
-		render_gametext(needsave);
+		render_gametext(needsave,false);
 	}
 
 	var cosmetic_corpo_ai_nick = "KoboldAI";
@@ -19840,12 +19803,7 @@ Current version indicated by LITEVER below.
 					}
 
 					//append instruction for instruct mode
-					if (!localsettings.placeholder_tags) {
-						txt =  get_instruct_endtag(false) + userinput;
-					}
-					else {
-						txt = instructendplaceholder + userinput;
-					}
+					txt = instructendplaceholder + userinput;
 
 					gametext_arr.push(txt);
 					render_gametext();
