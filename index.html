@@ -3176,9 +3176,9 @@ Current version indicated by LITEVER below.
 		chat_context_mod: true, //extra injection for chat mode
 		chatname: "User", //name to use in chat
 		chatopponent: defaultchatopponent,
-		instruct_starttag: "\\n### Instruction:\\n",
-		instruct_endtag: "\\n### Response:\\n",
-		instruct_systag: "",
+		instruct_starttag: "{{[INPUT]}}",
+		instruct_endtag: "{{[OUTPUT]}}",
+		instruct_systag: "{{[SYSTEM]}}",
 		instruct_starttag_end: "",
 		instruct_endtag_end: "",
 		instruct_systag_end: "",
@@ -3324,6 +3324,15 @@ Current version indicated by LITEVER below.
 
 	const instructpresets = [
 	{
+		"name":"KoboldCppAutomatic",
+		"user":"{{[INPUT]}}",
+		"user_end":"",
+		"assistant":"{{[OUTPUT]}}",
+		"assistant_end":"",
+		"system":"{{[SYSTEM]}}",
+		"system_end":"",
+	},
+	{
 		"name":"Alpaca",
 		"user":"\\n### Instruction:\\n",
 		"user_end":"",
@@ -3456,15 +3465,6 @@ Current version indicated by LITEVER below.
 		"assistant":"<|assistant|>\\n",
 		"assistant_end":"",
 		"system":"<|system|>\\n",
-		"system_end":"",
-	},
-	{
-		"name":"KoboldCppAutomatic",
-		"user":"{{[INPUT]}}",
-		"user_end":"",
-		"assistant":"{{[OUTPUT]}}",
-		"assistant_end":"",
-		"system":"{{[SYSTEM]}}",
 		"system_end":"",
 	}
 	];
@@ -4140,50 +4140,68 @@ Current version indicated by LITEVER below.
 	}
 	function get_instruct_starttag(doTrim=true)
 	{
+		let instag = localsettings.instruct_starttag;
+		if(instag=="{{[INPUT]}}" && !(custom_kobold_endpoint != "" && is_using_kcpp_with_autotags()))
+		{
+			instag = "\n### Instruction:\n"; //backend not compatible with auto
+		}
 		if(doTrim){
-			return replaceAll(localsettings.instruct_starttag, "\\n", "\n").trim();
+			return replaceAll(instag, "\\n", "\n").trim();
 		} else {
-			return replaceAll(localsettings.instruct_starttag, "\\n", "\n");
+			return replaceAll(instag, "\\n", "\n");
 		}
 	}
 	function get_instruct_endtag(doTrim=true)
 	{
+		let instag = localsettings.instruct_endtag;
+		if(instag=="{{[OUTPUT]}}" && !(custom_kobold_endpoint != "" && is_using_kcpp_with_autotags()))
+		{
+			instag = "\n### Response:\n"; //backend not compatible with auto
+		}
 		if(doTrim){
-			return replaceAll(localsettings.instruct_endtag, "\\n", "\n").trim();
+			return replaceAll(instag, "\\n", "\n").trim();
 		} else {
-			return replaceAll(localsettings.instruct_endtag, "\\n", "\n");
+			return replaceAll(instag, "\\n", "\n");
 		}
 	}
 	function get_instruct_systag(doTrim=true)
 	{
+		let instag = localsettings.instruct_systag;
+		if(instag=="{{[SYSTEM]}}" && !(custom_kobold_endpoint != "" && is_using_kcpp_with_autotags()))
+		{
+			instag = ""; //backend not compatible with auto
+		}
 		if(doTrim){
-			return replaceAll(localsettings.instruct_systag, "\\n", "\n").trim();
+			return replaceAll(instag, "\\n", "\n").trim();
 		} else {
-			return replaceAll(localsettings.instruct_systag, "\\n", "\n");
+			return replaceAll(instag, "\\n", "\n");
 		}
 	}
 	function get_instruct_starttag_end(doTrim=true)
 	{
+		let instag = localsettings.instruct_starttag_end;
 		if(doTrim){
-			return replaceAll(localsettings.instruct_starttag_end, "\\n", "\n").trim();
+			return replaceAll(instag, "\\n", "\n").trim();
 		} else {
-			return replaceAll(localsettings.instruct_starttag_end, "\\n", "\n");
+			return replaceAll(instag, "\\n", "\n");
 		}
 	}
 	function get_instruct_endtag_end(doTrim=true)
 	{
+		let instag = localsettings.instruct_endtag_end;
 		if(doTrim){
-			return replaceAll(localsettings.instruct_endtag_end, "\\n", "\n").trim();
+			return replaceAll(instag, "\\n", "\n").trim();
 		} else {
-			return replaceAll(localsettings.instruct_endtag_end, "\\n", "\n");
+			return replaceAll(instag, "\\n", "\n");
 		}
 	}
 	function get_instruct_systag_end(doTrim=true)
 	{
+		let instag = localsettings.instruct_systag_end;
 		if(doTrim){
-			return replaceAll(localsettings.instruct_systag_end, "\\n", "\n").trim();
+			return replaceAll(instag, "\\n", "\n").trim();
 		} else {
-			return replaceAll(localsettings.instruct_systag_end, "\\n", "\n");
+			return replaceAll(instag, "\\n", "\n");
 		}
 	}
 	function get_instruct_latest_end(doTrim=true)
@@ -11538,14 +11556,17 @@ Current version indicated by LITEVER below.
 		localsettings.chatopponent = newopps;
 		localsettings.instruct_starttag = document.getElementById("instruct_starttag").value;
 		localsettings.instruct_systag = document.getElementById("instruct_systag").value;
+		if (localsettings.instruct_systag == null || localsettings.instruct_systag == "") {
+			localsettings.instruct_systag = "{{[SYSTEM]}}";
+		}
 		localsettings.instruct_sysprompt = document.getElementById("instruct_sysprompt").value;
 		localsettings.instruct_sysprompt = replaceAll(localsettings.instruct_sysprompt, "\\n", "\n");
 		if (localsettings.instruct_starttag == null || localsettings.instruct_starttag == "") {
-			localsettings.instruct_starttag = "\\n### Instruction:\\n";
+			localsettings.instruct_starttag = "{{[INPUT]}}";
 		}
 		localsettings.instruct_endtag = document.getElementById("instruct_endtag").value;
 		if (localsettings.instruct_endtag == null || localsettings.instruct_endtag == "") {
-			localsettings.instruct_endtag = "\\n### Response:\\n";
+			localsettings.instruct_endtag = "{{[OUTPUT]}}";
 		}
 		localsettings.instruct_starttag_end = document.getElementById("instruct_starttag_end").value;
 		localsettings.instruct_endtag_end = document.getElementById("instruct_endtag_end").value;
@@ -14669,7 +14690,7 @@ Current version indicated by LITEVER below.
 			submit_payload.params.logprobs = localsettings.request_logprobs;
 			let st = get_instruct_starttag(true);
 			let et = get_instruct_endtag(true);
-			if(st=="{{[INPUT]}}" && et=="{{[OUTPUT]}}")
+			if(st=="{{[INPUT]}}" || et=="{{[OUTPUT]}}")
 			{
 				submit_payload.params.replace_instruct_placeholders = true;
 			}
