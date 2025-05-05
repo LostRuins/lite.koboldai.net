@@ -2979,7 +2979,9 @@ Current version indicated by LITEVER below.
 	const alltalk_voices_endpoint = "/api/voices";
 	const alltalk_rvc_voices_endpoint = "/api/rvcvoices";
 
-	const pollinations_img_endpoint = "https://image.pollinations.ai/prompt/";
+	const pollinations_img_endpoint = "https://image.pollinations.ai/prompt";
+	const pollinations_text_endpoint = "https://text.pollinations.ai/openai";
+	const dummy_pollinations_key = "kobo";
 
 	//support for quick news updates
 	const horde_news_endpoint = "https://hordenews.concedo.workers.dev"
@@ -3140,6 +3142,7 @@ Current version indicated by LITEVER below.
 		saved_openrouter_key: "",
 		saved_mistralai_key: "",
 		saved_featherless_key: "",
+		saved_pollinations_key: "", //this is a dummy key and isnt needed
 		saved_grok_key:"",
 		saved_claude_key: "", //do not ever share this in save files!
 		saved_claude_addr: default_claude_base, //do not ever share this in save files!
@@ -5146,6 +5149,10 @@ Current version indicated by LITEVER below.
 				}
 				else if (dch.message) {
 					synchro_polled_response = dch.message.content;
+					if(dch.message.content==null && dch.message.reasoning_content!=null && dch.message.reasoning_content!="") //vllm compat
+					{
+						synchro_polled_response = dch.message.reasoning_content;
+					}
 
 					if(oaiemulatecompletionscontent!="" && synchro_polled_response!="" && synchro_polled_response.startsWith(oaiemulatecompletionscontent))
 					{
@@ -5250,6 +5257,9 @@ Current version indicated by LITEVER below.
 								}else if(event.data.choices[0].delta && event.data.choices[0].delta.content)
 								{
 									synchro_pending_stream += event.data.choices[0].delta.content;
+								}else if(event.data.choices[0].delta && !event.data.choices[0].delta.content && event.data.choices[0].delta.reasoning_content!=null&& event.data.choices[0].delta.reasoning_content!="")
+								{
+									synchro_pending_stream += event.data.choices[0].delta.reasoning_content;
 								}
 
 								//mistral prefill interception
@@ -6095,7 +6105,7 @@ Current version indicated by LITEVER below.
 			referrer: "KoboldAILite"
 		});
 
-		let gen_endpoint = `${pollinations_img_endpoint}${encodeURIComponent(prompt)}?${pollinations_params.toString()}`;
+		let gen_endpoint = `${pollinations_img_endpoint}/${encodeURIComponent(prompt)}?${pollinations_params.toString()}`;
 
 		console.log(gen_endpoint);
 		let imgid = "PollAIimg"+(Math.floor(10000 + Math.random() * 90000)).toString();
@@ -6643,6 +6653,7 @@ Current version indicated by LITEVER below.
 			new_save_storyobj.savedsettings.saved_grok_key = "";
 			new_save_storyobj.savedsettings.saved_palm_key = "";
 			new_save_storyobj.savedsettings.saved_cohere_key = "";
+			new_save_storyobj.savedsettings.saved_pollinations_key = "";
 
 			new_save_storyobj.savedsettings.modelhashes = [];
 
@@ -7033,6 +7044,7 @@ Current version indicated by LITEVER below.
 					let tmp_or1 = localsettings.saved_openrouter_key;
 					let tmp_mai = localsettings.saved_mistralai_key;
 					let tmp_fai = localsettings.saved_featherless_key;
+					let tmp_pol = localsettings.saved_pollinations_key;
 					let tmp_grok = localsettings.saved_grok_key;
 					let tmp_claude1 = localsettings.saved_claude_key;
 					let tmp_claude2 = localsettings.saved_claude_addr;
@@ -7088,6 +7100,7 @@ Current version indicated by LITEVER below.
 					localsettings.saved_openrouter_key = tmp_or1;
 					localsettings.saved_mistralai_key = tmp_mai;
 					localsettings.saved_featherless_key = tmp_fai;
+					localsettings.saved_pollinations_key = tmp_pol;
 					localsettings.saved_grok_key = tmp_grok;
 					localsettings.saved_claude_key = tmp_claude1;
 					localsettings.saved_claude_addr = tmp_claude2;
@@ -9115,6 +9128,8 @@ Current version indicated by LITEVER below.
 				return document.getElementById("custom_featherless_model");
 			case "9":
 				return document.getElementById("custom_grok_model");
+			case "10":
+				return document.getElementById("custom_pollinations_model");
 			default:
 				return document.getElementById("custom_oai_model");
 		}
@@ -9122,7 +9137,7 @@ Current version indicated by LITEVER below.
 	function ep_should_always_use_chat_completions()
 	{
 		let epchoice = document.getElementById("customapidropdown").value;
-		return (epchoice==7);
+		return (epchoice==7 || epchoice==10);
 	}
 
 	function select_custom_oai_model()
@@ -9431,6 +9446,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("custom_mistralai_model").classList.add("hidden");
 		document.getElementById("custom_featherless_model").classList.add("hidden");
 		document.getElementById("custom_grok_model").classList.add("hidden");
+		document.getElementById("custom_pollinations_model").classList.add("hidden");
 		document.getElementById("hordeloadmodelcontainer").classList.add("hidden");
 		document.getElementById("coherecustom").classList.add("hidden");
 
@@ -9448,14 +9464,17 @@ Current version indicated by LITEVER below.
 				document.getElementById("customkoboldkey").value = localsettings.saved_kai_key;
 			}
 		}
-		else if(epchoice==2 || epchoice==3 || epchoice==7 || epchoice==8 || epchoice==9)
+		else if(epchoice==2 || epchoice==3 || epchoice==7 || epchoice==8 || epchoice==9 || epchoice==10)
 		{
 			document.getElementById("oaicustom").classList.remove("hidden");
+			document.getElementById("custom_oai_endpoint").classList.add("hidden");
+			document.getElementById("custom_oai_key").classList.remove("hidden");
 			document.getElementById("openrouterdesc").classList.add("hidden");
 			document.getElementById("mistralaidesc").classList.add("hidden");
 			document.getElementById("featherlessdesc").classList.add("hidden");
 			document.getElementById("grokdesc").classList.add("hidden");
 			document.getElementById("oaidesc").classList.add("hidden");
+			document.getElementById("pollinationsdesc").classList.add("hidden");
 			document.getElementById("openrouterproviderbox").classList.add("hidden");
 			if(epchoice==2)
 			{
@@ -9474,7 +9493,6 @@ Current version indicated by LITEVER below.
 			{
 				document.getElementById("custom_mistralai_model").classList.remove("hidden");
 				document.getElementById("mistralaidesc").classList.remove("hidden");
-				document.getElementById("custom_oai_endpoint").classList.add("hidden");
 				document.getElementById("custom_oai_key").value = localsettings.saved_mistralai_key;
 				document.getElementById("custom_oai_endpoint").value = default_mistralai_base;
 			}
@@ -9482,7 +9500,6 @@ Current version indicated by LITEVER below.
 			{
 				document.getElementById("custom_featherless_model").classList.remove("hidden");
 				document.getElementById("featherlessdesc").classList.remove("hidden");
-				document.getElementById("custom_oai_endpoint").classList.add("hidden");
 				document.getElementById("custom_oai_key").value = localsettings.saved_featherless_key;
 				document.getElementById("custom_oai_endpoint").value = default_featherless_base;
 				try_fetch_oai_models_auto();
@@ -9491,9 +9508,16 @@ Current version indicated by LITEVER below.
 			{
 				document.getElementById("custom_grok_model").classList.remove("hidden");
 				document.getElementById("grokdesc").classList.remove("hidden");
-				document.getElementById("custom_oai_endpoint").classList.add("hidden");
 				document.getElementById("custom_oai_key").value = localsettings.saved_grok_key;
 				document.getElementById("custom_oai_endpoint").value = default_grok_base;
+			}
+			else if(epchoice==10)
+			{
+				document.getElementById("custom_pollinations_model").classList.remove("hidden");
+				document.getElementById("pollinationsdesc").classList.remove("hidden");
+				document.getElementById("custom_oai_key").value = dummy_pollinations_key;
+				document.getElementById("custom_oai_endpoint").value = pollinations_text_endpoint;
+				document.getElementById("custom_oai_key").classList.add("hidden");
 			}
 			else //openrouter supports autofetch
 			{
@@ -9501,7 +9525,6 @@ Current version indicated by LITEVER below.
 				document.getElementById("custom_openrouter_model").classList.remove("hidden");
 				document.getElementById("openrouterproviderbox").classList.remove("hidden");
 				document.getElementById("custom_oai_endpoint").value = default_openrouter_base;
-				document.getElementById("custom_oai_endpoint").classList.add("hidden");
 				document.getElementById("custom_oai_key").value = localsettings.saved_openrouter_key;
 				if(!openrouter_fetch_attempted)
 				{
@@ -9592,7 +9615,7 @@ Current version indicated by LITEVER below.
 			let is_local = is_local_url(desired_oai_ep);
 			desired_oai_ep = (is_local?"http://":"https://") + desired_oai_ep;
 		}
-		if (document.getElementById("oaiaddversion").checked)
+		if (document.getElementById("oaiaddversion").checked && !desired_oai_ep.toLowerCase().includes("pollinations.ai"))
 		{
 			//fix incorrect paths
 			if(desired_oai_ep!="" && desired_oai_ep.toLowerCase().endsWith("/chat/completions")) {
@@ -9961,7 +9984,7 @@ Current version indicated by LITEVER below.
 				});
 			}
 		}
-		else if(epchoice==2 || epchoice==3 || epchoice==7 || epchoice==8 || epchoice==9) //connect to OAI / OpenRouter / MistralAI / Featherless / Grok Endpoint
+		else if(epchoice==2 || epchoice==3 || epchoice==7 || epchoice==8 || epchoice==9 || epchoice==10) //connect to OAI / OpenRouter / MistralAI / Featherless / Grok Endpoint
 		{
 			let desired_oai_key = document.getElementById("custom_oai_key").value.trim();
 			let desired_oai_ep = document.getElementById("custom_oai_endpoint").value.trim();
@@ -10000,6 +10023,10 @@ Current version indicated by LITEVER below.
 				else if(epchoice==9)
 				{
 					localsettings.saved_grok_key = custom_oai_key;
+				}
+				else if(epchoice==10)
+				{
+					localsettings.saved_pollinations_key = dummy_pollinations_key; //placeholder key, not actually used
 				}
 				else
 				{
@@ -15002,6 +15029,12 @@ Current version indicated by LITEVER below.
 					}
 				}
 
+				//pollinations always uses the exact same url for text gen regardless
+				if(targetep.toLowerCase().includes("text.pollinations.ai"))
+				{
+					targetep = pollinations_text_endpoint;
+				}
+
 				if(is_browser_supports_sse() && document.getElementById("oaistreaming").checked)
 				{
 					oai_payload.stream = true;
@@ -19133,6 +19166,9 @@ Current version indicated by LITEVER below.
 			}else if(custom_oai_endpoint.toLowerCase().includes("api.x.ai"))
 			{
 				localsettings.prev_custom_endpoint_type = 9;
+			}else if(custom_oai_endpoint.toLowerCase().includes("pollinations.ai"))
+			{
+				localsettings.prev_custom_endpoint_type = 10;
 			}
 		}
 		else if(custom_claude_key!="")
@@ -22592,6 +22628,7 @@ Current version indicated by LITEVER below.
 				<option value="7">MistralAI API</option>
 				<option value="8">Featherless API</option>
 				<option value="9">Grok API</option>
+				<option value="10">PollinationsAI API</option>
 			</select>
 			</div>
 
@@ -22671,6 +22708,11 @@ Current version indicated by LITEVER below.
 				Note that KoboldAI Lite takes no responsibility for your usage or consequences of this feature. Your API key is used directly with the Grok API and is not transmitted to us.<br>Only Temperature, Top-P, Top-K, Min-P and Repetition Penalty samplers are used.<br><br>
 				<span class="color_green" style="font-weight: bold;">Please input Grok Key.</span><br><br>
 				</span>
+				<span id="pollinationsdesc" class="hidden">
+				Pollinations.ai API is free to use without any key required.<br><br>
+				Note that KoboldAI Lite takes no responsibility for your usage or consequences of this feature.<br>Only Temperature, Top-P, Top-K and Repetition Penalty samplers are used.<br><br>
+				<span class="color_green" style="font-weight: bold;">No Key Required.</span><br><br>
+				</span>
 
 				<input class="form-control" type="text" id="custom_oai_endpoint" placeholder="OpenAI API URL" value="" onblur="try_fetch_oai_models_auto()">
 				<input class="form-control" type="password" id="custom_oai_key" placeholder="API Key (Required)" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
@@ -22728,6 +22770,27 @@ Current version indicated by LITEVER below.
 				<select title="Grok AI Model Selection" style="padding:4px;display:inline;width:calc(100% - 220px)" class="form-control hidden" id="custom_grok_model" onchange="oai_model_change(true)">
 					<option value="grok-beta">grok-beta</option>
 					<option value="grok-3">grok-3</option>
+					<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
+				</select>
+				<select title="Pollinations AI Model Selection" style="padding:4px;display:inline;width:calc(100% - 220px)" class="form-control hidden" id="custom_pollinations_model" onchange="oai_model_change(true)">
+					<option value="deepseek">deepseek</option>
+					<option value="deepseek-reasoning">deepseek-reasoning</option>
+					<option value="evil">evil</option>
+					<option value="hormoz">hormoz</option>
+					<option value="llama">llama</option>
+					<option value="llama-vision">llama-vision</option>
+					<option value="llamascout">llamascout</option>
+					<option value="midijourney">midijourney</option>
+					<option value="mirexa">mirexa</option>
+					<option value="mistral">mistral</option>
+					<option value="openai">openai</option>
+					<option value="openai-fast">openai-fast</option>
+					<option value="openai-large">openai-large</option>
+					<option value="phi">phi</option>
+					<option value="qwen-coder">qwen-coder</option>
+					<option value="rtist">rtist</option>
+					<option value="searchgpt">searchgpt</option>
+					<option value="unity">unity</option>
 					<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
 				</select>
 				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaifetchlist" onclick="oai_fetch_models()">Fetch List</button>
