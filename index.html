@@ -2979,6 +2979,8 @@ Current version indicated by LITEVER below.
 	const alltalk_voices_endpoint = "/api/voices";
 	const alltalk_rvc_voices_endpoint = "/api/rvcvoices";
 
+	const pollinations_img_endpoint = "https://image.pollinations.ai/prompt/";
+
 	//support for quick news updates
 	const horde_news_endpoint = "https://hordenews.concedo.workers.dev"
 
@@ -3159,7 +3161,7 @@ Current version indicated by LITEVER below.
 		saved_xtts_url: default_xtts_base,
 		saved_alltalk_url: default_alltalk_base,
 		prev_custom_endpoint_type: 0, //show a reconnect box to custom endpoint if needed. 0 is horde, otherwise its dropdown value+1
-		generate_images_mode: (localflag?0:1), //0=off, 1=horde, 2=a1111, 3=dalle, 4=comfy
+		generate_images_mode: (localflag?0:1), //0=off, 1=horde, 2=a1111, 3=dalle, 4=comfy, 5=pollinations
 
 		autoscroll: true, //automatically scroll to bottom on render
 		printer_view: false, //automatically scroll to bottom on render
@@ -6075,6 +6077,65 @@ Current version indicated by LITEVER below.
 				connect_to_comfyui(false);
 			}
 		},false);
+	}
+
+	function generate_pollinations_image(req_payload)
+	{
+		let splits = req_payload.prompt.split("###");
+		let prompt = splits[0].trim();
+		let negprompt = (splits.length > 1 ? splits[1] : "");
+
+		const pollinations_params = new URLSearchParams({
+			model:req_payload.models[0],
+			seed:Math.floor(Math.random() * 99999999),
+			width: req_payload.params.width,
+			height: req_payload.params.height,
+			nologo: true,
+			private: true,
+			referrer: "KoboldAILite"
+		});
+
+		let gen_endpoint = `${pollinations_img_endpoint}${encodeURIComponent(prompt)}?${pollinations_params.toString()}`;
+
+		console.log(gen_endpoint);
+		let imgid = "PollAIimg"+(Math.floor(10000 + Math.random() * 90000)).toString();
+		let nimgtag = "[<|p|" + imgid + "|p|>]";
+		if (localsettings.img_newturn) {
+			if(localsettings.opmode == 4)
+			{
+				nimgtag = wrap_newgen_instruct_format(nimgtag,false);
+			}
+			else if(localsettings.opmode == 3)
+			{
+				nimgtag = wrap_newgen_chat_format(nimgtag);
+			}
+		}
+		gametext_arr.push(nimgtag);
+		image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:prompt, poll_category:0 };
+		image_db[imgid].aspect = (req_payload.params.width>=req_payload.params.height*2?5:(req_payload.params.height>=req_payload.params.width*2?4:(req_payload.params.width>req_payload.params.height?2:(req_payload.params.width<req_payload.params.height?1:0))));
+		image_db[imgid].imsource = 0; //0=generated,1=uploaded
+
+		fetch(gen_endpoint, {
+			method: 'GET',
+		})
+		.then((response) => {
+			return response.blob(); // Convert the response into a Blob
+		})
+		.then((finalimg) => {
+			const reader = new FileReader();
+			reader.onloadend = () => {
+				let origImg = reader.result;
+				let imgres = localsettings.img_allowhd?(localsettings.img_aspect==0?NO_HD_RES_PX:HD_RES_PX):NO_HD_RES_PX;
+				compressImage(origImg, (newDataUri) => {
+					image_db[imgid].done = true;
+					image_db[imgid].result = newDataUri;
+				}, false, imgres);
+			};
+			reader.readAsDataURL(finalimg);
+		}).catch((error) => {
+			console.log("Generation Error: " + error);
+			msgbox("Image Generation Failed!\n\nCould not generate image with Pollinations.ai, maybe you are rate limited. Try again later.\n");
+		});
 	}
 
 	function set_horde_key()
@@ -11998,6 +12059,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("generate_images_dalle_container").classList.add("hidden");
 		document.getElementById("generate_images_local_model_container").classList.add("hidden");
 		document.getElementById("generate_images_comfy_container").classList.add("hidden");
+		document.getElementById("generate_images_pollinations_container").classList.add("hidden");
 		if(document.getElementById("generate_images_mode").value==1){
 			document.getElementById("generate_images_model_container").classList.remove("hidden");
 			if(!image_models_fetched)
@@ -12016,6 +12078,9 @@ Current version indicated by LITEVER below.
 		}else if(document.getElementById("generate_images_mode").value==4){
 			document.getElementById("generate_images_comfy_container").classList.remove("hidden");
 			connect_to_comfyui(silent);
+		}else if(document.getElementById("generate_images_mode").value==5)
+		{
+			document.getElementById("generate_images_pollinations_container").classList.remove("hidden");
 		}
 	}
 
@@ -15659,6 +15724,12 @@ Current version indicated by LITEVER below.
 			let desired_model = document.getElementById("generate_images_comfy_model").value;
 			genimg_payload.models = [desired_model];
 			generate_comfy_image(genimg_payload);
+		}
+		else if(localsettings.generate_images_mode==5) //pollinations
+		{
+			let desired_model = document.getElementById("generate_images_pollinations_model").value;
+			genimg_payload.models = [desired_model];
+			generate_pollinations_image(genimg_payload);
 		}
 	}
 
@@ -21647,6 +21718,7 @@ Current version indicated by LITEVER below.
 								<option value="2">KCPP / Forge / A1111</option>
 								<option value="3">OpenAI DALL-E</option>
 								<option value="4">ComfyUI</option>
+								<option value="5">Pollinations.ai</option>
 							</select>
 							<div id="generate_images_model_container" class="hidden">
 								<select class="form-control" id="generate_images_model" style="font-size: 12px;height:20px;padding:2px;margin:0px 0 0;" onblur="validate_sd_model()" title="Stable Diffusion Model Selection">
@@ -21684,6 +21756,13 @@ Current version indicated by LITEVER below.
 								<td><button type="button" class="btn btn-primary" style="width:100%; padding:2px 3px;margin-top:2px;font-size:11px;" onclick="set_dalle_key()">Set Key</button></td>
 								<td><button type="button" class="btn btn-primary" style="width:100%; padding:2px 3px;margin-top:2px;font-size:11px;" onclick="set_dalle_model()">Model</button></td>
 								</tr></table>
+							</div>
+							<div id="generate_images_pollinations_container" class="settinglabel hidden">
+								<select title="Select Image Model" class="form-control" id="generate_images_pollinations_model" style="height:20px;padding:0;margin:0px 0 0; width:calc(100% - 30px)">
+									<option value="flux" selected>flux</option>
+									<option value="turbo">turbo</option>
+								</select>
+								<button type="button" class="btn btn-primary" onclick="set_comfy_endpoint()" style="height: 20px; padding: 0px 2px; margin: 0px 0px 0px 3px;">⚙️</button>
 							</div>
 
 							<div>
