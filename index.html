@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 237;
+	const LITEVER = 238;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3116,6 +3116,7 @@ Current version indicated by LITEVER below.
 	let voiceprerecorder = null, voicerecorder = null, voice_is_speaking = false, voice_speaking_counter = 0;
 	let preaudiobuffers = [], preaudioblobs = []; //will store 2 preblobs at a time
 	var koboldcpp_has_tts = false;
+	var koboldcpp_has_guidance = false;
 	var no_escape_html = false;
 	var timetaken_timestamp = performance.now();
 	var bg_silence = null;
@@ -3239,6 +3240,8 @@ Current version indicated by LITEVER below.
 		inject_chatnames_instruct: false,
 		inject_jailbreak_instruct: false,
 		custom_jailbreak_text: "Sure, I will help with that:\\n\\n",
+		guidance_prompt: "",
+		guidance_scale: 1.0,
 		separate_end_tags: false,
 		idle_responses: 0,
 		idle_duration: 60,
@@ -6349,6 +6352,10 @@ Current version indicated by LITEVER below.
 	{
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.88") >= 0);
 	}
+	function is_using_kcpp_with_guidance()
+	{
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.90") >= 0 && koboldcpp_has_guidance);
+	}
 	function is_using_web_lite()
 	{
 		return (window.location.hostname.includes("koboldai.net") || window.location.hostname.includes("lostruins.github.io"));
@@ -8763,7 +8770,7 @@ Current version indicated by LITEVER below.
 
 	function expand_tokens_section(targetid)
 	{
-		let tablist = ["expandregexreplace","expandthinking","expandtokenbans","expandlogitbias","expandplaceholdertags"];
+		let tablist = ["expandregexreplace","expandthinking","expandtokenbans","expandlogitbias","expandplaceholdertags","expandguidance"];
 
 		for(let i=0;i<tablist.length;++i)
 		{
@@ -9798,7 +9805,8 @@ Current version indicated by LITEVER below.
 									koboldcpp_has_websearch = (data.websearch?true:false);
 									koboldcpp_has_tts = (data.tts?true:false);
 									koboldcpp_admin_type = (data.admin?data.admin:0);
-									koboldcpp_has_savedatafile = (data.savedata?true:false)
+									koboldcpp_has_savedatafile = (data.savedata?true:false);
+									koboldcpp_has_guidance = (data.guidance?true:false);
 									let has_password = (data.protected?true:false);
 									let has_txt2img = (data.txt2img?true:false);
 									let no_txt_model = (mdlname=="inactive");
@@ -11364,14 +11372,23 @@ Current version indicated by LITEVER below.
 				document.getElementById("newlogitbiasstringtogglesection").classList.add("hidden");
 				document.getElementById("newlogitbiasstringtoggle").checked = false;
 			}
+			if(is_using_kcpp_with_guidance())
+			{
+				document.getElementById("noguidance").classList.add("hidden");
+			}else{
+				document.getElementById("noguidance").classList.remove("hidden");
+			}
 		}
 		else
 		{
 			document.getElementById("nologitbias").classList.remove("hidden");
 			document.getElementById("notokenbans").classList.remove("hidden");
+			document.getElementById("noguidance").classList.remove("hidden");
 			document.getElementById("newlogitbiasstringtogglesection").classList.add("hidden");
 			document.getElementById("newlogitbiasstringtoggle").checked = false;
 		}
+		document.getElementById("guidance_scale").value = localsettings.guidance_scale;
+		document.getElementById("guidance_prompt").value = localsettings.guidance_prompt;
 		toggle_logit_bias_string();
 		populate_placeholder_tags();
 		populate_regex_replacers();
@@ -11644,9 +11661,6 @@ Current version indicated by LITEVER below.
 		localsettings.chatopponent = newopps;
 		localsettings.instruct_starttag = document.getElementById("instruct_starttag").value;
 		localsettings.instruct_systag = document.getElementById("instruct_systag").value;
-		if (localsettings.instruct_systag == null || localsettings.instruct_systag == "") {
-			localsettings.instruct_systag = "{{[SYSTEM]}}";
-		}
 		localsettings.instruct_sysprompt = document.getElementById("instruct_sysprompt").value;
 		localsettings.instruct_sysprompt = replaceAll(localsettings.instruct_sysprompt, "\\n", "\n");
 		if (localsettings.instruct_starttag == null || localsettings.instruct_starttag == "") {
@@ -11744,7 +11758,8 @@ Current version indicated by LITEVER below.
 		localsettings.xtc_threshold = parseFloat(document.getElementById("xtc_threshold").value);
 		localsettings.xtc_probability = parseFloat(document.getElementById("xtc_probability").value);
 		localsettings.token_count_multiplier = parseInt(document.getElementById("token_count_multiplier").value);
-
+		localsettings.guidance_scale = parseFloat(document.getElementById("guidance_scale").value);
+		localsettings.guidance_prompt = document.getElementById("guidance_prompt").value;
 
 		localsettings.extrastopseq = document.getElementById("extrastopseq").value;
 		localsettings.tokenbans = document.getElementById("tokenbans").value;
@@ -14807,6 +14822,12 @@ Current version indicated by LITEVER below.
 		{
 			submit_payload.params.presence_penalty = localsettings.presence_penalty;
 			submit_payload.params.logit_bias = JSON.parse(JSON.stringify(localsettings.logitbiasdict));
+		}
+
+		if(custom_kobold_endpoint != "" && is_using_kcpp_with_guidance() && localsettings.guidance_scale != 1 && localsettings.guidance_prompt!="")
+		{
+			submit_payload.params.guidance_scale = localsettings.guidance_scale;
+			submit_payload.params.negative_prompt = localsettings.guidance_prompt;
 		}
 
 		start_time_taken(); //timestamp start request
@@ -22146,6 +22167,17 @@ Current version indicated by LITEVER below.
 						</div>
 						<table id="placeholder_replace_table" class="settinglabel" style="text-align: center; border-spacing: 3px 2px; border-collapse: separate;">
 						</table>
+					</div>
+					<div style="padding:3px;" class="justifyleft settinglabel">Classifier-Free Guidance <span class="helpicon">?<span
+						class="helptext">Functions as a negative prompt when Guidance Scale is above 1.</span></span>
+						<button type="button" title="Classifier-Free Guidance" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('expandguidance')">Expand Section</button>
+					</div>
+					<div id="expandguidance" class="hidden">
+						<div class="color_red hidden" id="noguidance">Classifier-Free Guidance may be unavailable.</div>
+						<div style="color:#ffffff;">Classifier-Free Guidance prompt functions as a negative prompt when Guidance Scale is above 1, and a positive prompt at Guidance Scale is above 1. Disabled if scale is exactly 1 or CFG prompt is blank.</em><br></div>
+						<div style="display: flex; column-gap: 4px; margin-top: 4px; margin-bottom: 4px;">
+						<input class="form-control menuinput_inline" type="text" placeholder="Enter CFG Prompt" value="" id="guidance_prompt">
+						<div style="padding:1px" class="settinglabel">Scale<br>(0-5): </div><input class="form-control menuinput_inline" style="margin-left:4px;width:70px;" inputmode="numeric" placeholder="(Off)" value="" id="guidance_scale"></div>
 					</div>
 					</div>
 				</div>
