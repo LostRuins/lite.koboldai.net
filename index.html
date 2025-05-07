@@ -1874,6 +1874,7 @@ Current version indicated by LITEVER below.
 		flex-direction: column;
 		margin-top: 16px;
 		padding: 2px;
+		height: 95%;
 	}
 	.corpo_leftpanel_btn
 	{
@@ -1899,6 +1900,13 @@ Current version indicated by LITEVER below.
     	background-position: 8px;
 		background-size: 24px;
 	}
+	.corpo_leftpanel_btn.red:hover {
+		color: #000000;
+		background: #f5767f;
+		background-repeat: no-repeat;
+    	background-position: 8px;
+		background-size: 24px;
+	}
 	.corpo_leftpanel_btn:active {
 		transform: translateY(1px);
 	}
@@ -1906,6 +1914,14 @@ Current version indicated by LITEVER below.
 	{
 		color: #76a8ee;
 		background: #454545;
+		background-repeat: no-repeat;
+    	background-position: 8px;
+		background-size: 24px;
+	}
+	body.darkmode .corpo_leftpanel_btn.red:hover
+	{
+		color: #000000;
+		background: #f5767f;
 		background-repeat: no-repeat;
     	background-position: 8px;
 		background-size: 24px;
@@ -3078,6 +3094,7 @@ Current version indicated by LITEVER below.
 	var temp_scenario = null;
 	var last_token_budget = ""; //to display token limits
 	var last_known_filename = "saved_story.json";
+	var last_used_saveslot = -1; //used for corpo mode quicksave
 	var backup_localmodeport = 5001; //sometimes we reattempt a different port, this stores a backup
 	var localmodeport = 5001;
 	var localmodehost = "localhost";
@@ -4233,9 +4250,8 @@ Current version indicated by LITEVER below.
 
 	}
 
-	function replace_search_placeholders(text) {
-
-		// Remove any instruct tags as needed to ensure a more accurate search
+	function remove_all_instruct_tags(text)
+	{
 		text = replaceAll(text, get_instruct_starttag(false), "");
 		text = replaceAll(text, get_instruct_endtag(false), "");
 		text = replaceAll(text, get_instruct_systag(false), "");
@@ -4245,6 +4261,12 @@ Current version indicated by LITEVER below.
 		text = text.replace(/\{\{\[INPUT\]\}\}/g, "").replace(/\{\{\[OUTPUT\]\}\}/g, "");
 		text = text.replace(/\{\{\[INPUT_END\]\}\}/g, "").replace(/\{\{\[OUTPUT_END\]\}\}/g, "");
 		text = text.replace(/\{\{\[SYSTEM\]\}\}/g, "").replace(/\{\{\[SYSTEM_END\]\}\}/g, "");
+		return text;
+	}
+	function replace_search_placeholders(text) {
+
+		// Remove any instruct tags as needed to ensure a more accurate search
+		text = remove_all_instruct_tags(text);
 
 		// Replace {{user}} and other placeholders
 		text = replace_placeholders(text);
@@ -10402,6 +10424,27 @@ Current version indicated by LITEVER below.
 			document.getElementById("saveslotselecteddropdown").innerHTML = choices;
 		}
 	}
+	function find_unused_saveslot(onDoneCallback)
+	{
+		let slotpromises = [];
+		for(let i=0;i<SAVE_SLOTS;++i)
+		{
+			slotpromises.push(indexeddb_load("slot_"+i+"_meta",""));
+		}
+		Promise.all(slotpromises).then(slotlabels=>
+		{
+			let esid = -1;
+			for(let i=0;i<slotlabels.length;++i)
+			{
+				if(slotlabels[i]=="")
+				{
+					esid = i;
+					break;
+				}
+			}
+			onDoneCallback(esid);
+		});
+	}
 	function display_saveloadcontainer()
 	{
 		mainmenu_untab(true);
@@ -10442,7 +10485,43 @@ Current version indicated by LITEVER below.
 			});
 		}
 	}
-	function save_to_slot(slot,islocal)
+	function quicksave()
+	{
+		if(last_used_saveslot==-1)
+		{
+			if(!safe_to_overwrite())
+			{
+				find_unused_saveslot((slot)=>{
+					if(slot!=-1)
+					{
+						save_to_slot(slot,true,false);
+					}else
+					{
+						msgbox("Unable to Save - No Available New Slots.","Storage Slots Full");
+					}
+				});
+			}
+			else
+			{
+				msgbox("Nothing to save - Current session is empty.","Not Saved");
+			}
+		}
+		else
+		{
+			save_to_slot(last_used_saveslot,true,false);
+		}
+	}
+	function quickdelete()
+	{
+		if(last_used_saveslot!=-1)
+		{
+			delete_from_slot(last_used_saveslot,true,false);
+		}else
+		{
+			msgbox("Nothing to delete - Select a slot first.","No Action Taken");
+		}
+	}
+	function save_to_slot(slot,islocal,showcontainer)
 	{
 		let defaultsavename = (localsettings.opmode==1?"Untitled Story":(localsettings.opmode==2?"Untitled Adventure":(localsettings.opmode==3?"Untitled Chat":"Untitled Instruct")));
 		let savename = defaultsavename + " " + new Date().toLocaleString();
@@ -10462,8 +10541,19 @@ Current version indicated by LITEVER below.
 							userinput = defaultsavename;
 						}
 						indexeddb_save("slot_" + slot + "_data", newcompressedstory)
-						indexeddb_save("slot_" + slot + "_meta", userinput).then(()=>{display_saveloadcontainer()});
+						indexeddb_save("slot_" + slot + "_meta", userinput).then(()=>{
+							if(showcontainer)
+							{
+								display_saveloadcontainer();
+							}
+							else
+							{
+								saveloadchangeslot(true);
+								populate_corpo_leftpanel();
+							}
+						});
 					});
+					last_used_saveslot = slot;
 				}
 
 				if (testslot) {
@@ -10529,7 +10619,7 @@ Current version indicated by LITEVER below.
 			}
 		}
 	}
-	function load_from_slot(slot,islocal)
+	function load_from_slot(slot,islocal,switch_to_corpo)
 	{
 		const proceed_load_from_slot = function() {
 			if(islocal)
@@ -10539,6 +10629,13 @@ Current version indicated by LITEVER below.
 					{
 						hide_popups();
 						import_compressed_story(loadedstorycompressed,false);
+						last_used_saveslot = slot;
+						if(switch_to_corpo)
+						{
+							localsettings.gui_type_chat = 3;
+							localsettings.gui_type_instruct = 3;
+							render_gametext(false,false);
+						}
 					}else{
 						msgbox("Unable to load story from browser storage","Browser Storage Load Failed");
 					}
@@ -10627,15 +10724,32 @@ Current version indicated by LITEVER below.
 			});
 		}
 	}
-	function delete_from_slot(slot,islocal)
+	function delete_from_slot(slot,islocal,showcontainer)
 	{
 		let slotnumshown = (parseInt(slot)+1);
 		if (islocal) {
+			let postdel = function(){
+				if(showcontainer)
+				{
+					display_saveloadcontainer();
+				}
+				else
+				{
+					saveloadchangeslot(true);
+					populate_corpo_leftpanel();
+				}
+			};
 			msgboxYesNo("Delete story in Browser Storage Slot " + slotnumshown + "?", "Delete Browser Storage Slot " + slotnumshown, () => {
 				indexeddb_save("slot_" + slot + "_data", "");
-				indexeddb_save("slot_" + slot + "_meta", "").then(() => { display_saveloadcontainer() });
+				indexeddb_save("slot_" + slot + "_meta", "").then(() => {
+					postdel();
+					if(slot==last_used_saveslot)
+					{
+						last_used_saveslot = -1;
+					}
+				});
 			}, () => {
-				display_saveloadcontainer();
+				postdel();
 			});
 		} else {
 			msgboxYesNo("Delete story in Server Storage Slot " + slotnumshown + "?", "Delete Server Storage Slot " + slotnumshown, () => {
@@ -10679,14 +10793,14 @@ Current version indicated by LITEVER below.
 		let selectedslot = document.getElementById("saveslotselecteddropdown").value;
 		let selectedlocation = document.getElementById("saveslotlocationdropdown").value;
 		let islocal = (selectedlocation=="1");
-		save_to_slot(selectedslot,islocal);
+		save_to_slot(selectedslot,islocal,true);
 	}
 	function load_from_curr_slot()
 	{
 		let selectedslot = document.getElementById("saveslotselecteddropdown").value;
 		let selectedlocation = document.getElementById("saveslotlocationdropdown").value;
 		let islocal = (selectedlocation=="1");
-		load_from_slot(selectedslot,islocal);
+		load_from_slot(selectedslot,islocal,false);
 	}
 	function download_from_curr_slot()
 	{
@@ -10700,7 +10814,7 @@ Current version indicated by LITEVER below.
 		let selectedslot = document.getElementById("saveslotselecteddropdown").value;
 		let selectedlocation = document.getElementById("saveslotlocationdropdown").value;
 		let islocal = (selectedlocation=="1");
-		delete_from_slot(selectedslot,islocal);
+		delete_from_slot(selectedslot,islocal,true);
 	}
 
 	var cached_model_list = null;
@@ -12716,6 +12830,7 @@ Current version indicated by LITEVER below.
 			documentdb_data = "";
 		}
 		warn_unsaved = false;
+		last_used_saveslot = -1;
 		show_corpo_leftpanel(false);
 		update_toggle_lightmode(false); //load theme but dont save or toggle it
 		render_gametext(save); //necessary to trigger an autosave to wipe out current story in case they exit browser after newgame.
@@ -18956,10 +19071,11 @@ Current version indicated by LITEVER below.
 				let entry = "";
 				if(testslot)
 				{
-					entry = `<div onclick="load_from_slot(`+i+`, true)" class="corpo_leftpanel_btn" type="button">`+testslot+`</div>`;
+					entry = `<div onclick="load_from_slot(`+i+`, true, true)" class="corpo_leftpanel_btn" type="button">`+testslot+`</div>`;
 				}
 				panelitems += entry;
 			}
+			panelitems += `<div style="margin-top: auto; margin-bottom:4px;  width: 230px;"><div onclick="quicksave()" class="corpo_leftpanel_btn" type="button" style="width:110px;padding-left: 44px;background-image: var(--img_save);">Save</div><div onclick="quickdelete()" class="corpo_leftpanel_btn red" type="button" style="width:110px;padding-left: 44px;background-image: var(--img_delete);">Delete</div></div>`
 			panel.innerHTML = panelitems;
 		});
 	}
