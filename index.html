@@ -3069,7 +3069,8 @@ Current version indicated by LITEVER below.
 	var uses_cors_proxy = false; //we start off attempting a direct connection. switch to proxy if that fails
 	var synchro_polled_response = null;
 	var last_stop_reason = ""; //update stop reason if known
-	var synchro_pending_stream = ""; //used for token pseduo streaming for kobold api only
+	var synchro_pending_stream = ""; //used for storing incomplete streaming text
+	var gemini_was_thinking = false; //used as a switch to determine when thinking ends, to wrap output in tags
 	var waiting_for_tool_call = 0; //0=not waiting, 1=autosummary, 2=websearchsummary
 	var oaiemulatecompletionscontent = "";
 	var italics_regex = new RegExp(/\*(\S[^*]+\S)\*/g); //the fallback regex
@@ -5111,7 +5112,20 @@ Current version indicated by LITEVER below.
 			if (custom_gemini_key != "" && data.candidates != null && data.candidates.length>0 && data.candidates[0].output && data.candidates[0].output != "") {
 				synchro_polled_response = data.candidates[0].output;
 			}else if (custom_gemini_key != "" && data.candidates != null && data.candidates.length>0 && data.candidates[0].content && data.candidates[0].content.parts != null && data.candidates[0].content.parts.length>0) {
-				synchro_polled_response = data.candidates[0].content.parts[0].text;
+				synchro_polled_response = "";
+				for(let x=0;x<data.candidates[0].content.parts.length;++x)
+				{
+					if(!data.candidates[0].content.parts[x].text)
+					{
+						continue;
+					}
+					let tmp = data.candidates[0].content.parts[x].text;
+					if(data.candidates[0].content.parts[x].thought)
+					{
+						tmp = `<think>${tmp}</think>\n`;
+					}
+					synchro_polled_response += tmp;
+				}
 				//try to handle the stripping of spaces
 				if(localsettings.opmode==1 && gametext_arr.length>0 && synchro_polled_response!="")
 				{
@@ -5193,6 +5207,7 @@ Current version indicated by LITEVER below.
 	function oai_api_stream_sse(sub_endpt,submit_payload,submit_headers)
 	{
 		synchro_pending_stream = "";
+		gemini_was_thinking = false;
 		let reqOpt =
 		{method: 'POST',
 		headers: submit_headers,
@@ -5245,9 +5260,25 @@ Current version indicated by LITEVER below.
 						for (let event of chunk) {
 							//for gemini
 							if (event.data && event.data.candidates && event.data.candidates.length>0) {
-								if(event.data.candidates[0].content && event.data.candidates[0].content.parts && event.data.candidates[0].content.parts.length>0 && event.data.candidates[0].content.parts[0].text)
+								if(event.data.candidates[0].content && event.data.candidates[0].content.parts && event.data.candidates[0].content.parts.length>0)
 								{
-									synchro_pending_stream += event.data.candidates[0].content.parts[0].text;
+									for(let x=0;x<event.data.candidates[0].content.parts.length;++x)
+									{
+										if(event.data.candidates[0].content.parts[x].thought)
+										{
+											gemini_was_thinking = true;
+										}
+										if(!event.data.candidates[0].content.parts[x].text)
+										{
+											continue;
+										}
+										if(!event.data.candidates[0].content.parts[x].thought && gemini_was_thinking)
+										{
+											synchro_pending_stream = `<think>${synchro_pending_stream}</think>\n`;
+											gemini_was_thinking = false;
+										}
+										synchro_pending_stream += event.data.candidates[0].content.parts[x].text;
+									}
 								}
 								continue;
 							}
@@ -5300,6 +5331,7 @@ Current version indicated by LITEVER below.
 						synchro_polled_response = cleanup_story_completion(synchro_polled_response);
 					}
 					synchro_pending_stream = "";
+					gemini_was_thinking = false;
 					poll_pending_response();
 					//handle gen failures
 					if(resp.status==503)
@@ -12620,6 +12652,7 @@ Current version indicated by LITEVER below.
 		synchro_polled_response = null;
 		last_stop_reason = "";
 		synchro_pending_stream = "";
+		gemini_was_thinking = false;
 		waiting_for_tool_call = 0;
 		horde_poll_nearly_completed = false;
 		oaiemulatecompletionscontent = "";
@@ -12641,6 +12674,7 @@ Current version indicated by LITEVER below.
 		synchro_polled_response = null;
 		last_stop_reason = "";
 		synchro_pending_stream = "";
+		gemini_was_thinking = false;
 		waiting_for_tool_call = 0;
 		oaiemulatecompletionscontent = "";
 		last_reply_was_empty = false;
@@ -14841,6 +14875,7 @@ Current version indicated by LITEVER below.
 			synchro_polled_response = null;
 			last_stop_reason = "";
 			synchro_pending_stream = "";
+			gemini_was_thinking = false;
 
 			//if this is set, we don't use horde, use the custom endpoint instead
 			if (custom_kobold_endpoint != "") //handle for kai
@@ -15315,6 +15350,14 @@ Current version indicated by LITEVER below.
 				if(document.getElementById("usegeminiweb").checked)
 				{
 					payload["tools"] = [{"google_search": {}}];
+				}
+
+				if(mdlname.includes("gemini-2.5"))
+				{
+					if(!document.getElementById("usegeminithink").checked)
+					{
+						payload["generationConfig"]["thinkingConfig"] = {"thinkingBudget": 0};
+					}
 				}
 
 				let sentrole = document.getElementById("geminiroledropdown").value;
@@ -22976,6 +23019,10 @@ Current version indicated by LITEVER below.
 					<div>
 						<input type="checkbox" title="Use Gemini WebSearch" id="usegeminiweb">
 						<div class="box-label">Use WebSearch</div>
+					</div>
+					<div>
+						<input type="checkbox" title="Allow Gemini Thinking" id="usegeminithink" checked>
+						<div class="box-label">Allow Thinking</div>
 					</div>
 					<div><input type="checkbox" id="geministreaming" title="Enable SSE Streaming" onchange="">
 						<div class="box-label">Streaming</div>
