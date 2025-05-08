@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 238;
+	const LITEVER = 239;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -10572,6 +10572,7 @@ Current version indicated by LITEVER below.
 			}
 			const slotwrite = function () {
 				warn_unsaved = false;
+				last_used_saveslot = -1;
 				inputBox("Enter a label for this Server Storage Slot data", "Enter a label", savename, defaultsavename, () => {
 					let userinput = getInputBoxValue();
 					if (userinput.trim() == "") {
@@ -10633,6 +10634,8 @@ Current version indicated by LITEVER below.
 						if(switch_to_corpo)
 						{
 							localsettings.gui_type_chat = 3;
+							localsettings.gui_type_story = 3;
+							localsettings.gui_type_adventure = 3;
 							localsettings.gui_type_instruct = 3;
 							render_gametext(false,false);
 						}
@@ -10641,6 +10644,7 @@ Current version indicated by LITEVER below.
 					}
 				});
 			} else {
+				last_used_saveslot = -1;
 				fetch(custom_kobold_endpoint + koboldcpp_savedata_load_endpoint, {
 				method: 'POST', // or 'PUT'
 				headers: get_kobold_header(),
@@ -12354,10 +12358,12 @@ Current version indicated by LITEVER below.
 		if (document.getElementById('opmode').value == 1) {
 			document.getElementById('gui_type').value = localsettings.gui_type_story;
 			document.getElementById('uipicker_aesthetic').classList.remove('hidden');
+			document.getElementById('uipicker_corpo').classList.remove('hidden');
 		}
 		if (document.getElementById('opmode').value == 2) {
 			document.getElementById('gui_type').value = localsettings.gui_type_adventure;
 			document.getElementById('uipicker_aesthetic').classList.remove('hidden');
+			document.getElementById('uipicker_corpo').classList.remove('hidden');
 		}
 		if (document.getElementById('opmode').value == 3) {
 			document.getElementById('gui_type').value = localsettings.gui_type_chat;
@@ -18666,6 +18672,68 @@ Current version indicated by LITEVER below.
 		return turns;
 	}
 
+	function repack_adventure_history(input)
+	{
+		const regex = /\n\n> .+?\n/g;
+		const result = [];
+		let lastIndex = 0;
+		let match;
+		while ((match = regex.exec(input)) !== null) {
+			const start = match.index;
+			const end = regex.lastIndex;
+
+			if (start > lastIndex) {
+				// Opponent's turn (text before this match)
+				result.push({
+					msg: input.slice(lastIndex, start).trim(),
+					myturn: false
+				});
+			}
+
+			// My turn
+			let mymsg = match[0].trim();
+			if(mymsg.startsWith("> "))
+			{
+				mymsg = mymsg.substring(2);
+			}
+			result.push({
+				msg: mymsg,
+				myturn: true
+			});
+
+			lastIndex = end;
+		}
+
+		// Any remaining text after last match is opponent's turn
+		if (lastIndex < input.length) {
+			result.push({
+				msg: input.slice(lastIndex).trim(),
+				myturn: false
+			});
+		}
+
+		// Filter out empty messages
+		return result.filter(t => t.msg.length > 0);
+	}
+
+	function repack_story_history(input)
+	{
+		let arr = input.split("\n\n");
+		let result = [];
+		for(let i=0;i<arr.length;++i)
+		{
+			if(arr[i].trim()=="")
+			{
+				continue;
+			}
+			result.push({
+				msg: arr[i],
+				myturn: false
+			});
+		}
+		return result;
+	}
+
 	function corpo_chunk_prev()
 	{
 		let incomplete_resp = (synchro_pending_stream != "" || pending_response_id != "");
@@ -18698,6 +18766,14 @@ Current version indicated by LITEVER below.
 		{
 			chatunits = repack_chat_history(currctx);
 		}
+		else if(localsettings.opmode==2)
+		{
+			chatunits = repack_adventure_history(currctx);
+		}
+		else if(localsettings.opmode==1)
+		{
+			chatunits = repack_story_history(currctx);
+		}
 		else
 		{
 			chatunits = repack_instruct_history(currctx);
@@ -18714,6 +18790,31 @@ Current version indicated by LITEVER below.
 					let cont = chatunits[i].msg;
 					let chunk = "\n" + chatunits[i].name + ": " + cont;
 					gametext_arr.push(chunk);
+				}
+			}
+			else if(localsettings.opmode==2) //adventure mode
+			{
+				for(let i=0;i<=idx;++i)
+				{
+					let cont = chatunits[i].msg;
+					if(chatunits[i].myturn)
+					{
+						cont = `\n\n> ${cont}\n\n`;
+					}
+					gametext_arr.push(cont);
+
+				}
+			}
+			else if(localsettings.opmode==1) //story mode
+			{
+				for(let i=0;i<=idx;++i)
+				{
+					let cont = chatunits[i].msg;
+					if(i!=idx)
+					{
+						cont = `${cont}\n\n`;
+					}
+					gametext_arr.push(cont);
 				}
 			}
 			else
@@ -18781,6 +18882,14 @@ Current version indicated by LITEVER below.
 		{
 			chatunits = repack_chat_history(currctx);
 		}
+		else if(localsettings.opmode==2)
+		{
+			chatunits = repack_adventure_history(currctx);
+		}
+		else if(localsettings.opmode==1)
+		{
+			chatunits = repack_story_history(currctx);
+		}
 		else
 		{
 			chatunits = repack_instruct_history(currctx);
@@ -18812,6 +18921,37 @@ Current version indicated by LITEVER below.
 					{
 						let chunk = "\n" + chatunits[i].name + ": " + cont;
 						gametext_arr.push(chunk);
+					}
+				}
+			}
+			else if(localsettings.opmode==2) //adventure mode
+			{
+				for(let i=0;i<chatunits.length;++i)
+				{
+					let cont = (i==idx?newtxt:chatunits[i].msg);
+					if(cont!="")
+					{
+						let chunk = cont;
+						if(chatunits[i].myturn)
+						{
+							chunk = `\n\n> ${chunk}\n\n`;
+						}
+						gametext_arr.push(chunk);
+					}
+				}
+			}
+			else if(localsettings.opmode==1) //story mode
+			{
+				for(let i=0;i<chatunits.length;++i)
+				{
+					let cont = (i==idx?newtxt:chatunits[i].msg);
+					if(cont!="")
+					{
+						if(i<chatunits.length-1)
+						{
+							cont = `${cont}\n\n`;
+						}
+						gametext_arr.push(cont);
 					}
 				}
 			}
@@ -18882,6 +19022,14 @@ Current version indicated by LITEVER below.
 		{
 			chatunits = repack_chat_history(input);
 		}
+		else if(localsettings.opmode==2)
+		{
+			chatunits = repack_adventure_history(input);
+		}
+		else if(localsettings.opmode==1)
+		{
+			chatunits = repack_story_history(input);
+		}
 		else
 		{
 			chatunits = repack_instruct_history(input);
@@ -18930,7 +19078,7 @@ Current version indicated by LITEVER below.
 			{
 				namepart = curr.name;
 			}
-			else if(localsettings.inject_chatnames_instruct && localsettings.instruct_has_markdown)
+			else if(localsettings.opmode==4 && localsettings.inject_chatnames_instruct && localsettings.instruct_has_markdown)
 			{
 				let validprefixes = [];
 				if(curr.myturn)
@@ -19001,13 +19149,19 @@ Current version indicated by LITEVER below.
 				(curr.myturn ? `` : `<button title="Retry Chunk" onclick="corpo_retry_chunk(${i})" class="corpo_hover_btn" type="button" style="background-image: var(--img_corpo_retry);"></button>`)
 				+ `</div>`);
 
-			newbodystr += `<div class="corpostyleitem">
-				<div><img ${(curr.myturn ? "" : `onclick="corpo_click_avatar()"`)} src="${(curr.myturn ? human_square : niko_square)}" class="corpoavatar"/></div>
+			newbodystr += `<div class="corpostyleitem">`;
+
+			if(localsettings.opmode==1)
+			{
+				newbodystr += `<div style="width:100%">`;
+			}
+			else {
+				newbodystr += `<div><img ${(curr.myturn ? "" : `onclick="corpo_click_avatar()"`)} src="${(curr.myturn ? human_square : niko_square)}" class="corpoavatar"/></div>
 				<div style="width:100%">
-				<div class="corpostyleitemheading">`+ namepart + `</div>
-				`+ bodypart + chunkbtns + `
-				</div>
-				</div>`;
+				<div class="corpostyleitemheading">`+ namepart + `</div>`;
+			}
+
+			newbodystr += bodypart + chunkbtns + `</div></div>`;
 		}
 		if(incomplete_resp)
 		{
@@ -19017,13 +19171,22 @@ Current version indicated by LITEVER below.
 			{
 				namepart = "";
 			}
-			newbodystr += `<div class="corpostyleitem">
-			<div><img src="`+niko_square+`" class="corpoavatar"/></div>
-			<div>
-				<div class="corpostyleitemheading">`+namepart+`</div>
+			newbodystr += `<div class="corpostyleitem">`;
+
+			if (localsettings.opmode == 1) {
+				newbodystr += `
+				<div>
+				<div class="corpostyleitemcontent"><p><span class="pending_text">`+ futuretext + `</span></p></div>
+				</div>`;
+			}
+			else {
+				newbodystr += `<div><img src="` + niko_square + `" class="corpoavatar"/></div>
+				<div>
+				<div class="corpostyleitemheading">`+ namepart +`</div>
 				<div class="corpostyleitemcontent"><p><span class="pending_text">`+ futuretext +`</span></p></div>
-			</div>
-			</div>`;
+				</div>`;
+			}
+			newbodystr += `</div>`;
 		}
 
 		return newbodystr;
