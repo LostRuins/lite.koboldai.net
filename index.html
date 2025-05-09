@@ -3284,6 +3284,7 @@ Current version indicated by LITEVER below.
 		guidance_prompt: "",
 		guidance_scale: 1.0,
 		separate_end_tags: false,
+		enable_randomizing_tags: false,
 		idle_responses: 0,
 		idle_duration: 60,
 		export_settings: true, //affects if settings are included with the story and sharelinks
@@ -4286,6 +4287,34 @@ Current version indicated by LITEVER below.
 		text = text.replace(/\{\{\[SYSTEM\]\}\}/g, "").replace(/\{\{\[SYSTEM_END\]\}\}/g, "");
 		return text;
 	}
+
+	function inject_randomness(text,macro="pick",roll=true)
+	{
+		//Implements SillyTavern's PickReplace and DiceRoll macros, for compatibility with existing cards
+		text = text.replace(new RegExp("{{"+macro+"\s?::?([^}]+)}}","gi"), function (m, listString) {
+			const list = listString.includes('::') ? listString.split('::') : listString.replace(/\\,/g, '##�COMMA�##').split(',').map(item => item.trim().replace(/##�COMMA�##/g, ','));
+			return (list.length===0 ? '' : list[Math.floor(Math.random()*list.length)]);
+		});
+
+		if(roll){
+			text = text.replace(/{{roll[ : ]([^}]+)}}/gi, function (m, matchValue) {
+				let formula = matchValue.trim();
+				if (/^\d+$/.test(formula)){ formula = "1d${formula}"; }
+				pieces = formula.match(/^([1-9]\d*)?d([1-9]\d*)([x*×]\d+)?([+-]\d+)?$/i);
+				if (!pieces) {
+					return "";
+				}
+				var total = 0;
+				for (let a = 0; a < ((pieces[1]-0)||1); ++a) {
+					total += (1+Math.floor(Math.random()*pieces[2]));
+				}
+				total = total*((pieces[3].substring(1)-0)||1)+((pieces[4]-0)||0);
+				return String(total);
+			});
+		}
+		return text;
+	}
+
 	function replace_search_placeholders(text) {
 
 		// Remove any instruct tags as needed to ensure a more accurate search
@@ -4316,6 +4345,9 @@ Current version indicated by LITEVER below.
 	}
 	function replace_noninstruct_placeholders(inputtxt,escape=false)
 	{
+		if (localsettings.enable_randomizing_tags) {
+			inputtxt = inject_randomness(inputtxt,macro="random",roll=false);
+		}
 		let firstopponent = localsettings.chatopponent;
 		if (firstopponent && firstopponent.includes("||$||")) {
 			let coarr = firstopponent.split("||$||");
@@ -11457,6 +11489,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("inject_chatnames_instruct").checked = localsettings.inject_chatnames_instruct;
 		document.getElementById("inject_jailbreak_instruct").checked = localsettings.inject_jailbreak_instruct;
 		document.getElementById("separate_end_tags").checked = localsettings.separate_end_tags;
+		document.getElementById("enable_randomizing_tags").checked = localsettings.enable_randomizing_tags;
 		document.getElementById("idle_responses").value = localsettings.idle_responses;
 		document.getElementById("idle_duration").value = localsettings.idle_duration;
 		document.getElementById("fix_alpaca_leak").checked = localsettings.fix_alpaca_leak;
@@ -11920,6 +11953,7 @@ Current version indicated by LITEVER below.
 		localsettings.inject_chatnames_instruct = (document.getElementById("inject_chatnames_instruct").checked ? true : false);
 		localsettings.inject_jailbreak_instruct = (document.getElementById("inject_jailbreak_instruct").checked ? true : false);
 		localsettings.separate_end_tags = (document.getElementById("separate_end_tags").checked ? true : false);
+		localsettings.enable_randomizing_tags = (document.getElementById("enable_randomizing_tags").checked ? true : false);
 		localsettings.idle_responses = document.getElementById("idle_responses").value;
 		localsettings.idle_duration = document.getElementById("idle_duration").value;
 		localsettings.fix_alpaca_leak = (document.getElementById("fix_alpaca_leak").checked ? true : false);
@@ -12522,6 +12556,14 @@ Current version indicated by LITEVER below.
 		documentdb_searchrange = cleannum(documentdb_searchrange,0,1024);
 		documentdb_chunksize = parseInt(documentdb_chunksize);
 		documentdb_chunksize = cleannum(documentdb_chunksize,32,2048);
+
+		if(localsettings.enable_randomizing_tags)
+		{
+			current_memory = inject_randomness(current_memory,macro="pick",roll=true);
+			current_anote = inject_randomness(current_anote,macro="pick",roll=true);
+			gametext_arr = gametext_arr.map(txt => inject_randomness(txt,macro="pick",roll=true));
+		}
+
 	}
 
 	function set_personal_notes()
@@ -14180,6 +14222,12 @@ Current version indicated by LITEVER below.
 		let img_gen_trigger_prompt = "";
 		let doNotGenerate = false;
 		retry_in_progress = false;
+
+		//inject randomness
+		if(localsettings.enable_randomizing_tags)
+		{
+			newgen = inject_randomness(newgen,macro="(?:pick|random)",roll=true);
+		}
 
 		//match the request for creating images in instruct modes
 		if(newgen!="" && localsettings.img_gen_from_instruct && localsettings.opmode == 4 && localsettings.generate_images_mode!=0 && !newgen.includes("\n"))
@@ -21905,6 +21953,11 @@ Current version indicated by LITEVER below.
 							<div class="justifyleft settingsmall">Separate End Tags <span class="helpicon">?<span
 								class="helptext">Allows using separate Instruction and Response End Tags, instead of combing them with the start tag. Not recommended for beginners.</span></span></div>
 							<input type="checkbox" title="Separate End Tags" id="separate_end_tags" style="margin:0px 0px 0px auto;" onchange="toggle_separate_end_tags()">
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Randomizing Tags <span class="helpicon">?<span
+								class="helptext">Enables randomizing tags, like {{pick:option1,option2,option3}} or {{roll:2d6}}.</span></span></div>
+							<input type="checkbox" title="Randomizing Tags" id="enable_randomizing_tags" style="margin:0px 0px 0px auto;">
+						</div>
 						</div>
 					</div>
 				</div>
