@@ -21331,13 +21331,121 @@ Current version indicated by LITEVER below.
 	const underlinedPrimary = "underlinedYellow"
 	const underlinedClicked = "underlinedViolet"
 
-	/**
-	 * Retrieves the value of a form field by its key from a FormData object.
-	 *
-	 * @param {string} formId - The ID of the HTML form element that contains the field.
-	 * @param {string} key - The name attribute of the form field to retrieve.
-	 * @returns {*} The value of the form field, or null if it does not exist in the FormData object.
-	 */
+    const wordsFrequencyAnalyzers = {
+        "id-input-webserver-wordfreq-checkbox": async function(inputText) {
+            let bodyRequest = {"text": inputText}
+            console.log("use the webserver for word freq analysis...")
+            const wordsFrequencyURL = parseWebserverDomain()
+            try {
+                let response = await fetch(wordsFrequencyURL, {
+                    method: "POST",
+                    body: JSON.stringify(bodyRequest)
+                })
+                console.assert(response.status === 200, `response.status: ${response.status}!`)
+                let bodyResponseJson = await response.json()
+                setElementCssClass("waiting-for-be", "display-none")
+                let freq = bodyResponseJson["words_frequency"]
+                let nTotalRows = bodyResponseJson["n_total_rows"]
+                console.log(`getWordsFreq::nTotalRows: '${nTotalRows}'`)
+                populateWordsFrequencyTables(freq, nTotalRows)
+            } catch (err) {
+                console.error("getWordsFrequency::err on webserver request/response:", err, "#")
+                console.log(`wordsFrequencyURL:`, typeof wordsFrequency, "=>", wordsFrequencyURL, "#")
+                setElementCssClass("waiting-for-be", "display-none")
+                setElementCssClass("waiting-for-be-error", "display-block")
+            }
+        },
+
+        'stemmer-embedded': function(inputText) {
+            console.log("use the embedded functionality for word freq analysis...")
+            try {
+                const bodyResponseJson = textStemming(inputText)
+                setElementCssClass("waiting-for-be", "display-none")
+                let freq = bodyResponseJson["wordsStemsDict"]
+                let nTotalRows = bodyResponseJson["nTotalRows"]
+                console.log(`getWordsFreq::nTotalRows: '${nTotalRows}', populateWordsFrequencyTables...`)
+                populateWordsFrequencyTables(freq, nTotalRows)
+            } catch (err) {
+                console.error("getWordsFrequency::err on useWordfreqWebserver:", err, "#")
+                setElementCssClass("waiting-for-be", "display-none")
+                setElementCssClass("waiting-for-be-error", "display-block")
+            }
+        }
+    }
+
+    function filterElementsFromList (inputArray,  filterWhitespaces = false, filterArgs=["", " "]) {
+        if (filterWhitespaces) {
+            inputArray = inputArray.filter(e => String(e).trim());
+        }
+        return inputArray.filter((x) => !filterArgs.includes(x));
+    }
+
+    function customWordPunctTokenize(s, pattern = /([A-Za-zÀ-ÿ-]+|[0-9._]+|.|!|\?|'|"|:|;|,|-)/i, filterWhitespaces=true) {
+        const results = s.split(pattern)
+        return filterElementsFromList(results, filterWhitespaces)
+    }
+
+    function textStemming(text) {
+        const textSplitNewline = text.split('\n');
+        const rowWordsTokens = [];
+        const rowOffsetsTokens = [];
+        textSplitNewline.forEach((row, rowIndex) => {
+            const tokens = customWordPunctTokenize(row);
+            const offsets = getOffsets(row, tokens);
+            rowWordsTokens.push(tokens);
+            rowOffsetsTokens.push(offsets);
+        });
+        const wordsStemsDict = getWordsTokensAndIndexes(rowWordsTokens, rowOffsetsTokens);
+        const nTotalRows = textSplitNewline.length;
+        return { nTotalRows, wordsStemsDict };
+    }
+
+    function getWordsTokensAndIndexes(wordsTokensList, offsetsTokensList, minLenWords = 3) {
+        const wordsStemsDict = {};
+        wordsTokensList.forEach((wordsTokens, nRow) => {
+            wordsTokens.forEach((word, index) => {
+                const cleanedWord = cleanString(word);
+                if (cleanedWord.length < minLenWords) return;
+                // Apply stemming
+                const stem = porterStemmer(cleanedWord);
+                if (!wordsStemsDict[stem]) {
+                    wordsStemsDict[stem] = { count: 0, word_prefix: stem, offsets_array: [] };
+                }
+                const offsets = offsetsTokensList[nRow][index];
+                updateStemsList(wordsStemsDict[stem], word, offsets, nRow);
+            });
+        });
+
+        return wordsStemsDict;
+    }
+
+    function updateStemsList(currentStemObj, word, offsets, nRow) {
+        currentStemObj.count += 1;
+        currentStemObj.offsets_array.push({
+            word,
+            offsets: [offsets.start, offsets.end], // Convert offsets to an array format
+            n_row: nRow
+        });
+    }
+
+    function cleanString(s) {
+        return s.replace(/[^\w\s]|_/g, '').replace(/\s+/g, '').toLowerCase();
+    }
+
+    function getOffsets(text, tokens) {
+        const offsets = [];
+        let currentIndex = 0;
+
+        tokens.forEach(token => {
+            const start = text.indexOf(token, currentIndex);
+            const end = start + token.length;
+            offsets.push({ start, end });
+            currentIndex = end;
+        });
+
+        return offsets;
+    }
+
 	function getFormDataByKey(formId, key) {
 		let formElement = document.getElementById(formId)
 		const data = new FormData(formElement);
@@ -21345,13 +21453,6 @@ Current version indicated by LITEVER below.
 		return dataValue
 	}
 
-	/**
-	 * Read and preview a selected text file.
-	 *
-	 * @function previewFile
-	 * @description Displays the contents of a selected text file within an element with id 'editor'.
-	 * @param {none}
-	 */
 	function previewFile() {
 		const editor = document.getElementById(editorFieldLabel);
 		const [file] = document.querySelector("input[type=file]").files;
@@ -21366,15 +21467,6 @@ Current version indicated by LITEVER below.
 		}
 	}
 
-	/**
-	 * Scrolls an editor element to a specific y coordinate (calculated using given lines/rows number).
-	 *
-	 * @function scrollToGivenPoint
-	 * @param {HTMLElement} editorElement The HTML element id of the editor.
-	 * @param {number} line The line/row number to scroll to (0-indexed).
-	 * @param {number} nTotalRows The total number of text lines/rows.
-	 * @param {number} [negativeOffsetPerc=0.12] An optional percentage value to add a negative offset, preventing scrolling beyond the end of the viewport.
-	 */
 	function scrollToGivenPoint(editorElement, line, nTotalRows, negativeOffsetPerc=0.12) {
 		// try to scroll div to row... font-size on div is 12px
 		let scrollHeight = parseFloat(editorElement.scrollHeight, 10)
@@ -21388,14 +21480,6 @@ Current version indicated by LITEVER below.
 		editorElement.scrollTo(0, offsetToScrollInt)
 	}
 
-	/**
-	 * Scrolls the editor to a specified position and sets the caret at that point.
-	 *
-	 * @param {number} line - The line/row number (0-indexed) where the caret should be placed.
-	 * @param {Array<number>} offsetColumn - A number array containing two numbers representing the column offsets for the start and end of the selection range.
-	 * @param {number} nTotalRows - The total number of lines/rows in the editor for scrolling purposes.
-	 * @param {number} [negativeOffsetPerc=0.12] - A percentage value used to offset the vertical scroll position (default: 0.12).
-	 */
 	function setCaret(line, offsetColumn, nTotalRows, negativeOffsetPerc=0.12) {
 		let editorElement = document.getElementById(editorFieldLabel);
 		let validChildNodes = []
@@ -21418,60 +21502,44 @@ Current version indicated by LITEVER below.
 		scrollToGivenPoint(editorElement, line, nTotalRows, negativeOffsetPerc);
 	}
 
-	/**
-	 * Updates the CSS class of an HTML element with the specified ID.
-	 *
-	 * @param {string} elementId - The ID of the HTML element to update.
-	 * @param {string} currentClass - The new CSS class to apply to the element.
-	 */
 	const setElementCssClass = (elementId, currentClass) => {
 		let spanWaitingFor = document.getElementById(elementId)
 		spanWaitingFor.setAttribute("class", currentClass)
 	}
 
-	/**
-	 * Fetches words frequency data from the server and populates the words frequency tables.
-	 * 
-	 * @async
-	 * @function getWordsFrequency
-	 */
+    function parseWebserverDomain () {
+        const remoteWebServerEl = document.getElementById("id-input-webserver-wordfreq")
+        console.log("remoteWebServer.value:", remoteWebServerEl.value, "#")
+        const remoteWebServerValue = remoteWebServerEl.value ?? remoteWebServer
+        const remoteWebServerDomain = remoteWebServerValue.trim().replace(/\/+$/, '')
+        return `${remoteWebServerDomain}/words-frequency`
+    }
+
 	async function getWordsFrequency() {
 		let text = document.getElementById(editorFieldLabel)
 		// replace repeated newlines to prepare setCaret() use
 		text.innerText = text.innerText.replace(/[\r\n]+/g, '\n')
-		let bodyRequest = {"text": text.innerText}
 		setElementCssClass("waiting-for-be-error", "display-none")
 		setElementCssClass("waiting-for-be", "display-block")
 		let wordsFrequencyTableTitleEl = document.getElementById("id-words-frequency-table-title")
 		wordsFrequencyTableTitleEl.innerText = wordsFrequencyTableTitleText
 		let wordsFrequency = document.getElementById("words-frequency")
 		wordsFrequency.innerHTML = ""
-		try {
-			let response = await fetch(`${remoteWebServer}/words-frequency`, {
-				method: "POST",
-				body: JSON.stringify(bodyRequest)
-			})
-			console.assert(response.status, 200)
-			let bodyResponseJson = await response.json()
-			setElementCssClass("waiting-for-be", "display-none")
-			let freq = bodyResponseJson["words_frequency"]
-			let nTotalRows = bodyResponseJson["n_total_rows"]
-			console.log(`getWordsFreq::nTotalRows: '${nTotalRows}'`)
-			populateWordsFrequencyTables(freq, bodyResponseJson["n_total_rows"])
-		} catch (err) {
-			console.error("getWordsFrequency::err:", err, "#")
-			setElementCssClass("waiting-for-be", "display-none")
-			setElementCssClass("waiting-for-be-error", "display-block")
+        const choiceWordFreqAnalyzerEl = document.getElementById('id-input-webserver-wordfreq-checkbox')
+        console.log("choiceWordFreqAnalyzerEl checked:", choiceWordFreqAnalyzerEl.checked, "#")
+        switch (choiceWordFreqAnalyzerEl.checked) {
+            case true: // webserver
+                await wordsFrequencyAnalyzers['id-input-webserver-wordfreq-checkbox'](text.innerText)
+                break;
+            case false: // embedded
+                wordsFrequencyAnalyzers['stemmer-embedded'](text.innerText)
+                break;
+            default:
+                console.warn("No valid analyzer selected.");
+                break;
 		}
 	}
 
-	/**
-	 * Returns a sorting function for the given property and order.
-	 *
-	 * @param {string} property - The property to sort by.
-	 * @param {string} order - The order of sorting ('asc' or 'desc').
-	 * @returns {function} A comparison function that sorts data in the specified order.
-	 */
 	function dynamicSort(property, order) {
 		let sort_order = order === "desc" ? -1 : 1
 		return function (a, b){
@@ -21487,18 +21555,6 @@ Current version indicated by LITEVER below.
 		}
 	}
 
-	/**
-	 * This function filters an array based on a property key and the value to use for filter.
-	 *
-	 * @description
-	 *   The function iterates over each element in the array.
-	 *   If the element's value for the specified key matches the search value (it's included, case-insensitive), it is added to the new array.
-	 *
-	 * @param {array} arr - The array to filter.
-	 * @param {string} key - The property key to match against.
-	 * @param {string} value - The value to search for in the array elements.
-	 * @returns {array} A new array containing only the elements that match the specified value.
-	 */
 	function arrayFilter(arr, key, value) {
 		const newArray = [];
 		for(let i=0, l=arr.length; i<l; i++) {
@@ -21511,22 +21567,11 @@ Current version indicated by LITEVER below.
 	return newArray;
 	}
 
-	/**
-	 * Updates the words frequency tables with new data.
-	 *
-	 * @description
-	 *   This function is called whenever a change in form input fields or the uploaded text file affects the words frequency table's content.
-	 *   It sorts and filters the word groups based on user preferences, and updates the HTML elements containing these tables.
-	 *
-	 * @async
-	 * @function updateWordsFrequencyTables
-	 */
 	async function updateWordsFrequencyTables() {
 		let nTotalRows = wfo["nTotalRows"]
 		if (nTotalRows === null || nTotalRows < 1) {
 			alert("let's get some data before updating the result table...")
 		}
-
 		let _wfo = wfo["words_frequency"]
 		let reduced = Object.values(_wfo)
 		let order = getFormDataByKey("id-form-order-by", "order")
@@ -21535,7 +21580,7 @@ Current version indicated by LITEVER below.
 
 		let inputFilter = document.getElementById("filter-words-frequency")
 		let inputFilterValue = inputFilter.value
-		if (inputFilterValue != undefined && inputFilter.value !== "") {
+		if (inputFilterValue !== undefined && inputFilter.value !== "") {
 			reduced = arrayFilter(reduced, "word_prefix", inputFilterValue)
 		}
 
@@ -21548,26 +21593,15 @@ Current version indicated by LITEVER below.
 		}
 	}
 
-	/**
-	 * Populate the words frequency tables in the UI with data from the provided JSON object.
-	 *
-	 * @param {string} wordsFrequencyObj - The JSON string containing word frequencies.
-	 * @param {number} nTotalRows - The total number of lines/rows to display for each word group.
-	 */
 	function populateWordsFrequencyTables(wordsFrequencyObj, nTotalRows) {
-		wfo["words_frequency"] = JSON.parse(wordsFrequencyObj)
+        wfo["words_frequency"] = wordsFrequencyObj
+        if (typeof wordsFrequencyObj === "string") {
+		    wfo["words_frequency"] = JSON.parse(wordsFrequencyObj)
+        }
 		wfo["nTotalRows"] = nTotalRows
 		updateWordsFrequencyTables()
 	}
 
-	/**
-	 * Inserts a table into the DOM displaying the frequency of word prefixes and their corresponding row nths and offsets.
-	 *
-	 * @param {number} i - The current index being processed (needed for adding unique HTML id/aria-labels).
-	 * @param {object} iReduced - An object containing the reduced data for the current index, including word prefix, count, and offsets array.
-	 * @param {number} nTotalRows - The total number of lines/rows in the table.
-	 * @param {object} wordsFrequency - A container element to hold all tables representing word frequencies.
-	 */
 	function insertCurrentTable(i, iReduced, nTotalRows, wordsFrequency) {
 		let currentTableWordsFreq = document.createElement("table")
 		currentTableWordsFreq.setAttribute("class", "border-black")
@@ -21594,15 +21628,6 @@ Current version indicated by LITEVER below.
 		wordsFrequency.appendChild(currentTableWordsFreq)
 	}
 
-	/**
-	 * Inserts a new table row into the specified tbody with an associated click event listener.
-	 *
-	 * @param {HTMLTableSectionElement} currentTBody - The tbody element where the new row will be inserted.
-	 * @param {number} i - A reference number for the parent's position in the DOM (needed for adding unique HTML id/aria-labels).
-	 * @param {number} ii - A counter of how many lines/rows have been added to the table (needed for adding unique HTML id/aria-labels).
-	 * @param {object} nthOffset - An object containing information about a single offset word, including its row number and word text.
-	 * @param {number} nTotalRows - The total number of lines/rows in the table.
-	 */
 	function insertCellIntoTRow(currentTBody, i, ii, nthOffset, nTotalRows) {
 		let nthRowBody = currentTBody.insertRow()
 		nthRowBody.setAttribute("id", `id-table-${i}-row-${ii}-nth`)
@@ -21627,18 +21652,31 @@ Current version indicated by LITEVER below.
 		nthRowBody.insertCell().textContent = nthOffset["n_row"]
 		nthRowBody.insertCell().textContent = nthOffset["offsets"]
 	}
+
+    function toggleWordsFreqNav() {
+        let x = document.getElementById("wordsFreqNavbarNavDropdown");
+        if (x.classList.contains("collapse")) {
+            x.classList.remove("collapse");
+        } else {
+            x.classList.add("collapse");
+        }
+    }
+    function closeWordsFreqTopNav() {
+        let x = document.getElementById("wordsFreqNavbarNavDropdown");
+        x.classList.add("collapse");
+    }
+
+    function updateWordsFreqIfPressEnter() {
+        if(event.key==='Enter'){
+            closeWordsFreqTopNav()
+            updateWordsFrequencyTables()
+        }
+    }
 	/** end script section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer */
 	</script>
 
 	<style>
 	/** start style section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer */
-	#id-title.h1 {
-		font-size: 24px;
-		margin-left: 10px;
-		margin-right: 10px;
-		margin-block-start: 5px;
-		margin-block-end: 5px;
-	}
 	#id-col1-editor > h4,#id-col2-words-frequency > div > div > h4 {
 		font-size: 18px;
 		margin-block-start: 2px;
@@ -21654,16 +21692,15 @@ Current version indicated by LITEVER below.
 		padding-left: 10px;
 		padding-right: 10px;
 	}
+    #filter-words-frequency {
+        height: 30px;
+        width: 100%;
+    }
 	.display-none {
 		display: none;
 	}
 	.display-block {
 		display: block;
-	}
-	.underlinedDarkTurquoise {
-		text-decoration: underline;
-		text-decoration-color: darkturquoise;
-		text-decoration-style: wavy;
 	}
 	.underlinedYellow {
 		color: yellow;
@@ -21675,20 +21712,17 @@ Current version indicated by LITEVER below.
 		text-decoration: underline;
 		text-decoration-color: violet;
 	}
-	.display-flex {
-		display: flex;
-	}
-	.col-flex30 {
-		flex: 30%;
-	}
+    .display-grid {
+        display: grid;
+    }
+    .grid-template-5x1 {
+        grid-template-columns: 5fr 1fr;
+    }
+    .grid-template-1x2 {
+        grid-template-columns: 1fr 1fr;
+    }
 	.col-flex50 {
 		flex: 50%;
-	}
-	.border-green {
-		border: 1px solid green;
-	}
-	.border-blue {
-		border: 1px solid blue;
 	}
 	.border-black {
 		border: 1px solid black;
@@ -21696,35 +21730,21 @@ Current version indicated by LITEVER below.
 	.border-gray-litekoboldai {
 		border: 1px solid #646464;
 	}
+    #wordsFreqNavbarNavDropdown {
+        padding-left: 0;
+        padding-right: 0;
+    }
 	.padding10px {
 		padding: 10px;
 	}
 	.margin10px {
 		margin: 10px;
 	}
-	.margin5px-left {
-		margin-left: 10px;
-	}
-	.margin5px-right {
-		margin-right: 10px;
-	}
 	.margin5px-top {
 		margin-top: 5px;
 	}
 	.margin2px-bottom {
 		margin-bottom: 2px;
-	}
-	.background-color-lightgray {
-		background-color: lightgray;
-	}
-	.background-color-whitesmoke {
-		background-color: whitesmoke;
-	}
-	.max-height-90vh {
-		max-height: 90vh;
-	}
-	.max-height-80vh {
-		max-height: 80vh;
 	}
 	.max-height-80perc {
 		max-height: 80%;
@@ -21737,17 +21757,8 @@ Current version indicated by LITEVER below.
 		/* needed for scroll bar*/
 		overflow: auto;
 	}
-	.width-50perc {
-		width: 50%;
-	}
-	.width-80perc {
-		width: 80%;
-	}
-	#id-landscape-message {
-		display: none;
-	}
-	.id-orientation-message {
-		display: none;
+    .width-100perc {
+        width: 100%;
 	}
 	.background-color-verydarkgrey {
 		background-color: #404040;
@@ -21755,16 +21766,45 @@ Current version indicated by LITEVER below.
 	.font-size-12px {
 		font-size: small;
 	}
-	@media screen and (max-width: 1024px) and (orientation: portrait) {
-		.id-orientation-message {
-			display: block;
-			text-align: center;
-		}
-		.id-orientation-message:before {
-			color: red;
-			content: "(Mobile users: use this in landscape mode!)"
-		}
-	}
+    .color-white {
+        color: white;
+    }
+    .navtoggler-words-freq {
+        background-color: #337ab7;
+        border: 1px solid #bababa;
+        height: 45px;
+        width: 60px;
+        border-radius: 6px;
+    }
+    #words-frequency {
+        max-height: calc(84vh - 250px);
+    }
+    @media screen and (max-width: 1023px) {
+        #words-frequency {
+            max-height: calc(80vh - 250px);
+        }
+    }
+    @media only screen and (width:768px) {
+        #words-frequency {
+            max-height: calc(76vh - 160px);
+        }
+        #btn4-get-words-frequency {
+            font-size: 12px;
+        }
+        #btn-filter-words-frequency {
+            font-size: 12px;
+        }
+        #wordsFreqNavbarNavDropdown ul, #wordsFreqNavbarNavDropdown ul li div {
+            display: block;
+        }
+        #wordsFreqNavbarNavDropdown ul li {
+            margin-left: 12px;
+            margin-right: 12px;
+        }
+        #id-col1-editor > h4,#id-col2-words-frequency > div > div > h4 {
+            font-size: 14px;
+        }
+    }
 	/* end style section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer */
 	</style>
 </head>
@@ -21883,39 +21923,60 @@ Current version indicated by LITEVER below.
 				</span>
 				
 				<!-- start HTML section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer -->
-				<div id="id-col2-words-frequency" class="col-flex50 border-gray-litekoboldai padding10px margin10px overflow-hidden font-size-12px">
-							<h4 id="id-words-frequency-table-title">Words Frequency Stats</h4>
-					<div class="display-flex">
-						<div class="width-50perc">
-							<input type="text" id="filter-words-frequency" aria-label="filter-words-frequency" placeholder="Filter the output..." class="background-color-verydarkgrey" />
-							<button type="button" class="btn btn-primary mainnav" id="btn4-get-words-frequency" aria-label="btn4-get-words-frequency" onclick="getWordsFrequency()">Words Freq</button>
-							<button type="submit" class="btn btn-primary bg_green mainnav" id="btn-filter-words-frequency" aria-label="btn-filter-words-frequency" onclick="updateWordsFrequencyTables()">Filter</button>
-						</div>
-						<div class="display-flex width-50perc margin2px-bottom">
-							<form id="id-form-sort-by" aria-label="id-form-sort-by">
-								<fieldset>
-									<legend>Sort:</legend>
-									<div>
-										<input type="radio" id="sort-by-count" aria-label="sort-by-count" name="sort" value="count"/>
-										<label for="sort-by-count" id="sort-by-count-label" aria-label="sort-by-count-label">Count</label>
-										<input type="radio" id="sort-by-name" aria-label="sort-by-name" name="sort" value="word_prefix" />
-										<label for="sort-by-name" id="sort-by-name-label" aria-label="sort-by-name-label">Name</label>
-									</div>
-								</fieldset>
-							</form>
-							<form id="id-form-order-by" aria-label="id-form-order-by">
-								<fieldset>
-									<legend>Order:</legend>
-									<div>
-										<input type="radio" id="order-by-asc" aria-label="order-by-asc" name="order" value="asc" />
-										<label for="order-by-asc" id="order-by-asc-label" aria-label="order-by-asc-label">Ascend</label>
-										<input type="radio" id="order-by-desc" aria-label="order-by-desc" name="order" value="desc" checked/>
-										<label for="order-desc" id="order-by-desc-label" aria-label="order-by-desc-label">Descend</label>
-									</div>
-								</fieldset>
-							</form>
-						</div>
-					</div>
+                <div id="id-col2-words-frequency" style="display:none" class="col-flex50 border-gray-litekoboldai padding10px margin10px overflow-hidden font-size-12px">
+
+                    <div id="words-freq-menu" class="topmenu">
+                        <div style="width: 100%;">
+                            <div class="display-grid grid-template-5x1">
+                                <h4 id="id-words-frequency-table-title" aria-label="id-words-frequency-table-title" class="">Words Frequency Stats</h4>
+                                <button id="id-words-frequency-btn-navbar" title="Words freq Menu Options" class="navtoggler-words-freq" type="button" onclick="toggleWordsFreqNav()" tabindex="0">
+                                    Menù
+                                </button>
+                            </div>
+                            <div class="collapse" id="wordsFreqNavbarNavDropdown">
+                                <input type="text" id="filter-words-frequency" aria-label="filter-words-frequency" placeholder="Filter the output..." class="background-color-verydarkgrey" onkeypress="updateWordsFreqIfPressEnter()"/>
+                                <ul class="nav navbar-nav display-grid margin5px-top">
+
+                                    <li class="nav-item" id="words_freq_topbtn_1">
+                                        <button type="button" class="btn btn-primary mainnav" id="btn4-get-words-frequency-get" aria-label="btn4-get-words-frequency-get" onclick="closeWordsFreqTopNav();getWordsFrequency()">Words Freq</button>
+                                    </li>
+
+                                    <li class="nav-item" id="words_freq_topbtn_2">
+                                        <button type="submit" class="btn btn-primary bg_green mainnav" id="btn-filter-words-frequency-filter" aria-label="btn-filter-words-frequency-filter" onclick="closeWordsFreqTopNav();updateWordsFrequencyTables()">Filter / Update</button>
+                                    </li>
+
+                                    <li class="nav-item display-block" id="words_freq_topbtn_3">
+                                        <div class="grid-template-1x2 margin2px-bottom">
+                                            <form id="id-form-sort-by" aria-label="id-form-sort-by">
+                                                <fieldset>
+                                                    <legend>Sort:</legend>
+                                                    <div>
+                                                        <input type="radio" id="sort-by-count" aria-label="sort-by-count" name="sort" value="count"/>
+                                                        <label for="sort-by-count" id="sort-by-count-label" aria-label="sort-by-count-label">Count</label>
+                                                        <input type="radio" id="sort-by-name" aria-label="sort-by-name" name="sort" value="word_prefix" />
+                                                        <label for="sort-by-name" id="sort-by-name-label" aria-label="sort-by-name-label">Name</label>
+                                                    </div>
+                                                </fieldset>
+                                            </form>
+                                            <form id="id-form-order-by" aria-label="id-form-order-by">
+                                                <fieldset>
+                                                    <legend>Order:</legend>
+                                                    <div>
+                                                        <input type="radio" id="order-by-asc" aria-label="order-by-asc" name="order" value="asc" />
+                                                        <label for="order-by-asc" id="order-by-asc-label" aria-label="order-by-asc-label">Ascend</label>
+                                                        <input type="radio" id="order-by-desc" aria-label="order-by-desc" name="order" value="desc" checked/>
+                                                        <label for="order-by-desc" id="order-by-desc-label" aria-label="order-by-desc-label">Descend</label>
+                                                    </div>
+                                                </fieldset>
+                                            </form>
+                                        </div>
+                                    </li>
+                                </ul>
+                            </div>
+
+                        </div>
+                    </div>
+
 					<span id="id-n-total-rows" aria-label="id-n-total-rows" class="display-none"></span>
 					<span id="waiting-for-be" class="display-none">waiting for backend response...</span>
 					<span id="waiting-for-be-error" class="display-none">Error!</span>
@@ -23108,7 +23169,48 @@ Current version indicated by LITEVER below.
 						<input class="form-control menuinput_inline" type="text" placeholder="Enter CFG Prompt" value="" id="guidance_prompt">
 						<div style="padding:1px" class="settinglabel">Scale<br>(0-5): </div><input class="form-control menuinput_inline" style="margin-left:4px;width:70px;" inputmode="numeric" placeholder="(Off)" value="" id="guidance_scale"></div>
 					</div>
-					</div>
+
+                    <!-- start settings for My Ghost Writer -->
+                    <div style="padding:3px;" class="justifyleft settinglabel">Word Frequency Stats <span class="helpicon">?<span class="helptext">Configure 'My Ghost Writer' for extracting word frequency statistics.</span></span>
+                        <button type="button" title="Word Frequency Stats" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('expandwordsfreqstats')">Expand Section</button>
+                    </div>
+
+                    <div id="expandwordsfreqstats" class="hidden">
+
+                        <div class="settinglabel" id="id-settings-wordsfreq-enable">
+                            <div class="justifyleft settingsmall">Enable Word Frequency Stats <span class="helpicon">?<span
+                                    class="helptext">If enabled, it extracts word frequency stats.
+                            The output it's a list of word prefixes (<a href="https://en.wikipedia.org/wiki/Stemming">stems</a>)
+                            with associated words and their position within the editor, permitting to remove repetitions.</span></span>
+                            </div>
+                            <input
+                                    type="checkbox"
+                                    id="id-col2-words-frequency-enable"
+                                    aria-label="id-col2-words-frequency-enable"
+                                    name="id-col2-words-frequency-enable"
+                                    onchange="document.getElementById('id-col2-words-frequency').style.display=this.checked?'block':'none';"
+                            />
+                        </div>
+
+                        <div id="id-settings-wordsfreq-custom-webserver">
+                            <div class="justifyleft settingsmall color-white">Enable a <a href="https://github.com/trincadev/my_ghost_writer/">My Ghost Writer</a>
+                                    webserver to get words stats (now using <span id="id-wordfreq-show-analyzer" aria-label="id-wordfreq-show-analyzer">embedded</span> functionality) <span class="helpicon">?<span
+                                    class="helptext">If you have a custom web server, you can specify the URL here. Otherwise, leave it disabled to use the embedded functionality.</span></span>
+                                <input
+                                        type="checkbox"
+                                        id="id-input-webserver-wordfreq-checkbox"
+                                        aria-label="id-input-webserver-wordfreq-checkbox"
+                                        name="id-input-webserver-wordfreq-checkbox"
+                                        onchange="document.getElementById('id-input-webserver-wordfreq').disabled=!this.checked;document.getElementById('id-wordfreq-show-analyzer').innerText=this.checked?'webserver':'embedded';"
+                                />
+                            </div>
+                            <input type="URL" id="id-input-webserver-wordfreq" aria-label="id-input-webserver-wordfreq" value="http://localhost:7860" class="width-100perc" disabled/>
+                        </div>
+                    </div>
+                    <!-- end settings for My Ghost Writer -->
+
+
+                    </div>
 				</div>
 
 				<!--advanced settings menu top-->
