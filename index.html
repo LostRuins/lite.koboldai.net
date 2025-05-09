@@ -3040,6 +3040,7 @@ Current version indicated by LITEVER below.
 	const ALLTALK_ID = 1001;
 	const OAI_TTS_ID = 1002;
 	const KCPP_TTS_ID = 1003;
+	const POLLINATIONS_TTS_ID = 1004;
 	const HD_RES_PX = 768;
 	const VHD_RES_PX = 960;
 	const NO_HD_RES_PX = 512;
@@ -5166,7 +5167,7 @@ Current version indicated by LITEVER below.
 					let tmp = data.candidates[0].content.parts[x].text;
 					if(data.candidates[0].content.parts[x].thought)
 					{
-						tmp = `<think>${tmp}</think>\n`;
+						tmp = `<think>${tmp}</think>`;
 					}
 					synchro_polled_response += tmp;
 				}
@@ -5318,7 +5319,7 @@ Current version indicated by LITEVER below.
 										}
 										if(!event.data.candidates[0].content.parts[x].thought && gemini_was_thinking)
 										{
-											synchro_pending_stream = `<think>${synchro_pending_stream}</think>\n`;
+											synchro_pending_stream = `<think>${synchro_pending_stream}</think>`;
 											gemini_was_thinking = false;
 										}
 										synchro_pending_stream += event.data.candidates[0].content.parts[x].text;
@@ -11507,6 +11508,7 @@ Current version indicated by LITEVER below.
 		ttshtml += "<option value=\"1001\">AllTalk API Server</option>";
 		ttshtml += "<option value=\"1002\">OpenAI-Compat. API Server</option>";
 		ttshtml += "<option value=\"1003\">KoboldCpp TTS API</option>";
+		ttshtml += "<option value=\"1004\">PollinationsAI TTS API</option>";
 
 		if ('speechSynthesis' in window) {
 			let voices = window.speechSynthesis.getVoices();
@@ -13016,12 +13018,12 @@ Current version indicated by LITEVER below.
 			if(matches.length > 0)
 			{
 				let matchiter = 0;
-				inputtxt = inputtxt.replace(/%ExpandBtn%/g, function (m) {
+				inputtxt = inputtxt.replace(/%ExpandBtn%(?:\n{0,2})?/g, function (m) {
 					let curr = matches[matchiter];
-					let expandedhtml = `<span><button type="button" title="Show Thoughts" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="toggle_hide_thinking(this)">Show Thoughts (${curr.length} characters)</button><span class="color_lightgreen hidden"><br>${escape_html(curr)}\n</span></span>`;
+					let expandedhtml = `<span><button type="button" title="Show Thoughts" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="toggle_hide_thinking(this)">Show Thoughts (${curr.length} characters)</button><span class="color_lightgreen hidden"><br>${escape_html(curr)}</span><br></span>`;
 					if(!curr || curr.trim()=="")
 					{
-						expandedhtml = `<span><button type="button" title="No Thoughts" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="">No Thoughts</button></span>`;
+						expandedhtml = `<span><button type="button" title="No Thoughts" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="">No Thoughts</button><br></span>`;
 					}
 					++matchiter;
 					return expandedhtml;
@@ -13504,7 +13506,7 @@ Current version indicated by LITEVER below.
 		let ssval = document.getElementById("ttsselect").value;
 		let speakprompt = "Enter phrase to speak.";
 
-		if(ssval==XTTS_ID || ssval==ALLTALK_ID || ssval==OAI_TTS_ID || ssval==KCPP_TTS_ID)
+		if(ssval==XTTS_ID || ssval==ALLTALK_ID || ssval==OAI_TTS_ID || ssval==KCPP_TTS_ID || ssval==POLLINATIONS_TTS_ID)
 		{
 			speakprompt = `Enter phrase to speak.<br><div><input type="checkbox" id="downloadtts" title="Add Endpoint Version Number"><div class="box-label">Download as .wav file</div></div>`;
 		}
@@ -13688,11 +13690,12 @@ Current version indicated by LITEVER below.
 			}
 		}
 
-		if(ssval==XTTS_ID || ssval==ALLTALK_ID || ssval==OAI_TTS_ID || ssval==KCPP_TTS_ID) //xtts api server
+		if(ssval==XTTS_ID || ssval==ALLTALK_ID || ssval==OAI_TTS_ID || ssval==KCPP_TTS_ID || ssval==POLLINATIONS_TTS_ID) //xtts api server
 		{
 			let is_xtts = (ssval==XTTS_ID);
 			let is_oai_tts = (ssval==OAI_TTS_ID);
 			let is_kcpp_tts = (ssval==KCPP_TTS_ID);
+			let is_pollinations_tts = (ssval==POLLINATIONS_TTS_ID);
 			const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 			let audiofile_ref = null;
 
@@ -13760,6 +13763,48 @@ Current version indicated by LITEVER below.
 					};
 				}).catch((error) => {
 					console.log("XTTS Speak Error: " + error);
+				});
+			}
+			else if(is_pollinations_tts)
+			{
+				const pollinations_params = new URLSearchParams({
+					model:"openai-audio",
+					voice:"nova",
+					private: true,
+					referrer: "KoboldAiLite"
+				});
+				const speechprompt = `Please narrate the following text:\n\n${text}`;
+
+				let gen_endpoint = `${pollinations_text_endpoint}/${encodeURIComponent(speechprompt)}?${pollinations_params.toString()}`;
+
+				fetch(gen_endpoint, {
+					method: 'GET',
+				})
+				.then(response => response.arrayBuffer())
+				.then(data => {
+					audiofile_ref = data.slice(0);
+					return audioContext.decodeAudioData(data);
+				})
+				.then(decodedData => {
+					if(do_download)
+					{
+						tts_download(audiofile_ref);
+					}
+					const playSound = audioContext.createBufferSource();
+					playSound.buffer = decodedData;
+					playSound.connect(audioContext.destination);
+					xtts_is_playing = true;
+					update_submit_button(false);
+					playSound.start(audioContext.currentTime);
+					playSound.onended = function() {
+						setTimeout(() => {
+							xtts_is_playing = false;
+							update_submit_button(false);
+							console.log("Audio finished playing");
+						},300);
+					};
+				}).catch((error) => {
+					console.log("Pollinations Speak Error: " + error);
 				});
 			}
 			else if(xtts_is_connected)
@@ -15423,7 +15468,7 @@ Current version indicated by LITEVER below.
 								}
 								if(data.content[i].thinking)
 								{
-									comp += `<think>${data.content[i].thinking}</think>\n\n`; //for claudev3
+									comp += `<think>${data.content[i].thinking}</think>`; //for claudev3
 								}
 							}
 							if(comp!="")
