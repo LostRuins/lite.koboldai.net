@@ -4190,7 +4190,7 @@ Current version indicated by LITEVER below.
 	function get_instruct_starttag(doTrim=true)
 	{
 		let instag = localsettings.instruct_starttag;
-		if(instag=="{{[INPUT]}}" && !(custom_kobold_endpoint != "" && is_using_kcpp_with_autotags()) && localsettings.placeholder_tags)
+		if(instag=="{{[INPUT]}}" && !(custom_kobold_endpoint != "" && is_using_kcpp_with_autotags()))
 		{
 			instag = "\n### Instruction:\n"; //backend not compatible with auto
 		}
@@ -4203,7 +4203,7 @@ Current version indicated by LITEVER below.
 	function get_instruct_endtag(doTrim=true)
 	{
 		let instag = localsettings.instruct_endtag;
-		if(instag=="{{[OUTPUT]}}" && !(custom_kobold_endpoint != "" && is_using_kcpp_with_autotags()) && localsettings.placeholder_tags)
+		if(instag=="{{[OUTPUT]}}" && !(custom_kobold_endpoint != "" && is_using_kcpp_with_autotags()))
 		{
 			instag = "\n### Response:\n"; //backend not compatible with auto
 		}
@@ -4216,7 +4216,7 @@ Current version indicated by LITEVER below.
 	function get_instruct_systag(doTrim=true)
 	{
 		let instag = localsettings.instruct_systag;
-		if(instag=="{{[SYSTEM]}}" && !(custom_kobold_endpoint != "" && is_using_kcpp_with_autotags()) && localsettings.placeholder_tags)
+		if(instag=="{{[SYSTEM]}}" && !(custom_kobold_endpoint != "" && is_using_kcpp_with_autotags()))
 		{
 			instag = ""; //backend not compatible with auto
 		}
@@ -16540,47 +16540,44 @@ Current version indicated by LITEVER below.
 		{
 			let st = get_instruct_starttag(true);
 			let et = get_instruct_endtag(true);
+			let stripping_arr = [];
+			if(st!="")
+			{
+				stripping_arr.push(st);
+			}
+			if(et!="")
+			{
+				stripping_arr.push(et);
+			}
 			if(st=="{{[INPUT]}}" || et=="{{[OUTPUT]}}")
 			{
-				st = "### Instruction:";
-				et = "### Response:";
+				stripping_arr.push("### Instruction:");
+				stripping_arr.push("### Response:");
 			}
-			let stet_et = "";
 			if(localsettings.separate_end_tags && get_instruct_endtag_end(true))
 			{
-				stet_et = get_instruct_endtag_end(true);
+				let stet_et = get_instruct_endtag_end(true);
+				if(stet_et!="")
+				{
+					stripping_arr.push(stet_et);
+				}
 			}
 
 			//sometimes the OAI type endpoints get confused and repeat the instruct tag, so trim it
-			let earlymatch = gentxt.indexOf(et);
-			if(earlymatch==0)
+			for(let i=0;i<stripping_arr.length;++i)
 			{
-				gentxt = gentxt.substring(et.length);
-			}
+				let curtag = stripping_arr[i];
+				let earlymatch = gentxt.indexOf(curtag);
+				if(earlymatch==0)
+				{
+					gentxt = gentxt.substring(curtag.length);
+				}
 
-			let found = gentxt.indexOf(st);
-			let splitresponse = [];
-			if (found != -1) //if found, truncate to it
-			{
-				splitresponse = gentxt.split(st);
-				gentxt = splitresponse[0];
-			}
-
-			found = gentxt.indexOf(et);
-			splitresponse = [];
-			if (found != -1) //if found, truncate to it
-			{
-				splitresponse = gentxt.split(et);
-				gentxt = splitresponse[0];
-			}
-
-			if(stet_et && stet_et!="")
-			{
-				found = gentxt.indexOf(stet_et);
-				splitresponse = [];
+				let found = gentxt.indexOf(curtag);
+				let splitresponse = [];
 				if (found != -1) //if found, truncate to it
 				{
-					splitresponse = gentxt.split(stet_et);
+					splitresponse = gentxt.split(curtag);
 					gentxt = splitresponse[0];
 				}
 			}
