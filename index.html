@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 240;
+	const LITEVER = 241;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3206,6 +3206,7 @@ Current version indicated by LITEVER below.
 		saved_xtts_url: default_xtts_base,
 		saved_alltalk_url: default_alltalk_base,
 		prev_custom_endpoint_type: 0, //show a reconnect box to custom endpoint if needed. 0 is horde, otherwise its dropdown value+1
+		prev_custom_endpoint_model: "", //we may not be able to match, but set it if we do
 		generate_images_mode: (localflag?0:1), //0=off, 1=horde, 2=a1111, 3=dalle, 4=comfy, 5=pollinations
 
 		autoscroll: true, //automatically scroll to bottom on render
@@ -3251,7 +3252,7 @@ Current version indicated by LITEVER below.
 		image_styles: "",
 		image_negprompt: "",
 		grammar:"",
-		tokenstreammode: (localflag?2:0), //0=off,1=pollstream,2=sse
+		tokenstreammode: 2, //0=off,1=pollstream,2=sse
 		generate_images_model: "stable_diffusion", //"" is disabled and "*" is all, anything else is the model name pulled from stable horde
 		img_gen_from_instruct: true,
 		img_autogen: false,
@@ -4045,10 +4046,22 @@ Current version indicated by LITEVER below.
 
 				//offer to reconnect
 				let pending_eptype = localsettings.prev_custom_endpoint_type;
+				let pending_custmodel = localsettings.prev_custom_endpoint_model;
 				if(!localflag && pending_eptype>0)
 				{
 					msgboxYesNo("Reconnect to previous custom endpoint?","Custom Endpoint Reconnect",()=>{
 						document.getElementById("customapidropdown").value = (pending_eptype).toString();
+						if(pending_custmodel)
+						{
+							let dropdown = get_custom_ep_model_dropdown();
+							if(dropdown)
+							{
+								const hasValue = Array.from(dropdown.options).some(option => option.value === pending_custmodel);
+								if (hasValue) {
+									dropdown.value = pending_custmodel;
+								}
+							}
+						}
 						display_endpoint_container();
 					},null);
 				}
@@ -4132,12 +4145,6 @@ Current version indicated by LITEVER below.
 				render_gametext();
 			}
 		});
-	}
-
-	const tokenstreaming = urlParams.get('streaming');
-	if(tokenstreaming)
-	{
-		localsettings.tokenstreammode = 1;
 	}
 
 	//toggle genimg btn
@@ -5537,6 +5544,14 @@ Current version indicated by LITEVER below.
 			return input;
 		};
 		const formatMarkdown = (md) => {
+			let append_spcetg = false;
+			if(md.trim().startsWith("%SpcEtg%")) //this can cause issues matching start of response, so we note it down and remove it first
+			{
+				let idxof = md.indexOf("%SpcEtg%");
+				md = md.substring(idxof+8);
+				append_spcetg = true;
+			}
+
 			md = md.replace(/^###### (.*?)\s*#*$/gm, "<h6>$1</h6>")
 			.replace(/^##### (.*?)\s*#*$/gm, "<h5>$1</h5>")
 			.replace(/^#### (.*?)\s*#*$/gm, "<h4>$1</h4>")
@@ -5593,6 +5608,11 @@ Current version indicated by LITEVER below.
 			.replace(/^((?:\|[^|\r\n]*[^|\r\n\s]\s*)+\|(?:\r?\n|\r|))+/gm,
 				(matchedTable) => convertMarkdownTableToHtml(matchedTable))
 			.replace(/  \n/g, "\n<br/>");
+			if(append_spcetg)
+			{
+				append_spcetg = false;
+				md = `%SpcEtg%${md}`;
+			}
 			md = replaceTabbedCodeblocks(md);
 			md = md.replace(/<\/code\><\/pre\>\n<pre\><code\>/g, "\n");
 			if(renderLatex)
@@ -6182,7 +6202,7 @@ Current version indicated by LITEVER below.
 			height: req_payload.params.height,
 			nologo: true,
 			private: true,
-			referrer: "KoboldAiLite"
+			referrer: "koboldai"
 		});
 
 		let gen_endpoint = `${pollinations_img_endpoint}/${encodeURIComponent(prompt)}?${pollinations_params.toString()}`;
@@ -9223,13 +9243,25 @@ Current version indicated by LITEVER below.
 		}
 	}
 
-	function get_oai_model_dropdown()
+	function get_custom_ep_model_dropdown(ep_id=null) //if desired id not provided, use dynamic val
 	{
-		let ddval = document.getElementById("customapidropdown").value;
+		let ddval = (ep_id?ep_id.toString():document.getElementById("customapidropdown").value);
 		switch(ddval)
 		{
+			case "0": //horde
+				return document.getElementById("custom_oai_model"); //just return oai
+			case "1": //kai
+				return document.getElementById("custom_oai_model"); //just return oai
+			case "2":
+				return document.getElementById("custom_oai_model");
 			case "3":
 				return document.getElementById("custom_openrouter_model");
+			case "4":
+				return document.getElementById("custom_claude_model");
+			case "5":
+				return document.getElementById("custom_gemini_model");
+			case "6":
+				return document.getElementById("custom_cohere_model");
 			case "7":
 				return document.getElementById("custom_mistralai_model");
 			case "8":
@@ -9239,7 +9271,7 @@ Current version indicated by LITEVER below.
 			case "10":
 				return document.getElementById("custom_pollinations_model");
 			default:
-				return document.getElementById("custom_oai_model");
+				return document.getElementById("custom_oai_model"); //just return oai
 		}
 	}
 	function ep_should_always_use_chat_completions()
@@ -9252,7 +9284,7 @@ Current version indicated by LITEVER below.
 	{
 		inputBox("Enter custom model name","Custom Model Name",localsettings.saved_oai_custommodel,"", ()=>{
 			let coai = getInputBoxValue().trim();
-			let dropdown = get_oai_model_dropdown();
+			let dropdown = get_custom_ep_model_dropdown();
 			var mdlopt = dropdown.querySelector('option.custom_model_option');
 			if(coai!="")
 			{
@@ -9266,7 +9298,7 @@ Current version indicated by LITEVER below.
 	}
 	function oai_model_change(autotoggle_check = false)
 	{
-		let dropdown = get_oai_model_dropdown();
+		let dropdown = get_custom_ep_model_dropdown();
 		let non_completions = (dropdown.value.includes("davinci-002") || dropdown.value.includes("text-davinci-003") || dropdown.value.includes("text-davinci-002")
 		|| dropdown.value.includes("text-davinci-001") || dropdown.value.includes("gpt-3.5-turbo-instruct") || dropdown.value == "davinci");
 		if(autotoggle_check)
@@ -9428,7 +9460,7 @@ Current version indicated by LITEVER below.
 		}
 
 		let isOpenrouter = (document.getElementById("customapidropdown").value==3);
-		let dropdown = get_oai_model_dropdown();
+		let dropdown = get_custom_ep_model_dropdown();
 		fetch((desired_oai_ep + oai_models_endpoint), {
 			method: 'GET',
 			headers: oaiheaders,
@@ -10148,7 +10180,7 @@ Current version indicated by LITEVER below.
 				}
 				localsettings.saved_oai_role = document.getElementById("oairoledropdown").value;
 				localsettings.saved_oai_jailbreak2 = document.getElementById("jailbreakprompttext2").value;
-				let dropdown = get_oai_model_dropdown();
+				let dropdown = get_custom_ep_model_dropdown();
 				custom_oai_model = dropdown.value.trim();
 				localsettings.saved_oai_custommodel = custom_oai_model;
 				selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": custom_oai_model, "count": 1 }];
@@ -11437,13 +11469,13 @@ Current version indicated by LITEVER below.
 		document.getElementById("voice_typing_mode").disabled = !is_using_kcpp_with_whisper();
 		document.getElementById("grammar_retain_state").disabled = document.getElementById("setgrammar").disabled;
 
-		if(custom_kobold_endpoint!="")
+		if(custom_kobold_endpoint=="" && custom_oai_key=="" && custom_gemini_key=="")
 		{
-			document.getElementById("tokenstreaminglabel").classList.remove("color_red");
+			document.getElementById("tokenstreaminglabel").classList.add("color_red");
 		}
 		else
 		{
-			document.getElementById("tokenstreaminglabel").classList.add("color_red");
+			document.getElementById("tokenstreaminglabel").classList.remove("color_red");
 		}
 		document.getElementById("generate_images_model").value = localsettings.generate_images_model;
 		if(document.getElementById("generate_images_mode").value == 0 || document.getElementById("generate_images_mode").value != localsettings.generate_images_mode) {
@@ -13771,7 +13803,7 @@ Current version indicated by LITEVER below.
 					model:"openai-audio",
 					voice:"nova",
 					private: true,
-					referrer: "KoboldAiLite"
+					referrer: "koboldai"
 				});
 				const speechprompt = `Please narrate the following text:\n\n${text}`;
 
@@ -14186,7 +14218,7 @@ Current version indicated by LITEVER below.
 		{
 			let newgenlc = newgen.toLowerCase().trim();
 			if (newgenlc.startsWith("draw ") ||
-				newgenlc.match(/\b(?:draw (?:a|an)\b)|(?:draw me (?:a|an)\b)|(?:(?:draw|show me|generate|create|make|illustrate|visualize|produce|give me)(?:\s\w+){0,4}\s(?:image|picture|drawing|photo))/))
+				newgenlc.match(/\b(?:draw (?:a|an)\b)|(?:draw me (?:a|an)\b)|(?:(?:draw|show me|generate|create|make|illustrate|visualize|produce|give me)(?:\s\w+){0,4}\s(?:image\b|picture\b|drawing\b|photo))/))
 			{
 				img_gen_trigger_prompt = newgen;
 				doNotGenerate = true;
@@ -15321,10 +15353,10 @@ Current version indicated by LITEVER below.
 				{
 					targetep = pollinations_text_endpoint;
 					oai_payload.private = true;
-					oai_payload.referrer = "KoboldAiLite";
+					oai_payload.referrer = "koboldai";
 				}
 
-				if(is_browser_supports_sse() && document.getElementById("oaistreaming").checked)
+				if(is_browser_supports_sse() && localsettings.tokenstreammode!=0)
 				{
 					oai_payload.stream = true;
 					oai_api_stream_sse(targetep,oai_payload,oaiheaders);
@@ -15622,7 +15654,7 @@ Current version indicated by LITEVER below.
 				last_response_obj = null;
 
 				let geminiheaders = { 'Content-Type': 'application/json' };
-				if(is_browser_supports_sse() && document.getElementById("geministreaming").checked)
+				if(is_browser_supports_sse() && localsettings.tokenstreammode!=0)
 				{
 					let targetep = default_gemini_base + mdlname + default_gemini_stream_suffix + custom_gemini_key;
 					oai_api_stream_sse(targetep,payload,geminiheaders);
@@ -19617,6 +19649,7 @@ Current version indicated by LITEVER below.
 	function update_prev_custom_endpoint_type()
 	{
 		localsettings.prev_custom_endpoint_type = 0;
+		localsettings.prev_custom_endpoint_model = "";
 		if (custom_kobold_endpoint != "") {
 			localsettings.prev_custom_endpoint_type = 1;
 		}
@@ -19653,6 +19686,14 @@ Current version indicated by LITEVER below.
 			localsettings.prev_custom_endpoint_type = 6;
 		}
 
+		if(localsettings.prev_custom_endpoint_type!=0 && localsettings.prev_custom_endpoint_type!=1)
+		{
+			let dropdown = get_custom_ep_model_dropdown(localsettings.prev_custom_endpoint_type);
+			if(dropdown && dropdown.value)
+			{
+				localsettings.prev_custom_endpoint_model = dropdown.value;
+			}
+		}
 	}
 
 	function autosave() {
@@ -23169,7 +23210,7 @@ Current version indicated by LITEVER below.
 			<div id="oaicustom" class="menutext hidden">
 				<span id="oaidesc">
 				Entering your OpenAI API key will allow you to use KoboldAI Lite with their API.<br><br>
-				Note that KoboldAI Lite takes no responsibility for your usage or consequences of this feature. Your API key is used directly with the OpenAI API and is not transmitted to us.<br>Only Temperature, Top-P and Repetition Penalty samplers are used.<br><br>
+				Note that KoboldAI Lite takes no responsibility for your usage or consequences of this feature. Your API key is used directly with the OpenAI API and is not transmitted to us. Note that connecting will reset any custom DALL-E based or custom OpenAI based TTS endpoint urls to this new address.<br>Only Temperature, Top-P and Repetition Penalty samplers are used.<br><br>
 				<span class="color_green" style="font-weight: bold;">Please input OpenAI API URL and Key.</span><br><br>
 				</span>
 				<span id="openrouterdesc" class="hidden">
@@ -23209,9 +23250,19 @@ Current version indicated by LITEVER below.
 					<option value="gpt-4">gpt-4</option>
 					<option value="gpt-4-turbo">gpt-4-turbo</option>
 					<option value="gpt-4o">gpt-4o</option>
+					<option value="gpt-4o-mini">gpt-4o-mini</option>
 					<option value="gpt-4-32k">gpt-4-32k</option>
+					<option value="gpt-4.1">gpt-4.1</option>
+					<option value="gpt-4.1-mini">gpt-4.1-mini</option>
+					<option value="gpt-4.1-nano">gpt-4.1-nano</option>
+					<option value="gpt-4.5-preview">gpt-4.5-preview</option>
+					<option value="chatgpt-4o-latest">chatgpt-4o-latest</option>
 					<option value="o1-mini">o1-mini</option>
+					<option value="o1">o1</option>
 					<option value="o1-preview">o1-preview</option>
+					<option value="o3-mini">o3-mini</option>
+					<option value="o3">o3</option>
+					<option value="o4-mini">o4-mini</option>
 					<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
 				</select>
 				<select title="OpenRouter AI Model Selection" style="padding:4px;display:inline;width:calc(100% - 220px)" class="form-control hidden" id="custom_openrouter_model" onchange="oai_model_change(true)">
@@ -23231,7 +23282,10 @@ Current version indicated by LITEVER below.
 					<option value="mistral-tiny">mistral-tiny</option>
 					<option value="mistral-small">mistral-small</option>
 					<option value="mistral-medium-latest">mistral-medium-latest</option>
+					<option value="mistral-large-2407">mistral-large-2407</option>
 					<option value="mistral-large-latest">mistral-large-latest</option>
+					<option value="ministral-3b-latest">ministral-3b-latest</option>
+					<option value="ministral-8b-latest">ministral-8b-latest</option>
 					<option value="pixtral-12b-latest">pixtral-12b-latest</option>
 					<option value="pixtral-large-latest">pixtral-large-latest</option>
 					<option value="codestral-latest">codestral-latest</option>
@@ -23275,6 +23329,7 @@ Current version indicated by LITEVER below.
 					<option value="rtist">rtist</option>
 					<option value="searchgpt">searchgpt</option>
 					<option value="unity">unity</option>
+					<option value="bidara">bidara</option>
 					<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
 				</select>
 				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaifetchlist" onclick="oai_fetch_models()">Fetch List</button>
@@ -23286,8 +23341,6 @@ Current version indicated by LITEVER below.
 				<div style="display:inline-flex">
 					<div><input type="checkbox" id="oaiaddversion" title="Add Endpoint Version Number" onchange="" checked>
 					<div class="box-label">Add Ver. Num</div></div>
-					<div><input type="checkbox" id="oaistreaming" title="Enable SSE Streaming" onchange="">
-					<div class="box-label">Streaming</div></div>
 					<div><input type="checkbox" id="useoaichatcompl" title="Use ChatCompletions API" onchange="toggleoaichatcompl()">
 					<div class="box-label">Chat-Completions API</div></div>
 					<div><input type="checkbox" id="useoainonstandard" title="Send Non-Standard Fields">
@@ -23388,6 +23441,11 @@ Current version indicated by LITEVER below.
 					<option value="gemini-2.0-flash">gemini-2.0-flash</option>
 					<option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite</option>
 					<option value="gemini-2.0-pro-exp">gemini-2.0-pro-exp</option>
+					<option value="gemini-2.5-flash-preview-04-17">gemini-2.5-flash-preview-04-17</option>
+					<option value="gemini-2.5-pro-preview-05-06">gemini-2.5-pro-preview-05-06</option>
+					<option value="gemma-3-1b-it">gemma-3-1b-it</option>
+					<option value="gemma-3-4b-it">gemma-3-4b-it</option>
+					<option value="gemma-3-12b-it">gemma-3-12b-it</option>
 					<option value="gemma-3-27b-it">gemma-3-27b-it</option>
 				</select>
 				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="geminifetchlist" onclick="gemini_fetch_models()">Fetch List</button>
@@ -23423,15 +23481,12 @@ Current version indicated by LITEVER below.
 						<input type="checkbox" title="Allow Gemini Thinking" id="usegeminithink" checked>
 						<div class="box-label">Allow Thinking</div>
 					</div>
-					<div><input type="checkbox" id="geministreaming" title="Enable SSE Streaming" onchange="">
-						<div class="box-label">Streaming</div>
-					</div>
 				</div>
 			</div>
 			<div id="coherecustom" class="menutext hidden">
 				Uses Cohere's models through their own API.<br><br>
 				Note that KoboldAI Lite takes no responsibility for your usage or consequences of this feature. Your API key is used directly with the Cohere API and is not transmitted to us.<br><br>
-				<select  title="Cohere AI Model Selection" style="padding:4px;" class="form-control" id="custom_cohere_model">
+				<select title="Cohere AI Model Selection" style="padding:4px;" class="form-control" id="custom_cohere_model">
 					<option value="command" selected="selected">command</option>
 					<option value="command-r">command-r</option>
 					<option value="command-r-plus">command-r-plus</option>
