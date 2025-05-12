@@ -3146,6 +3146,7 @@ Current version indicated by LITEVER below.
 	var last_request_str = "No Requests Available"; //full context of last submitted request
 	var last_response_obj = null;
 	var lastcheckgenkey = ""; //for checking polled-streaming unique id when generating in kcpp
+	var kai_poll_recoverykey = ""; //for recovering a lost polled streaming in case of disconnect.
 	var globalabortcontroller = null;
 	var passed_ai_warning_local = false;
 	var welcome = "";
@@ -4947,6 +4948,33 @@ Current version indicated by LITEVER below.
 			console.log("AbortController Not Supported: " + e);
 		}
 	}
+	function show_last_incomplete_kai_syncpoll_request()
+	{
+		if(kai_poll_recoverykey=="")
+		{
+			return;
+		}
+		hide_msgbox();
+		fetch(custom_kobold_endpoint + koboldcpp_check_endpoint, {
+			method: 'POST',
+			headers: get_kobold_header(),
+			body: JSON.stringify({
+			"genkey": kai_poll_recoverykey
+			}),
+		})
+		.then((response) => response.json())
+		.then((data) => {
+			//makes sure a delayed response doesnt arrive late and mess up
+			if (data && data.results != null && data.results.length > 0 && data.results[0].text) {
+				let recovered = data.results[0].text;
+				msgbox(recovered,"Recovered Last Response");
+			}
+		})
+		.catch((error) => {
+			console.error('Error:', error);
+		});
+		kai_poll_recoverykey = "";
+	}
 	function kobold_api_sync_req(sub_endpt,submit_payload,trackedgenid)
 	{
 		let reqOpt = {
@@ -4987,6 +5015,7 @@ Current version indicated by LITEVER below.
 						//offer to abort
 						msgboxYesNo("Attempt to abort existing request?","Send Abort Command?",()=>{
 							lastcheckgenkey = "";
+							kai_poll_recoverykey = "";
 							abort_generation();
 						},null);
 					}
@@ -4998,8 +5027,17 @@ Current version indicated by LITEVER below.
 			console.error('Error:', error);
 			if(error.name!="AbortError") //aborts are silent
 			{
+				if(synchro_pending_stream!="" && lastcheckgenkey!="")
+				{
+					kai_poll_recoverykey = lastcheckgenkey;
+				}
 				flush_streaming_text();
-				msgbox("Error while submitting prompt: " + error);
+				if(kai_poll_recoverykey!="")
+				{
+					msgbox(`Error while submitting prompt: ${error}<br><br><a href="#" onclick="show_last_incomplete_kai_syncpoll_request()" class="color_blueurl">Click Here</a> to attempt to recover the last response. This is not guaranteed to work.`,"Error Encountered",true);
+				}else{
+					msgbox("Error while submitting prompt: " + error);
+				}
 			}
 			clear_poll_flags();
 			render_gametext();
@@ -14886,9 +14924,11 @@ Current version indicated by LITEVER below.
 			if((custom_kobold_endpoint != "" && is_using_kcpp_with_streaming()))
 			{
 				lastcheckgenkey = "KCPP"+(Math.floor(1000 + Math.random() * 9000)).toString();
+				kai_poll_recoverykey = "";
 				submit_payload.params.genkey = lastcheckgenkey;
 			}else{
 				lastcheckgenkey = "";
+				kai_poll_recoverykey = "";
 			}
 
 			//v2 api specific fields
@@ -15354,6 +15394,7 @@ Current version indicated by LITEVER below.
 					targetep = pollinations_text_endpoint;
 					oai_payload.private = true;
 					oai_payload.referrer = "koboldai";
+					oai_payload.seed = Math.floor(Math.random() * 99999999);
 				}
 
 				if(is_browser_supports_sse() && localsettings.tokenstreammode!=0)
