@@ -3023,8 +3023,8 @@ Current version indicated by LITEVER below.
 	const dummy_pollinations_key = "kobo";
 
 	//for optionally uploading content to share on dpaste
-	const dpaste_submit_endpoint = "https://dpaste.com/api/";
-	const dpaste_fetch_endpoint = "https://dpaste.com/";
+	const dpaste_submit_endpoint = "https://dpaste.org/api/";
+	const dpaste_fetch_endpoint = "https://dpaste.org/";
 
 	//support for quick news updates
 	const horde_news_endpoint = "https://hordenews.concedo.workers.dev"
@@ -5814,7 +5814,7 @@ Current version indicated by LITEVER below.
 			window.history.replaceState(null, null, window.location.pathname);
 		} else if (foundDpaste && foundDpaste != "") {
 			avoidwelcome = true;
-			fetch(`${dpaste_fetch_endpoint}${foundDpaste}.txt`)
+			fetch(`${dpaste_fetch_endpoint}${foundDpaste}/raw`)
 			.then(x => {
 				if(x.ok)
 				{
@@ -6629,7 +6629,7 @@ Current version indicated by LITEVER below.
 			console.log("Export Len: " + cstoryjson.length);
 			const params = new URLSearchParams();
 			params.append("content", cstoryjson);
-			params.append("expiry_days", expiry);
+			params.append("expiry", expiry);
 			fetch(dpaste_submit_endpoint, {
 				method: 'POST',
 				headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -6645,7 +6645,8 @@ Current version indicated by LITEVER below.
 				}
 			})
 			.then((text) => {
-				let pasteurl = text.split("/");
+				let pasteurl = replaceAll(text,"\"","");
+				pasteurl = pasteurl.split("/");
 				pasteurl = pasteurl[pasteurl.length-1];
 				let fullurl = "https://lite.koboldai.net/?dp=" + pasteurl;
 				document.getElementById("shareasurl").classList.add("hidden");
@@ -23808,14 +23809,15 @@ Current version indicated by LITEVER below.
 			<div id="shareasurl" class="hidden">
 			<div class="inlinelabel">
 			<h3>Please Note</h3>
-			<p>Clicking the button below will <b>upload</b> your current story to <b><a href="https://dpaste.com/terms/" target="_blank" class="color_blueurl">dpaste.com</a></b> where it will be <u><b>publically available</b></u> to <i>anyone</i> who has the link.</p>
+			<p>Clicking the button below will <b>upload</b> your current story to <b><a href="https://dpaste.org/about/" target="_blank" class="color_blueurl">dpaste.org</a></b> where it will be <u><b>publically available</b></u> to <i>anyone</i> who has the link.</p>
 			<p>Once shared, the file will be available online, and cannot be removed until it expires! Therefore, you're not recommended to use this service for any senstive content.</p>
-			<p class="color_red">Disclaimer: KoboldAI is not associated with dpaste.com, you are personally responsible for whatever you upload or share to their service.</p>
+			<p class="color_red">Disclaimer: KoboldAI is not associated with dpaste.org, you are personally responsible for whatever you upload or share to their service.</p>
 			<div style="width:100%">
 			<select class="form-control" id="dpaste_duration" style="width:100%">
-				<option value="1">Expires in 1 day</option>
-				<option value="7">Expires in 1 week</option>
-				<option value="30">Expires in 1 month</option>
+				<option value="3600">Expires in 1 hour</option>
+				<option value="86400" selected>Expires in 1 day</option>
+				<option value="604800">Expires in 1 week</option>
+				<option value="2592000">Expires in 1 month</option>
 			</select>
 			</div>
 			<div class="popupfooter">
