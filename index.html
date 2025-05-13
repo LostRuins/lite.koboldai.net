@@ -4414,7 +4414,7 @@ Current version indicated by LITEVER below.
 				inputtxt = inputtxt.replace(/{{random\s?:?:?([^}]+)}}/gi, function (m,listString) {
 					return pickfromlist(listString,0);
 				});
-				stablereg = /{{pick\s?::?([^}]+)}}/gi;
+				stablereg = /{{(?:pick)\s?::?([^}]+)}}/gi;
 			}
 			else
 			{
@@ -4427,12 +4427,12 @@ Current version indicated by LITEVER below.
 			let match;
 			while ((match = stablereg.exec(inputtxt)) !== null) {
 				accum += inputtxt.substring(lastIndex,match.index);
-				const matchtxt = match[0];
+				const matchtxt = match[1];
 				const count = countmap.get(matchtxt) || 0;
 				countmap.set(matchtxt, count + 1);
 				let hashstr = matchtxt + localsettings.inject_randomness_seed;
-				if (!(/[kK]/.test(inputtxt.substring(match.index-4,match.index)))) { hashstr += count; }
-				accum += (/[lL]/.test(inputtxt.substring(match.index-4,match.index)) ? dicenotation : pickfromlist)(matchtxt,parseInt("0x"+cyrb_hash(hashstr)));
+				if (isgametext || (match[0].substring(2,6) !== "pick")) { hashstr += count; }
+				accum += ((match[0].substring(2,6) == "roll") ? dicenotation : pickfromlist)(matchtxt,parseInt("0x"+cyrb_hash(hashstr)));
 				lastIndex = stablereg.lastIndex;
 			}
 			inputtxt = accum+inputtxt.substring(lastIndex);
