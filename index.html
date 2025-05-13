@@ -3234,6 +3234,7 @@ Current version indicated by LITEVER below.
 		instruct_has_latex: true,
 		placeholder_tags: true,
 		render_special_tags: false,
+		inject_randomness_seed: 1115215124,
 		request_logprobs: false,
 		persist_session: true,
 		speech_synth: 0, //0 is disabled, 1000 is xtts
@@ -3284,7 +3285,6 @@ Current version indicated by LITEVER below.
 		guidance_prompt: "",
 		guidance_scale: 1.0,
 		separate_end_tags: false,
-		enable_randomizing_tags: false,
 		idle_responses: 0,
 		idle_duration: 60,
 		export_settings: true, //affects if settings are included with the story and sharelinks
@@ -3565,6 +3565,14 @@ Current version indicated by LITEVER below.
 		//truncate to first 3 bytes
 		return hsh.substring(0, 6);
 	};
+	function basic_LCG(seed) { //simple RNG for reproducible dicerolls
+		var m = 2**35 - 31;
+		var a = 185852;
+		var s = seed % m;
+		return function () {
+			return (s = s * a % m) / m
+		}
+	}
 	function import_props_into_object(existingObj, objToImport) { //import new fields from one object into another while preserving exsting
 		for (var k in objToImport) {
 			existingObj[k] = objToImport[k];
@@ -4303,7 +4311,7 @@ Current version indicated by LITEVER below.
 		text = text.replace(new RegExp("{{"+rollmacro+"\s?:?:?([^}]+)}}","gi"), function (m, matchValue){
 			let formula = matchValue.trim();
 			if (/^\d+$/.test(formula)){ formula = "1d${formula}"; }
-			pieces = formula.match(/^([1-9]\d*)?d([1-9]\d*)([x*\u00D7][\d]*\.?[\d]+)?([+-][\d]*\.?[\d]+)?$/i);
+			pieces = formula.match(/^([1-9]\d*)?d([1-9]\d*)([x*\u00D7][\d.]+)?([+-][\d.]+)?$/i);
 			if (!pieces) {
 				return "";
 			}
@@ -4319,13 +4327,13 @@ Current version indicated by LITEVER below.
 		return text;
 	}
 
-	function replace_search_placeholders(text) {
+	function replace_search_placeholders(text,isstorage=false) {
 
 		// Remove any instruct tags as needed to ensure a more accurate search
 		text = remove_all_instruct_tags(text);
 
 		// Replace {{user}} and other placeholders
-		text = replace_placeholders(text);
+		text = replace_placeholders(text,isgametext=!isstorage);
 
 		return text;
 	}
@@ -4347,7 +4355,7 @@ Current version indicated by LITEVER below.
 		inputtxt = replaceAll(inputtxt,instructsysplaceholder_end.trim(),get_instruct_systag_end(false));
 		return inputtxt;
 	}
-	function replace_noninstruct_placeholders(inputtxt,escape=false)
+	function replace_noninstruct_placeholders(inputtxt,escape=false,isgametext=true)
 	{
 		let firstopponent = localsettings.chatopponent;
 		if (firstopponent && firstopponent.includes("||$||")) {
@@ -4373,15 +4381,71 @@ Current version indicated by LITEVER below.
 				inputtxt = replaceAll(inputtxt,localsettings.placeholder_tags_data[i].p,localsettings.placeholder_tags_data[i].r);
 			}
 		}
+
+		if(localsettings.inject_randomness_seed!=-1)
+		{
+			// define helper functions
+			let dicenotation = function(formula,seed=0){
+				RNG = seed ? basic_LCG(seed) : Math.random;
+				formula = formula.trim();
+				if (/^\d+$/.test(formula)){ formula = "1d${formula}"; }
+				const pieces = formula.match(/^(\d+)?d(\d+)([x*\u00D7]\d*\.?\d+)?([+-]\d*\.?\d+)?$/i);
+				if (!pieces) {
+					return "";
+				}
+				let total = (pieces[1]-0)||1;
+				for (let i=0; i < ((pieces[1]-0)||1); ++i) {
+					total += Math.floor(RNG()*pieces[2]);
+				}
+				total *= pieces[3] ? parseFloat(pieces[3].substring(1)) : 1;
+				total += pieces[4] ? parseFloat(pieces[4]) : 0;
+				return String(total);
+			}
+			let pickfromlist = function(listString,seed=0){
+				const list = listString.includes('::') ? listString.split('::') : listString.replace(/\\,/g, '{{COMMA}}').split(',').map(item => item.trim().replace(/{{COMMA}}/g, ','));
+				return (list.length===0 ? '' : list[Math.floor((seed ? seed/(2**24) : Math.random())*list.length)]);
+			}
+
+			if(!isgametext)
+			{
+	 			inputtxt = inputtxt.replace(/{{roll\s?:?:?([^}]+)}}/gi, function (m,matchValue) {
+					return dicenotation(matchValue, 0);
+				});
+				inputtxt = inputtxt.replace(/{{random\s?:?:?([^}]+)}}/gi, function (m,listString) {
+					return pickfromlist(listString,0);
+				});
+				stablereg = /{{pick\s?::?([^}]+)}}/gi;
+			}
+			else
+			{
+				stablereg = /{{(?:pick|random|roll)\s?::?([^}]+)}}/gi;
+			}
+
+			let countmap = new Map();
+			let accum = '';
+			let lastIndex = 0;
+			let match;
+			while ((match = stablereg.exec(inputtxt)) !== null) {
+				accum += inputtxt.substring(lastIndex,match.index);
+				const matchtxt = match[0];
+				const count = countmap.get(matchtxt) || 0;
+				countmap.set(matchtxt, count + 1);
+				let hashstr = matchtxt + localsettings.inject_randomness_seed;
+				if (!(/[kK]/.test(inputtxt.substring(match.index-4,match.index)))) { hashstr += count; }
+				accum += (/[lL]/.test(inputtxt.substring(match.index-4,match.index)) ? dicenotation : pickfromlist)(matchtxt,parseInt("0x"+cyrb_hash(hashstr)));
+				lastIndex = stablereg.lastIndex;
+			}
+			inputtxt = accum+inputtxt.substring(lastIndex);
+		}
 		return inputtxt;
 	}
 	//if alwaysreplace, then settings are not considered, otherwise checks settings
-	function replace_placeholders(inputtxt, escape=false, alwaysreplace=false)
+	function replace_placeholders(inputtxt, escape=false, alwaysreplace=false, isgametext=true)
 	{
 		inputtxt = replace_instruct_placeholders(inputtxt);
 		if(alwaysreplace || localsettings.placeholder_tags)
 		{
-			inputtxt = replace_noninstruct_placeholders(inputtxt,escape);
+			inputtxt = replace_noninstruct_placeholders(inputtxt,escape,isgametext);
 		}
 		return inputtxt;
 	}
@@ -7828,8 +7892,8 @@ Current version indicated by LITEVER below.
 			gametext_arr = [];
 			if(!localsettings.placeholder_tags) //do a one-time replace instead
 			{
-				greeting = replace_placeholders(greeting, false, true);
-				combinedmem = replace_placeholders(combinedmem, false, true);
+				greeting = replace_placeholders(greeting, false, true, true);
+				combinedmem = replace_placeholders(combinedmem, false, true, false);
 			}
 			if(greeting)
 			{
@@ -7888,7 +7952,7 @@ Current version indicated by LITEVER below.
 			let prompttxt = temp_scenario.prompt;
 			if(!localsettings.placeholder_tags) //do a one-time replace instead
 			{
-				prompttxt = replace_placeholders(prompttxt, false, true);
+				prompttxt = replace_placeholders(prompttxt, false, true, true);
 			}
 			gametext_arr.push(prompttxt);
 		}
@@ -7896,14 +7960,14 @@ Current version indicated by LITEVER below.
 			current_anote = temp_scenario.authorsnote;
 			if(!localsettings.placeholder_tags)
 			{
-				current_anote = replace_placeholders(current_anote, false, true);
+				current_anote = replace_placeholders(current_anote, false, true, false);
 			}
 		}
 		if (temp_scenario.memory != "") {
 			current_memory = temp_scenario.memory;
 			if(!localsettings.placeholder_tags)
 			{
-				current_memory = replace_placeholders(current_memory, false, true);
+				current_memory = replace_placeholders(current_memory, false, true, false);
 			}
 		}
 		if (temp_scenario.image && temp_scenario.image != "") {
@@ -11490,7 +11554,6 @@ Current version indicated by LITEVER below.
 		document.getElementById("inject_chatnames_instruct").checked = localsettings.inject_chatnames_instruct;
 		document.getElementById("inject_jailbreak_instruct").checked = localsettings.inject_jailbreak_instruct;
 		document.getElementById("separate_end_tags").checked = localsettings.separate_end_tags;
-		document.getElementById("enable_randomizing_tags").checked = localsettings.enable_randomizing_tags;
 		document.getElementById("idle_responses").value = localsettings.idle_responses;
 		document.getElementById("idle_duration").value = localsettings.idle_duration;
 		document.getElementById("fix_alpaca_leak").checked = localsettings.fix_alpaca_leak;
@@ -11499,6 +11562,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("instruct_has_markdown").checked = localsettings.instruct_has_markdown;
 		document.getElementById("instruct_has_latex").checked = localsettings.instruct_has_latex;
 		document.getElementById("placeholder_tags").checked = localsettings.placeholder_tags;
+		document.getElementById("inject_randomness_seed").value = localsettings.inject_randomness_seed;
 		document.getElementById("run_in_background").checked = run_in_background;
 		document.getElementById("auto_ctxlen").checked = localsettings.auto_ctxlen;
 		document.getElementById("auto_genamt").checked = localsettings.auto_genamt;
@@ -11954,7 +12018,6 @@ Current version indicated by LITEVER below.
 		localsettings.inject_chatnames_instruct = (document.getElementById("inject_chatnames_instruct").checked ? true : false);
 		localsettings.inject_jailbreak_instruct = (document.getElementById("inject_jailbreak_instruct").checked ? true : false);
 		localsettings.separate_end_tags = (document.getElementById("separate_end_tags").checked ? true : false);
-		localsettings.enable_randomizing_tags = (document.getElementById("enable_randomizing_tags").checked ? true : false);
 		localsettings.idle_responses = document.getElementById("idle_responses").value;
 		localsettings.idle_duration = document.getElementById("idle_duration").value;
 		localsettings.fix_alpaca_leak = (document.getElementById("fix_alpaca_leak").checked ? true : false);
@@ -11963,6 +12026,7 @@ Current version indicated by LITEVER below.
 		localsettings.instruct_has_markdown = (document.getElementById("instruct_has_markdown").checked ? true : false);
 		localsettings.instruct_has_latex = (document.getElementById("instruct_has_latex").checked ? true : false);
 		localsettings.placeholder_tags = (document.getElementById("placeholder_tags").checked ? true : false);
+		localsettings.inject_randomness_seed = document.getElementById("inject_randomness_seed").value;
 		run_in_background = (document.getElementById("run_in_background").checked ? true : false);
 		background_audio_loop(run_in_background);
 		localsettings.generate_images_model = document.getElementById("generate_images_model").value;
@@ -12557,13 +12621,6 @@ Current version indicated by LITEVER below.
 		documentdb_searchrange = cleannum(documentdb_searchrange,0,1024);
 		documentdb_chunksize = parseInt(documentdb_chunksize);
 		documentdb_chunksize = cleannum(documentdb_chunksize,32,2048);
-
-		if(localsettings.enable_randomizing_tags)
-		{
-			current_memory = inject_randomness(current_memory,onlystable=true);
-			current_anote = inject_randomness(current_anote,onlystable=true);
-		}
-
 	}
 
 	function set_personal_notes()
@@ -12931,6 +12988,7 @@ Current version indicated by LITEVER below.
 			documentdb_searchrange = 300;
 			documentdb_chunksize = 800;
 			documentdb_data = "";
+			new_randomness_seed(); 
 		}
 		warn_unsaved = false;
 		last_used_saveslot = -1;
@@ -12959,6 +13017,12 @@ Current version indicated by LITEVER below.
 			styleElement.innerHTML = "";
 		},null);
 
+	}
+
+	function new_randomness_seed()
+	{
+		localsettings.inject_randomness_seed = Math.floor(Math.random() * Math.pow(2,32));
+		document.getElementById("inject_randomness_seed").value = localsettings.inject_randomness_seed;
 	}
 
 	function btn_editmode()
@@ -13282,6 +13346,10 @@ Current version indicated by LITEVER below.
 
 	function do_manual_gen_image(sentence, base64img="") //b64 for img2img
 	{
+		if(localsettings.placeholder_tags)
+		{
+			sentence = replace_placeholders(sentence)
+		}
 		generate_new_image(sentence, base64img);
 		document.getElementById("btn_genimg").disabled = true;
 		document.getElementById("btn_genimg2").disabled = true;
@@ -14223,14 +14291,6 @@ Current version indicated by LITEVER below.
 		let doNotGenerate = false;
 		retry_in_progress = false;
 
-		//inject randomness
-		if(localsettings.enable_randomizing_tags)
-		{
-			newgen = inject_randomness(newgen,onlystable=false);
-			//since user could have edited the gametext to manually inject macros, we need a one-time replacement
-			gametext_arr = gametext_arr.map(txt => inject_randomness(txt,false));
-		}
-
 		//match the request for creating images in instruct modes
 		if(newgen!="" && localsettings.img_gen_from_instruct && localsettings.opmode == 4 && localsettings.generate_images_mode!=0 && !newgen.includes("\n"))
 		{
@@ -14394,12 +14454,6 @@ Current version indicated by LITEVER below.
 				}
 			}
 			
-			//replace all randomizing tags
-			if(localsettings.embed_randomizing_tags)
-			{
-				truncated_context = inject_randomness(truncated_context,onlystable=false);
-			}
-
 			let max_allowed_characters = getMaxAllowedCharacters(truncated_context, maxctxlen, maxgenamt);
 
 			//for adventure mode, inject hidden context, even more if there's nothing in memory
@@ -14595,13 +14649,9 @@ Current version indicated by LITEVER below.
 				{
 					appendedsysprompt += get_instruct_systag_end(false);
 				}
-				if(localsettings.enable_randomizing_tags)
-				{
-					appendedsysprompt = inject_randomness(appendedsysprompt,onlystable=false);
-				}
 				appendedsysprompt += "\n";
 			}
-			let truncated_memory = substring_to_boundary(localsettings.enable_randomizing_tags ? inject_randomness(current_memory,onlystable=false) : current_memory, max_mem_len);
+			let truncated_memory = substring_to_boundary(current_memory, max_mem_len);
 			if (truncated_memory != null && truncated_memory != "") {
 				if(newlineaftermemory)
 				{
@@ -14790,12 +14840,12 @@ Current version indicated by LITEVER below.
 			//limit wi size
 			if(wistr!="")
 			{
-				wistr = substring_to_boundary(localsettings.enable_randomizing_tags ? inject_randomness(wistr,onlystable=false) : wistr, max_wi_len);
+				wistr = substring_to_boundary(wistr, max_wi_len);
 			}
 
 			//we clip the authors note if its too long
 			let truncated_anote = current_anotetemplate.replace("<|>", current_anote);
-			truncated_anote = substring_to_boundary(localsettings.enable_randomizing_tags ? inject_randomness(truncated_anote,onlystable=false) : truncated_anote, max_anote_len);
+			truncated_anote = substring_to_boundary(truncated_anote, max_anote_len);
 
 			if (current_anote.length == 0) {
 				//if there's no authors note at all, don't include the template
@@ -14854,8 +14904,8 @@ Current version indicated by LITEVER below.
 				}
 			}
 
-			truncated_memory = replace_placeholders(truncated_memory);
-			truncated_context = replace_placeholders(truncated_context);
+			truncated_memory = replace_placeholders(truncated_memory,isgametext=false);
+			truncated_context = replace_placeholders(truncated_context,isgametext=true);
 
 			if(is_using_kcpp_with_added_memory())
 			{
@@ -18598,7 +18648,7 @@ Current version indicated by LITEVER below.
 			else
 			{
 				let textToRender = concat_gametext(false, "", "", "", true);
-				document.getElementById("corpo_body").innerHTML = render_corpo_ui(textToRender);
+				document.getElementById("corpo_body").innerHTML = render_corpo_ui(textToRender,true);
 				corpoedit_resize_input();
 			}
 
@@ -21305,7 +21355,7 @@ Current version indicated by LITEVER below.
 		allText = replaceAll(allText,recentTextStr,"");
 
 		// Ensure placeholders are replaced to allow searching for user / character
-		allText = replace_search_placeholders(allText)
+		allText = replace_search_placeholders(allText,isstorage=true)
 		searchStr = replace_search_placeholders(searchStr)
 		recentTextStr = replace_search_placeholders(recentTextStr)
 
@@ -21965,11 +22015,6 @@ Current version indicated by LITEVER below.
 							<div class="justifyleft settingsmall">Separate End Tags <span class="helpicon">?<span
 								class="helptext">Allows using separate Instruction and Response End Tags, instead of combing them with the start tag. Not recommended for beginners.</span></span></div>
 							<input type="checkbox" title="Separate End Tags" id="separate_end_tags" style="margin:0px 0px 0px auto;" onchange="toggle_separate_end_tags()">
-						</div>
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Randomizing Tags <span class="helpicon">?<span
-								class="helptext">Enables randomizing tags, like {{pick:option1,option2,option3}} or {{roll:2d6}}.</span></span></div>
-							<input type="checkbox" title="Randomizing Tags" id="enable_randomizing_tags" style="margin:0px 0px 0px auto;">
 						</div>
 					</div>
 				</div>
@@ -22672,6 +22717,8 @@ Current version indicated by LITEVER below.
 						</div>
 						<table id="placeholder_replace_table" class="settinglabel" style="text-align: center; border-spacing: 3px 2px; border-collapse: separate;">
 						</table>
+						<div style="padding:3px" class="settinglabel justifyleft">
+							Randomness Seed: <span class="helpicon">?<span class="helptext">A seed to generate randomness for {{pick}}, {{roll}} and {{random}}. Set to -1 to disable these placeholders.</span></span><input class="settinglabel miniinput" style="margin-left:4px;width:100px;" type="text" inputmode="decimal" placeholder="0" value="1115215124" id="inject_randomness_seed"><button title="Regen" type="button" class="btn btn-primary bg_green" style="padding:1px 3px;margin:0px 0px 0px auto;font-size:10px;" onclick="new_randomness_seed()">Regen</button></div>
 					</div>
 					<div style="padding:3px;" class="justifyleft settinglabel">Classifier-Free Guidance <span class="helpicon">?<span
 						class="helptext">Functions as a negative prompt when Guidance Scale is above 1.</span></span>
