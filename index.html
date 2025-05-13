@@ -3022,6 +3022,10 @@ Current version indicated by LITEVER below.
 	const pollinations_text_endpoint = "https://text.pollinations.ai/openai";
 	const dummy_pollinations_key = "kobo";
 
+	//for optionally uploading content to share on dpaste
+	const dpaste_submit_endpoint = "https://dpaste.com/api/";
+	const dpaste_fetch_endpoint = "https://dpaste.com/";
+
 	//support for quick news updates
 	const horde_news_endpoint = "https://hordenews.concedo.workers.dev"
 
@@ -3173,6 +3177,7 @@ Current version indicated by LITEVER below.
 	var mainmenu_is_untab = false;
 	var websearch_in_progress = false;
 	var kcpp_tts_json = "";
+	var avoidwelcome = false;
 
 	var localsettings = {
 		my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
@@ -4085,8 +4090,11 @@ Current version indicated by LITEVER below.
 		} else {
 			console.log("Skipped missing local save");
 			loadok = false;
-			//show welcome
-			show_welcome_panel();
+			if(!avoidwelcome)
+			{
+				//show welcome
+				show_welcome_panel();
+			}
 		}
 		populate_corpo_leftpanel();
 		update_toggle_lightmode(false); //load theme but dont save or toggle it
@@ -5785,6 +5793,7 @@ Current version indicated by LITEVER below.
 	{
 		//read the url params, and autoload a shared story if found
 		const foundStory = urlParams.get('s');
+		const foundDpaste = urlParams.get('dp');
 		const foundScenario = urlParams.get('scenario');
 		const foundScenarioSource = scenario_sources.find(scenario => urlParams.get(scenario.urlParam))
 
@@ -5795,11 +5804,39 @@ Current version indicated by LITEVER below.
 		}
 
 		if (foundStory && foundStory != "") {
+			avoidwelcome = true;
 			if (localsettings.persist_session && !safe_to_overwrite()) {
 				import_compressed_story_prompt_overwrite(foundStory);
 			} else {
 				import_compressed_story(foundStory, false);
 			}
+			//purge url params
+			window.history.replaceState(null, null, window.location.pathname);
+		} else if (foundDpaste && foundDpaste != "") {
+			avoidwelcome = true;
+			fetch(`${dpaste_fetch_endpoint}${foundDpaste}.txt`)
+			.then(x => {
+				if(x.ok)
+				{
+					return x.text();
+				}else{
+					throw new Error('Error loading dpaste: ' + (x.statusText));
+					return null;
+				}
+			})
+			.then(data => {
+				if(data && data!="")
+				{
+					if (localsettings.persist_session && !safe_to_overwrite()) {
+						import_compressed_story_prompt_overwrite(data);
+					} else {
+						import_compressed_story(data, false);
+					}
+				}
+			}).catch((error) => {
+				console.log("Error: " + error);
+				msgbox("The shared URL provided is invalid or expired.");
+			});
 			//purge url params
 			window.history.replaceState(null, null, window.location.pathname);
 		} else if (foundScenario && foundScenario != "") {
@@ -6548,9 +6585,12 @@ Current version indicated by LITEVER below.
 		let cstoryjson = "";
 
 		document.getElementById("sharecontainer").classList.remove("hidden");
-		document.getElementById("sharewarning").classList.add("hidden");
+		document.getElementById("shareastext").classList.add("hidden");
+		document.getElementById("shareasurl").classList.add("hidden");
+
 		if(sharetype==0) //base64 data
 		{
+			document.getElementById("shareastext").classList.remove("hidden");
 			cstoryjson = generate_compressed_story(localsettings.save_images,localsettings.export_settings,localsettings.export_settings);
 			console.log("Export Len: " + cstoryjson.length);
 			document.getElementById("sharecontainertitle").innerText = "Share Story as TextData";
@@ -6558,18 +6598,12 @@ Current version indicated by LITEVER below.
 		}
 		else if(sharetype==1) //url share
 		{
-			cstoryjson = generate_compressed_story(false,localsettings.export_settings,false);
-			console.log("Export Len: " + cstoryjson.length);
+			document.getElementById("shareasurl").classList.remove("hidden");
 			document.getElementById("sharecontainertitle").innerText = "Share Story as URL";
-			if (cstoryjson.length >= 4800) {
-				document.getElementById("sharewarning").classList.remove("hidden");
-			}
-
-			let fullurl = "https://lite.koboldai.net/?s=" + cstoryjson;
-			document.getElementById("sharestorytext").innerHTML = "<a href=\"" + fullurl + "\">" + fullurl + "</a>";
 		}
 		else
 		{
+			document.getElementById("shareastext").classList.remove("hidden");
 			cstoryjson = share_plaintext();
 			cstoryjson = replaceAll(cstoryjson,"\n","<br>",false);
 			console.log("Export Len: " + cstoryjson.length);
@@ -6578,7 +6612,7 @@ Current version indicated by LITEVER below.
 		}
 		document.getElementById("choosesharecontainer").classList.add("hidden");
 	}
-	function copy_share_url() {
+	function copy_shared_text() {
 		var copyText = document.getElementById("sharestorytext");
 
 		// Select the text field
@@ -6586,6 +6620,43 @@ Current version indicated by LITEVER below.
 
 		// Copy the text inside the text field
 		navigator.clipboard.writeText(copyText.innerText);
+	}
+	function upload_to_dpaste()
+	{
+		msgboxYesNo("Really upload current story? This action cannot be undone.","Confirm Upload Story",()=>{
+			let expiry = parseInt(document.getElementById("dpaste_duration").value);
+			let cstoryjson = generate_compressed_story(false,localsettings.export_settings,false);
+			console.log("Export Len: " + cstoryjson.length);
+			const params = new URLSearchParams();
+			params.append("content", cstoryjson);
+			params.append("expiry_days", expiry);
+			fetch(dpaste_submit_endpoint, {
+				method: 'POST',
+				headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+				body: params.toString(),
+			})
+			.then(x => {
+				if(x.ok)
+				{
+					return x.text();
+				}else{
+					throw new Error('Error uploading dpaste: ' + (x.statusText));
+					return null;
+				}
+			})
+			.then((text) => {
+				let pasteurl = text.split("/");
+				pasteurl = pasteurl[pasteurl.length-1];
+				let fullurl = "https://lite.koboldai.net/?dp=" + pasteurl;
+				document.getElementById("shareasurl").classList.add("hidden");
+				document.getElementById("shareastext").classList.remove("hidden");
+				document.getElementById("sharestorytext").innerHTML = "<a href=\"" + fullurl + "\">" + fullurl + "</a>";
+			})
+			.catch((error) => {
+				msgbox(`Unable to upload story: ${error}`);
+				console.error('Error:', error);
+			});
+		},()=>{});
 	}
 
 
@@ -22099,7 +22170,7 @@ Current version indicated by LITEVER below.
 
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Top-K Sampling <span class="helpicon">?<span class="helptext">Top-K Sampling. Discards all but the K most likely tokens. Set 0 to Deactivate.</span></span></div>
+							<div class="justifyleft settingsmall">Top-K Sampling <span class="helpicon">?<span class="helptext">Top-K Sampling. Discards all but the K most likely tokens. Set 0 to Deactivate. Range 0 to 100.</span></span></div>
 							<input title="Top-K Sampling"inputmode="decimal" class="justifyright flex-push-right settingsmall" id="top_k" oninput="
 						   document.getElementById('top_k_slide').value = this.value;">
 						</div>
@@ -22117,27 +22188,27 @@ Current version indicated by LITEVER below.
 						</div>
 						<div style="display:flex;width:100%;">
 							<div class="settinglabel settingcell">
-								<div title="Top-A Sampling. 0 to Deactivate." class="justifyleft settingsmall" style="width:100%">Top-A</div>
+								<div title="Top-A Sampling. 0 to Deactivate. Range 0 to 1." class="justifyleft settingsmall" style="width:100%">Top-A</div>
 								<div class="justifyleft settingsmall" style="width:100%">
 								<input title="Top-A Sampling" class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="top_a"></div>
 							</div>
 							<div class="settinglabel settingcell">
-								<div title="Typical Sampling. 1 to Deactivate." class="justifyleft settingsmall" style="width:100%">Typical</div>
+								<div title="Typical Sampling. 1 to Deactivate. Range 0 to 1." class="justifyleft settingsmall" style="width:100%">Typical</div>
 								<div class="justifyleft settingsmall" style="width:100%">
 								<input title="Typical Sampling"class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="typ_s"></div>
 							</div>
 							<div class="settinglabel settingcell">
-								<div title="Tail-Free Sampling. 1 to Deactivate." class="justifyleft settingsmall" style="width:100%">TFS</div>
+								<div title="Tail-Free Sampling. 1 to Deactivate. Range 0 to 1." class="justifyleft settingsmall" style="width:100%">TFS</div>
 								<div class="justifyleft settingsmall" style="width:100%">
 								<input title="Tail-Free Sampling" class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="tfs_s"></div>
 							</div>
 							<div class="settinglabel settingcell">
-								<div title="Min-P Sampling. 0 to Deactivate." class="justifyleft settingsmall" style="width:100%">Min-P</div>
+								<div title="Min-P Sampling. 0 to Deactivate. Range 0 to 1." class="justifyleft settingsmall" style="width:100%">Min-P</div>
 								<div class="justifyleft settingsmall" style="width:100%">
 								<input title="Min-P Sampling" class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="min_p"></div>
 							</div>
 							<div class="settinglabel settingcell">
-								<div title="Presence Penalty. 0 to Deactivate." class="justifyleft settingsmall" style="width:100%">Pr. Pen.</div>
+								<div title="Presence Penalty. 0 to Deactivate. Range -2 to 2." class="justifyleft settingsmall" style="width:100%">Pr. Pen.</div>
 								<div class="justifyleft settingsmall" style="width:100%">
 								<input title="Presence Penalty" class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="presence_penalty"></div>
 							</div>
@@ -22293,9 +22364,9 @@ Current version indicated by LITEVER below.
 								</div>
 							</div>
 							<div class="settinglabel settingcell">
-								<div title="Top N Sigma. 0 to deactivate." class="justifyleft settingsmall" style="width:100%">T.NSigma</div>
+								<div title="Top N Sigma. 0 to deactivate. Range 0 to 5." class="justifyleft settingsmall" style="width:100%">T.NSigma</div>
 								<div class="justifyleft settingsmall" style="width:100%">
-								<input title="Top N Sigma. 0 to deactivate." class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="nsigma"></div>
+								<input title="Top N Sigma. 0 to deactivate. Range 0 to 5." class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="nsigma"></div>
 							</div>
 						</div>
 					</div>
@@ -23726,14 +23797,33 @@ Current version indicated by LITEVER below.
 			<div class="popuptitlebar">
 				<div class="popuptitletext" id="sharecontainertitle">Share Story</div>
 			</div>
+			<div id="shareastext">
 			<div class="menutext shareStory" id="sharestorytext" style=" word-wrap: break-word;">
-
 			</div>
 			<div class="popupfooter">
-				<button type="button" class="btn btn-primary" onclick="copy_share_url()">Copy</button>
+				<button type="button" class="btn btn-primary" onclick="copy_shared_text()">Copy</button>
 				<button type="button" class="btn btn-primary" onclick="hide_popups()">Close</button>
 			</div>
-			<div class="box-label hidden" id="sharewarning">Warning: This story is very long. It may not load in some browsers. You should save it as a file instead.</div>
+			</div>
+			<div id="shareasurl" class="hidden">
+			<div class="inlinelabel">
+			<h3>Please Note</h3>
+			<p>Clicking the button below will <b>upload</b> your current story to <b><a href="https://dpaste.com/terms/" target="_blank" class="color_blueurl">dpaste.com</a></b> where it will be <u><b>publically available</b></u> to <i>anyone</i> who has the link.</p>
+			<p>Once shared, the file will be available online, and cannot be removed until it expires! Therefore, you're not recommended to use this service for any senstive content.</p>
+			<p class="color_red">Disclaimer: KoboldAI is not associated with dpaste.com, you are personally responsible for whatever you upload or share to their service.</p>
+			<div style="width:100%">
+			<select class="form-control" id="dpaste_duration" style="width:100%">
+				<option value="1">Expires in 1 day</option>
+				<option value="7">Expires in 1 week</option>
+				<option value="30">Expires in 1 month</option>
+			</select>
+			</div>
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="upload_to_dpaste()">Upload</button>
+				<button type="button" class="btn btn-primary" onclick="hide_popups()">Close</button>
+			</div>
+			</div>
+			</div>
 		</div>
 	</div>
 
