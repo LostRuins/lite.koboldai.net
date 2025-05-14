@@ -4301,7 +4301,7 @@ Current version indicated by LITEVER below.
 		text = remove_all_instruct_tags(text);
 
 		// Replace {{user}} and other placeholders
-		text = replace_placeholders(text,isgametext=!isstorage);
+		text = replace_placeholders(text,false,false,!isstorage);
 
 		return text;
 	}
@@ -4399,8 +4399,8 @@ Current version indicated by LITEVER below.
 				const count = countmap.get(matchtxt) || 0;
 				countmap.set(matchtxt, count + 1);
 				let hashstr = matchtxt + localsettings.inject_randomness_seed;
-				if (isgametext || (match[0].substring(2,6) !== "pick")) { hashstr += count; }
-				accum += ((match[0].substring(2,6) == "roll") ? dicenotation : pickfromlist)(matchtxt,parseInt("0x"+cyrb_hash(hashstr)));
+				if (isgametext || (match[0].toLowerCase().substring(2,6) !== "pick")) { hashstr += count; }
+				accum += ((match[0].toLowerCase().substring(2,6) == "roll") ? dicenotation : pickfromlist)(matchtxt,parseInt("0x"+cyrb_hash(hashstr)));
 				lastIndex = stablereg.lastIndex;
 			}
 			inputtxt = accum+inputtxt.substring(lastIndex);
@@ -12956,8 +12956,9 @@ Current version indicated by LITEVER below.
 			documentdb_searchrange = 300;
 			documentdb_chunksize = 800;
 			documentdb_data = "";
-			new_randomness_seed(); 
 		}
+		new_randomness_seed();
+		localsettings.inject_randomness_seed = document.getElementById("inject_randomness_seed").value;
 		warn_unsaved = false;
 		last_used_saveslot = -1;
 		show_corpo_leftpanel(false);
@@ -12989,8 +12990,7 @@ Current version indicated by LITEVER below.
 
 	function new_randomness_seed()
 	{
-		localsettings.inject_randomness_seed = Math.floor(Math.random() * Math.pow(2,32));
-		document.getElementById("inject_randomness_seed").value = localsettings.inject_randomness_seed;
+		document.getElementById("inject_randomness_seed").value = Math.floor(Math.random() * Math.pow(2,32));
 	}
 
 	function btn_editmode()
@@ -14839,6 +14839,8 @@ Current version indicated by LITEVER below.
 			//only do this processing if memory or anote is not blank
 			if (truncated_memory.length > 0 || current_anote.length > 0)
 			{
+				truncated_memory = replace_placeholders(truncated_memory,false,false,false);
+				truncated_anote = replace_placeholders(truncated_anote,false,false,false);
 				if(!is_using_kcpp_with_added_memory())
 				{
 					let augmented_len = truncated_memory.length + truncated_context.length + truncated_anote.length;
@@ -14872,8 +14874,7 @@ Current version indicated by LITEVER below.
 				}
 			}
 
-			truncated_memory = replace_placeholders(truncated_memory,isgametext=false);
-			truncated_context = replace_placeholders(truncated_context,isgametext=true);
+			truncated_context = replace_placeholders(truncated_context,false,false,true);
 
 			if(is_using_kcpp_with_added_memory())
 			{
