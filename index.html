@@ -3023,7 +3023,6 @@ Current version indicated by LITEVER below.
 	const dummy_pollinations_key = "kobo";
 
 	//for optionally uploading content to share on dpaste
-	const dpaste_submit_endpoint = "https://dpaste.org/api/";
 	const dpaste_fetch_endpoint = "https://dpaste.org/";
 
 	//support for quick news updates
@@ -6632,14 +6631,24 @@ Current version indicated by LITEVER below.
 	}
 	function upload_to_dpaste()
 	{
+		let serverurl = document.getElementById("dpaste_server_url").value;
+		let cstoryjson = generate_compressed_story(false,localsettings.export_settings,false);
+		if(serverurl=="")
+		{
+			document.getElementById("shareasurl").classList.add("hidden");
+			document.getElementById("shareastext").classList.remove("hidden");
+			let fullurl = "https://lite.koboldai.net/?s=" + cstoryjson;
+			document.getElementById("sharestorytext").innerHTML = "<a href=\"" + fullurl + "\">" + fullurl + "</a>";
+			return;
+		}
+
 		msgboxYesNo("Really upload current story? This action cannot be undone.","Confirm Upload Story",()=>{
 			let expiry = document.getElementById("dpaste_duration").value;
-			let cstoryjson = generate_compressed_story(false,localsettings.export_settings,false);
 			console.log("Export Len: " + cstoryjson.length);
 			const params = new URLSearchParams();
 			params.append("content", cstoryjson);
 			params.append("expiry", expiry);
-			fetch(dpaste_submit_endpoint, {
+			fetch(serverurl, {
 				method: 'POST',
 				headers: {'Content-Type': 'application/x-www-form-urlencoded'},
 				body: params.toString(),
@@ -23822,6 +23831,7 @@ Current version indicated by LITEVER below.
 			<p>Once shared, the file will be available online, and cannot be removed until it expires! Therefore, you're not recommended to use this service for any senstive content.</p>
 			<p class="color_red">Disclaimer: KoboldAI is not associated with dpaste.org, you are personally responsible for whatever you upload or share to their service.</p>
 			<div style="width:100%">
+			<input class="settinglabel" style="padding:2px;margin:0px;margin-bottom: 4px; width:100%" type="text" placeholder="(dPaste Server URL)" value="https://dpaste.org/api/" id="dpaste_server_url">
 			<select class="form-control" id="dpaste_duration" style="width:100%">
 				<option value="3600">Expires in 1 hour</option>
 				<option value="86400" selected>Expires in 1 day</option>
