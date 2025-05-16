@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 241;
+	const LITEVER = 242;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -1207,9 +1207,17 @@ Current version indicated by LITEVER below.
 		padding: 4px;
 		clear: both;
 	}
-	.storyimgside
+	.storyimgsidevertical
 	{
-		display: inline-block;
+		width: fit-content;
+		text-align: center;
+		position: relative;
+		padding: 4px;
+		margin: 0;
+	}
+	.storyimgsidehorizontal
+	{
+		display: table-cell;
 		width: fit-content;
 		text-align: center;
 		position: relative;
@@ -3274,6 +3282,7 @@ Current version indicated by LITEVER below.
 		img_allowhd: true,
 		img_crop: false,
 		img_newturn: false,
+		img_stacking: false,
 		img_img2imgstr: 0.6,
 		img_clipskip: -1,
 		img_steps: 20,
@@ -11780,6 +11789,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("img_allowhd").checked = localsettings.img_allowhd;
 		document.getElementById("img_crop").checked = localsettings.img_crop;
 		document.getElementById("img_newturn").checked = localsettings.img_newturn;
+		document.getElementById("img_stacking").checked = localsettings.img_stacking;
 		document.getElementById("img_autogen").checked = localsettings.img_autogen;
 		document.getElementById("img_gen_from_instruct").checked = localsettings.img_gen_from_instruct;
 		document.getElementById("save_images").checked = localsettings.save_images;
@@ -12243,6 +12253,7 @@ Current version indicated by LITEVER below.
 		localsettings.tokenstreammode = document.getElementById("tokenstreammode").value;
 		localsettings.img_crop = (document.getElementById("img_crop").checked ? true : false);
 		localsettings.img_newturn = (document.getElementById("img_newturn").checked ? true : false);
+		localsettings.img_stacking = (document.getElementById("img_stacking").checked ? true : false);
 		localsettings.img_allowhd = (document.getElementById("img_allowhd").checked ? true : false);
 		localsettings.img_autogen = (document.getElementById("img_autogen").checked ? true : false);
 		localsettings.img_gen_from_instruct = (document.getElementById("img_gen_from_instruct").checked ? true : false);
@@ -16484,15 +16495,36 @@ Current version indicated by LITEVER below.
 		}
 	}
 
-	function render_image_html(data, pend_txt = "", float=true, center=false) {
+	function render_all_image_html(text, float=true, center=false)
+	{
+		let siclass = (float?"storyimgfloat":(center?"storyimgcenter":"storyimgsidevertical"));
+		if(localsettings.img_stacking && !float) //allow horizontal stacking
+		{
+			siclass = "storyimgsidehorizontal"; //horizontal stack
+		}
+		text = text.replace(/\[<\|p\|.+?\|p\|>\]/g, function (m) {
+			// m here means the whole matched string
+			let inner = m.substring(5, m.length - 5);
+			inner = render_image_html("", inner, siclass);
+			return inner;
+		});
+		text = text.replace(/\[<\|d\|.+?\|d\|>\]/g, function (m) {
+			// m here means the whole matched string
+			let inner = m.substring(5, m.length - 5);
+			inner = render_image_html(inner, "", siclass);
+			return inner;
+		});
+		text = text.replace(/\[<\|[\s\S]+?\|>\]/g, ""); //remove normal comments too
+		return text;
+	}
+
+	function render_image_html(data, pend_txt = "", siclass="storyimgfloat") {
 		var dim = (localsettings.opmode == 2 ? 160 : 180); //adventure mode has smaller pictures
 		dimW = dim;
 		dimH = dim;
-		let siclass = (float?"storyimgfloat":(center?"storyimgcenter":"storyimgside"));
 		let reinvertcolor = localsettings.invert_colors?" invert_colors":"";
 		let alttxt = "";
 		let suffix = "";
-		let prefix = ((float==false&&center==false)?"<br>":"");
 		if (!data || data == "") {
 			let waittime = "Unavailable";
 			if (image_db[pend_txt] != null) {
@@ -16503,7 +16535,7 @@ Current version indicated by LITEVER below.
 				console.log("Cannot render " + pend_txt);
 			}
 
-			return prefix + `<div class="`+siclass+reinvertcolor+`" contenteditable="false"><img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wAARCAEAAQADASIAAhEBAxEB/8QAGQABAQEBAQEAAAAAAAAAAAAAAAEDAgQF/8QAIBABAAIBBQEBAQEAAAAAAAAAAAECEgMRMVKRIWFBof/EABQBAQAAAAAAAAAAAAAAAAAAAAD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwD7AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABETPENNPT3je3jUHm22HpmInljqUx+xwDgAAAAAAAAAAAAAAAAAAAAAAAAABaxvaIRaztaJB6AAEmN4mFSZ2iZB5wAAAAAAAAAAAAAAAAAAAAAAAAAAAaaeptG1vWrzETMcSD0zMRyx1L5fI4cb7gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA7rpzNd/HAAAAAAAAAAAAAAAAAAAAAAAAAAAAADTT09/s8Gnp7/Z4agONSmX2OXYDzDbUpl9jliAAAAAAAAAAAAAAAAAAAsVmd9o4KVm0/jeIiI2gHnGupp/2vjIAABpp6e/2TT09/s8NQAAAAHGpTL7HLsB5htqUy+xyxAAAAAAAAAAAAAAAWlZtP4UrNp/G8RFY2gCIiI2hQAZ6mn/a+NAHmaaenv8AZ4dzp1m2/wDjoAAAAAAAABxqUy+xy7AeYbalMvscsQAAAAAAAAAAFpWbT+FKzafxvEREbQBEREbQoAAAAAAAAAAAAAAAAAONSmX2OXYDzDbUpl9jliAAAAAAAtKzafxaVm0/jaIiI2gCIiI2hQAAAAAAAAAAAAAAAAAAAAAcalMvscuwHmG2pTL7HLEAAAAFi0xxMwZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6kzvyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/Z" width=` + dim + ` height=` + dim + ` style="border-radius: 6%;" title="`+alttxt+`" alt="` + pend_txt + `"><div class=\"imgloader\"></div><div class=\"imagelabel\">` + waittime + `</div></div>` + suffix;
+			return `<div class="`+siclass+reinvertcolor+`" contenteditable="false"><img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wAARCAEAAQADASIAAhEBAxEB/8QAGQABAQEBAQEAAAAAAAAAAAAAAAEDAgQF/8QAIBABAAIBBQEBAQEAAAAAAAAAAAECEgMRMVKRIWFBof/EABQBAQAAAAAAAAAAAAAAAAAAAAD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwD7AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABETPENNPT3je3jUHm22HpmInljqUx+xwDgAAAAAAAAAAAAAAAAAAAAAAAAABaxvaIRaztaJB6AAEmN4mFSZ2iZB5wAAAAAAAAAAAAAAAAAAAAAAAAAAAaaeptG1vWrzETMcSD0zMRyx1L5fI4cb7gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA7rpzNd/HAAAAAAAAAAAAAAAAAAAAAAAAAAAAADTT09/s8Gnp7/Z4agONSmX2OXYDzDbUpl9jliAAAAAAAAAAAAAAAAAAAsVmd9o4KVm0/jeIiI2gHnGupp/2vjIAABpp6e/2TT09/s8NQAAAAHGpTL7HLsB5htqUy+xyxAAAAAAAAAAAAAAAWlZtP4UrNp/G8RFY2gCIiI2hQAZ6mn/a+NAHmaaenv8AZ4dzp1m2/wDjoAAAAAAAABxqUy+xy7AeYbalMvscsQAAAAAAAAAAFpWbT+FKzafxvEREbQBEREbQoAAAAAAAAAAAAAAAAAONSmX2OXYDzDbUpl9jliAAAAAAAtKzafxaVm0/jaIiI2gCIiI2hQAAAAAAAAAAAAAAAAAAAAAcalMvscuwHmG2pTL7HLEAAAAFi0xxMwZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6kzvyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/Z" width=` + dim + ` height=` + dim + ` style="border-radius: 6%;" title="`+alttxt+`" alt="` + pend_txt + `"><div class=\"imgloader\"></div><div class=\"imagelabel\">` + waittime + `</div></div>` + suffix;
 		} else {
 			let imghash = cyrb_hash(data).trim();
 			if (completed_imgs_meta[imghash] != null) {
@@ -16529,7 +16561,7 @@ Current version indicated by LITEVER below.
 					dimH *= 0.75;
 				}
 			}
-			return prefix + `<div class="`+siclass+reinvertcolor+`"><img src="` + data + `" width=` + dimW + ` height=` + dimH + ` title="`+alttxt+`" style="border-radius: 6%; cursor: pointer;" onclick="return click_image(this,\'`+imghash+`\');"></div>` + suffix;
+			return `<div class="`+siclass+reinvertcolor+`"><img src="` + data + `" width=` + dimW + ` height=` + dimH + ` title="`+alttxt+`" style="border-radius: 6%; cursor: pointer;" onclick="return click_image(this,\'`+imghash+`\');"></div>` + suffix;
 		}
 	}
 
@@ -17995,7 +18027,7 @@ Current version indicated by LITEVER below.
 				redo_prev_text = [];
 
 				//stash images
-				gametext_elem.querySelectorAll('div.storyimgcenter,div.storyimgside,div.storyimgfloat').forEach(
+				gametext_elem.querySelectorAll('div.storyimgcenter,div.storyimgsidevertical,div.storyimgsidehorizontal,div.storyimgfloat').forEach(
 					(el) => {
 						let chimg = el.getElementsByTagName("img")[0];
 						if(el && chimg)
@@ -18574,18 +18606,7 @@ Current version indicated by LITEVER below.
 				let floatimg = (localsettings.opmode!=4);
 
 				//handle images
-				fulltxt = fulltxt.replace(/\[<\|p\|.+?\|p\|>\]/g, function (m) {
-					// m here means the whole matched string
-					let inner = m.substring(5, m.length - 5);
-					inner = render_image_html("", inner,floatimg,false);
-					return inner;
-				});
-				fulltxt = fulltxt.replace(/\[<\|d\|.+?\|d\|>\]/g, function (m) {
-					// m here means the whole matched string
-					let inner = m.substring(5, m.length - 5);
-					inner = render_image_html(inner, "",floatimg,false);
-					return inner;
-				});
+				fulltxt = render_all_image_html(fulltxt,floatimg,false);
 			}
 			else
 			{
@@ -19350,19 +19371,7 @@ Current version indicated by LITEVER below.
 				}
 
 				//convert the msg into images
-				processed_msg = processed_msg.replace(/\[<\|p\|.+?\|p\|>\]/g, function (m) {
-					// m here means the whole matched string
-					let inner = m.substring(5, m.length - 5);
-					inner = render_image_html("", inner,false,true);
-					return inner;
-				});
-				processed_msg = processed_msg.replace(/\[<\|d\|.+?\|d\|>\]/g, function (m) {
-					// m here means the whole matched string
-					let inner = m.substring(5, m.length - 5);
-					inner = render_image_html(inner, "",false,true);
-					return inner;
-				});
-				processed_msg = processed_msg.replace(/\[<\|[\s\S]+?\|>\]/g, ""); //remove normal comments too
+				processed_msg = render_all_image_html(processed_msg,false,true);
 			}
 
 			let namepart = (curr.myturn ? "User" : cosmetic_corpo_ai_nick);
@@ -19668,21 +19677,7 @@ Current version indicated by LITEVER below.
 				curr.msg = curr.msg.replace(bold_regex,"<b style='opacity:0.7'>$1</b>");
 				curr.msg = curr.msg.replace(italics_regex,"<em style='opacity:0.7'>$1</em>");
 				//convert the msg into images
-				curr.msg = curr.msg.replace(/\[<\|p\|.+?\|p\|>\]/g, function (m) {
-					// m here means the whole matched string
-					let inner = m.substring(5, m.length - 5);
-					inner = render_image_html("", inner,false,true);
-					return inner;
-				});
-				curr.msg = curr.msg.replace(/\[<\|d\|.+?\|d\|>\]/g, function (m) {
-					// m here means the whole matched string
-					let inner = m.substring(5, m.length - 5);
-					inner = render_image_html(inner, "",false,true);
-					return inner;
-				});
-				curr.msg = curr.msg.replace(/\[<\|[\s\S]+?\|>\]/g, ""); //remove normal comments too
-
-
+				curr.msg = render_all_image_html(curr.msg,false,true);
 			}
 
 			if(curr.myturn)
@@ -21155,18 +21150,7 @@ Current version indicated by LITEVER below.
 				newbodystr = newbodystr.replace(`%CodeStash${i}%`,codestashes[i]);
 			}
 		}
-		newbodystr = newbodystr.replace(/\[<\|p\|.+?\|p\|>\]/g, function (m) {
-			// m here means the whole matched string
-			let inner = m.substring(5, m.length - 5);
-			inner = render_image_html("", inner,false,true);
-			return inner;
-		});
-		newbodystr = newbodystr.replace(/\[<\|d\|.+?\|d\|>\]/g, function (m) {
-			// m here means the whole matched string
-			let inner = m.substring(5, m.length - 5);
-			inner = render_image_html(inner, "",false,true);
-			return inner;
-		});
+		newbodystr = render_all_image_html(newbodystr,false,true);
 		return portraitsStyling + newbodystr.replaceAll(/(\r\n|\r|\n)/g,'<br>'); // Finally, convert newlines to HTML format and return the stylized string.
 
 
@@ -22427,9 +22411,11 @@ Current version indicated by LITEVER below.
 								<option value="5">Pollinations.ai</option>
 							</select>
 							<div id="generate_images_model_container" class="hidden">
-								<select class="form-control" id="generate_images_model" style="font-size: 12px;height:20px;padding:2px;margin:0px 0 0;" onblur="validate_sd_model()" title="Stable Diffusion Model Selection">
+								<div style="display: inline-flex;">
+								<select class="form-control" id="generate_images_model" style="font-size: 12px;height:20px;padding:2px;margin-top:2px;width:calc(100% - 60px)" onblur="validate_sd_model()" title="Stable Diffusion Model Selection">
 								</select>
-								<button id="generate_images_horde_setkey" type="button" class="btn btn-primary" style="width:100%; padding:2px 3px;margin-top:2px;font-size:11px;" onclick="set_horde_key()">Set Horde Key</button>
+								<button id="generate_images_horde_setkey" type="button" class="btn btn-primary" style="width:52px; padding:2px 3px;margin:2px;font-size:11px;" onclick="set_horde_key()">Set Key</button>
+								</div>
 								<div class="settinglabel">
 									<div class="justifyleft settingsmall"  title="If NSFW is disabled, explicit images will be censored">Allow NSFW </div>
 								<input title="Allow NSFW Images" type="checkbox" id="img_allownsfw" style="margin:0px 0px 0px auto;">
@@ -22611,21 +22597,19 @@ Current version indicated by LITEVER below.
 						</div>
 						<div class="inlinelabel" style="font-size: 11px;">
 							<div class="justifyleft" style="padding:2px"  title="Language Code">Language </div>
-							<input class="settinglabel miniinput" type="text" placeholder="en" value="auto" id="voice_langcode" style="height:18px; width: 36px; padding: 2px;">
-
-						</div>
-
-						<div class="inlinelabel" style="font-size: 11px;">
-							<div class="justifyleft" style="padding:3px">Voice Delay: </div>
-							<input title="Voice Delay Milliseconds" type="text" inputmode="decimal" value="300" id="voice_end_delay" style="width:40px">
+							<input class="settinglabel miniinput" type="text" placeholder="en" value="auto" id="voice_langcode" style="height:18px; width: 30px; padding: 2px;">
+							<div class="justifyleft" style="padding:3px">Delay </div>
+							<input title="Voice Delay Milliseconds" type="text" inputmode="decimal" value="300" id="voice_end_delay" style="width:30px">
 							<input type="file" id="transcribe_file_input" accept="audio/*,video/*" style="display:none;">
-							<button id="transcribe_file_btn" type="button" class="bg_green btn btn-primary" style="height:20px; padding:2px 3px; font-size:11px;margin-top: 3px;" onclick="transcribe_file_btn()">Transcribe File</button>
+							<button id="transcribe_file_btn" type="button" class="bg_green btn btn-primary" style="height:20px; padding:2px 3px; font-size:11px;margin-top: 3px;" onclick="transcribe_file_btn()">Narrate File</button>
 						</div>
+
+
 					</div>
 
 					<div class="settingitem">
-						<div style="font-size:12px; line-height: 1.2;">
-							<div class="settingsdesctxt">Style tags to use for generating images:<br>(E.g. Sketch, Realistic, Anime, 3D Render, Drawing)<br></div>
+						<div style="font-size:11px; line-height: 1.1;">
+							<div class="settingsdesctxt">Style tags to use for generating images:<br>(E.g. Sketch, Realistic, Anime, 3D)<br></div>
 							<input class="settinglabel miniinput" title="Style Tags" type="text" placeholder="Default Style" value="" id="imagestyleinput">
 
 							<div class="inlinelabel">
@@ -22634,11 +22618,11 @@ Current version indicated by LITEVER below.
 							</div>
 							<div class="inlinelabel">
 								<div class="justifyleft rowitem">Step Count: </div>
-								<input title="Number of Steps" type="text" inputmode="decimal" id="img_steps" style="width:60px">
+								<input title="Number of Steps" type="text" inputmode="decimal" id="img_steps" style="width:50px">
 							</div>
 							<div class="inlinelabel">
 								<div class="justifyleft rowitem">Cfg. Scale: </div>
-								<input title="Cfg. Scale" type="text" inputmode="decimal" id="img_cfgscale" style="width:60px">
+								<input title="Cfg. Scale" type="text" inputmode="decimal" id="img_cfgscale" style="width:50px">
 							</div>
 							<div class="inlinelabel">
 								<div class="justifyleft rowitem">Sampler: </div>
@@ -22669,11 +22653,11 @@ Current version indicated by LITEVER below.
 								<div class="justifyleft rowitem">Img2Img Strength <span class="helpicon">?
 									<span class="helptext">Higher values lead to a more different image.</span>
 								</span>: </div>
-								<input title="Img2Img Strength" type="text" inputmode="decimal" id="img_img2imgstr" style="width:60px">
+								<input title="Img2Img Strength" type="text" inputmode="decimal" id="img_img2imgstr" style="width:50px">
 							</div>
 							<div class="inlinelabel">
 								<div class="justifyleft rowitem">Clip Skip: </div>
-								<input title="Clip Skip" type="text" inputmode="decimal" id="img_clipskip" style="width:60px">
+								<input title="Clip Skip" type="text" inputmode="decimal" id="img_clipskip" style="width:50px">
 							</div>
 							<div class="inlinelabel">
 								<div class="justifyleft rowitem">Save Higher-Res <span class="helpicon">?
@@ -22688,16 +22672,22 @@ Current version indicated by LITEVER below.
 								<input title="Crop Images" type="checkbox" id="img_crop" style="margin:0px 0 0;">
 							</div>
 							<div class="inlinelabel">
-								<div class="justifyleft rowitem">Insert Images as New Message <span class="helpicon">?
+								<div class="justifyleft rowitem">Add as New Turn <span class="helpicon">?
 									<span class="helptext">If enabled, images will be added in a new turn message instead of the existing one.</span>
 								</span>: </div>
 								<input title="Insert Images as New Message" type="checkbox" id="img_newturn" style="margin:0px 0 0;">
+							</div>
+							<div class="inlinelabel">
+								<div class="justifyleft rowitem">Stack Sideways <span class="helpicon">?
+									<span class="helptext">If enabled, multiple images can stack horizontally on the same row.</span>
+								</span>: </div>
+								<input title="Stack Images Horizontally" type="checkbox" id="img_stacking" style="margin:0px 0 0;">
 							</div>
 						</div>
 					</div>
 
 					<div class="settingitem">
-						<div style="font-size:12px; line-height: 1.2;">
+						<div style="font-size:11px; line-height: 1.1;">
 							<div class="settinglabel" style="padding: 4px;">Search the Web for relevant information when using instruct mode<br>(Requires WebSearch enabled KoboldCpp)</div>
 							<div id="websearchunsupporteddiv" class="color_red hidden" style="font-weight:bold;padding:3px;font-size:12px">WebSearch Not Supported</div>
 							<div class="settinglabel" style="padding: 4px;">
