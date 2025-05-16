@@ -3256,7 +3256,7 @@ Current version indicated by LITEVER below.
 		instruct_has_latex: true,
 		placeholder_tags: true,
 		render_special_tags: false,
-		inject_randomness_seed: 1115215124,
+		inject_randomness_seed: -1,
 		request_logprobs: false,
 		persist_session: true,
 		speech_synth: 0, //0 is disabled, 1000 is xtts
@@ -3589,12 +3589,12 @@ Current version indicated by LITEVER below.
 		//truncate to first 3 bytes
 		return hsh.substring(0, 6);
 	};
-	function basic_LCG(seed) { //simple RNG for reproducible dicerolls
+	function basic_lcg(seed) { //simple RNG for reproducible dicerolls
 		var m = 2**35 - 31;
 		var a = 185852;
 		var s = seed % m;
 		return function () {
-			return (s = s * a % m) / m
+			return ((s = s * a % m) / m);
 		}
 	}
 	function import_props_into_object(existingObj, objToImport) { //import new fields from one object into another while preserving exsting
@@ -4328,13 +4328,13 @@ Current version indicated by LITEVER below.
 		text = text.replace(/\{\{\[SYSTEM\]\}\}/g, "").replace(/\{\{\[SYSTEM_END\]\}\}/g, "");
 		return text;
 	}
-	function replace_search_placeholders(text,isstorage=false) {
+	function replace_search_placeholders(text) {
 
 		// Remove any instruct tags as needed to ensure a more accurate search
 		text = remove_all_instruct_tags(text);
 
 		// Replace {{user}} and other placeholders
-		text = replace_placeholders(text,false,false,!isstorage);
+		text = replace_placeholders(text,false,false,false);
 
 		return text;
 	}
@@ -4383,64 +4383,85 @@ Current version indicated by LITEVER below.
 			}
 		}
 
-		if(localsettings.inject_randomness_seed!=-1)
+		if(localsettings.inject_randomness_seed>0)
 		{
 			// define helper functions
 			let dicenotation = function(formula,seed=0){
-				RNG = seed ? basic_LCG(seed) : Math.random;
 				formula = formula.trim();
-				if (/^\d+$/.test(formula)){ formula = "1d${formula}"; }
+				if (/^\d+$/.test(formula)) { formula = `1d${formula}`; }
 				const pieces = formula.match(/^(\d+)?d(\d+)([x*\u00D7]\d*\.?\d+)?([+-]\d*\.?\d+)?$/i);
 				if (!pieces) {
+					return ""; //if the dice test fails we still need to return the original unswapped content!
+				}
+				let RNG = seed ? basic_lcg(seed) : Math.random;
+				let numDice = parseInt(pieces[1]) || 1;
+				let dieSides = parseInt(pieces[2]);
+				if (isNaN(numDice) || isNaN(dieSides) || dieSides < 0 || dieSides > 99999) { //dice above 99999 cause extreme slowdown
+					console.warn("Avoid potential dice issues");
 					return "";
 				}
-				let total = (pieces[1]-0)||1;
-				for (let i=0; i < ((pieces[1]-0)||1); ++i) {
-					total += Math.floor(RNG()*pieces[2]);
+				let total = 0;
+				for (let i = 0; i < numDice; ++i) {
+					total += Math.floor(RNG() * dieSides) + 1; // Standard dice rolls are 1-based
 				}
 				total *= pieces[3] ? parseFloat(pieces[3].substring(1)) : 1;
 				total += pieces[4] ? parseFloat(pieces[4]) : 0;
 				return String(total);
 			}
 			let pickfromlist = function(listString,seed=0){
-				const list = listString.includes('::') ? listString.split('::') : listString.replace(/\\,/g, '{{COMMA}}').split(',').map(item => item.trim().replace(/{{COMMA}}/g, ','));
-				return (list.length===0 ? '' : list[Math.floor((seed ? seed/(2**24) : Math.random())*list.length)]);
+				let RNG = seed ? basic_lcg(seed) : Math.random;
+				const list = listString.includes('::') ? listString.split('::') : listString.replace(/\\,/g, '%%COMMA%%').split(',').map(item => item.trim().replace(/%%COMMA%%/g, ','));
+				return (list.length===0 ? '' : list[Math.floor(RNG()*list.length)]);
 			}
 
-			if(!isgametext)
+			//don't waste time if we dont have any such tags
+			let lowerinputtxt = inputtxt.toLowerCase();
+			if (lowerinputtxt.includes("\{\{pick") || lowerinputtxt.includes("\{\{random") || lowerinputtxt.includes("\{\{roll"))
 			{
-	 			inputtxt = inputtxt.replace(/{{roll\s?:?:?([^}]+)}}/gi, function (m,matchValue) {
-					return dicenotation(matchValue, 0);
-				});
-				inputtxt = inputtxt.replace(/{{random\s?:?:?([^}]+)}}/gi, function (m,listString) {
-					return pickfromlist(listString,0);
-				});
-				stablereg = /{{(?:pick)\s?:?:?([^}]+)}}/gi;
-			}
-			else
-			{
-				stablereg = /{{(?:pick|random|roll)\s?:?:?([^}]+)}}/gi;
-			}
+				let stablereg = "";
+				if(!isgametext)
+				{
+					inputtxt = inputtxt.replace(/\{\{roll\s?:?:?([^\}\n]{1,250})\}\}/gi, function (m,matchValue) {
+						return dicenotation(matchValue, 0);
+					});
+					inputtxt = inputtxt.replace(/\{\{random\s?:?:?([^\}\n]{1,250})\}\}/gi, function (m,listString) {
+						return pickfromlist(listString,0);
+					});
+					stablereg = /\{\{(pick)\s?:?:?([^\}\n]{1,250})\}\}/gi;
+				}
+				else
+				{
+					stablereg = /\{\{(pick|random|roll)\s?:?:?([^\}\n]{1,250})\}\}/gi;
+				}
 
-			let countmap = new Map();
-			let accum = '';
-			let lastIndex = 0;
-			let match;
-			while ((match = stablereg.exec(inputtxt)) !== null) {
-				accum += inputtxt.substring(lastIndex,match.index);
-				const matchtxt = match[1];
-				const count = countmap.get(matchtxt) || 0;
-				countmap.set(matchtxt, count + 1);
-				let hashstr = matchtxt + localsettings.inject_randomness_seed;
-				if (isgametext || (match[0].toLowerCase().substring(2,6) !== "pick")) { hashstr += count; }
-				accum += ((match[0].toLowerCase().substring(2,6) == "roll") ? dicenotation : pickfromlist)(matchtxt,parseInt("0x"+cyrb_hash(hashstr)));
-				lastIndex = stablereg.lastIndex;
+				let countmap = new Map();
+				let parts = [];
+				let lastIndex = 0;
+				let match;
+
+				while ((match = stablereg.exec(inputtxt)) !== null) {
+					const tagType = match[1].toLowerCase();
+					const matchtxt = match[2];
+					parts.push(inputtxt.substring(lastIndex, match.index));
+					let count = countmap.get(matchtxt) || 0;
+					countmap.set(matchtxt, count + 1);
+					let hashstr = matchtxt + localsettings.inject_randomness_seed;
+					if (isgametext || tagType !== "pick") {
+						hashstr += count;
+					}
+					let seed = parseInt(cyrb_hash(hashstr), 16);
+					let replacement = (tagType === "roll" ? dicenotation : pickfromlist)(matchtxt, seed);
+					parts.push(replacement);
+					lastIndex = stablereg.lastIndex;
+				}
+				parts.push(inputtxt.substring(lastIndex));	// Add remaining text after the last match
+				inputtxt = parts.join('');
 			}
-			inputtxt = accum+inputtxt.substring(lastIndex);
 		}
 		return inputtxt;
 	}
 	//if alwaysreplace, then settings are not considered, otherwise checks settings
+	//if isgametext is true, then keeping the random values stable will be prioritized
 	function replace_placeholders(inputtxt, escape=false, alwaysreplace=false, isgametext=true)
 	{
 		inputtxt = replace_instruct_placeholders(inputtxt);
@@ -8038,7 +8059,7 @@ Current version indicated by LITEVER below.
 			gametext_arr = [];
 			if(!localsettings.placeholder_tags) //do a one-time replace instead
 			{
-				greeting = replace_placeholders(greeting, false, true, true);
+				greeting = replace_placeholders(greeting, false, true, false); //this is all onetime replacements, no need for stability
 				combinedmem = replace_placeholders(combinedmem, false, true, false);
 			}
 			if(greeting)
@@ -8098,7 +8119,7 @@ Current version indicated by LITEVER below.
 			let prompttxt = temp_scenario.prompt;
 			if(!localsettings.placeholder_tags) //do a one-time replace instead
 			{
-				prompttxt = replace_placeholders(prompttxt, false, true, true);
+				prompttxt = replace_placeholders(prompttxt, false, true, false);
 			}
 			gametext_arr.push(prompttxt);
 		}
@@ -13151,8 +13172,11 @@ Current version indicated by LITEVER below.
 			documentdb_chunksize = 800;
 			documentdb_data = "";
 		}
-		new_randomness_seed();
-		localsettings.inject_randomness_seed = document.getElementById("inject_randomness_seed").value;
+		if(localsettings.inject_randomness_seed>0)
+		{
+			new_randomness_seed();
+			localsettings.inject_randomness_seed = document.getElementById("inject_randomness_seed").value;
+		}
 		warn_unsaved = false;
 		last_used_saveslot = -1;
 		show_corpo_leftpanel(false);
@@ -13184,7 +13208,7 @@ Current version indicated by LITEVER below.
 
 	function new_randomness_seed()
 	{
-		document.getElementById("inject_randomness_seed").value = Math.floor(Math.random() * Math.pow(2,32));
+		document.getElementById("inject_randomness_seed").value = (Math.floor(Math.random() * 99999)); //keep within a simple range
 	}
 
 	function btn_editmode()
@@ -15037,7 +15061,7 @@ Current version indicated by LITEVER below.
 			//only do this processing if memory or anote is not blank
 			if (truncated_memory.length > 0 || current_anote.length > 0)
 			{
-				truncated_memory = replace_placeholders(truncated_memory,false,false,false);
+				truncated_memory = replace_placeholders(truncated_memory,false,false,true);
 				truncated_anote = replace_placeholders(truncated_anote,false,false,false);
 				if(!is_using_kcpp_with_added_memory())
 				{
@@ -21507,9 +21531,9 @@ Current version indicated by LITEVER below.
 		allText = replaceAll(allText,recentTextStr,"");
 
 		// Ensure placeholders are replaced to allow searching for user / character
-		allText = replace_search_placeholders(allText,isstorage=true)
-		searchStr = replace_search_placeholders(searchStr)
-		recentTextStr = replace_search_placeholders(recentTextStr)
+		allText = replace_search_placeholders(allText);
+		searchStr = replace_search_placeholders(searchStr);
+		recentTextStr = replace_search_placeholders(recentTextStr);
 
 		let i = 0, startLoc = 0;
 		while (startLoc < allText.length && i < Number.MAX_SAFE_INTEGER) {
@@ -22891,7 +22915,7 @@ Current version indicated by LITEVER below.
 						<table id="placeholder_replace_table" class="settinglabel" style="text-align: center; border-spacing: 3px 2px; border-collapse: separate;">
 						</table>
 						<div style="padding:3px" class="settinglabel justifyleft">
-							Randomness Seed: <span class="helpicon">?<span class="helptext">A seed to generate randomness for {{pick}}, {{roll}} and {{random}}. Set to -1 to disable these three placeholders.</span></span><input class="settinglabel miniinput" style="margin-left:4px;width:100px;" type="text" inputmode="decimal" placeholder="0" value="1115215124" id="inject_randomness_seed"><button title="Regen" type="button" class="btn btn-primary bg_green" style="padding:1px 3px;margin:0px 0px 0px auto;font-size:10px;" onclick="new_randomness_seed()">Regen</button></div>
+							Randomness Seed: <span class="helpicon">?<span class="helptext">A seed to generate randomness for {{pick}}, {{roll}} and {{random}}. Set to -1 to disable these three placeholders.</span></span><input class="settinglabel miniinput" style="margin-left:4px;width:70px;" type="text" inputmode="decimal" placeholder="0" value="" id="inject_randomness_seed"><button title="Regen" type="button" class="btn btn-primary bg_green" style="padding:1px 3px;margin:0px 0px 0px auto;font-size:10px;" onclick="new_randomness_seed()">Regen</button></div>
 					</div>
 					<div style="padding:3px;" class="justifyleft settinglabel">Classifier-Free Guidance <span class="helpicon">?<span
 						class="helptext">Functions as a negative prompt when Guidance Scale is above 1.</span></span>
