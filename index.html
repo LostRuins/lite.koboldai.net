@@ -4356,7 +4356,7 @@ Current version indicated by LITEVER below.
 		inputtxt = replaceAll(inputtxt,instructsysplaceholder_end.trim(),get_instruct_systag_end(false));
 		return inputtxt;
 	}
-	function replace_noninstruct_placeholders(inputtxt,escape=false,isgametext=true)
+	function replace_noninstruct_placeholders(inputtxt,escape=false,isgametext=true,persistent_countmap=null)
 	{
 		let firstopponent = localsettings.chatopponent;
 		if (firstopponent && firstopponent.includes("||$||")) {
@@ -4434,7 +4434,7 @@ Current version indicated by LITEVER below.
 					stablereg = /\{\{(pick|random|roll)\s?:?:?([^\}\n]{1,500})\}\}/gi;
 				}
 
-				let countmap = new Map();
+				let countmap = (persistent_countmap?persistent_countmap:new Map());
 				let parts = [];
 				let lastIndex = 0;
 				let match;
@@ -4467,7 +4467,7 @@ Current version indicated by LITEVER below.
 		inputtxt = replace_instruct_placeholders(inputtxt);
 		if(alwaysreplace || localsettings.placeholder_tags)
 		{
-			inputtxt = replace_noninstruct_placeholders(inputtxt,escape,isgametext);
+			inputtxt = replace_noninstruct_placeholders(inputtxt,escape,isgametext,null);
 		}
 		return inputtxt;
 	}
@@ -19454,6 +19454,7 @@ Current version indicated by LITEVER below.
 
 		let incomplete_resp = (synchro_pending_stream!="" || pending_response_id!="");
 
+		let countmap = new Map();
 		for(var i=0;i<chatunits.length;++i)
 		{
 			let curr = chatunits[i];
@@ -19462,7 +19463,7 @@ Current version indicated by LITEVER below.
 			processed_msg = apply_display_only_regex(processed_msg);
 			if(processed_msg && processed_msg!="")
 			{
-				processed_msg = replace_noninstruct_placeholders(processed_msg,true);
+				processed_msg = replace_noninstruct_placeholders(processed_msg,true,true,countmap);
 				let codeblockcount = (processed_msg.match(/```/g) || []).length;
 				if(codeblockcount>0 && codeblockcount%2!=0 )
 				{
