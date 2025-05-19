@@ -21760,10 +21760,14 @@ Current version indicated by LITEVER below.
 	const underlinedClicked = "underlinedViolet"
     const underlinedPrimaryTable = "underlinedYellowTable"
     const underlinedClickedTable = "underlinedVioletTable"
+    const objectChildNodeNamesToParse = {
+        "#text": "textContent",
+        "SPAN": "textContent"
+    }
 
     const wordsFrequencyAnalyzers = {
-        "id-input-webserver-wordfreq-checkbox": async function(inputText) {
-            let bodyRequest = {"text": inputText}
+        "id-input-webserver-wordfreq-checkbox": async function(arrayOfValidTextChildWithNrow) {
+            let bodyRequest = {"text": arrayOfValidTextChildWithNrow}
             console.log("use the webserver for word freq analysis...")
             const wordsFrequencyURL = parseWebserverDomain()
             try {
@@ -21776,16 +21780,15 @@ Current version indicated by LITEVER below.
                 setElementCssClassById("waiting-for-be", "collapse")
                 let freq = bodyResponseJson["words_frequency"]
                 let nTotalRows = bodyResponseJson["n_total_rows"]
-                console.log(`getWordsFreq::nTotalRows: '${nTotalRows}'`)
+                console.log(`wordsFrequencyAnalyzers::nTotalRows: '${nTotalRows}'`)
                 populateWordsFrequencyTables(freq, nTotalRows)
             } catch (err) {
-                console.error("getWordsFrequency::err on webserver request/response:", err, "#")
-                console.log(`wordsFrequencyURL:`, typeof wordsFrequencyURL, "=>", wordsFrequencyURL, "#")
+                console.error("wordsFrequencyAnalyzers::err on webserver request/response:", err, "#")
+                console.log(`wordsFrequencyAnalyzers::wordsFrequencyURL: ${typeof wordsFrequencyURL}:`, wordsFrequencyURL, "#")
                 setElementCssClassById("waiting-for-be", "collapse")
                 setElementCssClassById("waiting-for-be-error", "display-block")
             }
         },
-
         'stemmer-embedded': function(inputText) {
             console.log("use the embedded functionality for word freq analysis...")
             try {
@@ -21815,50 +21818,35 @@ Current version indicated by LITEVER below.
         return filterElementsFromList(results, filterWhitespaces)
     }
 
-    function textStemming(text) {
-        const textSplitNewline = text.split('\n');
-        const rowWordsTokens = [];
-        const rowOffsetsTokens = [];
-        textSplitNewline.forEach((row, rowIndex) => {
+    function textStemming(textSplitNewline) {
+        const wordsStemsDict = {};
+        let nTotalRows = textSplitNewline.length;
+
+        textSplitNewline.forEach((data) => {
+            const row = data.text;
+            const idxRow = data.idxRow;
+            const idxRowChild = data.idxRowChild ?? null;
+            const idxRowParent = data.idxRowParent ?? null;
             const tokens = customWordPunctTokenize(row);
             const offsets = getOffsets(row, tokens);
-            rowWordsTokens.push(tokens);
-            rowOffsetsTokens.push(offsets);
-        });
-        const wordsStemsDict = getWordsTokensAndIndexes(rowWordsTokens, rowOffsetsTokens);
-        const nTotalRows = textSplitNewline.length;
-        return { nTotalRows, wordsStemsDict };
-    }
 
-    function getWordsTokensAndIndexes(wordsTokensList, offsetsTokensList) {
-        const wordsStemsDict = {};
-        wordsTokensList.forEach((wordsTokens, nRow) => {
-            wordsTokens.forEach((word, index) => {
-                const cleanedWord = cleanString(word);
-                // Apply stemming
-                const stem = porterStemmer(cleanedWord);
+            tokens.forEach((word, i) => {
+                const wordLower = word.toLowerCase();
+                const stem = porterStemmer(wordLower);
                 if (!wordsStemsDict[stem]) {
                     wordsStemsDict[stem] = { count: 0, word_prefix: stem, offsets_array: [] };
                 }
-                const offsets = offsetsTokensList[nRow][index];
-                updateStemsList(wordsStemsDict[stem], word, offsets, nRow);
+                wordsStemsDict[stem].count += 1;
+                wordsStemsDict[stem].offsets_array.push({
+                    word: word, // keep original casing for display
+                    offsets: [offsets[i].start, offsets[i].end],
+                    n_row: idxRow,
+                    n_row_child: idxRowChild,
+                    n_row_parent: idxRowParent
+                });
             });
         });
-
-        return wordsStemsDict;
-    }
-
-    function updateStemsList(currentStemObj, word, offsets, nRow) {
-        currentStemObj.count += 1;
-        currentStemObj.offsets_array.push({
-            word,
-            offsets: [offsets.start, offsets.end], // Convert offsets to an array format
-            n_row: nRow
-        });
-    }
-
-    function cleanString(s) {
-        return s.replace(/[^\w\s]|_/g, '').replace(/\s+/g, '').toLowerCase();
+        return { nTotalRows, wordsStemsDict };
     }
 
     function getOffsets(text, tokens) {
@@ -21896,41 +21884,65 @@ Current version indicated by LITEVER below.
 		}
 	}
 
-	function scrollToGivenPoint(editorElement, line, nTotalRows, negativeOffsetPerc=0.12) {
-		// try to scroll div to row... font-size on div is 12px
-		let scrollHeight = parseFloat(editorElement.scrollHeight, 10)
-		let offsetToScrollPerc = line / nTotalRows
-		let offsetToScroll = scrollHeight * offsetToScrollPerc
-		// if already at the end of the page, don't scroll anymore to avoid missing words in the upper side of the viewport
-		if (offsetToScrollPerc < (1 - negativeOffsetPerc)) {
-			offsetToScroll -= offsetToScroll * negativeOffsetPerc
-		}
-		let offsetToScrollInt = parseInt(offsetToScroll, 10)
-		editorElement.scrollTo(0, offsetToScrollInt)
-	}
+    function scrollToGivenPoint(editorElement, yClientOffset, negativeMultiplierFontSize = 3) {
+        const editorComputedStyle = window.getComputedStyle(editorElement)
+        const fontSize = parseInt(editorComputedStyle.getPropertyValue("font-size"), 10)
+        const negativeOffset = fontSize * negativeMultiplierFontSize
+        const scrollHeight = editorElement.scrollHeight
+        if (yClientOffset < (scrollHeight - negativeOffset)) {
+            yClientOffset -= negativeOffset
+        }
+        editorElement.scrollTo(0, yClientOffset)
+    }
 
-	function setCaret(line, offsetColumn, nTotalRows, negativeOffsetPerc=0.12) {
-		let editorElement = document.getElementById(editorFieldLabel);
-		let validChildNodes = []
-		// use a for loop because of better performance
-		for (let i=0; i < editorElement.childNodes.length; i++) {
-			let childNode = editorElement.childNodes[i]
-			if (childNode.innerHTML !== "") {
-				validChildNodes.push(childNode)
-			}
-		}
-		let rng = document.createRange();
-		let sel = window.getSelection();
-		let col0 = offsetColumn[0]
-		let col1 = offsetColumn[1]
-		rng.setStart(validChildNodes[line], col0);
-		rng.setEnd(validChildNodes[line], col1)
-		sel.removeAllRanges();
-		sel.addRange(rng);
-		editorElement.focus();
-		scrollToGivenPoint(editorElement, line, nTotalRows, negativeOffsetPerc);
-	}
+    function setCaret(line, offsetColumn, nRowChild, nRowParent) {
+        const editorElement = document.getElementById(editorFieldLabel)
+        editorElement.scrollTo(0, 0) // workaround: first reset the scroll position moving it at editorElement beginning
 
+        const childNodes = editorElement.childNodes
+        let rng = document.createRange();
+        let sel = window.getSelection();
+        let col0 = offsetColumn[0]
+        let col1 = offsetColumn[1]
+        let childNode = childNodes[line]
+        let subChildNode;
+        /// handle case of childNodes not of type #text, e.g., SPAN
+        if (nRowParent !== null) {
+            console.assert(line === nRowParent, `line ${line} nth === parent line ${nRowParent} nth???`)
+        }
+        switch (childNode.nodeName) {
+            case "#text":
+                rng.setStart(childNode, col0)
+                rng.setEnd(childNode, col1)
+                break
+            case "SPAN":
+                subChildNode = childNode.childNodes[nRowChild]
+                rng.setStart(subChildNode, col0)
+                rng.setEnd(subChildNode, col1)
+                break
+            default:
+                throw Error(`childNode.nodeName ${childNode.nodeName} not yet handled!`)
+        }
+        sel.removeAllRanges();
+        sel.addRange(rng);
+        editorElement.focus();
+
+        const offsetsEditor = getOffsetsWithElement(editorElement)
+        const yBase = parseInt(offsetsEditor.top, 10)
+        const y = parseInt(getBoundingClientRect(rng).y, 10)
+        const yClientOffset = y - yBase
+
+        scrollToGivenPoint(editorElement, yClientOffset)
+    }
+
+    function getOffsetsWithElement(el) {
+        return {top: el.offsetTop, height: el.offsetHeight}
+    }
+
+    function getBoundingClientRect(el) {
+        let bounds = el.getBoundingClientRect();
+        return {x: bounds.left, y: bounds.y, bottom: bounds.bottom, top: bounds.top};
+    }
     function setElementCssClassById(elementId, currentClass) {
         let elementWithClassToChange = document.getElementById(elementId)
         elementWithClassToChange.setAttribute("class", currentClass)
@@ -21940,9 +21952,7 @@ Current version indicated by LITEVER below.
         try {
             let oldClassElement = document.getElementsByClassName(oldClassName)
             oldClassElement[0].className = currentClass
-        } catch {
-            console.log("not found...")
-        }
+        } catch {}
 	}
 
     function parseWebserverDomain () {
@@ -21954,9 +21964,7 @@ Current version indicated by LITEVER below.
     }
 
 	async function getWordsFrequency() {
-		let text = document.getElementById(editorFieldLabel)
-		// replace repeated newlines to prepare setCaret() use
-		text.innerText = text.innerText.replace(/[\r\n]+/g, '\n')
+        let {validChildContent} = getValidChildNodesFromEditorById(editorFieldLabel)
         setElementCssClassById("waiting-for-be-error", "collapse")
         setElementCssClassById("waiting-for-be-error-embedded", "collapse")
         setElementCssClassById("waiting-for-be", "display-block")
@@ -21967,13 +21975,13 @@ Current version indicated by LITEVER below.
         let currentTableOfWords = document.getElementById("id-current-table-of-words")
         currentTableOfWords.innerHTML = ""
         const choiceWordFreqAnalyzerEl = document.getElementById('id-input-webserver-wordfreq-checkbox')
-        console.log("choiceWordFreqAnalyzerEl checked:", choiceWordFreqAnalyzerEl.checked, "#")
+        console.log("choiceWordFreqAnalyzerEl checked:", typeof choiceWordFreqAnalyzerEl.checked, choiceWordFreqAnalyzerEl.checked, "#")
         switch (choiceWordFreqAnalyzerEl.checked) {
             case true: // webserver
-                await wordsFrequencyAnalyzers['id-input-webserver-wordfreq-checkbox'](text.innerText)
+                await wordsFrequencyAnalyzers['id-input-webserver-wordfreq-checkbox'](validChildContent)
                 break;
             case false: // embedded
-                wordsFrequencyAnalyzers['stemmer-embedded'](text.innerText)
+                wordsFrequencyAnalyzers['stemmer-embedded'](validChildContent)
                 break;
             default:
                 console.warn("No valid analyzer selected.");
@@ -21996,13 +22004,30 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+    function extractStringValues(obj) {
+        let result = [];
+        if (typeof obj === "string") {
+            result.push(obj);
+        } else if (Array.isArray(obj)) {
+            for (const item of obj) {
+                result = result.concat(extractStringValues(item));
+            }
+        } else if (typeof obj === "object" && obj !== null) {
+            for (const key in obj) {
+                result = result.concat(extractStringValues(obj[key]));
+            }
+        }
+        return result;
+    }
+
     function arrayFilterNestedValue(array, nestedValue) {
         return array.filter(item => {
-            return JSON.stringify(item).toLowerCase().includes(nestedValue.toLowerCase());
+            let valuesFromObject = extractStringValues(item).join(" ")
+            return valuesFromObject.toLowerCase().includes(nestedValue.toLowerCase());
         });
 	}
 
-	async function updateWordsFrequencyTables() {
+    function updateWordsFrequencyTables() {
 		let nTotalRows = wfo["nTotalRows"]
 		if (nTotalRows === null || nTotalRows < 1) {
 			alert("let's get some data before updating the result table...")
@@ -22028,7 +22053,7 @@ Current version indicated by LITEVER below.
 		wordsFrequencyTableTitleEl.innerText = `${wordsFrequencyTableTitleText} (${reduced.length} word groups, ${nTotalRows} rows)`
         const wordListElement = document.createElement("list")
 		for (let i=0; i<reduced.length; i++ ) {
-            insertListOfWords(i, reduced[i], nTotalRows, wordListElement, currentTableOfWords);
+            insertListOfWords(i, reduced[i], wordListElement, currentTableOfWords);
             }
         listOfWords.append(wordListElement)
 	}
@@ -22042,7 +22067,7 @@ Current version indicated by LITEVER below.
 		updateWordsFrequencyTables()
 	}
 
-    function insertCurrentTable(i, iReduced, nTotalRows, currentTableOfWords) {
+    function insertCurrentTable(i, iReduced, currentTableOfWords) {
         let currentTableWordsFreq = document.createElement("table")
         currentTableWordsFreq.setAttribute("class", "border-black")
         currentTableWordsFreq.setAttribute("id", `id-table-${i}-nth`)
@@ -22061,21 +22086,21 @@ Current version indicated by LITEVER below.
         let currentTBody = document.createElement("tbody")
         let offsetsArray = iReduced.offsets_array
         for (let ii = 0; ii < offsetsArray.length; ii++) {
-            insertCellIntoTRow(currentTBody, i, ii, offsetsArray[ii], nTotalRows)
+            insertCellIntoTRow(currentTBody, i, ii, offsetsArray[ii])
         }
         currentTableWordsFreq.appendChild(currentTHead)
         currentTableWordsFreq.appendChild(currentTBody)
         currentTableOfWords.appendChild(currentTableWordsFreq)
     }
 
-    function insertListOfWords(i, iReduced, nTotalRows, wordListElement, currentTableOfWords) {
+    function insertListOfWords(i, iReduced, wordListElement, currentTableOfWords) {
         const li = document.createElement("li");
         const a = document.createElement("a")
         a.innerText = `${iReduced["word_prefix"]}: ${iReduced["count"]} repetitions`
         a.addEventListener("click",  function() {
             currentTableOfWords.innerHTML = ""
-            console.log("a::", `${iReduced["word_prefix"]}: ${iReduced["count"]} repetitions`, "#")
-            insertCurrentTable(i, iReduced, nTotalRows, currentTableOfWords)
+            console.log(`insertListOfWords::'a', ${iReduced["word_prefix"]}: ${iReduced["count"]} repetitions`)
+            insertCurrentTable(i, iReduced, currentTableOfWords)
             setElementCssClassByOldClass(underlinedClicked, underlinedPrimary)
             a.className = underlinedClicked
         });
@@ -22084,7 +22109,7 @@ Current version indicated by LITEVER below.
         wordListElement.appendChild(li);
 	}
 
-	function insertCellIntoTRow(currentTBody, i, ii, nthOffset, nTotalRows) {
+    function insertCellIntoTRow(currentTBody, i, ii, nthOffset) {
 		let nthRowBody = currentTBody.insertRow()
 		nthRowBody.setAttribute("id", `id-table-${i}-row-${ii}-nth`)
 		nthRowBody.setAttribute("aria-label", `id-table-${i}-row-${ii}-nth`)
@@ -22092,8 +22117,10 @@ Current version indicated by LITEVER below.
 		let currentUrl = document.createElement("a")
 		currentUrl.addEventListener("click", function() {
 			let nRow = nthOffset["n_row"]
+            let nRowChild = nthOffset["n_row_child"]
+            let nRowParent = nthOffset["n_row_parent"]
 			let offsetWord = nthOffset["offsets"]
-			setCaret(nRow, offsetWord, nTotalRows)
+            setCaret(nRow, offsetWord, nRowChild, nRowParent)
             setElementCssClassByOldClass(underlinedClickedTable, underlinedPrimaryTable)
             currentUrl.className = underlinedClickedTable
 		})
@@ -22104,6 +22131,70 @@ Current version indicated by LITEVER below.
 		nthRowBody.insertCell().textContent = nthOffset["offsets"]
 	}
 
+    function getValidChildNodesFromEditorById(idElement) {
+        const editorElement = document.getElementById(idElement);
+        let validChildContent = [];
+        const validNodeNames = Object.keys(objectChildNodeNamesToParse);
+
+        function hasValidChild(node) {
+            for (let i = 0; i < node.childNodes.length; i++) {
+                const child = node.childNodes[i];
+                if (validNodeNames.includes(child.nodeName)) {
+                    const prop = objectChildNodeNamesToParse[child.nodeName];
+                    if (child[prop] && child[prop].trim() !== "") {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function processNode(node, topIdx, childIdx = null, parentId = null) {
+            // For nodes that are not SPAN, push their text if valid.
+            if (node.nodeName !== "SPAN" && validNodeNames.includes(node.nodeName)) {
+                const textField = objectChildNodeNamesToParse[node.nodeName];
+                const textContent = node[textField];
+                if (textContent && textContent.trim() !== "") {
+                    validChildContent.push({
+                        idxRow: topIdx,
+                        text: textContent,
+                        idxRowChild: childIdx,
+                        idxRowParent: parentId
+                    });
+                }
+            }
+            if (node.nodeName === "SPAN") {
+                if (!hasValidChild(node)) {
+                    const textField = objectChildNodeNamesToParse[node.nodeName];
+                    const textContent = node[textField];
+                    if (textContent && textContent.trim() !== "") {
+                        validChildContent.push({
+                            idxRow: topIdx,
+                            text: textContent,
+                            idxRowChild: childIdx,
+                            idxRowParent: parentId
+                        });
+                    }
+                }
+            }
+            if (node.childNodes && node.childNodes.length > 0) {
+                let newParentId = parentId;
+                if (node.nodeName === "SPAN") {
+                    newParentId = topIdx;  // for nested nodes, use parent's top-level index.
+                }
+                for (let i = 0; i < node.childNodes.length; i++) {
+                    processNode(node.childNodes[i], topIdx, i, newParentId);
+                }
+            }
+        }
+        // Process each top-level child node of the editor.
+        for (let i = 0; i < editorElement.childNodes.length; i++) {
+            processNode(editorElement.childNodes[i], i);
+        }
+        return { validChildContent, editorElement };
+    }
+
+    /** specific for lite.koboldai.net */
     function toggleWordsFreqNav(idElement) {
         let x = document.getElementById(idElement);
         if (x.classList.contains("collapse")) {
@@ -22132,15 +22223,15 @@ Current version indicated by LITEVER below.
         }
     }
 
-    function updateWordsFreqIfPressEnter() {
-        if(event.key==='Enter'){
+    async function updateWordsFreqIfPressEnter() {
+        if (event.key === 'Enter') {
             closeWordsFreqTopNav('wordsFreqNavbarNavDropdown')
             const webserverIsCheckedEl = document.getElementById("id-input-webserver-wordfreq-checkbox")
             const webserverIsChecked = webserverIsCheckedEl.checked
             if (!webserverIsChecked) {
-                getWordsFrequency()
+                await getWordsFrequency()
             } else {
-                // in case id-input-webserver-wordfreq-checkbox is checked this will only fire updateWordsFrequencyTables()
+                // in case id-input-webserver-wordfreq-checkbox is checked, this will only fire updateWordsFrequencyTables()
                 // use instead btn4-get-words-frequency-get to fire getWordsFrequency()
                 updateWordsFrequencyTables()
             }
@@ -22395,7 +22486,7 @@ Current version indicated by LITEVER below.
 					<p id="tempgtloadtxt">Loading...</p>
 					<noscript><style>#tempgtloadtxt { display: none; } #gametext { white-space: normal!important; }</style><p>Sorry, KoboldAI Lite requires Javascript to function.</p></noscript>
 				</span>
-				
+
 				<!-- start HTML section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer -->
                 <div id="id-col2-words-frequency" class="col-flex50 border-gray-litekoboldai padding10px margin10px overflow-hidden font-size-12px collapse">
 
@@ -23706,7 +23797,7 @@ Current version indicated by LITEVER below.
                     </div>
                     <!-- end settings for My Ghost Writer -->
 
-                    </div>
+					</div>
 				</div>
 
 				<!--advanced settings menu top-->
