@@ -3401,11 +3401,12 @@ Current version indicated by LITEVER below.
 	{
 		"name":"KoboldCppAutomatic",
 		"user":"{{[INPUT]}}",
-		"user_end":"",
+		"user_end":"{{[INPUT_END]}}",
 		"assistant":"{{[OUTPUT]}}",
-		"assistant_end":"",
+		"assistant_end":"{{[OUTPUT_END]}}",
 		"system":"{{[SYSTEM]}}",
-		"system_end":"",
+		"system_end":"{{[SYSTEM_END]}}",
+		"nonsplit_excludes_endtags":true,
 	},
 	{
 		"name":"Alpaca",
@@ -4273,6 +4274,10 @@ Current version indicated by LITEVER below.
 	function get_instruct_starttag_end(doTrim=true)
 	{
 		let instag = localsettings.instruct_starttag_end;
+		if(instag=="{{[INPUT_END]}}" && !(custom_kobold_endpoint != "" && is_using_kcpp_with_autotags()))
+		{
+			instag = ""; //backend not compatible with auto
+		}
 		if(doTrim){
 			return replaceAll(instag, "\\n", "\n").trim();
 		} else {
@@ -4282,6 +4287,10 @@ Current version indicated by LITEVER below.
 	function get_instruct_endtag_end(doTrim=true)
 	{
 		let instag = localsettings.instruct_endtag_end;
+		if(instag=="{{[OUTPUT_END]}}" && !(custom_kobold_endpoint != "" && is_using_kcpp_with_autotags()))
+		{
+			instag = ""; //backend not compatible with auto
+		}
 		if(doTrim){
 			return replaceAll(instag, "\\n", "\n").trim();
 		} else {
@@ -4291,6 +4300,10 @@ Current version indicated by LITEVER below.
 	function get_instruct_systag_end(doTrim=true)
 	{
 		let instag = localsettings.instruct_systag_end;
+		if(instag=="{{[SYSTEM_END]}}" && !(custom_kobold_endpoint != "" && is_using_kcpp_with_autotags()))
+		{
+			instag = ""; //backend not compatible with auto
+		}
 		if(doTrim){
 			return replaceAll(instag, "\\n", "\n").trim();
 		} else {
@@ -5493,6 +5506,7 @@ Current version indicated by LITEVER below.
 		{
 			reqOpt.signal = globalabortcontroller.signal;
 		}
+		let cached_stop_seq = get_stop_sequences();
 		fetch(sub_endpt, reqOpt)
 		.then(x => {
 			if(x.ok)
@@ -5583,6 +5597,30 @@ Current version indicated by LITEVER below.
 								if(event.data.choices[0].finish_reason=="stop")
 								{
 									last_stop_reason = "stop";
+								}
+							}
+
+							//potentially trigger an early stopping
+							for(let i=0;i<cached_stop_seq.length;++i)
+							{
+								let cur = cached_stop_seq[i];
+								if(!cur || cur.trim()=="")
+								{
+									continue;
+								}
+								if(synchro_pending_stream.includes(cur))
+								{
+									cached_stop_seq = [];
+									let need_clean_output = (synchro_pending_stream!="" && localsettings.opmode==1 && gametext_arr.length>0 && document.getElementById("useoaichatcompl").checked);
+									if(need_clean_output)
+									{
+										synchro_pending_stream = cleanup_story_completion(synchro_pending_stream);
+									}
+									flush_streaming_text();
+									clear_poll_flags();
+									trigger_abort_controller();
+									console.log("Somehow a stop seq was generated. Aborting...");
+									break;
 								}
 							}
 						}
@@ -12550,6 +12588,7 @@ Current version indicated by LITEVER below.
 		let ste = "";
 		let ete = "";
 		let systage = "";
+		let nonsplit_excludes_endtags = false;
 
 		for(let i=0;i<instructpresets.length;++i)
 		{
@@ -12561,11 +12600,12 @@ Current version indicated by LITEVER below.
 				ste = instructpresets[i].user_end;
 				ete = instructpresets[i].assistant_end;
 				systage = instructpresets[i].system_end;
+				nonsplit_excludes_endtags = instructpresets[i].nonsplit_excludes_endtags;
 				break;
 			}
 		}
 
-		return {"system":systag,"system_end":systage,"user":st,"user_end":ste,"assistant":et,"assistant_end":ete};
+		return {"system":systag,"system_end":systage,"user":st,"user_end":ste,"assistant":et,"assistant_end":ete,"nonsplit_excludes_endtags":nonsplit_excludes_endtags};
 	}
 	function toggle_instruct_tag_format()
 	{
@@ -12576,9 +12616,15 @@ Current version indicated by LITEVER below.
 		{
 			if(!use_et)
 			{
-				document.getElementById('instruct_starttag').value = itags.assistant_end + itags.user;
-				document.getElementById('instruct_endtag').value = itags.user_end + itags.assistant;
-				document.getElementById('instruct_systag').value = itags.system;
+				if (itags.nonsplit_excludes_endtags) {
+					document.getElementById('instruct_starttag').value = itags.user;
+					document.getElementById('instruct_endtag').value = itags.assistant;
+					document.getElementById('instruct_systag').value = itags.system;
+				} else {
+					document.getElementById('instruct_starttag').value = itags.assistant_end + itags.user;
+					document.getElementById('instruct_endtag').value = itags.user_end + itags.assistant;
+					document.getElementById('instruct_systag').value = itags.system;
+				}
 				document.getElementById('instruct_starttag_end').value = "";
 				document.getElementById('instruct_endtag_end').value = "";
 				document.getElementById('instruct_systag_end').value = "";
@@ -12622,7 +12668,9 @@ Current version indicated by LITEVER below.
 			let et_end = document.getElementById('instruct_endtag_end').value;
 			let sys_end = document.getElementById('instruct_systag_end').value;
 			if (!use_et) {
-				if (itags.user != "" && itags.assistant != "" && (itags.assistant_end + itags.user) == st && (itags.user_end + itags.assistant) == et && itags.system == systag && (st_end == "" && et_end == "" && sys_end == "")) {
+				let matched_st = (itags.nonsplit_excludes_endtags?itags.user:(itags.assistant_end + itags.user));
+				let matched_et = (itags.nonsplit_excludes_endtags?itags.assistant:(itags.user_end + itags.assistant));
+				if (itags.user != "" && itags.assistant != "" && matched_st == st && matched_et == et && itags.system == systag && (st_end == "" && et_end == "" && sys_end == "")) {
 					document.getElementById('instruct_tag_format').value = option.value;
 					found = true;
 					break;
