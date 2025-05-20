@@ -18714,23 +18714,13 @@ Current version indicated by LITEVER below.
 				fulltxt = replaceAll(fulltxt, get_instruct_endtag(true), `%SpcEtg%`);
 				if (localsettings.separate_end_tags) {
 					if (get_instruct_endtag_end(true)) {
+						fulltxt = replaceAll(fulltxt, get_instruct_endtag_end(false), ``);
 						fulltxt = replaceAll(fulltxt, get_instruct_endtag_end(true), ``);
 					}
 					if (get_instruct_starttag_end(true)) {
+						fulltxt = replaceAll(fulltxt, get_instruct_starttag_end(false), ``);
 						fulltxt = replaceAll(fulltxt, get_instruct_starttag_end(true), ``);
 					}
-				}
-
-				if(localsettings.instruct_has_markdown && synchro_pending_stream=="")
-				{
-					//if a list has a starttag on the same line, add a newline before it
-					fulltxt = fulltxt.replace(/(\n[-*] .+?)(%SpcStg%)/g, "$1\n$2");
-					let codeblockcount = (fulltxt.match(/```/g) || []).length;
-					if(codeblockcount>0 && codeblockcount%2!=0 )
-					{
-						fulltxt += "```"; //force end code block
-					}
-					fulltxt = simpleMarkdown(fulltxt,localsettings.instruct_has_latex);
 				}
 
 				let instruct_turns = repack_instruct_turns(fulltxt, `%SpcStg%`,`%SpcEtg%`, true);
@@ -18738,16 +18728,29 @@ Current version indicated by LITEVER below.
 				for(let i=0;i<instruct_turns.length;++i)
 				{
 					let curr = instruct_turns[i];
+					let currmsg = curr.msg;
+					if(localsettings.instruct_has_markdown && (synchro_pending_stream==""||(i+1)<instruct_turns.length))
+					{
+						//if a list has a starttag on the same line, add a newline before it
+						currmsg = currmsg.replace(/(\n[-*] .+?)(%SpcStg%)/g, "$1\n$2");
+						let codeblockcount = (currmsg.match(/```/g) || []).length;
+						if(codeblockcount>0 && codeblockcount%2!=0 )
+						{
+							currmsg += "```"; //force end code block
+						}
+						currmsg = simpleMarkdown(currmsg,localsettings.instruct_has_latex);
+					}
+
 					if(curr.myturn)
 					{
-						fulltxt += `<hr style="margin-top: 12px; margin-bottom: 12px;"><span class="color_cyan"><img src="${human_square}" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>${curr.msg}</span>`;
+						fulltxt += `<hr style="margin-top: 12px; margin-bottom: 12px;"><span class="color_cyan"><img src="${human_square}" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>${currmsg}</span>`;
 					}
 					else
 					{
 						if (i == 0) {
-							fulltxt += `${curr.msg}`;
+							fulltxt += `${currmsg}`;
 						} else {
-							fulltxt += `<hr style="margin-top: 12px; margin-bottom: 12px;"><img src="${niko_square}" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>${curr.msg}</span>`;
+							fulltxt += `<hr style="margin-top: 12px; margin-bottom: 12px;"><img src="${niko_square}" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>${currmsg}</span>`;
 						}
 					}
 				}
