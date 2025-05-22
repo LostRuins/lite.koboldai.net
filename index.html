@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 243;
+	const LITEVER = 244;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -1879,6 +1879,23 @@ Current version indicated by LITEVER below.
 	{
 		background-color: #161616;
 	}
+	.corpoendeditbutton {
+      position: fixed;
+      top: 75px;
+      right: 25px;
+	  width: 40px;
+      padding: 8px 6px;
+      background-color: #de5b5b;
+      color: white;
+      border-radius: 24px;
+	  opacity: 0.65;
+      cursor: pointer;
+      box-shadow: 1 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .corpoendeditbutton:hover {
+      background-color: #f67676;
+    }
 	.corpoleftpanelitems
 	{
 		display: flex;
@@ -3320,6 +3337,7 @@ Current version indicated by LITEVER below.
 		entersubmit: true, //enter sends the prompt
 		darkmode: true,
 		raw_instruct_tags: false, //experimental flag
+		show_endpoint_selector: false,
 
 		//section migrated from story itself
 		extrastopseq: "",
@@ -4327,7 +4345,10 @@ Current version indicated by LITEVER below.
 		if (maxIndex === lastA) return get_instructstartplaceholder_end();
 		if (maxIndex === lastB) return get_instructendplaceholder_end();
 		return instructsysplaceholder_end;
-
+	}
+	function get_current_timestamp()
+	{
+		return "["+(new Date().toLocaleTimeString([], {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'}))+"]";
 	}
 
 	function remove_all_instruct_tags(text)
@@ -5608,7 +5629,7 @@ Current version indicated by LITEVER below.
 								{
 									continue;
 								}
-								if(synchro_pending_stream.includes(cur))
+								if(synchro_pending_stream.includes(cur) && synchro_pending_stream.trim().indexOf(cur) > 1) //don't trigger early stopping if the match is very early
 								{
 									cached_stop_seq = [];
 									let need_clean_output = (synchro_pending_stream!="" && localsettings.opmode==1 && gametext_arr.length>0 && document.getElementById("useoaichatcompl").checked);
@@ -6074,6 +6095,7 @@ Current version indicated by LITEVER below.
 			//purge url params
 			window.history.replaceState(null, null, window.location.pathname);
 		} else if (foundScenario && foundScenario != "") {
+			avoidwelcome = true;
 			display_scenarios();
 			document.getElementById("scenariosearch").value = escape_html(foundScenario);
 			scenario_search();
@@ -6085,6 +6107,7 @@ Current version indicated by LITEVER below.
 			//purge url params
 			window.history.replaceState(null, null, window.location.pathname);
 		} else if (foundScenarioSource) {
+			avoidwelcome = true;
 			console.log(foundScenarioSource, urlParams.get(foundScenarioSource.urlParam));
 			display_scenarios();
 			import_scenario(foundScenarioSource, urlParams.get(foundScenarioSource.urlParam));
@@ -6093,6 +6116,7 @@ Current version indicated by LITEVER below.
 		}
 		else if (foundQuery && foundQuery != "")
 		{
+			avoidwelcome = true;
 			window.history.replaceState(null, null, window.location.pathname);
 			if (localsettings.persist_session && !safe_to_overwrite()) {
 				msgboxYesNo("You already have an existing persistent story. Do you want to overwrite it?","Overwrite Story Warning",()=>{
@@ -6109,6 +6133,10 @@ Current version indicated by LITEVER below.
 				document.getElementById("input_text").value = foundQuery;
 				prepare_submit_generation();
 			}
+		}
+		if(avoidwelcome)
+		{
+			close_welcome_panel(false);
 		}
 	}
 
@@ -11783,6 +11811,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("instruct_systag_end").value = localsettings.instruct_systag_end;
 		document.getElementById("instruct_endtag_end").value = localsettings.instruct_endtag_end;
 		document.getElementById("raw_instruct_tags").checked = localsettings.raw_instruct_tags;
+		document.getElementById("show_endpoint_selector").checked = localsettings.show_endpoint_selector;
 		document.getElementById("min_p").value = localsettings.min_p;
 		document.getElementById("dynatemp_range").value = localsettings.dynatemp_range;
 		document.getElementById("dynatemp_exponent").value = localsettings.dynatemp_exponent;
@@ -12307,6 +12336,7 @@ Current version indicated by LITEVER below.
 		localsettings.eos_ban_mode = document.getElementById("eos_ban_mode").value;
 		localsettings.persist_session = (document.getElementById("persist_session").checked ? true : false);
 		localsettings.raw_instruct_tags = (document.getElementById("raw_instruct_tags").checked ? true : false);
+		localsettings.show_endpoint_selector = (document.getElementById("show_endpoint_selector").checked ? true : false);
 		if(document.getElementById("opmode").value==1)
 		{
 			localsettings.gui_type_story = document.getElementById("gui_type").value;
@@ -13258,6 +13288,7 @@ Current version indicated by LITEVER below.
 	function restart_new_game(save = true, keep_memory = false) {
 		xtts_is_playing = false;
 		idle_timer = 0;
+		idle_triggered_counter = 0;
 		gametext_arr = [];
 		redo_arr = [];
 		last_request_str = "No Requests Available";
@@ -13382,6 +13413,11 @@ Current version indicated by LITEVER below.
 			}
 		}
 		render_gametext(false);
+	}
+	function exit_editmode()
+	{
+		document.getElementById("allowediting").checked = false;
+		toggle_editable();
 	}
 
 	function toggle_hide_thinking(button) {
@@ -14558,7 +14594,7 @@ Current version indicated by LITEVER below.
 			}
 			if(localsettings.inject_timestamps)
 			{
-				newgen = "["+(new Date().toLocaleTimeString([], {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'}))+"] " + newgen;
+				newgen = get_current_timestamp() + " " + newgen;
 			}
 
 			//append instruction for instruct mode
@@ -14598,7 +14634,7 @@ Current version indicated by LITEVER below.
 		let injecttime = "";
 		if(localsettings.inject_timestamps)
 		{
-			injecttime = " ["+(new Date().toLocaleTimeString([], {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'}))+"]";
+			injecttime = " " + get_current_timestamp();
 		}
 		newgen = "\n" + get_my_multiplayer_chatname() + ":"+ injecttime +" "+ newgen + "";
 		return newgen;
@@ -14877,7 +14913,7 @@ Current version indicated by LITEVER below.
 					pending_context_preinjection = "\n"+co + ":";
 					if(localsettings.inject_timestamps)
 					{
-						pending_context_preinjection += " ["+(new Date().toLocaleTimeString([], {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'}))+"]";
+						pending_context_preinjection += " " + get_current_timestamp();
 					}
 				}
 				else
@@ -14917,7 +14953,7 @@ Current version indicated by LITEVER below.
 					let endmatcher = get_instructendplaceholder();
 					if (truncated_context.toLowerCase().trim().endsWith(endmatcher.toLowerCase().trim())) {
 						if (localsettings.inject_timestamps) {
-							pending_context_preinjection += "[" + (new Date().toLocaleTimeString([], { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })) + "]";
+							pending_context_preinjection += get_current_timestamp();
 						}
 						if (localsettings.inject_chatnames_instruct && localsettings.chatopponent!="") {
 							if (localsettings.inject_timestamps) {
@@ -15550,7 +15586,7 @@ Current version indicated by LITEVER below.
 				let prompt = submit_payload.prompt;
 				submit_payload = submit_payload.params;
 				submit_payload.prompt = prompt;
-				let showlog = (document.getElementById("remoteconsolelog").checked ? true : false);
+				let showlog = false;
 				submit_payload.quiet = !showlog;
 
 				//for vesion 1.2.2 and later, send stopper tokens for chat and instruct
@@ -16291,8 +16327,11 @@ Current version indicated by LITEVER below.
 				case "DPM++ 2M":
 					usedsampler = "k_dpmpp_2m";
 					break;
+				case "DDIM":
+					usedsampler = "DDIM";
+					break;
 				default:
-					usedsampler = "k_euler_a";
+					usedsampler = "k_euler";
 					break;
 			}
 
@@ -17507,7 +17546,7 @@ Current version indicated by LITEVER below.
 
 						if(localsettings.inject_timestamps)
 						{
-							pending_context_preinjection += "["+(new Date().toLocaleTimeString([], {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'}))+"]";
+							pending_context_preinjection += get_current_timestamp();
 						}
 					}
 				}
@@ -18714,23 +18753,13 @@ Current version indicated by LITEVER below.
 				fulltxt = replaceAll(fulltxt, get_instruct_endtag(true), `%SpcEtg%`);
 				if (localsettings.separate_end_tags) {
 					if (get_instruct_endtag_end(true)) {
+						fulltxt = replaceAll(fulltxt, get_instruct_endtag_end(false), ``);
 						fulltxt = replaceAll(fulltxt, get_instruct_endtag_end(true), ``);
 					}
 					if (get_instruct_starttag_end(true)) {
+						fulltxt = replaceAll(fulltxt, get_instruct_starttag_end(false), ``);
 						fulltxt = replaceAll(fulltxt, get_instruct_starttag_end(true), ``);
 					}
-				}
-
-				if(localsettings.instruct_has_markdown && synchro_pending_stream=="")
-				{
-					//if a list has a starttag on the same line, add a newline before it
-					fulltxt = fulltxt.replace(/(\n[-*] .+?)(%SpcStg%)/g, "$1\n$2");
-					let codeblockcount = (fulltxt.match(/```/g) || []).length;
-					if(codeblockcount>0 && codeblockcount%2!=0 )
-					{
-						fulltxt += "```"; //force end code block
-					}
-					fulltxt = simpleMarkdown(fulltxt,localsettings.instruct_has_latex);
 				}
 
 				let instruct_turns = repack_instruct_turns(fulltxt, `%SpcStg%`,`%SpcEtg%`, true);
@@ -18738,16 +18767,29 @@ Current version indicated by LITEVER below.
 				for(let i=0;i<instruct_turns.length;++i)
 				{
 					let curr = instruct_turns[i];
+					let currmsg = curr.msg;
+					if(localsettings.instruct_has_markdown && (synchro_pending_stream==""||(i+1)<instruct_turns.length))
+					{
+						//if a list has a starttag on the same line, add a newline before it
+						currmsg = currmsg.replace(/(\n[-*] .+?)(%SpcStg%)/g, "$1\n$2");
+						let codeblockcount = (currmsg.match(/```/g) || []).length;
+						if(codeblockcount>0 && codeblockcount%2!=0 )
+						{
+							currmsg += "```"; //force end code block
+						}
+						currmsg = simpleMarkdown(currmsg,localsettings.instruct_has_latex);
+					}
+
 					if(curr.myturn)
 					{
-						fulltxt += `<hr style="margin-top: 12px; margin-bottom: 12px;"><span class="color_cyan"><img src="${human_square}" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>${curr.msg}</span>`;
+						fulltxt += `<hr style="margin-top: 12px; margin-bottom: 12px;"><span class="color_cyan"><img src="${human_square}" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>${currmsg}</span>`;
 					}
 					else
 					{
 						if (i == 0) {
-							fulltxt += `${curr.msg}`;
+							fulltxt += `${currmsg}`;
 						} else {
-							fulltxt += `<hr style="margin-top: 12px; margin-bottom: 12px;"><img src="${niko_square}" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>${curr.msg}</span>`;
+							fulltxt += `<hr style="margin-top: 12px; margin-bottom: 12px;"><img src="${niko_square}" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>${currmsg}</span>`;
 						}
 					}
 				}
@@ -18866,7 +18908,7 @@ Current version indicated by LITEVER below.
 			}
 
 			//console.log("FT:" + fulltxt);
-			if(fulltxt=="" && gametext_arr.length == 0 && synchro_pending_stream=="" && pending_response_id!="")
+			if(fulltxt == "" && gametext_arr.length == 0 && synchro_pending_stream=="" && pending_response_id!="")
 			{
 				fulltxt = "Generating...";
 			}
@@ -18899,7 +18941,15 @@ Current version indicated by LITEVER below.
 			}else{
 				document.getElementById("topbtn_customendpt").classList.remove("hidden");
 			}
-			document.getElementById("topbtn_ai").classList.add("hidden");
+			if(localsettings.show_endpoint_selector)
+			{
+				document.getElementById("topbtn_ai").classList.remove("hidden");
+			}
+			else
+			{
+				document.getElementById("topbtn_ai").classList.add("hidden");
+			}
+
 			document.getElementById("topbtn_newgame").classList.remove("hidden");
 			document.getElementById("topbtn_save_load").classList.remove("hidden");
 			document.getElementById("topbtn_scenarios").classList.add("hidden");
@@ -18908,7 +18958,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("topbtn_reconnect").classList.add("hidden");
 			document.getElementById("topbtn_customendpt").classList.add("hidden");
 
-			if(localflag)
+			if(localflag && !localsettings.show_endpoint_selector)
 			{
 				document.getElementById("topbtn_ai").classList.add("hidden");
 			}else{
@@ -19003,7 +19053,13 @@ Current version indicated by LITEVER below.
 		}
 		else if (!inEditMode && isAestheticUiStyle)
 		{
-			let textToRender = (gametext_arr.length == 0 ? document.getElementById("gametext").innerHTML : concat_gametext(false, "", "", "", true));
+			let textToRender = "";
+			let prepToGen = (gametext_arr.length == 0 && synchro_pending_stream == "" && pending_response_id != "");
+			if (gametext_arr.length == 0 && (prepToGen || pending_response_id == "")) {
+				textToRender = document.getElementById("gametext").innerHTML;
+			} else {
+				textToRender = concat_gametext(false, "", "", "", true);
+			}
 			textToRender = apply_display_only_regex(textToRender);
 			textToRender = replace_placeholders(textToRender,true);
 
@@ -19068,6 +19124,12 @@ Current version indicated by LITEVER below.
 			document.getElementById("enhancedchatinterface").classList.add("hidden");
 			document.getElementById("corpointerface").classList.add("hidden");
 			document.getElementById("normalinterface").classList.remove("hidden");
+		}
+
+		if (inEditMode && isCorpoUiStyle) {
+			document.getElementById("corpoendedit").classList.remove("hidden");
+		} else {
+			document.getElementById("corpoendedit").classList.add("hidden");
 		}
 
 		update_submit_button(true); //full update for submit button, otherwise just text when not generating
@@ -19803,7 +19865,7 @@ Current version indicated by LITEVER below.
 
 	function show_corpo_leftpanel(open)
 	{
-		let panel = document.getElementById('corpo_leftpannel');
+		let panel = document.getElementById('corpo_leftpanel');
 		if(open)
 		{
 			panel.classList.add('open');
@@ -20840,7 +20902,7 @@ Current version indicated by LITEVER below.
 
 					if(localsettings.inject_timestamps)
 					{
-						userinput = "["+(new Date().toLocaleTimeString([], {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'}))+"] " + userinput;
+						userinput = get_current_timestamp() + " " + userinput;
 					}
 
 					//append instruction for instruct mode
@@ -22632,9 +22694,10 @@ Current version indicated by LITEVER below.
 			</div>
 		</div>
 
+		<button title="Exit Edit Mode" id="corpoendedit" class="corpoendeditbutton hidden" onclick="exit_editmode()">X</button>
 		<div id="corpointerface" class="hidden">
 			<div class="corpostyle">
-				<div id="corpo_leftpannel" class="corpoleftpanel">
+				<div id="corpo_leftpanel" class="corpoleftpanel">
 					<button title="Hide Corpo Side Panel" class="corpo_leftpanel_close mainnav" onclick="show_corpo_leftpanel(false)">&times;</button>
 					<div id="corpoleftpanelitems" class="corpoleftpanelitems">
 					<div class="corpoleftpanelitemstopper" id="corpoleftpanelitemstopper"></div>
@@ -23564,6 +23627,7 @@ Current version indicated by LITEVER below.
 									<option value="Heun">Heun</option>
 									<option value="DPM2">DPM2</option>
 									<option value="LCM">LCM</option>
+									<option value="DDIM">DDIM</option>
 									<option value="DPM++ 2M">DPM++ 2M</option>
 								</select>
 							</div>
@@ -23942,6 +24006,11 @@ Current version indicated by LITEVER below.
 							<div class="justifyleft settingsmall">RawInstructTags <span class="helpicon">?<span
 								class="helptext">Does not insert instruct placeholders, only uses raw tags</span></span></div>
 						   <input title="Raw Instruct Tags" type="checkbox" id="raw_instruct_tags" style="margin:0px 0px 0px 0px;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">ShowEndpointSelector <span class="helpicon">?<span
+								class="helptext">Allows you to change the connected custom endpoint at runtime even in local mode.</span></span></div>
+						   <input title="Show Local Endpoint Selector" type="checkbox" id="show_endpoint_selector" style="margin:0px 0px 0px 0px;">
 						</div>
 					</div>
 
@@ -24346,8 +24415,6 @@ Current version indicated by LITEVER below.
 				<input class="form-control" title="Enter KoboldCpp Custom Endpoint" id="customkoboldendpoint" placeholder="https://sample-remote-address.trycloudflare.com" value="">
 				<input class="form-control" title="Enter KoboldCpp API Key" type="password" id="customkoboldkey" placeholder="KoboldAI API Key (Optional)" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
 				<div class="borderbox flex flex-push-right">
-					<input type="checkbox" id="remoteconsolelog">
-					<div class="box-label" title="Will display outputs to the remote endpoint's console logs, useful for debugging.">Show Console Logging</div>
 				</div>
 			</div>
 			<div id="oaicustom" class="menutext hidden">
