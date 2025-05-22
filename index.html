@@ -3337,6 +3337,7 @@ Current version indicated by LITEVER below.
 		entersubmit: true, //enter sends the prompt
 		darkmode: true,
 		raw_instruct_tags: false, //experimental flag
+		show_endpoint_selector: false,
 
 		//section migrated from story itself
 		extrastopseq: "",
@@ -5625,7 +5626,7 @@ Current version indicated by LITEVER below.
 								{
 									continue;
 								}
-								if(synchro_pending_stream.includes(cur))
+								if(synchro_pending_stream.includes(cur) && synchro_pending_stream.trim().indexOf(cur) > 1) //don't trigger early stopping if the match is very early
 								{
 									cached_stop_seq = [];
 									let need_clean_output = (synchro_pending_stream!="" && localsettings.opmode==1 && gametext_arr.length>0 && document.getElementById("useoaichatcompl").checked);
@@ -11800,6 +11801,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("instruct_systag_end").value = localsettings.instruct_systag_end;
 		document.getElementById("instruct_endtag_end").value = localsettings.instruct_endtag_end;
 		document.getElementById("raw_instruct_tags").checked = localsettings.raw_instruct_tags;
+		document.getElementById("show_endpoint_selector").checked = localsettings.show_endpoint_selector;
 		document.getElementById("min_p").value = localsettings.min_p;
 		document.getElementById("dynatemp_range").value = localsettings.dynatemp_range;
 		document.getElementById("dynatemp_exponent").value = localsettings.dynatemp_exponent;
@@ -12324,6 +12326,7 @@ Current version indicated by LITEVER below.
 		localsettings.eos_ban_mode = document.getElementById("eos_ban_mode").value;
 		localsettings.persist_session = (document.getElementById("persist_session").checked ? true : false);
 		localsettings.raw_instruct_tags = (document.getElementById("raw_instruct_tags").checked ? true : false);
+		localsettings.show_endpoint_selector = (document.getElementById("show_endpoint_selector").checked ? true : false);
 		if(document.getElementById("opmode").value==1)
 		{
 			localsettings.gui_type_story = document.getElementById("gui_type").value;
@@ -13275,6 +13278,7 @@ Current version indicated by LITEVER below.
 	function restart_new_game(save = true, keep_memory = false) {
 		xtts_is_playing = false;
 		idle_timer = 0;
+		idle_triggered_counter = 0;
 		gametext_arr = [];
 		redo_arr = [];
 		last_request_str = "No Requests Available";
@@ -15572,7 +15576,7 @@ Current version indicated by LITEVER below.
 				let prompt = submit_payload.prompt;
 				submit_payload = submit_payload.params;
 				submit_payload.prompt = prompt;
-				let showlog = (document.getElementById("remoteconsolelog").checked ? true : false);
+				let showlog = false;
 				submit_payload.quiet = !showlog;
 
 				//for vesion 1.2.2 and later, send stopper tokens for chat and instruct
@@ -18891,7 +18895,7 @@ Current version indicated by LITEVER below.
 			}
 
 			//console.log("FT:" + fulltxt);
-			if(fulltxt=="" && gametext_arr.length == 0 && synchro_pending_stream=="" && pending_response_id!="")
+			if(fulltxt == "" && gametext_arr.length == 0 && synchro_pending_stream=="" && pending_response_id!="")
 			{
 				fulltxt = "Generating...";
 			}
@@ -18924,7 +18928,15 @@ Current version indicated by LITEVER below.
 			}else{
 				document.getElementById("topbtn_customendpt").classList.remove("hidden");
 			}
-			document.getElementById("topbtn_ai").classList.add("hidden");
+			if(localsettings.show_endpoint_selector)
+			{
+				document.getElementById("topbtn_ai").classList.remove("hidden");
+			}
+			else
+			{
+				document.getElementById("topbtn_ai").classList.add("hidden");
+			}
+
 			document.getElementById("topbtn_newgame").classList.remove("hidden");
 			document.getElementById("topbtn_save_load").classList.remove("hidden");
 			document.getElementById("topbtn_scenarios").classList.add("hidden");
@@ -18933,7 +18945,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("topbtn_reconnect").classList.add("hidden");
 			document.getElementById("topbtn_customendpt").classList.add("hidden");
 
-			if(localflag)
+			if(localflag && !localsettings.show_endpoint_selector)
 			{
 				document.getElementById("topbtn_ai").classList.add("hidden");
 			}else{
@@ -19028,7 +19040,13 @@ Current version indicated by LITEVER below.
 		}
 		else if (!inEditMode && isAestheticUiStyle)
 		{
-			let textToRender = (gametext_arr.length == 0 ? document.getElementById("gametext").innerHTML : concat_gametext(false, "", "", "", true));
+			let textToRender = "";
+			let prepToGen = (gametext_arr.length == 0 && synchro_pending_stream == "" && pending_response_id != "");
+			if (gametext_arr.length == 0 && (prepToGen || pending_response_id == "")) {
+				textToRender = document.getElementById("gametext").innerHTML;
+			} else {
+				textToRender = concat_gametext(false, "", "", "", true);
+			}
 			textToRender = apply_display_only_regex(textToRender);
 			textToRender = replace_placeholders(textToRender,true);
 
@@ -23248,6 +23266,11 @@ Current version indicated by LITEVER below.
 								class="helptext">Does not insert instruct placeholders, only uses raw tags</span></span></div>
 						   <input title="Raw Instruct Tags" type="checkbox" id="raw_instruct_tags" style="margin:0px 0px 0px 0px;">
 						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">ShowEndpointSelector <span class="helpicon">?<span
+								class="helptext">Allows you to change the connected custom endpoint at runtime even in local mode.</span></span></div>
+						   <input title="Show Local Endpoint Selector" type="checkbox" id="show_endpoint_selector" style="margin:0px 0px 0px 0px;">
+						</div>
 					</div>
 
 					<div class="settingitem wide">
@@ -23651,8 +23674,6 @@ Current version indicated by LITEVER below.
 				<input class="form-control" title="Enter KoboldCpp Custom Endpoint" id="customkoboldendpoint" placeholder="https://sample-remote-address.trycloudflare.com" value="">
 				<input class="form-control" title="Enter KoboldCpp API Key" type="password" id="customkoboldkey" placeholder="KoboldAI API Key (Optional)" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
 				<div class="borderbox flex flex-push-right">
-					<input type="checkbox" id="remoteconsolelog">
-					<div class="box-label" title="Will display outputs to the remote endpoint's console logs, useful for debugging.">Show Console Logging</div>
 				</div>
 			</div>
 			<div id="oaicustom" class="menutext hidden">
