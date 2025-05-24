@@ -3123,6 +3123,7 @@ Current version indicated by LITEVER below.
 	var documentdb_searchrange = 300;
 	var documentdb_chunksize = 800;
 	var documentdb_data = "";
+	var documentdb_useEmbeddings = false
 	var generateimagesinterval = 750; //if generated images is enabled, it will trigger after every 700 new characters in context.
 	var nextgeneratedimagemilestone = generateimagesinterval; //used to keep track of when to generate the next image
 	var image_db = {}; //stores a dictionary of pending images
@@ -3169,6 +3170,7 @@ Current version indicated by LITEVER below.
 	var koboldcpp_has_multiplayer = false;
 	var koboldcpp_has_websearch = false;
 	var koboldcpp_has_savedatafile = false;
+	var koboldcpp_has_embeddings = false;
 	var koboldcpp_admin_type = 0; //0 = no admin, 1=has admin, 2=protected admin
 	var lastSearchQuery = "";
 	var lastSearchResults = [];
@@ -3595,7 +3597,7 @@ Current version indicated by LITEVER below.
 			return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
 		}).join(''))
 	}
-	function cyrb_hash(str, seed = 0) { //generate a unique hash from a model name
+	function cyrb_hash(str, seed = 0, hashBytes = 3) { //generate a unique hash from a model name
 		let h1 = 0xdeadbeef ^ seed,
 			h2 = 0x41c6ce57 ^ seed;
 		for (let i = 0, ch; i < str.length; i++) {
@@ -3607,7 +3609,7 @@ Current version indicated by LITEVER below.
 		h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
 		let hsh = (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16);
 		//truncate to first 3 bytes
-		return hsh.substring(0, 6);
+		return hsh.substring(0, hashBytes*2);
 	};
 	function basic_lcg(seed) { // simple RNG for reproducible dice rolls
 		var m = Math.pow(2, 35) - 31;
@@ -6800,6 +6802,10 @@ Current version indicated by LITEVER below.
 		return (window.location.hostname.includes("koboldai.net") || window.location.hostname.includes("lostruins.github.io"));
 	}
 
+	function is_using_kcpp_with_embeddings() {
+		return (custom_kobold_endpoint != "" && koboldcpp_version && koboldcpp_version != "" && compare_version_str(koboldcpp_version, "1.84") >= 0 && koboldcpp_has_embeddings);
+	}
+
 	function determine_if_ban_eos(input_was_empty) {
 		if(localsettings.eos_ban_mode == 3)
 		{
@@ -7128,6 +7134,7 @@ Current version indicated by LITEVER below.
 		new_save_storyobj.documentdb_searchrange = documentdb_searchrange;
 		new_save_storyobj.documentdb_chunksize = documentdb_chunksize;
 		new_save_storyobj.documentdb_data = documentdb_data;
+		new_save_storyobj.documentdb_useEmbeddings = documentdb_useEmbeddings;
 
 		if (export_settings) {
 			new_save_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
@@ -7435,6 +7442,10 @@ Current version indicated by LITEVER below.
 				if(storyobj.documentdb_data)
 				{
 					documentdb_data = storyobj.documentdb_data;
+				}
+				if(storyobj.documentdb_useEmbeddings)
+				{
+					documentdb_useEmbeddings = storyobj.documentdb_useEmbeddings;
 				}
 
 
@@ -7749,6 +7760,54 @@ Current version indicated by LITEVER below.
 			console.log("ERROR ALT GREETING NOT FOUND");
 		}
 	}
+
+	function getInfoSnippet(snippet) {
+		return `\n[Info Snippet${!!snippet.document ? ` from document "${snippet.document}"` : ""}: ${snippet.snippet}]\n`;
+	}
+
+	function getDocumentFromTextDB(documentName) {
+		regex = `\(\\[DOCUMENT BREAK\\]\\[${documentName}\\]\)\(.*?\)\(\\[DOCUMENT BREAK\\]\)`
+		let match = documentdb_data.match(new RegExp(regex, "s"))
+		return !!match ? match[2].trim() : null
+	}
+
+	function replaceDocumentFromTextDB(documentName, documentContent) {
+		if (documentdb_data.indexOf(`[DOCUMENT BREAK][${documentName}]`) !== -1) {
+			regex = `\(\\[DOCUMENT BREAK\\]\\[${documentName}\\]\)\(.*?\)\(\\[DOCUMENT BREAK\\]\)`
+			documentdb_data = documentdb_data.replace(new RegExp(regex, "s"), `$1${documentContent.trim()}$3`)
+		}
+		else {
+			documentdb_data += `[DOCUMENT BREAK][${documentName}]${documentContent.trim()}[DOCUMENT BREAK]`
+		}
+		document.getElementById("documentdb_data").value = documentdb_data;
+	}
+
+	function importLorebookAsTextDB(lorebook) {
+		if (!!lorebook?.entries) 
+		{
+			let outputText = Object.values(lorebook.entries)
+				.map(loreEntry => {
+					let {name, comment, content} = loreEntry;
+					let keys = [...new Set([...loreEntry.key, ...loreEntry.keys, ...loreEntry.keysecondary])];
+					let description = `### Name: ${name}`
+					if (comment !== name) {
+						description += `\n(Description: ${comment})`
+					}
+					if (keys.length > 0) 
+					{
+						description += `\n(Alternative names: ${keys.join(",")})`
+					}
+					description += `\nDetails: ${content}`
+					return description
+				});
+			replaceDocumentFromTextDB(lorebook?.name, outputText.join("\n\n"))
+			return true
+		}
+		else 
+		{
+			return false
+		}
+	}
 	function load_tavern_obj(obj)
 	{
 		let selectedgreeting = "";
@@ -7821,7 +7880,19 @@ Current version indicated by LITEVER below.
 			//check if it's a world info only card, if so, do not restart game
 			if(combinedmem.trim()=="" && greeting=="" && obj.entries)
 			{
-				current_wi = load_tavern_wi(obj,chatopponent,myname);
+				msgboxYesNo("Import World Info / Lorebook into TextDB instead of overwriting existing World Info?\n\nYes = TextDB Used\nNo = World Info Used\n\nIf unsure, select 'No'.","Import World Info / Lorebook Mode", ()=>{
+					let importSuccessful = importLorebookAsTextDB(obj)
+					if (importSuccessful)
+					{
+						msgbox(`Lorebook "${lorebook?.name}" loaded into TextDB`) 
+					}
+					else
+					{
+						msgbox(`No entries found for ${lorebook?.name}`)
+					}
+				},()=>{
+					current_wi = load_tavern_wi(obj,chatopponent,myname);
+				});
 			}
 			else if(agnaidatafieldsempty.trim()=="" && obj.entries && obj.kind=="memory")
 			{
@@ -10340,6 +10411,7 @@ Current version indicated by LITEVER below.
 									koboldcpp_admin_type = (data.admin?data.admin:0);
 									koboldcpp_has_savedatafile = (data.savedata?true:false);
 									koboldcpp_has_guidance = (data.guidance?true:false);
+									koboldcpp_has_embeddings = (data.embeddings ? true : false)
 									let has_password = (data.protected?true:false);
 									let has_txt2img = (data.txt2img?true:false);
 									let no_txt_model = (mdlname=="inactive");
@@ -12958,6 +13030,13 @@ Current version indicated by LITEVER below.
 		hide_popups();
 	}
 
+	function estimate_and_show_textDB_usage() {
+		let currentChunkSize = Number(document.getElementById("documentdb_chunksize").value)
+		let snippetEstimate = currentChunkSize * 1.5 * Number(document.getElementById("documentdb_numresults").value);
+		let numberOfChunks = Math.ceil(document.getElementById("documentdb_data").value.length / (currentChunkSize - (Math.min(currentChunkSize * 0.5, 500))))
+		document.getElementById("documentdb_snippetestimate").innerText = `Estimate of context usage: ${snippetEstimate / 3} tokens (${snippetEstimate} characters). Total chunks: ${numberOfChunks}.`;
+	}
+
 	function confirm_memory() {
 		current_memory = document.getElementById("memorytext").value;
 		current_anote = document.getElementById("anotetext").value;
@@ -12970,6 +13049,7 @@ Current version indicated by LITEVER below.
 		documentdb_searchrange = document.getElementById("documentdb_searchrange").value;
 		documentdb_chunksize = document.getElementById("documentdb_chunksize").value;
 		documentdb_data = document.getElementById("documentdb_data").value;
+		documentdb_useEmbeddings = document.getElementById("documentdb_useEmbeddings").checked ? true : false;
 		documentdb_numresults = parseInt(documentdb_numresults);
 		documentdb_numresults = cleannum(documentdb_numresults,1,10);
 		documentdb_searchrange = parseInt(documentdb_searchrange);
@@ -13344,6 +13424,7 @@ Current version indicated by LITEVER below.
 			documentdb_searchrange = 300;
 			documentdb_chunksize = 800;
 			documentdb_data = "";
+			documentdb_useEmbeddings = false;
 		}
 		if(localsettings.inject_randomness_seed>0)
 		{
@@ -14651,7 +14732,7 @@ Current version indicated by LITEVER below.
 		});
 	}
 
-	function submit_generation(senttext)
+	async function submit_generation(senttext)
 	{
 		warn_unsaved = true;
 		let newgen = senttext;
@@ -15186,7 +15267,7 @@ Current version indicated by LITEVER below.
 							fullDocument += "\n"+historicalContext;
 						}
 
-						let ltmSnippets = DatabaseMinisearch(fullDocument,ltmSearchQuery,recentTextStr);
+						let ltmSnippets = await DatabaseMinisearch(fullDocument,ltmSearchQuery,recentTextStr);
 						if (ltmSnippets.length === 0)
 						{
 							console.log("No memory fragments found either as history is too short or no relevant content found");
@@ -15197,7 +15278,7 @@ Current version indicated by LITEVER below.
 							let ltmContent = "";
 							for(let i=0;i<ltmSnippets.length;++i)
 							{
-								ltmContent += `\n[Info Snippet: ${ltmSnippets[i].snippet}]\n`;
+								ltmContent += getInfoSnippet(ltmSnippets[i]);
 							}
 							wistr = ltmContent + wistr;
 						}
@@ -20201,6 +20282,7 @@ Current version indicated by LITEVER below.
 			case 2:
 				document.getElementById("documentdb_tab").classList.add("active");
 				document.getElementById("documentdb_tab_container").classList.remove("hidden");
+				estimate_and_show_textDB_usage();
 				break;
 			default:
 				break;
@@ -20228,7 +20310,22 @@ Current version indicated by LITEVER below.
 		document.getElementById("documentdb_numresults").value = documentdb_numresults
 		document.getElementById("documentdb_searchrange").value = documentdb_searchrange;
 		document.getElementById("documentdb_chunksize").value = documentdb_chunksize;
+		document.getElementById("documentdb_numresults_slide").value = documentdb_numresults
+		document.getElementById("documentdb_searchrange_slide").value = documentdb_searchrange;
+		document.getElementById("documentdb_chunksize_slide").value = documentdb_chunksize;
 		document.getElementById("documentdb_data").value = documentdb_data;
+		document.getElementById("documentdb_useEmbeddings").checked = documentdb_useEmbeddings;
+		if(is_using_kcpp_with_embeddings())
+		{
+			document.getElementById("documentdb_useEmbeddings").parentElement.classList.remove("color_red");
+			document.getElementById("documentdb_useEmbeddings").disabled = false;
+		}
+		else
+		{
+			document.getElementById("documentdb_useEmbeddings").parentElement.classList.add("color_red");
+			document.getElementById("documentdb_useEmbeddings").disabled = true;
+			document.getElementById("documentdb_useEmbeddings").checked = false;
+		}
 	}
 
 	function toggle_logit_bias_string()
@@ -21654,13 +21751,12 @@ Current version indicated by LITEVER below.
 
 	//LTM TextDB Memsnipper searching
 	//searches dbText for searchStr and recentTextStr, returns up to 3 results
-	function DatabaseMinisearch(dbText, searchStr, recentTextStr)
+	async function DatabaseMinisearch(dbText, searchStr, recentTextStr, minSimilarity = 0.2)
 	{	//predefined minisearch constants
 		const chunkSize = documentdb_chunksize;
-		const chunkSizeOverlap = chunkSize*0.5;
+		const chunkSizeOverlap = Math.min(chunkSize*0.5, 500);
 		const maxResultsPerSection = 5; //returns up to 5 matches per section
 		const valuesToReturn = documentdb_numresults;
-		const minSimilarity = 0.2;
 
 		if(dbText=="" || searchStr=="")
 		{
@@ -21716,7 +21812,8 @@ Current version indicated by LITEVER below.
 			let comparisons = sectionSummary.map(doc => {
 				return {
 					match: doc.score,
-					snippet: doc.snippet
+					snippet: doc.snippet,
+					document: doc.document
 				};
 			}).sort((a, b) => {
 				return (a.match > b.match ? -1 : 1);
@@ -21743,75 +21840,101 @@ Current version indicated by LITEVER below.
 		searchStr = replace_search_placeholders(searchStr);
 		recentTextStr = replace_search_placeholders(recentTextStr);
 
-		let i = 0, startLoc = 0;
-		while (startLoc < allText.length && i < Number.MAX_SAFE_INTEGER) {
-			let actualChunkStart = Math.max(0, startLoc - chunkSizeOverlap);
-			let actualChunkEnd = Math.min(allText.length, actualChunkStart + chunkSize);
-			let currentSnippet = allText.substring(actualChunkStart, actualChunkEnd);
-			paragraphs.push(currentSnippet);
-			startLoc = actualChunkEnd;
-			i++;
+		let i = 0;
+		allText.split("[DOCUMENT BREAK]").forEach(doc => {
+			doc = doc.trim()
+			let titleMatch = doc.match(/^\[([^\n]+?)\]/), title = null;
+			if (titleMatch !== null)
+			{
+				doc = doc.replace(titleMatch[0], "")
+				title = titleMatch[1]
+			}
+			let startLoc = 0;
+			while (startLoc < doc.length && i < Number.MAX_SAFE_INTEGER) {
+				let actualChunkStart = Math.max(0, startLoc - chunkSizeOverlap);
+				let actualChunkEnd = Math.min(doc.length, actualChunkStart + chunkSize);
+				let currentSnippet = doc.substring(actualChunkStart, actualChunkEnd);
+				paragraphs.push({snippet: currentSnippet, document: title});
+				startLoc = actualChunkEnd;
+				i++;
+			}
+		})
+		paragraphs = paragraphs.map(c => {
+			c.snippet = c.snippet.replace(/\n\n/g, "\n");
+			return c;
+		}).filter(c => !!c.snippet);
+
+		let miniSearch;
+		if (!!documentdb_useEmbeddings && is_using_kcpp_with_embeddings())
+		{
+			let searchResults = await embeddingSearcher.getRankedEmbeddings(searchStr, ...paragraphs)
+			searchResults = searchResults.filter(x=>x.similarity>minSimilarity);
+			searchResults = searchResults.slice(0, valuesToReturn);
+			return searchResults;
 		}
-		paragraphs = paragraphs.map(c => c.replace(/\n\n/g, "\n")).filter(s => !!s);
-		let pgcount = 0;
-		paragraphs = paragraphs.map(txt => {
-			pgcount += 1;
-			return {
-				id: pgcount,
-				snippet: txt,
-				text: stripToTokens(txt),
-				category: "context"
-			}
-		});
-
-		// a list of commonly used words that have little meaning and can be excluded from analysis.
-		const stopwords = [
-			'about', 'above', 'after', 'again', 'all', 'also', 'am', 'an', 'and', 'another',
-			'any', 'are', 'as', 'at', 'be', 'because', 'been', 'before', 'being', 'below',
-			'between', 'both', 'but', 'by', 'came', 'can', 'cannot', 'come', 'could', 'did',
-			'do', 'does', 'doing', 'during', 'each', 'few', 'for', 'from', 'further', 'get',
-			'got', 'has', 'had', 'he', 'have', 'her', 'here', 'him', 'himself', 'his', 'how',
-			'if', 'in', 'into', 'is', 'it', 'its', 'itself', 'like', 'make', 'many', 'me',
-			'might', 'more', 'most', 'much', 'must', 'my', 'myself', 'never', 'now', 'of', 'on',
-			'only', 'or', 'other', 'our', 'ours', 'ourselves', 'out', 'over', 'own',
-			'said', 'same', 'see', 'she', 'should', 'since', 'so', 'some', 'still', 'such', 'take', 'than',
-			'that', 'the', 'their', 'theirs', 'them', 'themselves', 'then', 'there', 'these', 'they',
-			'this', 'those', 'through', 'to', 'too', 'under', 'until', 'up', 'very', 'was',
-			'way', 'we', 'well', 'were', 'what', 'where', 'when', 'which', 'while', 'who',
-			'whom', 'with', 'would', 'why', 'you', 'your', 'yours', 'yourself',
-			'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
-			'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '$', '1',
-			'2', '3', '4', '5', '6', '7', '8', '9', '0', '_',
-			'll', 're'
-		];
-		//step 2: initialize minisearch engine
-		let miniSearch = new MiniSearch({
-			fields: ["text"], // fields to index for full-text search
-			storeFields: ['category', "snippet"], // fields to return with search results
-			searchOptions: {
-				fuzzy: 0,
-				bm25: { // https://lucaong.github.io/minisearch/types/MiniSearch.BM25Params.html
-					b: 0.7, // Normalisation for the length of the string
-					d: 0.7, // Minimum significance of a term showing up once
-					k: 1.5 // Term frequency falloff (higher values allow for bigger differences based on amount of repetition of terms)
+		else
+		{
+			let pgcount = 0;
+			paragraphs = paragraphs.map(paragraph => {
+				pgcount += 1;
+				return {
+					id: pgcount,
+					snippet: paragraph.snippet,
+					text: stripToTokens(paragraph.snippet),
+					category: "context",
+					document: paragraph.document
 				}
-			},
-			processTerm: (term, _fieldName) => {
-				let processedTerm = stopwords.includes(term.toLowerCase()) ? false : MiniSearch.getDefault("processTerm")(term);
-				return processedTerm;
-			},
-			tokenize: (str) => {
-				let terms = MiniSearch.getDefault("tokenize")(str);
-				return terms.concat(terms.map(porterStemmer));
-			}
-		});
-		miniSearch.addAll(paragraphs); //populate minisearch with paragraphs
+			});
 
-		//step 3: run the search over the dbText to generate matches
-		let searchResults = searchAndScore(searchStr,recentTextStr,paragraphs);
-		searchResults = searchResults.filter(x=>x.match>minSimilarity);
-		searchResults = searchResults.slice(0, valuesToReturn);
-		return searchResults;
+			// a list of commonly used words that have little meaning and can be excluded from analysis.
+			const stopwords = [
+				'about', 'above', 'after', 'again', 'all', 'also', 'am', 'an', 'and', 'another',
+				'any', 'are', 'as', 'at', 'be', 'because', 'been', 'before', 'being', 'below',
+				'between', 'both', 'but', 'by', 'came', 'can', 'cannot', 'come', 'could', 'did',
+				'do', 'does', 'doing', 'during', 'each', 'few', 'for', 'from', 'further', 'get',
+				'got', 'has', 'had', 'he', 'have', 'her', 'here', 'him', 'himself', 'his', 'how',
+				'if', 'in', 'into', 'is', 'it', 'its', 'itself', 'like', 'make', 'many', 'me',
+				'might', 'more', 'most', 'much', 'must', 'my', 'myself', 'never', 'now', 'of', 'on',
+				'only', 'or', 'other', 'our', 'ours', 'ourselves', 'out', 'over', 'own',
+				'said', 'same', 'see', 'she', 'should', 'since', 'so', 'some', 'still', 'such', 'take', 'than',
+				'that', 'the', 'their', 'theirs', 'them', 'themselves', 'then', 'there', 'these', 'they',
+				'this', 'those', 'through', 'to', 'too', 'under', 'until', 'up', 'very', 'was',
+				'way', 'we', 'well', 'were', 'what', 'where', 'when', 'which', 'while', 'who',
+				'whom', 'with', 'would', 'why', 'you', 'your', 'yours', 'yourself',
+				'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+				'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '$', '1',
+				'2', '3', '4', '5', '6', '7', '8', '9', '0', '_',
+				'll', 're'
+			];
+			//step 2: initialize minisearch engine
+			miniSearch = new MiniSearch({
+				fields: ["text"], // fields to index for full-text search
+				storeFields: ['category', "snippet", "document"], // fields to return with search results
+				searchOptions: {
+					fuzzy: 0,
+					bm25: { // https://lucaong.github.io/minisearch/types/MiniSearch.BM25Params.html
+						b: 0.7, // Normalisation for the length of the string
+						d: 0.7, // Minimum significance of a term showing up once
+						k: 1.5 // Term frequency falloff (higher values allow for bigger differences based on amount of repetition of terms)
+					}
+				},
+				processTerm: (term, _fieldName) => {
+					let processedTerm = stopwords.includes(term.toLowerCase()) ? false : MiniSearch.getDefault("processTerm")(term);
+					return processedTerm;
+				},
+				tokenize: (str) => {
+					let terms = MiniSearch.getDefault("tokenize")(str);
+					return terms.concat(terms.map(porterStemmer));
+				}
+			});
+			miniSearch.addAll(paragraphs); //populate minisearch with paragraphs
+
+			//step 3: run the search over the dbText to generate matches
+			let searchResults = searchAndScore(searchStr, recentTextStr, paragraphs);
+			searchResults = searchResults.filter(x => x.match > minSimilarity);
+			searchResults = searchResults.slice(0, valuesToReturn);
+			return searchResults;
+		}
 	}
 	</script>
 
@@ -22115,11 +22238,13 @@ Current version indicated by LITEVER below.
 
 				<div style="float:right;">
 					<div class="settinglabel"><button type="button" class="btn purplebtn widelbtn" style="padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;font-size:8px" id="wiexport" onclick="wi_group_export()">[Export / Import Group]</button></div>
-					<div class="settinglabel" style="padding: 4px;">
-						<div class="justifyleft settingsmall" title="Toggles all entries in entire group on/off">Toggle Group </div>
-						<input title="Toggle Entire Group" type="checkbox" id="toggle_wi_group" style="margin:0px 0 0;" onchange="toggle_wi_group_enabled()" checked>
+					<div style="float:right;">
+						<div class="settinglabel" style="padding: 4px;">
+							<div class="justifyleft settingsmall" title="Toggles all entries in entire group on/off">Toggle Group </div>
+							<input title="Toggle Entire Group" type="checkbox" id="toggle_wi_group" style="margin:0px 0 0;" onchange="toggle_wi_group_enabled()" checked>
+						</div>
+						<input title="World Info Quick Search" class="settinglabel miniinput" style="margin: 3px; width: 90px;" type="text" placeholder="Quick Search" value="" id="wiquicksearch" oninput="wi_quick_search()">
 					</div>
-					<input title="World Info Quick Search" class="settinglabel miniinput" style="margin: 3px; width: 90px;" type="text" placeholder="Quick Search" value="" id="wiquicksearch" oninput="wi_quick_search()">
 				</div>
 
 				<div class="settinglabel" style="padding: 4px;">
@@ -22155,42 +22280,82 @@ Current version indicated by LITEVER below.
 					<div class="justifyleft settingsmall" title="Enable TextDB">Enable TextDB </div>
 					<input title="Enable TextDB" type="checkbox" id="documentdb_enabled" style="margin:0px 0 0;">
 				</div>
+								
+				<div class="settinglabel" style="padding: 4px;">
+					<div class="justifyleft settingsmall" title="Use Embeddings for Searching">Use Embeddings for Searching <span class="helpicon">?
+						<span class="helptext">If enabled, the text DB is converted to vectors using the KoboldCPP embedding endpoint. If not, it uses the traditional TextDB keyword based search. Generally, embeddings are slower to generate initially (so when making changes to DB the next response might be very slow) - but may understand the context of the sentence better while also potentially supporting multiple languages.</span></span></div>
+					<input title="Use Embeddings for Searching" type="checkbox" id="documentdb_useEmbeddings" style="margin:0px 0 0;">
+				</div>
+
+				<div class="settinglabel" style="padding: 4px;">
+					<div class="justifyleft settingsmall" title="Delete Embedding cache">Delete Embedding cache <span class="helpicon">?
+						<span class="helptext">When embeddings are enabled, they get generated by the KCPP server and then are cached in the web browser. This button clears the browser cache.</span></span></div>
+					<button title="Delete Embedding cache" class="btn btn-primary" onclick="embeddingDB.deleteAllDocuments()" style="margin:0px 0 0;">Delete Embedding cache</button>
+				</div>
+
+				<div class="settinglabel" style="padding: 4px;">
+					<div class="justifyleft settingsmall" title="Add document to TextDB">Add document to TextDB <span class="helpicon">?
+						<span class="helptext">Tries to extract the text from the document, adding (or overwriting) an existing document in the TextDB with the same name.</span></span></div>
+					<button title="Add document to TextDB" class="btn btn-primary" onclick="documentParser.addDocumentToTextDB()" style="margin:0px 0 0;">Add document to TextDB</button>
+				</div>
 
 				<div class="settinglabel" style="padding: 4px;">
 					<div class="justifyleft settingsmall" title="Search Includes Context History">Search Includes Context History <span class="helpicon">?
-						<span class="helptext">If enabled, the entire story/chat history is used as a searchable document</span></span></div>
+						<span class="helptext">If enabled, the entire story/chat history is used as a searchable document.</span></span></div>
 					<input title="Search Context History" type="checkbox" id="documentdb_searchhistory" style="margin:0px 0 0;">
 				</div>
 
-				<div class="settinglabel" style="padding: 4px;">
-					<div class="justifyleft settingsmall">Num. Search Results <span class="helpicon">?
-					<span class="helptext">Controls how many snippets to retrieve from DB</span></span></div>
-					<input title="Number of Search Results" class="settinglabel miniinput"
-						style="height:16px;margin:0px 4px 0; width:90px;font-size:10px;" type="number"
-						min="1" max="5" step="1" pattern="\d+" placeholder="" value="" id="documentdb_numresults">
-				</div>
-				<div class="settinglabel" style="padding: 4px;">
-					<div class="justifyleft settingsmall">Nearby Text Amount <span class="helpicon">?
-						<span class="helptext">Controls	amount of nearby text included in the search query</span></span>
+				<div class="settingitem" style="width: unset;">
+					<div class="settinglabel" style="padding: 4px;">
+						<div class="justifyleft settingsmall">Num. Search Results <span class="helpicon">?<span class="helptext">Controls how many search results to retrieve from DB. Each search result is added to the context as a snippet of the DB
+						document.</span></span></div>
+						<input title="Number of Search Results" inputmode="numeric" class="justifyright flex-push-right settingsmall" id="documentdb_numresults" oninput="
+						document.getElementById('documentdb_numresults_slide').value = this.value; estimate_and_show_textDB_usage();">
 					</div>
-					<input title="Nearby Text Amount" class="settinglabel miniinput"
-						style="height:16px;margin:0px 4px 0; width:90px;font-size:10px;" type="number"
-						min="1" step="1" pattern="\d+" placeholder="" value="" id="documentdb_searchrange">
-				</div>
-				<div class="settinglabel" style="padding: 4px;">
-					<div class="justifyleft settingsmall">Search Chunk Size <span class="helpicon">?
-					<span class="helptext">Controls the size of each snippet being searched for</span></span>
+					<div><input title="Number of Search Results Slider" type="range" min="1" max="10" step="1" id="documentdb_numresults_slide" oninput="
+						document.getElementById('documentdb_numresults').value = this.value; estimate_and_show_textDB_usage();"></div>
+					<div class="settingminmax">
+						<div class="justifyleft">1</div>
+						<div class="justifyright">10</div>
 					</div>
-					<input title="Search Chunk Size" class="settinglabel miniinput"
-						style="height:16px;margin:0px 4px 0; width:90px;font-size:10px;" type="number"
-						min="0" step="1" pattern="\d+" placeholder="" value="" id="documentdb_chunksize">
 				</div>
+
+				<div class="settingitem" style="width: unset;">
+					<div class="settinglabel" style="padding: 4px;">
+						<div class="justifyleft settingsmall">Extra Text For Search <span class="helpicon">?<span class="helptext">Adds the specified amount of characters from the context before the last user message to the search query.</span></span></div>
+						<input title="Extra Text For Search" inputmode="numeric" class="justifyright flex-push-right settingsmall" id="documentdb_searchrange" oninput="
+						document.getElementById('documentdb_searchrange_slide').value = this.value;">
+					</div>
+					<div><input title="Extra Text For Search Slider" type="range" min="50" max="500" step="10" id="documentdb_searchrange_slide" oninput="
+						document.getElementById('documentdb_searchrange').value = this.value;"></div>
+					<div class="settingminmax">
+						<div class="justifyleft">50</div>
+						<div class="justifyright">500</div>
+					</div>
+				</div>
+
+				<div class="settingitem" style="width: unset;">
+					<div class="settinglabel" style="padding: 4px;">
+						<div class="justifyleft settingsmall">Snippet Size <span class="helpicon">?<span class="helptext">Controls the size (in characters) of each snippet taken from the documents.</span></span></div>
+						<input title="Snippet Size" inputmode="numeric" class="justifyright flex-push-right settingsmall" id="documentdb_chunksize" oninput="
+						document.getElementById('documentdb_chunksize_slide').value = this.value; estimate_and_show_textDB_usage();">
+					</div>
+					<div><input title="Snippet Size Slider" type="range" min="100" max="3000" step="50" id="documentdb_chunksize_slide" oninput="
+						document.getElementById('documentdb_chunksize').value = this.value; estimate_and_show_textDB_usage();"></div>
+					<div class="settingminmax">
+						<div class="justifyleft">100</div>
+						<div class="justifyright">3000</div>
+					</div>
+				</div>
+				
+				<div class="settinglabel settingsmall" style="padding: 4px;" id="documentdb_snippetestimate"></div>
+				<div class="settinglabel settingsmall" style="padding: 4px;">Please note, as with world info this can cause context reprocessing.  It is recommended to have at least 8K context size and a good prompt processing speed to use this feature.</div>
 				<div class="settinglabel">
 					<div class="justifyleft"><br>TextDB Storage<span class="helpicon">?<span
-						class="helptext">Paste as much raw text data here as you like. E.g. background information, reference documents, etc. This text will populate the database that will be chunked and searched by TextDB.</span></span></div>
+						class="helptext">Paste as much raw text data here as you like. E.g. background information, reference documents, etc. This text will populate the database that will be chunked and searched by TextDB. This can be split using "[DOCUMENT BREAK]" to split the overall database into smaller documents, and titles can be added with "[DOCUMENT BREAK][Title of document]This is the content of the document".</span></span></div>
 				</div>
-				<textarea title="Edit TextDB" class="form-control menuinput_multiline" id="documentdb_data" style="height: 120px;"
-					placeholder="Paste as much text data here as you like. This text will populate the database that will be searched by TextDB."></textarea>
+				<textarea title="Edit TextDB" class="form-control menuinput_multiline" oninput="estimate_and_show_textDB_usage()" id="documentdb_data" style="height: 120px;"
+					placeholder="Paste as much text data here as you like. This text will populate the database that will be searched by TextDB. This can be split using [DOCUMENT BREAK] to split the overall database into smaller documents, and titles can be added with [DOCUMENT BREAK][Title of document]This is the content of the document."></textarea>
 			</div>
 			<div id="memorycontainerfooter" class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="confirm_memory();save_wi();commit_wi_changes();render_gametext();sync_multiplayer(true);hide_popups()">OK</button>
@@ -24394,5 +24559,515 @@ else
 {
 	console.log("service workers API not available");
 }
+</script>
+<script>
+	let promptUserForLocalFile = (fileCallback, allowedExtensions=[]) => {
+		let input = document.createElement('input');
+		input.type = 'file';
+		if (allowedExtensions.length > 0)
+		{
+			input.accept=allowedExtensions.join(",")
+		}
+
+		input.onchange = e => {
+			try {
+				if (!e?.target?.files || e.target.files.length !== 1) {
+					throw new Error("Please select one file")
+				}
+				/**
+				 * @type File
+				 */
+				let file = e.target.files[0];
+
+				fileNameWithExt = file.name;
+				extPos = fileNameWithExt.lastIndexOf(".");
+				fileName = fileNameWithExt.substring(0, extPos);
+				ext = fileNameWithExt.substring(extPos);
+
+				let reader = new FileReader();
+				reader.readAsDataURL(file)
+
+				reader.onload = async readerEvent => {
+					let content = readerEvent.target.result;
+					fileCallback({
+						file, fileName, ext, content
+					})
+				}
+			}
+			catch (e) {
+				handleError(e)
+			}
+			finally {
+				delete input;
+			}
+		}
+
+		input.click();
+	}
+</script>
+<script>
+	/**
+	 * Source: https://github.com/jakearchibald/idb
+	 * Wrapper for IndexDB to allow for Async / Await
+	 */
+
+	/**
+	 * ISC License (ISC)
+	Copyright (c) 2016, Jake Archibald <jaffathecake@gmail.com>
+
+	Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies.
+
+	THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+	*/
+
+	!function (e, t) { "object" == typeof exports && "undefined" != typeof module ? t(exports) : "function" == typeof define && define.amd ? define(["exports"], t) : t((e = "undefined" != typeof globalThis ? globalThis : e || self).idb = {}) }(this, (function (e) { "use strict"; const t = (e, t) => t.some((t => e instanceof t)); let n, r; const o = new WeakMap, s = new WeakMap, i = new WeakMap; let a = { get(e, t, n) { if (e instanceof IDBTransaction) { if ("done" === t) return o.get(e); if ("store" === t) return n.objectStoreNames[1] ? void 0 : n.objectStore(n.objectStoreNames[0]) } return f(e[t]) }, set: (e, t, n) => (e[t] = n, !0), has: (e, t) => e instanceof IDBTransaction && ("done" === t || "store" === t) || t in e }; function c(e) { a = e(a) } function u(e) { return (r || (r = [IDBCursor.prototype.advance, IDBCursor.prototype.continue, IDBCursor.prototype.continuePrimaryKey])).includes(e) ? function (...t) { return e.apply(l(this), t), f(this.request) } : function (...t) { return f(e.apply(l(this), t)) } } function d(e) { return "function" == typeof e ? u(e) : (e instanceof IDBTransaction && function (e) { if (o.has(e)) return; const t = new Promise(((t, n) => { const r = () => { e.removeEventListener("complete", o), e.removeEventListener("error", s), e.removeEventListener("abort", s) }, o = () => { t(), r() }, s = () => { n(e.error || new DOMException("AbortError", "AbortError")), r() }; e.addEventListener("complete", o), e.addEventListener("error", s), e.addEventListener("abort", s) })); o.set(e, t) }(e), t(e, n || (n = [IDBDatabase, IDBObjectStore, IDBIndex, IDBCursor, IDBTransaction])) ? new Proxy(e, a) : e) } function f(e) { if (e instanceof IDBRequest) return function (e) { const t = new Promise(((t, n) => { const r = () => { e.removeEventListener("success", o), e.removeEventListener("error", s) }, o = () => { t(f(e.result)), r() }, s = () => { n(e.error), r() }; e.addEventListener("success", o), e.addEventListener("error", s) })); return i.set(t, e), t }(e); if (s.has(e)) return s.get(e); const t = d(e); return t !== e && (s.set(e, t), i.set(t, e)), t } const l = e => i.get(e); const p = ["get", "getKey", "getAll", "getAllKeys", "count"], D = ["put", "add", "delete", "clear"], I = new Map; function y(e, t) { if (!(e instanceof IDBDatabase) || t in e || "string" != typeof t) return; if (I.get(t)) return I.get(t); const n = t.replace(/FromIndex$/, ""), r = t !== n, o = D.includes(n); if (!(n in (r ? IDBIndex : IDBObjectStore).prototype) || !o && !p.includes(n)) return; const s = async function (e, ...t) { const s = this.transaction(e, o ? "readwrite" : "readonly"); let i = s.store; return r && (i = i.index(t.shift())), (await Promise.all([i[n](...t), o && s.done]))[0] }; return I.set(t, s), s } c((e => ({ ...e, get: (t, n, r) => y(t, n) || e.get(t, n, r), has: (t, n) => !!y(t, n) || e.has(t, n) }))); const B = ["continue", "continuePrimaryKey", "advance"], b = {}, g = new WeakMap, v = new WeakMap, h = { get(e, t) { if (!B.includes(t)) return e[t]; let n = b[t]; return n || (n = b[t] = function (...e) { g.set(this, v.get(this)[t](...e)) }), n } }; async function* m(...e) { let t = this; if (t instanceof IDBCursor || (t = await t.openCursor(...e)), !t) return; const n = new Proxy(t, h); for (v.set(n, t), i.set(n, l(t)); t;)yield n, t = await (g.get(n) || t.continue()), g.delete(n) } function w(e, n) { return n === Symbol.asyncIterator && t(e, [IDBIndex, IDBObjectStore, IDBCursor]) || "iterate" === n && t(e, [IDBIndex, IDBObjectStore]) } c((e => ({ ...e, get: (t, n, r) => w(t, n) ? m : e.get(t, n, r), has: (t, n) => w(t, n) || e.has(t, n) }))), e.deleteDB = function (e, { blocked: t } = {}) { const n = indexedDB.deleteDatabase(e); return t && n.addEventListener("blocked", (e => t(e.oldVersion, e))), f(n).then((() => { })) }, e.openDB = function (e, t, { blocked: n, upgrade: r, blocking: o, terminated: s } = {}) { const i = indexedDB.open(e, t), a = f(i); return r && i.addEventListener("upgradeneeded", (e => { r(f(i.result), e.oldVersion, e.newVersion, f(i.transaction), e) })), n && i.addEventListener("blocked", (e => n(e.oldVersion, e.newVersion, e))), a.then((e => { s && e.addEventListener("close", (() => s())), o && e.addEventListener("versionchange", (e => o(e.oldVersion, e.newVersion, e))) })).catch((() => { })), a }, e.unwrap = l, e.wrap = f }));
+</script>
+<script type="module">
+	let createEmbeddingSchema = (db) => {
+		store = db.createObjectStore("EmbeddingsStore", {
+			keyPath: "id",
+			autoIncrement: true
+		});
+		index = store.createIndex("HashIndex", "hash");
+		index = store.createIndex("DocumentIndex", "document");
+	}
+
+	window.addEventListener('load', () => {
+		// Open (or create) the database
+		let indexedDBAgnostic = window.indexedDB || window.mozIndexedDB || window.webkitIndexedDB || window.msIndexedDB || window.shimIndexedDB;
+		let dbCon = indexedDBAgnostic.open("Embeddings", 1);
+
+		// Create the schema
+		dbCon.onupgradeneeded = () => {
+			createEmbeddingSchema(dbCon.result)
+		};
+
+		dbCon.onsuccess = () => {
+			// Start a new transaction
+			var db = dbCon.result;
+			var tx = db.transaction("EmbeddingsStore", "readwrite");
+
+			// Close the db when the transaction is done
+			tx.oncomplete = function () {
+				db.close();
+			};
+		}
+	})
+
+	class EmbeddingDB {
+		indexedDBAgnostic = window.indexedDB || window.mozIndexedDB || window.webkitIndexedDB || window.msIndexedDB || window.shimIndexedDB;
+		dbCon;
+
+		createEmbeddingSchema = () => {
+			let store = this.dbCon.result.createObjectStore("EmbeddingsStore", {
+				keyPath: "id",
+				autoIncrement: true
+			});
+			let index = store.createIndex("HashIndex", "hash");
+			index = store.createIndex("DocumentIndex", "document");
+		}
+
+		constructor() {
+			this.dbCon = this.indexedDBAgnostic.open("Embeddings", 1);
+			this.dbCon.onupgradeneeded = () => {
+				this.createEmbeddingSchema(this)
+			};
+
+			this.dbCon.onsuccess = () => {
+				let db = this.dbCon.result;
+				let tx = db.transaction("EmbeddingsStore", "readwrite");
+
+				tx.oncomplete = function () {
+					db.close();
+				};
+			}
+		}
+
+		getData = async (dbName, storeName, searchTerms, indexName) => {
+			const db = await idb.openDB(dbName, 1, this.createEmbeddingSchema);
+			if (!!indexName) {
+				return await db.getFromIndex(storeName, indexName, searchTerms)
+			}
+			return await db.get(storeName, searchTerms)
+		}
+
+		getAllData = async (dbName, storeName, searchTerms, indexName) => {
+			const db = await idb.openDB(dbName, 1, this.createEmbeddingSchema);
+			if (!!indexName) {
+				return await db.getAllFromIndex(storeName, indexName, searchTerms)
+			}
+			return await db.getAll(storeName, searchTerms)
+		}
+
+		getEmbedding = async (searchTerms, indexName = "HashIndex") => {
+			return this.getData("Embeddings", "EmbeddingsStore", searchTerms, indexName)
+		}
+
+		getEmbeddingsByDocument = async (searchTerms) => {
+			return this.getAllData("Embeddings", "EmbeddingsStore", searchTerms, "DocumentIndex")
+		}
+
+		saveData = async (dbName, storeName, item) => {
+			let db = await idb.openDB(dbName, 1, this.createEmbeddingSchema);
+			let tran = await db.transaction(storeName, 'readwrite');
+			let store = tran.objectStore(storeName);
+			return await store.put(item);
+		}
+
+		saveEmbedding = async (item) => {
+			return await this.saveData("Embeddings", "EmbeddingsStore", item)
+		}
+
+		putIfAbscentEmbedding = async (item) => {
+			let currentEmbedding = await this.getEmbedding(item.hash)
+			if (currentEmbedding === undefined) {
+				return await this.saveEmbedding(item)
+			}
+		}
+
+		computeIfAbscentEmbedding = async (hash, generator) => {
+			let currentEmbedding = await this.getEmbedding(hash)
+			if (currentEmbedding === undefined) {
+				return await this.saveEmbedding(await generator(hash))
+			}
+		}
+
+		computeAndGetIfAbscentEmbedding = async (hash, generator) => {
+			let currentEmbedding = await this.getEmbedding(hash)
+			if (currentEmbedding === undefined) {
+				await this.saveEmbedding(await generator(hash))
+			}
+			return await this.getEmbedding(hash)
+		}
+
+		deleteData = async (dbName, storeName, id) => {
+			let db = await idb.openDB(dbName, 1, this.createEmbeddingSchema);
+			return await db.delete(storeName, id)
+		}
+
+		deleteEmbedding = async (id) => {
+			return await this.deleteData("Embeddings", "EmbeddingsStore", id)
+		}
+
+		deleteDocument = async (document) => {
+			let embeddings = await embeddingDB.getEmbeddingsByDocument(document);
+			for (let embedding of embeddings) {
+				await this.deleteEmbedding(embedding.id)
+			}
+		}
+
+		deleteAllDocuments = async () => {
+			let embeddings = await embeddingDB.getAllData("Embeddings", "EmbeddingsStore")
+			for (let embedding of embeddings) {
+				await this.deleteEmbedding(embedding.id)
+			}
+		}
+	}
+
+	window.embeddingDB = new EmbeddingDB()
+
+</script>
+<style>
+	div.waitingToast {
+		display: flex;
+		background-color: #4787be;
+		border: solid red 1px;
+		border-radius: 20px;
+		position: absolute;
+		bottom: 15%;
+		right: 5%;
+		padding-right: 20px;
+	}
+
+	div.waitingIcon {
+		height: 50px;
+		width: 50px;
+		position: unset;
+		margin: 10px;
+	}
+
+	div.waitingToastText {
+		align-content: center;
+		word-break: break-all;
+		max-width: 300px;
+	}
+</style>
+<script>
+	class WaitingToast {
+		#waitingDiv
+		#waitingText
+		constructor() {
+			this.waitingDiv = document.createElement("div")
+			this.waitingDiv.classList.add("waitingToast", "hidden")
+
+			let waitingIcon = document.createElement("div")
+			waitingIcon.classList.add("imgloader", "waitingIcon")
+			this.waitingDiv.appendChild(waitingIcon)
+
+			this.waitingText = document.createElement("div")
+			this.waitingText.classList.add("waitingToastText")
+			this.waitingDiv.appendChild(this.waitingText)
+
+			document.body.appendChild(this.waitingDiv)
+		}
+
+		show() {
+			this.waitingDiv.classList.remove("hidden")
+		}
+
+		hide() {
+			this.waitingDiv.classList.add("hidden")
+		}
+
+		setText(text) {
+			this.waitingText.innerText = text
+		}
+	}
+
+	window.waitingToast = new WaitingToast()
+
+	let originalTriggerAbortController = trigger_abort_controller
+
+	trigger_abort_controller = () => {
+		waitingToast.hide()
+		originalTriggerAbortController()
+	}
+</script>
+<script type="module">
+	class EmbeddingSearcher {
+		getHashForText = (text) => {
+			// MD5 implementation: forge.md5.create().update(text).digest().toHex()
+			return cyrb_hash(text, 0, 4)
+		}
+
+		generateEmbedding = async (text) => {
+			let reqOpt = {
+				method: 'POST', // or 'PUT'
+				headers: get_kobold_header(),
+				body: JSON.stringify({
+					"input": text,
+					"truncate": true
+				}),
+			};
+			if (globalabortcontroller) {
+				reqOpt.signal = globalabortcontroller.signal;
+			}
+			let sub_endpt = apply_proxy_url(`${custom_kobold_endpoint}/api/extra/embeddings`);
+			return fetch(sub_endpt, reqOpt)
+				.then((response) => response.json())
+		}
+
+		getEmbeddings = async (modelHashInUse, ...paragraphs) => {
+			waitingToast.setText(`Generating embedding for search text: 0/${paragraphs.length}`);
+			let embeddings = []
+			for (let i = 0; i < paragraphs.length; i++) {
+				let embeddingObj = undefined
+				if (!!paragraphs[i]?.snippet) {
+					let documentContent = paragraphs[i]?.snippet;
+					let hashFromText = this.getHashForText(`${modelHashInUse}###${documentContent}`),
+						documentName = paragraphs[i]?.document;
+
+					embeddingObj = await embeddingDB.computeAndGetIfAbscentEmbedding(hashFromText, async (hash) => {
+						let embedding = await this.generateEmbedding(documentContent)
+						if (!!embedding?.data && embedding?.data.length > 0 && !!embedding?.data[0]?.embedding) {
+							return {
+								document: !!documentName ? documentName : "None",
+								hash: hash,
+								embedding: embedding.data[0].embedding,
+								snippet: documentContent,
+								modelUsed: embedding?.model
+							}
+						}
+						return undefined
+					});
+				} else {
+					let documentContent = paragraphs[i]
+					let embedding = await this.generateEmbedding(documentContent)
+					if (!!embedding?.data && embedding?.data.length > 0 && !!embedding?.data[0]?.embedding) {
+						embeddingObj = {
+							document: "None",
+							hash: this.getHashForText(`${modelHashInUse}###${documentContent}`),
+							embedding: embedding.data[0].embedding,
+							snippet: documentContent,
+							modelUsed: embedding?.model
+						}
+					}
+				}
+
+				if (!!embeddingObj) {
+					embeddings.push(embeddingObj)
+				}
+
+				waitingToast.setText(`Generating embedding for search text: ${i + 1}/${paragraphs.length}`);
+			}
+			return embeddings
+		}
+
+		cosineSimilarity = (A, B) => {
+			let dotproduct = 0;
+			let mA = 0;
+			let mB = 0;
+
+			for (let i = 0; i < A.length; i++) {
+				dotproduct += A[i] * B[i];
+				mA += A[i] * A[i];
+				mB += B[i] * B[i];
+			}
+
+			mA = Math.sqrt(mA);
+			mB = Math.sqrt(mB);
+
+			return dotproduct / (mA * mB);
+		}
+
+		getRankedEmbeddings = async (searchTerm, ...paragraphs) => {
+			waitingToast.show();
+			waitingToast.setText("Generating embedding for search text");
+			let searchEmbedding = await this.getEmbeddings("Unknown", searchTerm)
+			let modelUsedForSearchEmbedding = searchEmbedding[0]?.modelUsed
+			let embeddings = await this.getEmbeddings(modelUsedForSearchEmbedding, ...paragraphs);
+
+			waitingToast.setText(`Searching embedding for search text: 0/${embeddings.length}`);
+			let i = 0;
+			embeddings.forEach(embedding => {
+				embedding.similarity = this.cosineSimilarity(searchEmbedding[0].embedding, embedding.embedding)
+				waitingToast.setText(`Searching embedding for search text: ${++i}/${embeddings.length}`);
+			})
+			waitingToast.hide()
+
+			embeddings.sort((a, b) => a.similarity > b.similarity ? -1 : 1)
+			return embeddings
+		}
+	}
+
+	window.embeddingSearcher = new EmbeddingSearcher()
+</script>
+<script type="module">
+	class DocumentParser {
+		extractTextFromDocument(content) {
+			let reqOpt = {
+				method: 'POST',
+				headers: get_kobold_header(),
+				body: JSON.stringify({
+					docData: content
+				}),
+			};
+			if (globalabortcontroller) {
+				reqOpt.signal = globalabortcontroller.signal;
+			}
+			let sub_endpt = apply_proxy_url(`${custom_kobold_endpoint}/api/extra/extractText`);
+
+			return fetch(sub_endpt, reqOpt)
+				.then((response) => response.json())
+		}
+
+		addDocumentToTextDB() {
+			let tryImportLorebookAsTextDB = (b64) => {
+				try {
+					let obj = JSON.parse(atob(b64.split(",")[1]))
+					return importLorebookAsTextDB(obj)
+				}
+				catch (e) {
+					return false
+				}
+			}
+			promptUserForLocalFile(async (fileDetails) => {
+				let { file, fileName, ext, content } = fileDetails
+				let extractedText = undefined
+
+				if (content.startsWith("data:image")) {
+					let analysisPrompt = "Perform OCR on the provided image."
+					extractedText = await generateAndGetTextFromPrompt(`${createInstructPrompt(analysisPrompt)}${instructendplaceholder}${!!localsettings?.inject_jailbreak_instruct ? localsettings.custom_jailbreak_text : ""}`, undefined, [content.split(",")[1]])
+				}
+				else if (content.startsWith("data:application/json") && tryImportLorebookAsTextDB(content)) {
+					return
+				}
+				else {
+					extractedText = (await this.extractTextFromDocument(content))?.text
+				}
+
+				if (!!extractedText) {
+					replaceDocumentFromTextDB(fileName, extractedText)
+				}
+			})
+		}
+	}
+	document.documentParser = new DocumentParser()
+</script>
+<script>
+	// Mod to allow WI to be exported / imported from JSON files
+
+	let saveFileGeneric = (fileName, fileContent, mimeType) => {
+		window.URL = window.URL || window.webkitURL;
+		var userAgent = window.navigator.userAgent;
+
+		if (userAgent.match(/AppleWebKit/) && (userAgent.match(/iPad/i) || userAgent.match(/iPhone/i))) {
+			let ststr = fileContent;
+			var file = new Blob([ststr], { type: 'application/octet-stream' });
+			var file2 = new Blob([ststr], { type: mimeType });
+			console.log("Special save handling for iphones")
+			// iPad or iPhone needs an extra download
+			var reader = new FileReader();
+			var reader2 = new FileReader();
+			let datblob = window.URL.createObjectURL(file2);
+			reader.onload = function (e) {
+				reader2.readAsDataURL(file2);
+				reader2.onload = function (e) {
+					msgbox(`<button type="button" class="btn btn-primary" id="ios_save" onclick="savenowfn()">Click to Save</button>
+	<br><h5>Apple devices are known to have issues saving. If the above button does not work, try opening or right-click / long press one of the below links, and select (Save As)</h5><h4><li><a href=` + reader.result + ` class='color_blueurl' target='_blank' download="` + fileName + `">Raw File Data</a></li><li><a href=` + reader2.result + ` class='color_blueurl' target='_blank' download="` + fileName + `">File Data</a></li><li><a href=` + datblob + ` class='color_blueurl' download="` + fileName + `">URL Blob</a></li></h4>`, "Save Story", true)
+				}
+			}
+			reader.readAsDataURL(file);
+		}
+		else {
+			var a = document.getElementById("tempfile");
+			var file = new Blob([fileContent], { type: mimeType });
+			console.log("Normal save handling")
+			if (tempfileurl) {
+				window.URL.revokeObjectURL(tempfileurl);
+			}
+			tempfileurl = window.URL.createObjectURL(file);
+			a.href = tempfileurl;
+			a.target = '_blank';
+			a.download = fileName;
+			setTimeout(function () { a.click() }, 20);
+		}
+	}
+
+	window.addEventListener('load', () => {
+		let createWIButton = (id, text, onClickEvent) => {
+			let button = document.createElement("button")
+			button.id = id
+			button.innerText = text
+			button.onclick = onClickEvent
+			button.classList.add("btn", "purplebtn", "widelbtn")
+			button.style = "padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;font-size:8px"
+			return button
+		}
+
+		let wiButtonHolder = document.getElementById("wiexport").parentElement
+		wiButtonHolder.appendChild(createWIButton("exportWIToFile", "[Export WI group to file]", () => {
+			save_wi()
+			update_wi()
+			saveFileGeneric(`wi_${curr_wi_tab !== "" ? curr_wi_tab : "General"}`, JSON.stringify(pending_wi_obj.filter(wi => wi.wigroup === curr_wi_tab)), 'application/json')
+		}))
+
+		wiButtonHolder.appendChild(createWIButton("importWIFromFile", "[Import WI group from file]", () => {
+			promptUserForLocalFile((fileDetails) => {
+				let { file, fileName, ext, content } = fileDetails
+				try {
+					let wiToAdd = JSON.parse(atob(content.split(",")[1]))
+					let wiGroup = fileName.replace("wi_", "")
+					pending_wi_obj = pending_wi_obj.filter(wi => (wiGroup === "General" ? wi.wigroup !== "" : wi.wigroup !== wiGroup))
+					pending_wi_obj.push(...wiToAdd)
+					update_wi()
+					select_wi_group(wiGroup === "General" ? "" : wiGroup)
+				}
+				catch (e) {
+					handleError(e)
+				}
+			})
+		}))
+	})
 </script>
 </html>
