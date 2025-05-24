@@ -7783,7 +7783,7 @@ Current version indicated by LITEVER below.
 	}
 
 	function importLorebookAsTextDB(lorebook) {
-		if (!!lorebook?.entries) 
+		if (!!lorebook?.name && !!lorebook?.entries) 
 		{
 			let outputText = Object.values(lorebook.entries)
 				.map(loreEntry => {
@@ -7800,8 +7800,12 @@ Current version indicated by LITEVER below.
 					description += `\nDetails: ${content}`
 					return description
 				});
-			replaceDocumentFromTextDB(lorebook?.name, outputText.join("\n\n"))
-			return true
+			if (!!outputText)
+			{
+				replaceDocumentFromTextDB(lorebook?.name, outputText.join("\n\n"))
+				return true
+			}
+			return false
 		}
 		else 
 		{
@@ -24975,12 +24979,23 @@ else
 				let { file, fileName, ext, content } = fileDetails
 				let extractedText = undefined
 
+				debugger
 				if (content.startsWith("data:image")) {
 					let analysisPrompt = "Perform OCR on the provided image."
 					extractedText = await generateAndGetTextFromPrompt(`${createInstructPrompt(analysisPrompt)}${instructendplaceholder}${!!localsettings?.inject_jailbreak_instruct ? localsettings.custom_jailbreak_text : ""}`, undefined, [content.split(",")[1]])
 				}
 				else if (content.startsWith("data:application/json") && tryImportLorebookAsTextDB(content)) {
 					return
+				}
+				else if (content.startsWith("data:text/")) {
+					try
+					{
+						extractedText = atob(content.split(",")[1])
+					}
+					catch (e)
+					{
+						console.error(e)
+					}
 				}
 				else {
 					extractedText = (await this.extractTextFromDocument(content))?.text
