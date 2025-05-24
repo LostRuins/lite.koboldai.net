@@ -21813,8 +21813,631 @@ Current version indicated by LITEVER below.
 		searchResults = searchResults.slice(0, valuesToReturn);
 		return searchResults;
 	}
+
+	/** start script section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer */
+	const wordsFrequencyTableTitleText = "Words Freq."
+	let wfo = {
+		"words_frequency": {},
+		"nTotalRows": null
+	}
+	const editorFieldLabel = "gametext"
+	const remoteWebServer = "http://localhost:7860"
+	const underlinedPrimary = "underlinedYellow"
+	const underlinedClicked = "underlinedViolet"
+    const underlinedPrimaryTable = "underlinedYellowTable"
+    const underlinedClickedTable = "underlinedVioletTable"
+    const objectChildNodeNamesToParse = {
+        "#text": "textContent",
+        "SPAN": "textContent"
+    }
+
+    const wordsFrequencyAnalyzers = {
+        "id-input-webserver-wordfreq-checkbox": async function(arrayOfValidTextChildWithNrow) {
+            let bodyRequest = {"text": arrayOfValidTextChildWithNrow}
+            console.log("use the webserver for word freq analysis...")
+            const wordsFrequencyURL = parseWebserverDomain()
+            try {
+                let response = await fetch(wordsFrequencyURL, {
+                    method: "POST",
+                    body: JSON.stringify(bodyRequest)
+                })
+                console.assert(response.status === 200, `response.status: ${response.status}!`)
+                let bodyResponseJson = await response.json()
+                setElementCssClassById("waiting-for-be", "collapse")
+                let freq = bodyResponseJson["words_frequency"]
+                let nTotalRows = bodyResponseJson["n_total_rows"]
+                console.log(`wordsFrequencyAnalyzers::nTotalRows: '${nTotalRows}'`)
+                populateWordsFrequencyTables(freq, nTotalRows)
+            } catch (err) {
+                console.error("wordsFrequencyAnalyzers::err on webserver request/response:", err, "#")
+                console.log(`wordsFrequencyAnalyzers::wordsFrequencyURL: ${typeof wordsFrequencyURL}:`, wordsFrequencyURL, "#")
+                setElementCssClassById("waiting-for-be", "collapse")
+                setElementCssClassById("waiting-for-be-error", "display-block")
+            }
+        },
+        'stemmer-embedded': function(inputText) {
+            console.log("use the embedded functionality for word freq analysis...")
+            try {
+                const bodyResponseJson = textStemming(inputText)
+                setElementCssClassById("waiting-for-be", "collapse")
+                let freq = bodyResponseJson["wordsStemsDict"]
+                let nTotalRows = bodyResponseJson["nTotalRows"]
+                console.log(`getWordsFreq::nTotalRows: '${nTotalRows}', populateWordsFrequencyTables...`)
+                populateWordsFrequencyTables(freq, nTotalRows)
+            } catch (err) {
+                console.error("getWordsFrequency::err on useWordfreqWebserver:", err, "#")
+                setElementCssClassById("waiting-for-be", "collapse")
+                setElementCssClassById("waiting-for-be-error-embedded", "display-block")
+            }
+        }
+    }
+
+    function filterElementsFromList (inputArray,  filterWhitespaces = false, filterArgs=["", " "]) {
+        if (filterWhitespaces) {
+            inputArray = inputArray.filter(e => String(e).trim());
+        }
+        return inputArray.filter((x) => !filterArgs.includes(x));
+    }
+
+    function customWordPunctTokenize(s, pattern = /([A-Za-zÀ-ÿ-]+|[0-9._]+|.|!|\?|'|"|:|;|,|-)/i, filterWhitespaces=true) {
+        const results = s.split(pattern)
+        return filterElementsFromList(results, filterWhitespaces)
+    }
+
+    function textStemming(textSplitNewline) {
+        const wordsStemsDict = {};
+        let nTotalRows = textSplitNewline.length;
+
+        textSplitNewline.forEach((data) => {
+            const row = data.text;
+            const idxRow = data.idxRow;
+            const idxRowChild = data.idxRowChild ?? null;
+            const idxRowParent = data.idxRowParent ?? null;
+            const tokens = customWordPunctTokenize(row);
+            const offsets = getOffsets(row, tokens);
+
+            tokens.forEach((word, i) => {
+                const wordLower = word.toLowerCase();
+                const stem = porterStemmer(wordLower);
+                if (!wordsStemsDict[stem]) {
+                    wordsStemsDict[stem] = { count: 0, word_prefix: stem, offsets_array: [] };
+                }
+                wordsStemsDict[stem].count += 1;
+                wordsStemsDict[stem].offsets_array.push({
+                    word: word, // keep original casing for display
+                    offsets: [offsets[i].start, offsets[i].end],
+                    n_row: idxRow,
+                    n_row_child: idxRowChild,
+                    n_row_parent: idxRowParent
+                });
+            });
+        });
+        return { nTotalRows, wordsStemsDict };
+    }
+
+    function getOffsets(text, tokens) {
+        const offsets = [];
+        let currentIndex = 0;
+
+        tokens.forEach(token => {
+            const start = text.indexOf(token, currentIndex);
+            const end = start + token.length;
+            offsets.push({ start, end });
+            currentIndex = end;
+        });
+
+        return offsets;
+    }
+
+	function getFormDataByKey(formId, key) {
+		let formElement = document.getElementById(formId)
+		const data = new FormData(formElement);
+		let dataValue = data.get(key)
+		return dataValue
+	}
+
+	function previewFile() {
+		const editor = document.getElementById(editorFieldLabel);
+		const [file] = document.querySelector("input[type=file]").files;
+		const reader = new FileReader();
+		reader.addEventListener("load", () => {
+				// this will then display a text file
+				editor.innerText = reader.result;
+			}, false
+		);
+		if (file) {
+			reader.readAsText(file);
+		}
+	}
+
+    function scrollToGivenPoint(editorElement, yClientOffset, negativeMultiplierFontSize = 3) {
+        const editorComputedStyle = window.getComputedStyle(editorElement)
+        const fontSize = parseInt(editorComputedStyle.getPropertyValue("font-size"), 10)
+        const negativeOffset = fontSize * negativeMultiplierFontSize
+        const scrollHeight = editorElement.scrollHeight
+        if (yClientOffset < (scrollHeight - negativeOffset)) {
+            yClientOffset -= negativeOffset
+        }
+        editorElement.scrollTo(0, yClientOffset)
+    }
+
+    function setCaret(line, offsetColumn, nRowChild, nRowParent) {
+        const editorElement = document.getElementById(editorFieldLabel)
+        editorElement.scrollTo(0, 0) // workaround: first reset the scroll position moving it at editorElement beginning
+
+        const childNodes = editorElement.childNodes
+        let rng = document.createRange();
+        let sel = window.getSelection();
+        let col0 = offsetColumn[0]
+        let col1 = offsetColumn[1]
+        let childNode = childNodes[line]
+        let subChildNode;
+        /// handle case of childNodes not of type #text, e.g., SPAN
+        if (nRowParent !== null) {
+            console.assert(line === nRowParent, `line ${line} nth === parent line ${nRowParent} nth???`)
+        }
+        switch (childNode.nodeName) {
+            case "#text":
+                rng.setStart(childNode, col0)
+                rng.setEnd(childNode, col1)
+                break
+            case "SPAN":
+                subChildNode = childNode.childNodes[nRowChild]
+                rng.setStart(subChildNode, col0)
+                rng.setEnd(subChildNode, col1)
+                break
+            default:
+                throw Error(`childNode.nodeName ${childNode.nodeName} not yet handled!`)
+        }
+        sel.removeAllRanges();
+        sel.addRange(rng);
+        editorElement.focus();
+
+        const offsetsEditor = getOffsetsWithElement(editorElement)
+        const yBase = parseInt(offsetsEditor.top, 10)
+        const y = parseInt(getBoundingClientRect(rng).y, 10)
+        const yClientOffset = y - yBase
+
+        scrollToGivenPoint(editorElement, yClientOffset)
+    }
+
+    function getOffsetsWithElement(el) {
+        return {top: el.offsetTop, height: el.offsetHeight}
+    }
+
+    function getBoundingClientRect(el) {
+        let bounds = el.getBoundingClientRect();
+        return {x: bounds.left, y: bounds.y, bottom: bounds.bottom, top: bounds.top};
+    }
+    function setElementCssClassById(elementId, currentClass) {
+        let elementWithClassToChange = document.getElementById(elementId)
+        elementWithClassToChange.setAttribute("class", currentClass)
+    }
+
+    function setElementCssClassByOldClass(oldClassName, currentClass) {
+        try {
+            let oldClassElement = document.getElementsByClassName(oldClassName)
+            oldClassElement[0].className = currentClass
+        } catch {}
+	}
+
+    function parseWebserverDomain () {
+        const remoteWebServerEl = document.getElementById("id-input-webserver-wordfreq")
+        console.log("remoteWebServer.value:", remoteWebServerEl.value, "#")
+        const remoteWebServerValue = remoteWebServerEl.value ?? remoteWebServer
+        const remoteWebServerDomain = remoteWebServerValue.trim().replace(/\/+$/, '')
+        return `${remoteWebServerDomain}/words-frequency`
+    }
+
+	async function getWordsFrequency() {
+        let {validChildContent} = getValidChildNodesFromEditorById(editorFieldLabel)
+        setElementCssClassById("waiting-for-be-error", "collapse")
+        setElementCssClassById("waiting-for-be-error-embedded", "collapse")
+        setElementCssClassById("waiting-for-be", "display-block")
+		let wordsFrequencyTableTitleEl = document.getElementById("id-words-frequency-table-title")
+		wordsFrequencyTableTitleEl.innerText = wordsFrequencyTableTitleText
+        let listOfWords = document.getElementById("id-list-of-words")
+        listOfWords.innerHTML = ""
+        let currentTableOfWords = document.getElementById("id-current-table-of-words")
+        currentTableOfWords.innerHTML = ""
+        const choiceWordFreqAnalyzerEl = document.getElementById('id-input-webserver-wordfreq-checkbox')
+        console.log("choiceWordFreqAnalyzerEl checked:", typeof choiceWordFreqAnalyzerEl.checked, choiceWordFreqAnalyzerEl.checked, "#")
+        switch (choiceWordFreqAnalyzerEl.checked) {
+            case true: // webserver
+                await wordsFrequencyAnalyzers['id-input-webserver-wordfreq-checkbox'](validChildContent)
+                break;
+            case false: // embedded
+                wordsFrequencyAnalyzers['stemmer-embedded'](validChildContent)
+                break;
+            default:
+                console.warn("No valid analyzer selected.");
+                break;
+		}
+	}
+
+	function dynamicSort(property, order) {
+		let sort_order = order === "desc" ? -1 : 1
+		return function (a, b){
+			// a should come before b in the sorted order
+			if(a[property] < b[property]){
+				return -1 * sort_order;
+			// a should come after b in the sorted order
+			}else if(a[property] > b[property]){
+				return 1 * sort_order;
+			// a and b are the same
+			}
+			return 0 * sort_order;
+		}
+	}
+
+    function extractStringValues(obj) {
+        let result = [];
+        if (typeof obj === "string") {
+            result.push(obj);
+        } else if (Array.isArray(obj)) {
+            for (const item of obj) {
+                result = result.concat(extractStringValues(item));
+            }
+        } else if (typeof obj === "object" && obj !== null) {
+            for (const key in obj) {
+                result = result.concat(extractStringValues(obj[key]));
+            }
+        }
+        return result;
+    }
+
+    function arrayFilterNestedValue(array, nestedValue) {
+        return array.filter(item => {
+            let valuesFromObject = extractStringValues(item).join(" ")
+            return valuesFromObject.toLowerCase().includes(nestedValue.toLowerCase());
+        });
+	}
+
+    function updateWordsFrequencyTables() {
+		let nTotalRows = wfo["nTotalRows"]
+		if (nTotalRows === null || nTotalRows < 1) {
+			alert("let's get some data before updating the result table...")
+		}
+		let _wfo = wfo["words_frequency"]
+		let reduced = Object.values(_wfo)
+		let order = getFormDataByKey("id-form-order-by", "order")
+		let sort = getFormDataByKey("id-form-sort-by", "sort")
+		reduced.sort(dynamicSort(sort, order))
+
+		let inputFilter = document.getElementById("filter-words-frequency")
+		let inputFilterValue = inputFilter.value
+		if (inputFilterValue !== undefined && inputFilter.value !== "") {
+        reduced = arrayFilterNestedValue(reduced, inputFilterValue)
+		}
+
+        let listOfWords = document.getElementById("id-list-of-words")
+        listOfWords.innerHTML = ""
+        let currentTableOfWords = document.getElementById("id-current-table-of-words")
+        currentTableOfWords.innerHTML = ""
+
+		let wordsFrequencyTableTitleEl = document.getElementById("id-words-frequency-table-title")
+		wordsFrequencyTableTitleEl.innerText = `${wordsFrequencyTableTitleText} (${reduced.length} word groups, ${nTotalRows} rows)`
+        const wordListElement = document.createElement("list")
+		for (let i=0; i<reduced.length; i++ ) {
+            insertListOfWords(i, reduced[i], wordListElement, currentTableOfWords);
+            }
+        listOfWords.append(wordListElement)
+	}
+
+	function populateWordsFrequencyTables(wordsFrequencyObj, nTotalRows) {
+        wfo["words_frequency"] = wordsFrequencyObj
+        if (typeof wordsFrequencyObj === "string") {
+		    wfo["words_frequency"] = JSON.parse(wordsFrequencyObj)
+        }
+		wfo["nTotalRows"] = nTotalRows
+		updateWordsFrequencyTables()
+	}
+
+    function insertCurrentTable(i, iReduced, currentTableOfWords) {
+        let currentTableWordsFreq = document.createElement("table")
+        currentTableWordsFreq.setAttribute("class", "border-black")
+        currentTableWordsFreq.setAttribute("id", `id-table-${i}-nth`)
+        currentTableWordsFreq.setAttribute("aria-label", `id-table-${i}-nth`)
+
+        let currentCaption = currentTableWordsFreq.createCaption()
+        currentCaption.setAttribute("aria-label", `id-table-${i}-caption`)
+        currentCaption.innerText = `${iReduced["word_prefix"]}: ${iReduced["count"]} repetitions`
+
+        let currentTHead = document.createElement("thead")
+        let currentTHeadRow = currentTHead.insertRow()
+        currentTHeadRow.insertCell().textContent = 'word'
+        currentTHeadRow.insertCell().textContent = 'row nth'
+        currentTHeadRow.insertCell().textContent = 'offsets'
+
+        let currentTBody = document.createElement("tbody")
+        let offsetsArray = iReduced.offsets_array
+        for (let ii = 0; ii < offsetsArray.length; ii++) {
+            insertCellIntoTRow(currentTBody, i, ii, offsetsArray[ii])
+        }
+        currentTableWordsFreq.appendChild(currentTHead)
+        currentTableWordsFreq.appendChild(currentTBody)
+        currentTableOfWords.appendChild(currentTableWordsFreq)
+    }
+
+    function insertListOfWords(i, iReduced, wordListElement, currentTableOfWords) {
+        const li = document.createElement("li");
+        const a = document.createElement("a")
+        a.innerText = `${iReduced["word_prefix"]}: ${iReduced["count"]} repetitions`
+        a.addEventListener("click",  function() {
+            currentTableOfWords.innerHTML = ""
+            console.log(`insertListOfWords::'a', ${iReduced["word_prefix"]}: ${iReduced["count"]} repetitions`)
+            insertCurrentTable(i, iReduced, currentTableOfWords)
+            setElementCssClassByOldClass(underlinedClicked, underlinedPrimary)
+            a.className = underlinedClicked
+        });
+        a.className = underlinedPrimary
+        li.appendChild(a);
+        wordListElement.appendChild(li);
+	}
+
+    function insertCellIntoTRow(currentTBody, i, ii, nthOffset) {
+		let nthRowBody = currentTBody.insertRow()
+		nthRowBody.setAttribute("id", `id-table-${i}-row-${ii}-nth`)
+		nthRowBody.setAttribute("aria-label", `id-table-${i}-row-${ii}-nth`)
+		let currentCell = nthRowBody.insertCell()
+		let currentUrl = document.createElement("a")
+		currentUrl.addEventListener("click", function() {
+			let nRow = nthOffset["n_row"]
+            let nRowChild = nthOffset["n_row_child"]
+            let nRowParent = nthOffset["n_row_parent"]
+			let offsetWord = nthOffset["offsets"]
+            setCaret(nRow, offsetWord, nRowChild, nRowParent)
+            setElementCssClassByOldClass(underlinedClickedTable, underlinedPrimaryTable)
+            currentUrl.className = underlinedClickedTable
+		})
+		currentUrl.className = underlinedPrimary
+		currentUrl.innerText = nthOffset["word"]
+		currentCell.appendChild(currentUrl)
+		nthRowBody.insertCell().textContent = nthOffset["n_row"]
+		nthRowBody.insertCell().textContent = nthOffset["offsets"]
+	}
+
+    function getValidChildNodesFromEditorById(idElement) {
+        const editorElement = document.getElementById(idElement);
+        let validChildContent = [];
+        const validNodeNames = Object.keys(objectChildNodeNamesToParse);
+
+        function hasValidChild(node) {
+            for (let i = 0; i < node.childNodes.length; i++) {
+                const child = node.childNodes[i];
+                if (validNodeNames.includes(child.nodeName)) {
+                    const prop = objectChildNodeNamesToParse[child.nodeName];
+                    if (child[prop] && child[prop].trim() !== "") {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function processNode(node, topIdx, childIdx = null, parentId = null) {
+            // For nodes that are not SPAN, push their text if valid.
+            if (node.nodeName !== "SPAN" && validNodeNames.includes(node.nodeName)) {
+                const textField = objectChildNodeNamesToParse[node.nodeName];
+                const textContent = node[textField];
+                if (textContent && textContent.trim() !== "") {
+                    validChildContent.push({
+                        idxRow: topIdx,
+                        text: textContent,
+                        idxRowChild: childIdx,
+                        idxRowParent: parentId
+                    });
+                }
+            }
+            if (node.nodeName === "SPAN") {
+                if (!hasValidChild(node)) {
+                    const textField = objectChildNodeNamesToParse[node.nodeName];
+                    const textContent = node[textField];
+                    if (textContent && textContent.trim() !== "") {
+                        validChildContent.push({
+                            idxRow: topIdx,
+                            text: textContent,
+                            idxRowChild: childIdx,
+                            idxRowParent: parentId
+                        });
+                    }
+                }
+            }
+            if (node.childNodes && node.childNodes.length > 0) {
+                let newParentId = parentId;
+                if (node.nodeName === "SPAN") {
+                    newParentId = topIdx;  // for nested nodes, use parent's top-level index.
+                }
+                for (let i = 0; i < node.childNodes.length; i++) {
+                    processNode(node.childNodes[i], topIdx, i, newParentId);
+                }
+            }
+        }
+        // Process each top-level child node of the editor.
+        for (let i = 0; i < editorElement.childNodes.length; i++) {
+            processNode(editorElement.childNodes[i], i);
+        }
+        return { validChildContent, editorElement };
+    }
+
+    /** specific for lite.koboldai.net */
+    function toggleWordsFreqNav(idElement) {
+        let x = document.getElementById(idElement);
+        if (x.classList.contains("collapse")) {
+            x.classList.remove("collapse");
+        } else {
+            x.classList.add("collapse");
+        }
+    }
+
+    function closeWordsFreqTopNav(idElement) {
+        let x = document.getElementById(idElement);
+        x.classList.add("collapse");
+    }
+
+    function toggleOrCloseByBoolAndId(idElement, boolFlag) {
+        switch (boolFlag) {
+            case boolFlag === true:
+                toggleWordsFreqNav(idElement)
+                break;
+            case boolFlag === false:
+                closeWordsFreqTopNav(idElement)
+                break;
+            default:
+                console.error("toggleOrCloseByBoolAndId::something is wrong: idElement => ", idElement, "#")
+                console.error("toggleOrCloseByBoolAndId::something is wrong: boolFlag => ", boolFlag, "#")
+        }
+    }
+
+    async function updateWordsFreqIfPressEnter() {
+        if (event.key === 'Enter') {
+            closeWordsFreqTopNav('wordsFreqNavbarNavDropdown')
+            const webserverIsCheckedEl = document.getElementById("id-input-webserver-wordfreq-checkbox")
+            const webserverIsChecked = webserverIsCheckedEl.checked
+            if (!webserverIsChecked) {
+                await getWordsFrequency()
+            } else {
+                // in case id-input-webserver-wordfreq-checkbox is checked, this will only fire updateWordsFrequencyTables()
+                // use instead btn4-get-words-frequency-get to fire getWordsFrequency()
+                updateWordsFrequencyTables()
+            }
+        }
+    }
+	/** end script section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer */
 	</script>
 
+	<style>
+	/** start style section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer */
+	#id-col1-editor > h4,#id-col2-words-frequency > div > div > h4 {
+		font-size: 18px;
+		margin-block-start: 2px;
+		margin-block-end: 2px;
+	}
+	#words-frequency > table > caption {
+		margin-left: 12px;
+		margin-top: 10px;
+		text-align: left;
+		font-weight: bold;
+	}
+	#words-frequency > table > thead > tr > td, #words-frequency > table > tbody > tr > td {
+		padding-left: 10px;
+		padding-right: 10px;
+	}
+    #filter-words-frequency {
+        height: 30px;
+        width: 100%;
+    }
+	.display-block {
+		display: block;
+	}
+	.underlinedYellow, .underlinedYellowTable {
+		color: yellow;
+		text-decoration: underline;
+		text-decoration-color: yellow;
+	}
+	.underlinedViolet, .underlinedVioletTable {
+		color: violet;
+		text-decoration: underline;
+		text-decoration-color: violet;
+	}
+    .display-flex {
+        display: flex;
+    }
+    .display-grid {
+        display: grid;
+    }
+    .grid-template-5x1 {
+        grid-template-columns: 5fr 1fr;
+    }
+    .grid-template-1x2 {
+        grid-template-columns: 1fr 1fr;
+    }
+	.col-flex50 {
+		flex: 50%;
+	}
+	.border-black {
+		border: 1px solid black;
+	}
+	.border-gray-litekoboldai {
+		border: 1px solid #646464;
+	}
+    #wordsFreqNavbarNavDropdown {
+        padding-left: 0;
+        padding-right: 0;
+    }
+	.padding10px {
+		padding: 10px;
+	}
+	.margin10px {
+		margin: 10px;
+	}
+	.margin5px-top {
+		margin-top: 5px;
+	}
+	.margin2px-bottom {
+		margin-bottom: 2px;
+	}
+	.max-height-80perc {
+		max-height: 80%;
+	}
+	.overflow-hidden {
+		/* needed for scroll bar*/
+		overflow: hidden;
+	}
+	.overflow-auto {
+		/* needed for scroll bar*/
+		overflow: auto;
+	}
+    .width-100perc {
+        width: 100%;
+	}
+	.background-color-verydarkgrey {
+		background-color: #404040;
+	}
+	.font-size-12px {
+		font-size: small;
+	}
+    .color-white {
+        color: white;
+    }
+    .navtoggler-words-freq {
+        background-color: #337ab7;
+        border: 1px solid #bababa;
+        height: 45px;
+        width: 60px;
+        border-radius: 6px;
+    }
+    #words-frequency {
+        max-height: calc(84vh - 250px);
+    }
+    @media screen and (max-width: 1023px) {
+        #words-frequency {
+            max-height: calc(80vh - 250px);
+        }
+    }
+    @media only screen and (width:768px) {
+        #words-frequency {
+            max-height: calc(76vh - 160px);
+        }
+        #btn4-get-words-frequency {
+            font-size: 12px;
+        }
+        #btn-filter-words-frequency {
+            font-size: 12px;
+        }
+        #wordsFreqNavbarNavDropdown ul, #wordsFreqNavbarNavDropdown ul li div {
+            display: block;
+        }
+        #wordsFreqNavbarNavDropdown ul li {
+            margin-left: 12px;
+            margin-right: 12px;
+        }
+        #id-col1-editor > h4,#id-col2-words-frequency > div > div > h4 {
+            font-size: 14px;
+        }
+    }
+	/* end style section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer */
+	</style>
 </head>
 
 <body id="outerbody" class="darkmode" onkeydown="handle_escape_button(event)" onbeforeunload="return handle_quit()">
@@ -21929,6 +22552,70 @@ Current version indicated by LITEVER below.
 					<p id="tempgtloadtxt">Loading...</p>
 					<noscript><style>#tempgtloadtxt { display: none; } #gametext { white-space: normal!important; }</style><p>Sorry, KoboldAI Lite requires Javascript to function.</p></noscript>
 				</span>
+
+				<!-- start HTML section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer -->
+                <div id="id-col2-words-frequency" class="col-flex50 border-gray-litekoboldai padding10px margin10px overflow-hidden font-size-12px collapse">
+
+                    <div id="words-freq-menu" class="topmenu">
+                        <div style="width: 100%;">
+                            <div class="display-grid grid-template-5x1">
+                                <h4 id="id-words-frequency-table-title" aria-label="id-words-frequency-table-title" class="">Words Frequency Stats</h4>
+                                <button id="id-words-frequency-btn-navbar" title="Words freq Menu Options" class="navtoggler-words-freq" type="button" onclick="toggleWordsFreqNav('wordsFreqNavbarNavDropdown')" tabindex="0">
+                                    Menù
+                                </button>
+                            </div>
+                            <div class="collapse" id="wordsFreqNavbarNavDropdown">
+                                <input type="text" id="filter-words-frequency" aria-label="filter-words-frequency" placeholder="Filter/update the output..." class="background-color-verydarkgrey" onkeypress="updateWordsFreqIfPressEnter()"/>
+                                <ul class="nav navbar-nav display-grid margin5px-top">
+
+                                    <li class="nav-item" id="words_freq_topbtn_1">
+                                        <button type="button" class="btn btn-primary mainnav collapse" id="btn4-get-words-frequency-get" aria-label="btn4-get-words-frequency-get" onclick="closeWordsFreqTopNav('wordsFreqNavbarNavDropdown');getWordsFrequency()">Words Freq</button>
+                                    </li>
+
+                                    <li class="nav-item display-block" id="words_freq_topbtn_3">
+                                        <div class="grid-template-1x2 margin2px-bottom">
+                                            <form id="id-form-sort-by" aria-label="id-form-sort-by">
+                                                <fieldset>
+                                                    <legend>Sort:</legend>
+                                                    <div>
+                                                        <input type="radio" id="sort-by-count" aria-label="sort-by-count" name="sort" value="count"/>
+                                                        <label for="sort-by-count" id="sort-by-count-label" aria-label="sort-by-count-label">Count</label>
+                                                        <input type="radio" id="sort-by-name" aria-label="sort-by-name" name="sort" value="word_prefix" />
+                                                        <label for="sort-by-name" id="sort-by-name-label" aria-label="sort-by-name-label">Name</label>
+                                                    </div>
+                                                </fieldset>
+                                            </form>
+                                            <form id="id-form-order-by" aria-label="id-form-order-by">
+                                                <fieldset>
+                                                    <legend>Order:</legend>
+                                                    <div>
+                                                        <input type="radio" id="order-by-asc" aria-label="order-by-asc" name="order" value="asc" />
+                                                        <label for="order-by-asc" id="order-by-asc-label" aria-label="order-by-asc-label">Ascend</label>
+                                                        <input type="radio" id="order-by-desc" aria-label="order-by-desc" name="order" value="desc" checked/>
+                                                        <label for="order-by-desc" id="order-by-desc-label" aria-label="order-by-desc-label">Descend</label>
+                                                    </div>
+                                                </fieldset>
+                                            </form>
+                                        </div>
+                                    </li>
+                                </ul>
+                            </div>
+
+                        </div>
+                    </div>
+
+					<span id="id-n-total-rows" aria-label="id-n-total-rows" class="collapse"></span>
+					<span id="waiting-for-be" class="collapse">waiting for backend response...</span>
+					<span id="waiting-for-be-error" class="collapse">Error! You probably have outdated results, since you are using the custom webserver.</span>
+					<span id="waiting-for-be-error-embedded" class="collapse">Error!</span>
+					<!-- max-height-80perc instead of max-height-80vh -->
+                    <div id="words-frequency" class="max-height-80perc overflow-hidden display-flex" aria-label="words-frequency">
+                        <div id="id-list-of-words" class="overflow-auto" aria-label="id-list-of-words"></div>
+                        <div id="id-current-table-of-words" class="overflow-auto" aria-label="id-current-table-of-words"></div>
+                    </div>
+				</div>
+				<!-- end HTML section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer -->
+
 			</div>
 		</div>
 
@@ -23138,6 +23825,46 @@ Current version indicated by LITEVER below.
 						<input class="form-control menuinput_inline" type="text" placeholder="Enter CFG Prompt" value="" id="guidance_prompt">
 						<div style="padding:1px" class="settinglabel">Scale<br>(0-5): </div><input class="form-control menuinput_inline" style="margin-left:4px;width:70px;" inputmode="numeric" placeholder="(Off)" value="" id="guidance_scale"></div>
 					</div>
+
+                    <!-- start settings for My Ghost Writer -->
+                    <div style="padding:3px;" class="justifyleft settinglabel">Word Frequency Stats <span class="helpicon">?<span class="helptext">Configure 'My Ghost Writer' for extracting word frequency statistics.</span></span>
+                        <button type="button" title="Word Frequency Stats" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('expandwordsfreqstats')">Expand Section</button>
+                    </div>
+
+                    <div id="expandwordsfreqstats" class="hidden">
+
+                        <div class="settinglabel" id="id-settings-wordsfreq-enable">
+                            <div class="justifyleft settingsmall">Enable Word Frequency Stats <span class="helpicon">?<span
+                                    class="helptext">If enabled, it extracts word frequency stats.
+                            The output it's a list of word prefixes (<a href="https://en.wikipedia.org/wiki/Stemming">stems</a>)
+                            with associated words and their position within the editor, permitting to remove repetitions.</span></span>
+                            </div>
+                            <input
+                                    type="checkbox"
+                                    id="id-col2-words-frequency-enable"
+                                    aria-label="id-col2-words-frequency-enable"
+                                    name="id-col2-words-frequency-enable"
+                                    onchange="toggleOrCloseByBoolAndId('id-col2-words-frequency', this.checked);toggleOrCloseByBoolAndId('id-settings-wordsfreq-custom-webserver', this.checked);"
+                            />
+                        </div>
+
+                        <div id="id-settings-wordsfreq-custom-webserver" class="collapse">
+                            <div class="justifyleft settingsmall color-white">Enable a <a href="https://github.com/trincadev/my_ghost_writer/">My Ghost Writer</a>
+                                    webserver to get words stats (now using <span id="id-wordfreq-show-analyzer" aria-label="id-wordfreq-show-analyzer">embedded</span> functionality) <span class="helpicon">?<span
+                                    class="helptext">If you have a custom web server, you can specify the URL here. Otherwise, leave it disabled to use the embedded functionality.</span></span>
+                                <input
+                                        type="checkbox"
+                                        id="id-input-webserver-wordfreq-checkbox"
+                                        aria-label="id-input-webserver-wordfreq-checkbox"
+                                        name="id-input-webserver-wordfreq-checkbox"
+                                        onchange="toggleOrCloseByBoolAndId('id-input-webserver-wordfreq', this.checked);toggleOrCloseByBoolAndId('btn4-get-words-frequency-get', this.checked);document.getElementById('id-wordfreq-show-analyzer').innerText=this.checked?'webserver':'embedded';"
+                                />
+                            </div>
+                            <input type="URL" id="id-input-webserver-wordfreq" aria-label="id-input-webserver-wordfreq" value="http://localhost:7860" class="width-100perc collapse"/>
+                        </div>
+                    </div>
+                    <!-- end settings for My Ghost Writer -->
+
 					</div>
 				</div>
 
