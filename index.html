@@ -21819,8 +21819,9 @@ Current version indicated by LITEVER below.
     const wordsFrequencyTableTitleMobileText = "Text stats"
 	let wfo = {
 		"words_frequency": {},
-    "nTotalRows": null,
-    "rowArray": []
+        "nTotalRows": null,
+        "rowArray": [],
+        "currentCSSClassScrollable": "scrollable-table-container"
 	}
 	const editorFieldLabel = "gametext"
 	const remoteWebServer = "http://localhost:7860"
@@ -22050,8 +22051,8 @@ Current version indicated by LITEVER below.
         wordsFrequencyTableTitleElMobile.innerText = wordsFrequencyTableTitleMobileText
         let listOfWords = document.getElementById("id-list-of-words")
         listOfWords.innerHTML = ""
-        let currentTableOfWords = document.getElementById("id-current-table-of-words")
-        currentTableOfWords.innerHTML = ""
+        let currentTableOfWordsScrollable = document.getElementById("id-current-table-of-words-scrollable")
+        currentTableOfWordsScrollable.innerHTML = ""
         let currentTableTitle = document.getElementById("id-current-table-of-words-title")
         currentTableTitle.innerText = ""
         const choiceWordFreqAnalyzerEl = document.getElementById('id-input-webserver-wordfreq-checkbox')
@@ -22131,8 +22132,8 @@ Current version indicated by LITEVER below.
             filterValue.innerText = `'${inputFilterValue}', ${reduced.length} occ.`
 		}
 
-        let currentTableOfWords = document.getElementById("id-current-table-of-words")
-        currentTableOfWords.innerHTML = ""
+        let currentTableOfWordsScrollable = document.getElementById("id-current-table-of-words-scrollable")
+        currentTableOfWordsScrollable.innerHTML = ""
         let currentTableTitle = document.getElementById("id-current-table-of-words-title")
         currentTableTitle.innerText = ""
 		let wordsFrequencyTableTitleEl = document.getElementById("id-words-frequency-table-title")
@@ -22142,7 +22143,7 @@ Current version indicated by LITEVER below.
 
         const wordListElement = document.createElement("list")
 		for (let i=0; i<reduced.length; i++ ) {
-            insertListOfWords(i, reduced[i], wordListElement, currentTableOfWords);
+            insertListOfWords(i, reduced[i], wordListElement, currentTableOfWordsScrollable);
         }
         listOfWords.append(wordListElement)
 	}
@@ -22176,7 +22177,8 @@ Current version indicated by LITEVER below.
         currentTableWordsFreq.appendChild(currentTBody)
         // Wrap the table in a scrollable container
         let scrollableDiv = document.createElement("div")
-        scrollableDiv.className = "scrollable-table-container"
+        scrollableDiv.className = wfo["currentCSSClassScrollable"]
+        scrollableDiv.setAttribute("id", "id-current-table-of-words-scrollable")
         scrollableDiv.appendChild(currentTableWordsFreq)
         currentTableOfWords.appendChild(scrollableDiv)
     }
@@ -22381,9 +22383,42 @@ Current version indicated by LITEVER below.
         }
     }
 
-    function toggleMobileMenu() {
+    function toggleElementWithClassMissingById(idElement, className="collapse") {
+        let elementWithClassToChange = document.getElementById(idElement)
+        if (!elementWithClassToChange.classList.contains(className)) {
+            elementWithClassToChange.classList.add(className);
+        } else {
+            elementWithClassToChange.classList.remove(className);
+        }
+    }
+
+    function toggleMobileMenu(firedByMenuAction=true) {
         addClassById("id-words-frequency-table-title-mobile-no-info", "collapse")
-        toggleElementWithClassById('id-container-filter-sort-order')
+        if (firedByMenuAction) {
+            toggleElementWithClassById('id-container-filter-sort-order')
+        }
+        const menuMobile = document.getElementById('id-container-filter-sort-order')
+        const listParent = document.getElementById("id-list-of-words")
+        let listChild = listParent.querySelector("list")
+        let listChildExists = listChild !== null
+        try {
+            let listChildElementCountExists = listChild.childElementCount !== null
+            let listChildNotEmpty = listChildExists && listChildElementCountExists && listChild.childElementCount > 0
+            const menuClosed = menuMobile.classList.contains("collapse")
+            if (listChildNotEmpty && menuClosed) {
+                wfo["currentCSSClassScrollable"] = "scrollable-table-container"
+                addClassById('id-list-of-words', "scrollable-table-container")
+                removeClassById('id-list-of-words', "calc100vh_less_520px")
+                addClassById('id-current-table-of-words-scrollable', "scrollable-table-container")
+                removeClassById('id-current-table-of-words-scrollable', "calc100vh_less_520px")
+            } else if (listChildNotEmpty && !menuClosed) {
+                wfo["currentCSSClassScrollable"] = "calc100vh_less_520px"
+                removeClassById('id-list-of-words', "scrollable-table-container")
+                addClassById('id-list-of-words', "calc100vh_less_520px")
+                removeClassById('id-current-table-of-words-scrollable', "scrollable-table-container")
+                addClassById('id-current-table-of-words-scrollable', "calc100vh_less_520px")
+            }
+        } catch {}
     }
 
     function addClassById(idElement, className) {
@@ -22424,6 +22459,7 @@ Current version indicated by LITEVER below.
             if (isMobile() || isMobilePortrait()) {
                 addClassById("id-words-frequency-table-title-mobile-no-info", "collapse")
                 addClassById('id-container-filter-sort-order', "collapse")
+                toggleMobileMenu(false)
                 backToListFromCurrentTable()
             }
         }
@@ -22611,7 +22647,7 @@ Current version indicated by LITEVER below.
         margin-top: -2px;
         margin-right: -2px;
         position: relative;
-        z-index: 1000;
+        z-index: 2;
     }
 	.navtoggler-words-freq:hover {
 		background-color: #4db4ea;
@@ -22631,8 +22667,9 @@ Current version indicated by LITEVER below.
     }
 
     /* Classic UI Main Text, lite.koboldai.net */
-    .calc100vh_less_200px {
-        height: calc(100vh - 200px);
+    .calc100vh_less_520px {
+        height: calc(100vh - 520px);
+        max-height: calc(100vh - 520px);
     }
 
     @media (max-height: 1024px),(max-width: 1024px) {
@@ -22912,7 +22949,9 @@ Current version indicated by LITEVER below.
                                 <span id="id-current-table-of-words-btn-back" onclick="backToListFromCurrentTable()" class="collapse">↩️</span>
                                 <span id="id-current-table-of-words-title"></span>
                             </div>
-                            <div id="id-current-table-of-words" class="overflow-auto" aria-label="id-current-table-of-words"></div>
+                            <div id="id-current-table-of-words" class="overflow-auto" aria-label="id-current-table-of-words">
+                                <div id="id-current-table-of-words-scrollable" class="scrollable-table-container"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
