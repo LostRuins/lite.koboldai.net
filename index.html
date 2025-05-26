@@ -5479,9 +5479,16 @@ Current version indicated by LITEVER below.
 				}
 				else if (dch.message) {
 					synchro_polled_response = dch.message.content;
-					if(dch.message.content==null && dch.message.reasoning_content!=null && dch.message.reasoning_content!="") //vllm compat
+					if(dch.message.reasoning_content!=null && dch.message.reasoning_content!="") //vllm compat
 					{
-						synchro_polled_response = dch.message.reasoning_content;
+						if(dch.message.content==null)
+						{
+							synchro_polled_response = dch.message.reasoning_content;
+						}
+						else
+						{
+							synchro_polled_response = `<think>${dch.message.reasoning_content}</think>${dch.message.content}`;
+						}
 					}
 
 					if(oaiemulatecompletionscontent!="" && synchro_polled_response!="" && synchro_polled_response.startsWith(oaiemulatecompletionscontent))
@@ -6991,13 +6998,14 @@ Current version indicated by LITEVER below.
 	{
 		document.getElementById('loadfileinput').click();
 	}
+
 	var tempfileurl = null;
-	var tempfileobj = generate_base_storyobj();
+	var tempfileobj = null;
 	var newfilename = "";
 	function savenowfn()
 	{
 		var a = document.getElementById("tempfile");
-		var file = new Blob([JSON.stringify(tempfileobj)], { type: 'application/json' });
+		var file = new Blob([tempfileobj], { type: 'application/json' });
 		console.log("Normal save handling")
 		if (tempfileurl) {
 			window.URL.revokeObjectURL(tempfileurl);
@@ -7008,43 +7016,79 @@ Current version indicated by LITEVER below.
 		a.download = newfilename;
 		setTimeout(function(){a.click()},20);
 	}
+	function promptUserForLocalFile(fileCallback, allowedTypes = "")
+	{
+		//allowedTypes should be a string, because then you can accept MIME types like audio/*
+		let picker = document.getElementById('tempfilepicker');
+		picker.accept = allowedTypes;
+		picker.onchange = function (event) {
+			let input = event.target;
+			if (input.files.length > 0) {
+				let file = input.files[0];
+				let fileNameWithExt = file.name;
+				let extPos = fileNameWithExt.lastIndexOf(".");
+				let fileName = fileNameWithExt.substring(0, extPos);
+				let ext = fileNameWithExt.substring(extPos);
 
-	function save_file_button(use_existing_save=false) //for triggering an optional popup. if use save is true, assume temp obj is set
+				let readerText = new FileReader();
+				let readerDataURL = new FileReader();
+				readerText.onload = function () {
+					let plaintext = readerText.result; //basic plaintext
+					readerDataURL.onload = function() {
+						let content = readerDataURL.result; //raw data
+						fileCallback({ file, fileName, ext, content, plaintext });
+					};
+					readerDataURL.readAsDataURL(file);
+				};
+				readerText.readAsText(file); //first, attempt read as text, then read as data
+			}
+			picker.value = "";
+		}
+		picker.click();
+	}
+	function saveFileGeneric(fileName, fileContent, mimeType)
+	{
+		window.URL = window.URL || window.webkitURL;
+		var userAgent = window.navigator.userAgent;
+		tempfileobj = fileContent;
+		newfilename = fileName;
+
+		if (userAgent.match(/AppleWebKit/) && (userAgent.match(/iPad/i) || userAgent.match(/iPhone/i))) {
+			let ststr = fileContent;
+			var file = new Blob([ststr], { type: 'application/octet-stream' });
+			var file2 = new Blob([ststr], { type: mimeType });
+			console.log("Special save handling for iphones");
+			// iPad or iPhone needs an extra download
+			var reader = new FileReader();
+			var reader2 = new FileReader();
+			let datblob = window.URL.createObjectURL(file2);
+			reader.onload = function (e) {
+				reader2.readAsDataURL(file2);
+				reader2.onload = function (e) {
+					msgbox(`<button type="button" class="btn btn-primary" id="ios_save" onclick="savenowfn()">Click to Save</button>
+					<br><h5>Apple devices are known to have issues saving. If the above button does not work, try opening or right-click / long press one of the below links, and select (Save As)</h5>
+					<h4><li><a href="${reader.result}" class="color_blueurl" target="_blank" download="${fileName}">Raw File Data</a></li>
+					<li><a href="${reader2.result}" class="color_blueurl" target="_blank" download="${fileName}">JSON File Data</a></li>
+					<li><a href="${datblob}" class="color_blueurl" download="${fileName}">JSON URL Blob</a></li></h4>`, "Save File", true);
+				}
+			}
+			reader.readAsDataURL(file);
+		}
+		else
+		{
+			savenowfn();
+		}
+	}
+	function save_file_button(save_file_obj=null) //if null, generate new savefile, otherwise use provided
 	{
 		warn_unsaved = false;
 		const save_file = function()
 		{
-			if(!use_existing_save)
+			if(!save_file_obj)
 			{
-				tempfileobj = generate_savefile(localsettings.save_images, localsettings.export_settings, localsettings.export_settings);
+				save_file_obj = generate_savefile(localsettings.save_images, localsettings.export_settings, localsettings.export_settings);
 			}
-			newfilename = last_known_filename;
-
-			window.URL = window.URL || window.webkitURL;
-			var userAgent = window.navigator.userAgent;
-
-			if (userAgent.match(/AppleWebKit/) && (userAgent.match(/iPad/i) || userAgent.match(/iPhone/i))) {
-				let ststr = JSON.stringify(tempfileobj);
-				var file = new Blob([ststr], { type: 'application/octet-stream' });
-				var file2 = new Blob([ststr], { type: 'application/json' });
-				console.log("Special save handling for iphones")
-				// iPad or iPhone needs an extra download
-				var reader = new FileReader();
-				var reader2 = new FileReader();
-				let datblob = window.URL.createObjectURL(file2);
-				reader.onload = function (e) {
-					reader2.readAsDataURL(file2);
-					reader2.onload = function (e) {
-						msgbox(`<button type="button" class="btn btn-primary" id="ios_save" onclick="savenowfn()">Click to Save</button>
-						<br><h5>Apple devices are known to have issues saving. If the above button does not work, try opening or right-click / long press one of the below links, and select (Save As)</h5><h4><li><a href=` + reader.result + ` class='color_blueurl' target='_blank' download="`+newfilename+`">Raw File Data</a></li><li><a href=` + reader2.result + ` class='color_blueurl' target='_blank' download="`+newfilename+`">JSON File Data</a></li><li><a href=` + datblob + ` class='color_blueurl' download="`+newfilename+`">JSON URL Blob</a></li></h4>`, "Save Story", true)
-					}
-				}
-				reader.readAsDataURL(file);
-			}
-			else
-			{
-				savenowfn();
-			}
+			saveFileGeneric(last_known_filename, JSON.stringify(save_file_obj), "application/json");
 		}
 
 		if(localsettings.prompt_for_savename)
@@ -7783,7 +7827,7 @@ Current version indicated by LITEVER below.
 	}
 
 	function importLorebookAsTextDB(lorebook) {
-		if (!!lorebook?.name && !!lorebook?.entries) 
+		if (!!lorebook?.name && !!lorebook?.entries)
 		{
 			let outputText = Object.values(lorebook.entries)
 				.map(loreEntry => {
@@ -7793,7 +7837,7 @@ Current version indicated by LITEVER below.
 					if (comment !== name) {
 						description += `\n(Description: ${comment})`
 					}
-					if (keys.length > 0) 
+					if (keys.length > 0)
 					{
 						description += `\n(Alternative names: ${keys.join(",")})`
 					}
@@ -7807,7 +7851,7 @@ Current version indicated by LITEVER below.
 			}
 			return false
 		}
-		else 
+		else
 		{
 			return false
 		}
@@ -7888,7 +7932,7 @@ Current version indicated by LITEVER below.
 					let importSuccessful = importLorebookAsTextDB(obj)
 					if (importSuccessful)
 					{
-						msgbox(`Lorebook "${lorebook?.name}" loaded into TextDB`) 
+						msgbox(`Lorebook "${lorebook?.name}" loaded into TextDB`)
 					}
 					else
 					{
@@ -11242,12 +11286,11 @@ Current version indicated by LITEVER below.
 	{
 		let ondl = function (loadedstorycompressed) {
 			if (loadedstorycompressed) {
-				tempfileobj = decompress_story(loadedstorycompressed);
-				if (tempfileobj) {
-					save_file_button(true);
+				let storyobj = decompress_story(loadedstorycompressed);
+				if (storyobj) {
+					save_file_button(storyobj);
 				}
 				else {
-					tempfileobj = generate_base_storyobj();
 					msgbox("Story could not be downloaded. Try loading it first.", "Download Failed");
 				}
 			} else {
@@ -22284,7 +22327,7 @@ Current version indicated by LITEVER below.
 					<div class="justifyleft settingsmall" title="Enable TextDB">Enable TextDB </div>
 					<input title="Enable TextDB" type="checkbox" id="documentdb_enabled" style="margin:0px 0 0;">
 				</div>
-								
+
 				<div class="settinglabel" style="padding: 4px;">
 					<div class="justifyleft settingsmall" title="Use Embeddings for Searching">Use Embeddings for Searching <span class="helpicon">?
 						<span class="helptext">If enabled, the text DB is converted to vectors using the KoboldCPP embedding endpoint. If not, it uses the traditional TextDB keyword based search. Generally, embeddings are slower to generate initially (so when making changes to DB the next response might be very slow) - but may understand the context of the sentence better while also potentially supporting multiple languages.</span></span></div>
@@ -22351,7 +22394,7 @@ Current version indicated by LITEVER below.
 						<div class="justifyright">3000</div>
 					</div>
 				</div>
-				
+
 				<div class="settinglabel settingsmall" style="padding: 4px;" id="documentdb_snippetestimate"></div>
 				<div class="settinglabel settingsmall" style="padding: 4px;">Please note, as with world info this can cause context reprocessing.  It is recommended to have at least 8K context size and a good prompt processing speed to use this feature.</div>
 				<div class="settinglabel">
@@ -24531,7 +24574,7 @@ Current version indicated by LITEVER below.
 			</div>
 		</div>
 	</div>
-
+	<input type="file" id="tempfilepicker" style="display:none;" accept="*">
 
 </body>
 
@@ -24564,51 +24607,7 @@ else
 	console.log("service workers API not available");
 }
 </script>
-<script>
-	let promptUserForLocalFile = (fileCallback, allowedExtensions=[]) => {
-		let input = document.createElement('input');
-		input.type = 'file';
-		if (allowedExtensions.length > 0)
-		{
-			input.accept=allowedExtensions.join(",")
-		}
 
-		input.onchange = e => {
-			try {
-				if (!e?.target?.files || e.target.files.length !== 1) {
-					throw new Error("Please select one file")
-				}
-				/**
-				 * @type File
-				 */
-				let file = e.target.files[0];
-
-				fileNameWithExt = file.name;
-				extPos = fileNameWithExt.lastIndexOf(".");
-				fileName = fileNameWithExt.substring(0, extPos);
-				ext = fileNameWithExt.substring(extPos);
-
-				let reader = new FileReader();
-				reader.readAsDataURL(file)
-
-				reader.onload = async readerEvent => {
-					let content = readerEvent.target.result;
-					fileCallback({
-						file, fileName, ext, content
-					})
-				}
-			}
-			catch (e) {
-				handleError(e)
-			}
-			finally {
-				delete input;
-			}
-		}
-
-		input.click();
-	}
-</script>
 <script>
 	/**
 	 * Source: https://github.com/jakearchibald/idb
@@ -24976,7 +24975,7 @@ else
 				}
 			}
 			promptUserForLocalFile(async (fileDetails) => {
-				let { file, fileName, ext, content } = fileDetails
+				let { file, fileName, ext, content, plaintext } = fileDetails
 				let extractedText = undefined
 
 				if (content.startsWith("data:application/json") && tryImportLorebookAsTextDB(content)) {
@@ -25004,43 +25003,6 @@ else
 <script>
 	// Mod to allow WI to be exported / imported from JSON files
 
-	let saveFileGeneric = (fileName, fileContent, mimeType) => {
-		window.URL = window.URL || window.webkitURL;
-		var userAgent = window.navigator.userAgent;
-
-		if (userAgent.match(/AppleWebKit/) && (userAgent.match(/iPad/i) || userAgent.match(/iPhone/i))) {
-			let ststr = fileContent;
-			var file = new Blob([ststr], { type: 'application/octet-stream' });
-			var file2 = new Blob([ststr], { type: mimeType });
-			console.log("Special save handling for iphones")
-			// iPad or iPhone needs an extra download
-			var reader = new FileReader();
-			var reader2 = new FileReader();
-			let datblob = window.URL.createObjectURL(file2);
-			reader.onload = function (e) {
-				reader2.readAsDataURL(file2);
-				reader2.onload = function (e) {
-					msgbox(`<button type="button" class="btn btn-primary" id="ios_save" onclick="savenowfn()">Click to Save</button>
-	<br><h5>Apple devices are known to have issues saving. If the above button does not work, try opening or right-click / long press one of the below links, and select (Save As)</h5><h4><li><a href=` + reader.result + ` class='color_blueurl' target='_blank' download="` + fileName + `">Raw File Data</a></li><li><a href=` + reader2.result + ` class='color_blueurl' target='_blank' download="` + fileName + `">File Data</a></li><li><a href=` + datblob + ` class='color_blueurl' download="` + fileName + `">URL Blob</a></li></h4>`, "Save Story", true)
-				}
-			}
-			reader.readAsDataURL(file);
-		}
-		else {
-			var a = document.getElementById("tempfile");
-			var file = new Blob([fileContent], { type: mimeType });
-			console.log("Normal save handling")
-			if (tempfileurl) {
-				window.URL.revokeObjectURL(tempfileurl);
-			}
-			tempfileurl = window.URL.createObjectURL(file);
-			a.href = tempfileurl;
-			a.target = '_blank';
-			a.download = fileName;
-			setTimeout(function () { a.click() }, 20);
-		}
-	}
-
 	window.addEventListener('load', () => {
 		let createWIButton = (id, text, onClickEvent) => {
 			let button = document.createElement("button")
@@ -25061,7 +25023,7 @@ else
 
 		wiButtonHolder.appendChild(createWIButton("importWIFromFile", "[Import WI group from file]", () => {
 			promptUserForLocalFile((fileDetails) => {
-				let { file, fileName, ext, content } = fileDetails
+				let { file, fileName, ext, content, plaintext } = fileDetails
 				try {
 					let wiToAdd = JSON.parse(atob(content.split(",")[1]))
 					let wiGroup = fileName.replace("wi_", "")
