@@ -20837,6 +20837,40 @@ Current version indicated by LITEVER below.
 		},true,true);
 	}
 
+	function export_wi_to_file()
+	{
+		save_wi();
+		update_wi();
+		let fdata = JSON.stringify(pending_wi_obj.filter(wi => {
+			var cg = wi.wigroup?wi.wigroup:"";
+			return (cg == curr_wi_tab);
+		}));
+		saveFileGeneric(`wi_${curr_wi_tab !== "" ? curr_wi_tab : "General"}`, fdata, 'application/json');
+	}
+	function import_wi_from_file()
+	{
+		promptUserForLocalFile((fileDetails) => {
+			try {
+				let { file, fileName, ext, content, plaintext } = fileDetails;
+				let wiToAdd = JSON.parse(plaintext);
+				if (wiToAdd && wiToAdd.length > 0)
+				{
+					for (let i = 0; i < wiToAdd.length; ++i)
+					{
+						let wi = wiToAdd[i];
+						var cg = curr_wi_tab ?curr_wi_tab : "";
+						wi.wigroup = cg;
+						pending_wi_obj.push(wi);
+					}
+				}
+				update_wi();
+			}
+			catch (e) {
+				console.log("WI File Import Failed: " + e);
+			}
+		});
+	}
+
 	var backLongPressTimer = null;
 	function btn_back_longpress_start()
 	{
@@ -22284,7 +22318,11 @@ Current version indicated by LITEVER below.
 				</div>
 
 				<div style="float:right;">
-					<div class="settinglabel"><button type="button" class="btn purplebtn widelbtn" style="padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;font-size:8px" id="wiexport" onclick="wi_group_export()">[Export / Import Group]</button></div>
+					<div class="settinglabel">
+						<button type="button" class="btn purplebtn widelbtn" style="padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;font-size:8px" id="wiexport" onclick="wi_group_export()">[Export / Import Group]</button>
+						<button type="button" class="btn purplebtn widelbtn" style="padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;font-size:8px" id="wiexport" onclick="export_wi_to_file()">[Export WI group to file]</button>
+						<button type="button" class="btn purplebtn widelbtn" style="padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;font-size:8px" id="wiexport" onclick="import_wi_from_file()">[Import WI group from file]</button>
+					</div>
 					<div style="float:right;">
 						<div class="settinglabel" style="padding: 4px;">
 							<div class="justifyleft settingsmall" title="Toggles all entries in entire group on/off">Toggle Group </div>
@@ -24999,44 +25037,5 @@ else
 		}
 	}
 	document.documentParser = new DocumentParser()
-</script>
-<script>
-	// Mod to allow WI to be exported / imported from JSON files
-
-	window.addEventListener('load', () => {
-		let createWIButton = (id, text, onClickEvent) => {
-			let button = document.createElement("button")
-			button.id = id
-			button.innerText = text
-			button.onclick = onClickEvent
-			button.classList.add("btn", "purplebtn", "widelbtn")
-			button.style = "padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;font-size:8px"
-			return button
-		}
-
-		let wiButtonHolder = document.getElementById("wiexport").parentElement
-		wiButtonHolder.appendChild(createWIButton("exportWIToFile", "[Export WI group to file]", () => {
-			save_wi()
-			update_wi()
-			saveFileGeneric(`wi_${curr_wi_tab !== "" ? curr_wi_tab : "General"}`, JSON.stringify(pending_wi_obj.filter(wi => wi.wigroup === curr_wi_tab)), 'application/json')
-		}))
-
-		wiButtonHolder.appendChild(createWIButton("importWIFromFile", "[Import WI group from file]", () => {
-			promptUserForLocalFile((fileDetails) => {
-				let { file, fileName, ext, content, plaintext } = fileDetails
-				try {
-					let wiToAdd = JSON.parse(atob(content.split(",")[1]))
-					let wiGroup = fileName.replace("wi_", "")
-					pending_wi_obj = pending_wi_obj.filter(wi => (wiGroup === "General" ? wi.wigroup !== "" : wi.wigroup !== wiGroup))
-					pending_wi_obj.push(...wiToAdd)
-					update_wi()
-					select_wi_group(wiGroup === "General" ? "" : wiGroup)
-				}
-				catch (e) {
-					handleError(e)
-				}
-			})
-		}))
-	})
 </script>
 </html>
