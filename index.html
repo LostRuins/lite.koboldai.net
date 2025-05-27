@@ -7256,8 +7256,9 @@ Current version indicated by LITEVER below.
 					}
 				} else {
 					//check for tavernai fields
+					let has_tav_wi_check = (new_loaded_storyobj && new_loaded_storyobj.entries && new_loaded_storyobj.entries["0"] && new_loaded_storyobj.entries["0"].hasOwnProperty("uid"));
 					if (!new_loaded_storyobj.scenarioVersion && (new_loaded_storyobj.name != null || new_loaded_storyobj.description != null ||
-						new_loaded_storyobj.personality != null || new_loaded_storyobj.spec=="chara_card_v2")) {
+						new_loaded_storyobj.personality != null || new_loaded_storyobj.spec=="chara_card_v2" || has_tav_wi_check)) {
 						load_tavern_obj(new_loaded_storyobj);
 					}
 					else if (new_loaded_storyobj.char_name != null || new_loaded_storyobj.char_persona != null) {
@@ -7806,56 +7807,75 @@ Current version indicated by LITEVER below.
 	}
 
 	function getInfoSnippet(snippet) {
-		return `\n[Info Snippet${!!snippet.document ? ` from document "${snippet.document}"` : ""}: ${snippet.snippet}]\n`;
-	}
-
-	function getDocumentFromTextDB(documentName) {
-		regex = `\(\\[DOCUMENT BREAK\\]\\[${documentName}\\]\)\(.*?\)\(\\[DOCUMENT BREAK\\]\)`
-		let match = documentdb_data.match(new RegExp(regex, "s"))
-		return !!match ? match[2].trim() : null
+		return `\n[Info Snippet${snippet.document ? ` from document "${snippet.document}"` : ""}: ${snippet.snippet}]\n`;
 	}
 
 	function replaceDocumentFromTextDB(documentName, documentContent) {
-		if (documentdb_data.indexOf(`[DOCUMENT BREAK][${documentName}]`) !== -1) {
-			regex = `\(\\[DOCUMENT BREAK\\]\\[${documentName}\\]\)\(.*?\)\(\\[DOCUMENT BREAK\\]\)`
-			documentdb_data = documentdb_data.replace(new RegExp(regex, "s"), `$1${documentContent.trim()}$3`)
+		//we want to edit the LIVE copy, not the cached var in memory.
+		let curr_doc_db = document.getElementById("documentdb_data").value;
+		if (curr_doc_db.indexOf(`[DOCUMENT BREAK][${documentName}]`) !== -1) {
+			const regex = new RegExp(`(\\[DOCUMENT BREAK\\]\\[${documentName}\\])(.*?)(\\[DOCUMENT BREAK\\]|$)`, "s");
+			curr_doc_db = curr_doc_db.replace(regex, `$1${documentContent.trim()}$3`);
+		} else {
+			curr_doc_db += `[DOCUMENT BREAK][${documentName}]${documentContent.trim()}`;
 		}
-		else {
-			documentdb_data += `[DOCUMENT BREAK][${documentName}]${documentContent.trim()}[DOCUMENT BREAK]`
-		}
-		document.getElementById("documentdb_data").value = documentdb_data;
+		document.getElementById("documentdb_data").value = curr_doc_db;
 	}
 
-	function importLorebookAsTextDB(lorebook) {
-		if (!!lorebook?.name && !!lorebook?.entries)
+	function importLorebookAsTextDB(lorebook)
+	{
+		let has_tav_wi_check = (lorebook && lorebook.entries && lorebook.entries["0"] && lorebook.entries["0"].hasOwnProperty("uid"));
+		if (lorebook && has_tav_wi_check)
 		{
-			let outputText = Object.values(lorebook.entries)
-				.map(loreEntry => {
-					let {name, comment, content} = loreEntry;
-					let keys = [...new Set([...loreEntry.key, ...loreEntry.keys, ...loreEntry.keysecondary])];
-					let description = `### Name: ${name}`
-					if (comment !== name) {
-						description += `\n(Description: ${comment})`
+			let lbname = lorebook.name?lorebook.name:"UntitledLorebook";
+			var outputText = [];
+			var entries = (typeof lorebook.entries === "object") ? Object.keys(lorebook.entries).map(function (key) { return lorebook.entries[key]; }) : [];
+
+			for (var i = 0; i < entries.length; i++) {
+				var loreEntry = entries[i];
+				var name = lbname.trim();
+				var comment = loreEntry.comment || "";
+				var content = loreEntry.content || "";
+
+				if(comment == "" && content == "") {
+					continue; //skip blank entries
+				}
+
+				var keyList = []
+					.concat(loreEntry.key || [])
+					.concat(loreEntry.keys || [])
+					.concat(loreEntry.keysecondary || []);
+
+				// Remove duplicates
+				var seen = {};
+				var keys = [];
+				for (var j = 0; j < keyList.length; j++) {
+					var key = keyList[j];
+					if (!seen[key]) {
+						keys.push(key);
+						seen[key] = true;
 					}
-					if (keys.length > 0)
-					{
-						description += `\n(Alternative names: ${keys.join(",")})`
-					}
-					description += `\nDetails: ${content}`
-					return description
-				});
-			if (!!outputText)
-			{
-				replaceDocumentFromTextDB(lorebook?.name, outputText.join("\n\n"))
-				return true
+				}
+
+				var description = "### Name: " + name;
+				if (comment && comment !== name) {
+					description += "\n(Description: " + comment + ")";
+				}
+				if (keys.length > 0) {
+					description += "\n(Alternative names: " + keys.join(",") + ")";
+				}
+				description += "\nDetails: " + content.trim();
+				outputText.push(description);
 			}
-			return false
+
+			if (outputText.length > 0) {
+				replaceDocumentFromTextDB(lbname, outputText.join("\n\n"));
+				return true;
+			}
 		}
-		else
-		{
-			return false
-		}
+		return false;
 	}
+
 	function load_tavern_obj(obj)
 	{
 		let selectedgreeting = "";
@@ -7925,19 +7945,13 @@ Current version indicated by LITEVER below.
 			}
 			let combinedmem = sysprompt + memory + scenario + examplemsg;
 			let agnaidatafieldsempty = scenario + examplemsg + (obj.personality?obj.personality:"") + greeting;
+			let has_tav_wi_check = (obj && obj.entries && obj.entries["0"] && obj.entries["0"].hasOwnProperty("uid"));
 			//check if it's a world info only card, if so, do not restart game
-			if(combinedmem.trim()=="" && greeting=="" && obj.entries)
+			if(combinedmem.trim()=="" && greeting=="" && has_tav_wi_check)
 			{
-				msgboxYesNo("Import World Info / Lorebook into TextDB instead of overwriting existing World Info?\n\nYes = TextDB Used\nNo = World Info Used\n\nIf unsure, select 'No'.","Import World Info / Lorebook Mode", ()=>{
-					let importSuccessful = importLorebookAsTextDB(obj)
-					if (importSuccessful)
-					{
-						msgbox(`Lorebook "${lorebook?.name}" loaded into TextDB`)
-					}
-					else
-					{
-						msgbox(`No entries found for ${lorebook?.name}`)
-					}
+				msgboxYesNo("Import World Info / Lorebook into TextDB?\n\nYes = TextDB Used\nNo = World Info Used\n\nIf unsure, select 'No'.","Import World Info / Lorebook Mode", ()=>{
+					importLorebookAsTextDB(obj); //can't fail since same wi check is done beforehand
+					documentdb_data = document.getElementById("documentdb_data").value; //save to db
 				},()=>{
 					current_wi = load_tavern_wi(obj,chatopponent,myname);
 				});
@@ -13078,9 +13092,9 @@ Current version indicated by LITEVER below.
 	}
 
 	function estimate_and_show_textDB_usage() {
-		let currentChunkSize = Number(document.getElementById("documentdb_chunksize").value)
+		let currentChunkSize = Number(document.getElementById("documentdb_chunksize").value);
 		let snippetEstimate = currentChunkSize * 1.5 * Number(document.getElementById("documentdb_numresults").value);
-		let numberOfChunks = Math.ceil(document.getElementById("documentdb_data").value.length / (currentChunkSize - (Math.min(currentChunkSize * 0.5, 500))))
+		let numberOfChunks = Math.ceil(document.getElementById("documentdb_data").value.length / (currentChunkSize - (Math.min(currentChunkSize * 0.5, 500))));
 		document.getElementById("documentdb_snippetestimate").innerText = `Estimate of context usage: ${snippetEstimate / 3} tokens (${snippetEstimate} characters). Total chunks: ${numberOfChunks}.`;
 	}
 
@@ -21827,6 +21841,19 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	function addDocumentToTextDB()
+	{
+		promptUserForLocalFile((fileDetails) => {
+			let { file, fileName, ext, content, plaintext } = fileDetails;
+			if (!plaintext) {
+				return; //not importable, not text
+			}
+			let importLorebookResult = importLorebookAsTextDB(plaintext);
+			if (!importLorebookResult) {
+				replaceDocumentFromTextDB(fileName, plaintext);
+			}
+		});
+	}
 	//LTM TextDB Memsnipper searching
 	//searches dbText for searchStr and recentTextStr, returns up to 3 results
 	async function DatabaseMinisearch(dbText, searchStr, recentTextStr, minSimilarity = 0.2)
@@ -22364,7 +22391,7 @@ Current version indicated by LITEVER below.
 				</div>
 
 				<div class="settinglabel" style="padding: 4px;">
-					<div class="justifyleft settingsmall" title="Use Embeddings for Searching">Use Embeddings for Searching <span class="helpicon">?
+					<div class="justifyleft settingsmall" id="useembeddingslabel" title="Use Embeddings for Searching">Use Embeddings for Searching <span class="helpicon">?
 						<span class="helptext">If enabled, the text DB is converted to vectors using the KoboldCPP embedding endpoint. If not, it uses the traditional TextDB keyword based search. Generally, embeddings are slower to generate initially (so when making changes to DB the next response might be very slow) - but may understand the context of the sentence better while also potentially supporting multiple languages.</span></span></div>
 					<input title="Use Embeddings for Searching" type="checkbox" id="documentdb_useEmbeddings" style="margin:0px 0 0;">
 				</div>
@@ -22378,7 +22405,7 @@ Current version indicated by LITEVER below.
 				<div class="settinglabel" style="padding: 4px;">
 					<div class="justifyleft settingsmall" title="Add document to TextDB">Add document to TextDB <span class="helpicon">?
 						<span class="helptext">Tries to extract the text from the document, adding (or overwriting) an existing document in the TextDB with the same name.</span></span></div>
-					<button title="Add document to TextDB" class="btn btn-primary" onclick="documentParser.addDocumentToTextDB()" style="margin:0px 0 0;">Add document to TextDB</button>
+					<button title="Add document to TextDB" class="btn btn-primary" onclick="addDocumentToTextDB()" style="margin:0px 0 0;">Add document to TextDB</button>
 				</div>
 
 				<div class="settinglabel" style="padding: 4px;">
@@ -24980,59 +25007,5 @@ else
 
 	window.embeddingSearcher = new EmbeddingSearcher()
 </script>
-<script type="module">
-	class DocumentParser {
-		extractTextFromDocument(content) {
-			let reqOpt = {
-				method: 'POST',
-				headers: get_kobold_header(),
-				body: JSON.stringify({
-					docData: content
-				}),
-			};
-			if (globalabortcontroller) {
-				reqOpt.signal = globalabortcontroller.signal;
-			}
-			let sub_endpt = apply_proxy_url(`${custom_kobold_endpoint}/api/extra/extractText`);
 
-			return fetch(sub_endpt, reqOpt)
-				.then((response) => response.json())
-		}
-
-		addDocumentToTextDB() {
-			let tryImportLorebookAsTextDB = (b64) => {
-				try {
-					let obj = JSON.parse(atob(b64.split(",")[1]))
-					return importLorebookAsTextDB(obj)
-				}
-				catch (e) {
-					return false
-				}
-			}
-			promptUserForLocalFile(async (fileDetails) => {
-				let { file, fileName, ext, content, plaintext } = fileDetails
-				let extractedText = undefined
-
-				if (content.startsWith("data:application/json") && tryImportLorebookAsTextDB(content)) {
-					return
-				}
-				else if (content.startsWith("data:text/")) {
-					try
-					{
-						extractedText = atob(content.split(",")[1])
-					}
-					catch (e)
-					{
-						console.error(e)
-					}
-				}
-
-				if (!!extractedText) {
-					replaceDocumentFromTextDB(fileName, extractedText)
-				}
-			})
-		}
-	}
-	document.documentParser = new DocumentParser()
-</script>
 </html>
