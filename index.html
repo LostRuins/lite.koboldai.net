@@ -3123,7 +3123,7 @@ Current version indicated by LITEVER below.
 	var documentdb_searchrange = 300;
 	var documentdb_chunksize = 800;
 	var documentdb_data = "";
-	var documentdb_useEmbeddings = false
+	var documentdb_useembeddings = false
 	var generateimagesinterval = 750; //if generated images is enabled, it will trigger after every 700 new characters in context.
 	var nextgeneratedimagemilestone = generateimagesinterval; //used to keep track of when to generate the next image
 	var image_db = {}; //stores a dictionary of pending images
@@ -3175,6 +3175,7 @@ Current version indicated by LITEVER below.
 	var lastSearchQuery = "";
 	var lastSearchResults = [];
 	var recentSearchQueries = [];
+	var embeddings_cache = {}; //this is a greatly simplified version of jaxxks' embeddings DB. Key is chunkhash, value is an object {paragraph_text,embeds_array}. entire object serialized into indexedDb.
 	var multiplayer_active = false;
 	var multiplayer_pinged = false;
 	var multiplayer_override_name = "";
@@ -3804,6 +3805,23 @@ Current version indicated by LITEVER below.
 			isValid = false;
 		}
 		return isValid;
+	}
+
+	function asyncRunner(generatorFn) { //allows async/await like syntax before it exists
+		return function (...args) {
+			const generator = generatorFn.apply(this, args);
+			function handle(result) {
+				if (result.done) return Promise.resolve(result.value);
+				return Promise.resolve(result.value).then(
+					res => handle(generator.next(res)),
+					err => handle(generator.throw(err))
+				);
+			} try {
+				return handle(generator.next());
+			} catch (ex) {
+				return Promise.reject(ex);
+			}
+		};
 	}
 
 	//tasks run on start
@@ -7178,7 +7196,7 @@ Current version indicated by LITEVER below.
 		new_save_storyobj.documentdb_searchrange = documentdb_searchrange;
 		new_save_storyobj.documentdb_chunksize = documentdb_chunksize;
 		new_save_storyobj.documentdb_data = documentdb_data;
-		new_save_storyobj.documentdb_useEmbeddings = documentdb_useEmbeddings;
+		new_save_storyobj.documentdb_useembeddings = documentdb_useembeddings;
 
 		if (export_settings) {
 			new_save_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
@@ -7488,9 +7506,9 @@ Current version indicated by LITEVER below.
 				{
 					documentdb_data = storyobj.documentdb_data;
 				}
-				if(storyobj.documentdb_useEmbeddings)
+				if(storyobj.documentdb_useembeddings)
 				{
-					documentdb_useEmbeddings = storyobj.documentdb_useEmbeddings;
+					documentdb_useembeddings = storyobj.documentdb_useembeddings;
 				}
 
 
@@ -13110,7 +13128,7 @@ Current version indicated by LITEVER below.
 		documentdb_searchrange = document.getElementById("documentdb_searchrange").value;
 		documentdb_chunksize = document.getElementById("documentdb_chunksize").value;
 		documentdb_data = document.getElementById("documentdb_data").value;
-		documentdb_useEmbeddings = document.getElementById("documentdb_useEmbeddings").checked ? true : false;
+		documentdb_useembeddings = document.getElementById("documentdb_useembeddings").checked ? true : false;
 		documentdb_numresults = parseInt(documentdb_numresults);
 		documentdb_numresults = cleannum(documentdb_numresults,1,10);
 		documentdb_searchrange = parseInt(documentdb_searchrange);
@@ -13485,7 +13503,7 @@ Current version indicated by LITEVER below.
 			documentdb_searchrange = 300;
 			documentdb_chunksize = 800;
 			documentdb_data = "";
-			documentdb_useEmbeddings = false;
+			documentdb_useembeddings = false;
 		}
 		if(localsettings.inject_randomness_seed>0)
 		{
@@ -20375,17 +20393,17 @@ Current version indicated by LITEVER below.
 		document.getElementById("documentdb_searchrange_slide").value = documentdb_searchrange;
 		document.getElementById("documentdb_chunksize_slide").value = documentdb_chunksize;
 		document.getElementById("documentdb_data").value = documentdb_data;
-		document.getElementById("documentdb_useEmbeddings").checked = documentdb_useEmbeddings;
+		document.getElementById("documentdb_useembeddings").checked = documentdb_useembeddings;
 		if(is_using_kcpp_with_embeddings())
 		{
-			document.getElementById("documentdb_useEmbeddings").parentElement.classList.remove("color_red");
-			document.getElementById("documentdb_useEmbeddings").disabled = false;
+			document.getElementById("useembeddingslabel").classList.remove("color_red");
+			document.getElementById("documentdb_useembeddings").disabled = false;
 		}
 		else
 		{
-			document.getElementById("documentdb_useEmbeddings").parentElement.classList.add("color_red");
-			document.getElementById("documentdb_useEmbeddings").disabled = true;
-			document.getElementById("documentdb_useEmbeddings").checked = false;
+			document.getElementById("useembeddingslabel").classList.add("color_red");
+			document.getElementById("documentdb_useembeddings").disabled = true;
+			document.getElementById("documentdb_useembeddings").checked = false;
 		}
 	}
 
@@ -21843,12 +21861,21 @@ Current version indicated by LITEVER below.
 
 	function addDocumentToTextDB()
 	{
+		let tryImportLorebookAsTextDB = (str) => {
+			try {
+				let obj = JSON.parse(str);
+				return importLorebookAsTextDB(obj);
+			}
+			catch (e) {
+				return false
+			}
+		}
 		promptUserForLocalFile((fileDetails) => {
 			let { file, fileName, ext, content, plaintext } = fileDetails;
 			if (!plaintext) {
 				return; //not importable, not text
 			}
-			let importLorebookResult = importLorebookAsTextDB(plaintext);
+			let importLorebookResult = tryImportLorebookAsTextDB(plaintext);
 			if (!importLorebookResult) {
 				replaceDocumentFromTextDB(fileName, plaintext);
 			}
@@ -21946,31 +21973,33 @@ Current version indicated by LITEVER below.
 		recentTextStr = replace_search_placeholders(recentTextStr);
 
 		let i = 0;
-		allText.split("[DOCUMENT BREAK]").forEach(doc => {
-			doc = doc.trim()
-			let titleMatch = doc.match(/^\[([^\n]+?)\]/), title = null;
-			if (titleMatch !== null)
-			{
-				doc = doc.replace(titleMatch[0], "")
-				title = titleMatch[1]
-			}
-			let startLoc = 0;
-			while (startLoc < doc.length && i < Number.MAX_SAFE_INTEGER) {
-				let actualChunkStart = Math.max(0, startLoc - chunkSizeOverlap);
-				let actualChunkEnd = Math.min(doc.length, actualChunkStart + chunkSize);
-				let currentSnippet = doc.substring(actualChunkStart, actualChunkEnd);
-				paragraphs.push({snippet: currentSnippet, document: title});
-				startLoc = actualChunkEnd;
-				i++;
-			}
-		})
-		paragraphs = paragraphs.map(c => {
-			c.snippet = c.snippet.replace(/\n\n/g, "\n");
-			return c;
-		}).filter(c => !!c.snippet);
+        allText.split("[DOCUMENT BREAK]").forEach(doc => {
+            doc = doc.trim();
+            if (!doc) { return; }
+            let titleMatch = doc.match(/^\[([^\n]+?)\]/);
+            let title = null;
+            if (titleMatch !== null)
+            {
+                doc = doc.replace(titleMatch[0], "");
+                title = titleMatch[1];
+            }
+            let startLoc = 0;
+            while (startLoc < doc.length && i < Number.MAX_SAFE_INTEGER) {
+                let actualChunkStart = Math.max(0, startLoc - chunkSizeOverlap);
+                let actualChunkEnd = Math.min(doc.length, actualChunkStart + chunkSize);
+                let currentSnippet = doc.substring(actualChunkStart, actualChunkEnd);
+                paragraphs.push({snippet: currentSnippet, document: title});
+                startLoc = actualChunkEnd;
+                i++;
+            }
+        });
+        paragraphs = paragraphs.map(c => {
+            c.snippet = c.snippet.replace(/\n\n/g, "\n");
+            return c;
+        }).filter(c => !!c.snippet);
 
 		let miniSearch;
-		if (!!documentdb_useEmbeddings && is_using_kcpp_with_embeddings())
+		if (documentdb_useembeddings && is_using_kcpp_with_embeddings())
 		{
 			let searchResults = await embeddingSearcher.getRankedEmbeddings(searchStr, ...paragraphs)
 			searchResults = searchResults.filter(x=>x.similarity>minSimilarity);
@@ -22393,7 +22422,7 @@ Current version indicated by LITEVER below.
 				<div class="settinglabel" style="padding: 4px;">
 					<div class="justifyleft settingsmall" id="useembeddingslabel" title="Use Embeddings for Searching">Use Embeddings for Searching <span class="helpicon">?
 						<span class="helptext">If enabled, the text DB is converted to vectors using the KoboldCPP embedding endpoint. If not, it uses the traditional TextDB keyword based search. Generally, embeddings are slower to generate initially (so when making changes to DB the next response might be very slow) - but may understand the context of the sentence better while also potentially supporting multiple languages.</span></span></div>
-					<input title="Use Embeddings for Searching" type="checkbox" id="documentdb_useEmbeddings" style="margin:0px 0 0;">
+					<input title="Use Embeddings for Searching" type="checkbox" id="documentdb_useembeddings" style="margin:0px 0 0;">
 				</div>
 
 				<div class="settinglabel" style="padding: 4px;">
