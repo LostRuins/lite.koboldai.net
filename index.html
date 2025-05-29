@@ -21826,8 +21826,10 @@ Current version indicated by LITEVER below.
 	const editorFieldLabel = "gametext"
 	const remoteWebServer = "http://localhost:7860"
 	const underlinedPrimary = "underlinedYellow"
+    const underlinedSecondary = "underlinedWhite"
 	const underlinedClicked = "underlinedViolet"
     const underlinedPrimaryTable = "underlinedYellowTable"
+    const underlinedSecondaryTable = "underlinedWhiteTable"
     const underlinedClickedTable = "underlinedVioletTable"
     const objectChildNodeNamesToParse = {
         "#text": "textContent",
@@ -21892,7 +21894,7 @@ Current version indicated by LITEVER below.
         return filterElementsFromList(results, filterWhitespaces)
     }
 
-    function textStemming(textSplitNewline) {
+    function textStemming(textSplitNewline, n = 2) {
         const wordsStemsDict = {};
         let nTotalRows = textSplitNewline.length;
 
@@ -21904,23 +21906,49 @@ Current version indicated by LITEVER below.
             const tokens = customWordPunctTokenize(row);
             const offsets = getOffsets(row, tokens);
 
-            tokens.forEach((word, i) => {
-                const wordLower = word.toLowerCase();
-                const stem = porterStemmer(wordLower);
-                if (!wordsStemsDict[stem]) {
-                    wordsStemsDict[stem] = { count: 0, word_prefix: stem, offsets_array: [] };
+            for (let ngramLen = 1; ngramLen <= n; ngramLen++) {
+                for (let i = 0; i <= tokens.length - ngramLen; i++) {
+                    const ngramTokens = tokens.slice(i, i + ngramLen);
+                    const ngram = ngramTokens.join(" ");
+                    const ngramOffsets = offsets.slice(i, i + ngramLen);
+                    const start = ngramOffsets[0].start;
+                    const end = ngramOffsets[ngramOffsets.length - 1].end;
+                    const ngramLower = ngramTokens.map(w => w.toLowerCase());
+                    const stem = ngramLower.map(porterStemmer).join(" ");
+                    if (!wordsStemsDict[stem]) {
+                        wordsStemsDict[stem] = {
+                            count: 0, word_prefix: ngram, offsets_array: [], n_words_ngram: ngramLen, "stem": stem
+                        };
+                    }
+                    wordsStemsDict[stem].count += 1;
+                    wordsStemsDict[stem].offsets_array.push({
+                        word: ngram,
+                        offsets: [start, end],
+                        n_row: idxRow,
+                        n_row_child: idxRowChild,
+                        n_row_parent: idxRowParent
+                    });
                 }
-                wordsStemsDict[stem].count += 1;
-                wordsStemsDict[stem].offsets_array.push({
-                    word: word, // keep original casing for display
-                    offsets: [offsets[i].start, offsets[i].end],
-                    n_row: idxRow,
-                    n_row_child: idxRowChild,
-                    n_row_parent: idxRowParent
-                });
-            });
+            }
         });
-        return { nTotalRows, wordsStemsDict };
+
+        // Update word_prefix to the most common 'word' in offsets_array
+        Object.values(wordsStemsDict).forEach(entry => {
+            const words = entry.offsets_array.map(item => item.word);
+            if (words.length > 0) {
+                const freq = {};
+                let maxWord = words[0], maxCount = 0;
+                words.forEach(w => {
+                    freq[w] = (freq[w] || 0) + 1;
+                    if (freq[w] > maxCount) {
+                        maxCount = freq[w];
+                        maxWord = w;
+                    }
+                });
+                entry.word_prefix = maxWord;
+            }
+        });
+        return {nTotalRows, wordsStemsDict};
     }
 
     function getOffsets(text, tokens) {
@@ -22179,6 +22207,7 @@ Current version indicated by LITEVER below.
 
         const titleCurrentTable = document.getElementById("id-current-table-of-words-title")
         titleCurrentTable.innerText = getRepetitionsText(iReduced) + " "
+        titleCurrentTable.title = `stem: '${iReduced.stem}'`
         const repetitionSpan = document.createElement("span")
         repetitionSpan.className = "repetitions"
         titleCurrentTable.append(repetitionSpan)
@@ -22214,6 +22243,7 @@ Current version indicated by LITEVER below.
                 hideWordsFreqMobileMenu()
             }
         });
+        a.title = `stem: '${iReduced.stem}'`
         a.className = underlinedPrimary
         li.appendChild(a);
         wordListElement.appendChild(li);
@@ -22237,7 +22267,7 @@ Current version indicated by LITEVER below.
             currentUrl.className = underlinedClickedTable
             hideWordsFreqMobileMenu()
         })
-        currentUrl.className = underlinedPrimary
+        currentUrl.className = underlinedPrimaryTable
         const wfoContainerWidth = getStylePropertyById("id-col2-words-frequency", "width", "int")
         const listOfWordsWidth = getStylePropertyById("id-list-of-words-scrollable", "width", "int")
         const sentencesContainerWidth = wfoContainerWidth - listOfWordsWidth
@@ -22250,7 +22280,7 @@ Current version indicated by LITEVER below.
 
         const span0 = document.createElement("span").innerText = substring0
         const spanWord = document.createElement("span")
-        spanWord.setAttribute("class", "font-weight-bold")
+        spanWord.setAttribute("class", underlinedSecondaryTable)
         spanWord.innerText = substringWord
         const span2 = document.createElement("span").innerText = substring2
         currentUrl.append(span0)
@@ -22603,6 +22633,11 @@ Current version indicated by LITEVER below.
 		text-decoration: underline;
 		text-decoration-color: yellow;
 	}
+    .underlinedWhite, .underlinedWhiteTable {
+		color: white;
+		text-decoration: underline;
+		text-decoration-color: white;
+	}
 	.underlinedViolet, .underlinedVioletTable {
 		color: violet;
 		text-decoration: underline;
@@ -22727,6 +22762,24 @@ Current version indicated by LITEVER below.
         content: "occurrences"
     }
 
+    /* tooltips on mobile devices */
+    @media (pointer: coarse), (hover: none) {
+        #id-current-table-of-words-title [title], .underlinedYellow [title] {
+            position: relative;
+            display: inline-flex;
+            justify-content: center;
+        }
+        #id-current-table-of-words-title [title]:focus::after, .underlinedYellow [title]:focus::after {
+            content: attr(title);
+            position: absolute;
+            top: 90%;
+            color: #000;
+            background-color: #fff;
+            border: 1px solid;
+            width: fit-content;
+            padding: 3px;
+        }
+    }
     /* Classic UI Main Text, lite.koboldai.net */
     @media screen and (max-height: 1024px) and (max-width: 1366px) and (orientation: landscape) {
         .scrollable-table-container {
