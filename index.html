@@ -21882,11 +21882,40 @@ Current version indicated by LITEVER below.
 		});
 	}
 
-	async function DBComputeAndLoadEmbedding(hash, generator) //gets cached embedding, recomputes if missing
+	async function generateNewEmbedding(text) { //generates new embedding from kcpp
+		let reqOpt = {
+			method: 'POST', // or 'PUT'
+			headers: get_kobold_header(),
+			body: JSON.stringify({
+				"input": text,
+				"truncate": true
+			}),
+		};
+		if (globalabortcontroller) {
+			reqOpt.signal = globalabortcontroller.signal;
+		}
+		let sub_endpt = apply_proxy_url(`${custom_kobold_endpoint}/api/extra/embeddings`);
+		return fetch(sub_endpt, reqOpt).then((response) => response.json());
+	}
+	async function DBComputeAndLoadEmbedding(hash,  documentName, documentContent) //gets a cached embedding, recomputes if missing
 	{
+		let generatorFn = async(hash, documentName, documentContent) => {
+			let embedding = await generateNewEmbedding(documentContent);
+			if (embedding && embedding.data && embedding.data.length > 0 && embedding.data[0].embedding) {
+				return {
+					document: documentName ? documentName : "None",
+					hash: hash,
+					embedding: embedding.data[0].embedding,
+					snippet: documentContent,
+					modelUsed: embedding.model
+				}
+			}
+			return null;
+		};
+
 		let currentEmbedding = embeddings_cache[hash];
 		if (!currentEmbedding) {
-			let newembedding = await generator(hash);
+			let newembedding = await generatorFn(hash, documentName, documentContent);
 			embeddings_cache[newembedding.hash] = newembedding;
 		}
 		return embeddings_cache[hash];
@@ -21894,6 +21923,55 @@ Current version indicated by LITEVER below.
 	function DBClearEmbeddings() //erases all cached embeddings
 	{
 		embeddings_cache = {};
+	}
+	async function getRankedEmbeddings(searchTerm, paragraphs) {
+
+		const cosineSimilarity = (A, B) => {
+			let dotproduct = 0;
+			let mA = 0;
+			let mB = 0;
+			for (let i = 0; i < A.length; i++) {
+				dotproduct += A[i] * B[i];
+				mA += A[i] * A[i];
+				mB += B[i] * B[i];
+			}
+			mA = Math.sqrt(mA);
+			mB = Math.sqrt(mB);
+			return dotproduct / (mA * mB);
+		}
+
+		const getEmbeddings = async (paragraphs) => { //paragraphs is a list. each element is an object {snippet,document}
+			waitingToast.setText(`Generating embedding for search text: 0/${paragraphs.length}`);
+			let embeddings = []
+			for (let i = 0; i < paragraphs.length; i++) {
+				let embeddingObj = null;
+				let documentContent = paragraphs[i].snippet;
+				let documentName = paragraphs[i].document;
+				let documentContentHash = cyrb_hash(`${documentContent}`, 0, 4);
+				embeddingObj = await DBComputeAndLoadEmbedding(documentContentHash, documentName, documentContent);
+				if (!!embeddingObj) {
+					embeddings.push(embeddingObj)
+				}
+				waitingToast.setText(`Generating embedding for search text: ${i + 1}/${paragraphs.length}`);
+			}
+			return embeddings
+		}
+
+		waitingToast.show();
+		waitingToast.setText("Generating embedding for search text");
+		let searchEmbeddingList = await getEmbeddings([{ "document": "UserInput", "snippet": searchTerm }]);
+		let otherEmbeddingList = await getEmbeddings(paragraphs);
+
+		waitingToast.setText(`Searching embedding for search text: 0/${otherEmbeddingList.length}`);
+		let i = 0;
+		otherEmbeddingList.forEach(embedding => {
+			embedding.similarity = cosineSimilarity(searchEmbeddingList[0].embedding, embedding.embedding)
+			waitingToast.setText(`Searching embedding for search text: ${++i}/${otherEmbeddingList.length}`);
+		});
+		waitingToast.hide()
+
+		otherEmbeddingList.sort((a, b) => a.similarity > b.similarity ? -1 : 1)
+		return otherEmbeddingList
 	}
 
 	//LTM TextDB Memsnipper searching
@@ -22016,7 +22094,7 @@ Current version indicated by LITEVER below.
 		let miniSearch;
 		if (documentdb_useembeddings && is_using_kcpp_with_embeddings())
 		{
-			let searchResults = await embeddingSearcher.getRankedEmbeddings(searchStr, ...paragraphs)
+			let searchResults = await getRankedEmbeddings(searchStr, paragraphs);
 			searchResults = searchResults.filter(x=>x.similarity>minSimilarity);
 			searchResults = searchResults.slice(0, valuesToReturn);
 			return searchResults;
@@ -24781,114 +24859,4 @@ else
 		originalTriggerAbortController()
 	}
 </script>
-<script type="module">
-	class EmbeddingSearcher {
-		getHashForText = (text) => {
-			// MD5 implementation: forge.md5.create().update(text).digest().toHex()
-			return cyrb_hash(text, 0, 4)
-		}
-
-		generateEmbedding = async (text) => {
-			let reqOpt = {
-				method: 'POST', // or 'PUT'
-				headers: get_kobold_header(),
-				body: JSON.stringify({
-					"input": text,
-					"truncate": true
-				}),
-			};
-			if (globalabortcontroller) {
-				reqOpt.signal = globalabortcontroller.signal;
-			}
-			let sub_endpt = apply_proxy_url(`${custom_kobold_endpoint}/api/extra/embeddings`);
-			return fetch(sub_endpt, reqOpt)
-				.then((response) => response.json())
-		}
-
-		getEmbeddings = async (modelHashInUse, ...paragraphs) => {
-			waitingToast.setText(`Generating embedding for search text: 0/${paragraphs.length}`);
-			let embeddings = []
-			for (let i = 0; i < paragraphs.length; i++) {
-				let embeddingObj = undefined
-				if (!!paragraphs[i]?.snippet) {
-					let documentContent = paragraphs[i]?.snippet;
-					let hashFromText = this.getHashForText(`${modelHashInUse}###${documentContent}`),
-						documentName = paragraphs[i]?.document;
-
-					embeddingObj = await DBComputeAndLoadEmbedding(hashFromText, async (hash) => {
-						let embedding = await this.generateEmbedding(documentContent)
-						if (!!embedding?.data && embedding?.data.length > 0 && !!embedding?.data[0]?.embedding) {
-							return {
-								document: !!documentName ? documentName : "None",
-								hash: hash,
-								embedding: embedding.data[0].embedding,
-								snippet: documentContent,
-								modelUsed: embedding?.model
-							}
-						}
-						return undefined
-					});
-				} else {
-					let documentContent = paragraphs[i]
-					let embedding = await this.generateEmbedding(documentContent)
-					if (!!embedding?.data && embedding?.data.length > 0 && !!embedding?.data[0]?.embedding) {
-						embeddingObj = {
-							document: "None",
-							hash: this.getHashForText(`${modelHashInUse}###${documentContent}`),
-							embedding: embedding.data[0].embedding,
-							snippet: documentContent,
-							modelUsed: embedding?.model
-						}
-					}
-				}
-
-				if (!!embeddingObj) {
-					embeddings.push(embeddingObj)
-				}
-
-				waitingToast.setText(`Generating embedding for search text: ${i + 1}/${paragraphs.length}`);
-			}
-			return embeddings
-		}
-
-		cosineSimilarity = (A, B) => {
-			let dotproduct = 0;
-			let mA = 0;
-			let mB = 0;
-
-			for (let i = 0; i < A.length; i++) {
-				dotproduct += A[i] * B[i];
-				mA += A[i] * A[i];
-				mB += B[i] * B[i];
-			}
-
-			mA = Math.sqrt(mA);
-			mB = Math.sqrt(mB);
-
-			return dotproduct / (mA * mB);
-		}
-
-		getRankedEmbeddings = async (searchTerm, ...paragraphs) => {
-			waitingToast.show();
-			waitingToast.setText("Generating embedding for search text");
-			let searchEmbedding = await this.getEmbeddings("Unknown", searchTerm)
-			let modelUsedForSearchEmbedding = searchEmbedding[0]?.modelUsed
-			let embeddings = await this.getEmbeddings(modelUsedForSearchEmbedding, ...paragraphs);
-
-			waitingToast.setText(`Searching embedding for search text: 0/${embeddings.length}`);
-			let i = 0;
-			embeddings.forEach(embedding => {
-				embedding.similarity = this.cosineSimilarity(searchEmbedding[0].embedding, embedding.embedding)
-				waitingToast.setText(`Searching embedding for search text: ${++i}/${embeddings.length}`);
-			})
-			waitingToast.hide()
-
-			embeddings.sort((a, b) => a.similarity > b.similarity ? -1 : 1)
-			return embeddings
-		}
-	}
-
-	window.embeddingSearcher = new EmbeddingSearcher()
-</script>
-
 </html>
