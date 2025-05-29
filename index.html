@@ -13144,7 +13144,7 @@ Current version indicated by LITEVER below.
 		let currentChunkSize = Number(document.getElementById("documentdb_chunksize").value);
 		let snippetEstimate = currentChunkSize * 1.5 * Number(document.getElementById("documentdb_numresults").value);
 		let numberOfChunks = Math.ceil(document.getElementById("documentdb_data").value.length / (currentChunkSize - (Math.min(currentChunkSize * 0.5, 500))));
-		document.getElementById("documentdb_snippetestimate").innerText = `Estimate of context usage: ${snippetEstimate / 3} tokens (${snippetEstimate} characters). Total chunks: ${numberOfChunks}.`;
+		document.getElementById("documentdb_snippetestimate").innerText = `Estimate of context usage: ${snippetEstimate / 3} tokens (${snippetEstimate} characters). Total chunks: ${numberOfChunks}. Cached chunks: ${Object.keys(embeddings_cache).length}`;
 	}
 
 	function confirm_memory() {
@@ -21932,6 +21932,20 @@ Current version indicated by LITEVER below.
 	});
 	const DBComputeAndLoadEmbedding = asyncRunner(function* (hash, documentName, documentContent) //gets a cached embedding, recomputes if missing
 	{
+		//if db is not initialized, init it
+		const isIndexedDBSupported = !!window.indexedDB;
+		if(isIndexedDBSupported && Object.keys(embeddings_cache).length === 0)
+		{
+			let iddb = yield indexeddb_load('EmbeddingsCache', '');
+			if (iddb && iddb != "") {
+				try {
+					embeddings_cache = JSON.parse(iddb);
+				} catch (e) {
+					console.log("Fail to parse embeddings cache");
+				}
+			}
+		}
+
 		// Check if the embedding is already cached
 		let currentEmbedding = embeddings_cache[hash];
 		if (!currentEmbedding) {
@@ -21946,6 +21960,10 @@ Current version indicated by LITEVER below.
 					modelUsed: embedding.model
 				};
 				embeddings_cache[hash] = newembedding;
+				if(isIndexedDBSupported)
+				{
+					indexeddb_save('EmbeddingsCache',JSON.stringify(embeddings_cache));
+				}
 			}
 		}
 		return embeddings_cache[hash];
@@ -21953,6 +21971,12 @@ Current version indicated by LITEVER below.
 	function DBClearEmbeddings() //erases all cached embeddings
 	{
 		embeddings_cache = {};
+		const isIndexedDBSupported = !!window.indexedDB;
+		if(isIndexedDBSupported)
+		{
+			indexeddb_save('EmbeddingsCache',JSON.stringify(embeddings_cache));
+		}
+		estimate_and_show_textDB_usage();
 	}
 	const getRankedEmbeddings = asyncRunner(function* (searchTerm, paragraphs)
 	{
