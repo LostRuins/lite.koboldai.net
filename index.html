@@ -5788,6 +5788,31 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	function copyToClipboard(text)
+	{
+		const fallbackCopy = function(text) {
+			const textArea = document.createElement("textarea");
+			textArea.value = text;
+			document.body.appendChild(textArea);
+			textArea.focus();
+			textArea.select();
+			try {
+				document.execCommand('copy');
+			} catch (err) {
+				console.error('Fallback: Copy command failed', err);
+			}
+			document.body.removeChild(textArea);
+		}
+
+		if (navigator.clipboard && navigator.clipboard.writeText) {
+			navigator.clipboard.writeText(text).catch(err => {
+				// fallback if clipboard API fails
+				fallbackCopy(text);
+			});
+		} else {
+			fallbackCopy(text);
+		}
+	}
 	function copyMarkdownCode(btn)
 	{
 		const codeContainer = btn.parentElement.querySelector('pre code');
@@ -5801,7 +5826,7 @@ Current version indicated by LITEVER below.
 				break;
 			 }
 		}
-		navigator.clipboard.writeText(innercode);
+		copyToClipboard(innercode);
 	}
 
 	function simpleMarkdown(text, renderLatex) {
@@ -6922,11 +6947,11 @@ Current version indicated by LITEVER below.
 	function copy_shared_text() {
 		var copyText = document.getElementById("sharestorytext");
 
+		// Copy the text inside the text field
+		copyToClipboard(copyText.innerText);
+
 		// Select the text field
 		select_element_contents(copyText);
-
-		// Copy the text inside the text field
-		navigator.clipboard.writeText(copyText.innerText);
 	}
 	function upload_to_dpaste()
 	{
