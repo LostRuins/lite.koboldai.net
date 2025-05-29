@@ -236,7 +236,7 @@ Current version indicated by LITEVER below.
 	/* Top nav menu */
 	#connectstatusdiv {
 		text-align: center;
-		font-size: 14px;
+		font-size: 13px;
 		font-weight: bold;
 		display: flex;
 		flex-direction: column;
@@ -2408,6 +2408,20 @@ Current version indicated by LITEVER below.
 		background-image: none;
 		border-color: #ac2925
 	}
+
+	.toptoast {
+		position: fixed;
+		top: 70px;
+		left: 50%;
+		transform: translateX(-50%);
+		background-color: #568fc1;
+		color: white;
+		padding: 6px 10px;
+		border-radius: 8px;
+		font-size: 12px;
+		z-index: 9999;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+	}
 	</style>
 
 	<script> //Third party JS libraries
@@ -3123,6 +3137,7 @@ Current version indicated by LITEVER below.
 	var documentdb_searchrange = 300;
 	var documentdb_chunksize = 800;
 	var documentdb_data = "";
+	var documentdb_useembeddings = false
 	var generateimagesinterval = 750; //if generated images is enabled, it will trigger after every 700 new characters in context.
 	var nextgeneratedimagemilestone = generateimagesinterval; //used to keep track of when to generate the next image
 	var image_db = {}; //stores a dictionary of pending images
@@ -3169,10 +3184,12 @@ Current version indicated by LITEVER below.
 	var koboldcpp_has_multiplayer = false;
 	var koboldcpp_has_websearch = false;
 	var koboldcpp_has_savedatafile = false;
+	var koboldcpp_has_embeddings = false;
 	var koboldcpp_admin_type = 0; //0 = no admin, 1=has admin, 2=protected admin
 	var lastSearchQuery = "";
 	var lastSearchResults = [];
 	var recentSearchQueries = [];
+	var embeddings_cache = {}; //this is a greatly simplified version of jaxxks' embeddings DB. Key is chunkhash, value is an object {paragraph_text,embeds_array}. entire object serialized into indexedDb.
 	var multiplayer_active = false;
 	var multiplayer_pinged = false;
 	var multiplayer_override_name = "";
@@ -3595,7 +3612,7 @@ Current version indicated by LITEVER below.
 			return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
 		}).join(''))
 	}
-	function cyrb_hash(str, seed = 0) { //generate a unique hash from a model name
+	function cyrb_hash(str, seed = 0, hashBytes = 3) { //generate a unique hash from a model name
 		let h1 = 0xdeadbeef ^ seed,
 			h2 = 0x41c6ce57 ^ seed;
 		for (let i = 0, ch; i < str.length; i++) {
@@ -3607,7 +3624,7 @@ Current version indicated by LITEVER below.
 		h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
 		let hsh = (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16);
 		//truncate to first 3 bytes
-		return hsh.substring(0, 6);
+		return hsh.substring(0, hashBytes*2);
 	};
 	function basic_lcg(seed) { // simple RNG for reproducible dice rolls
 		var m = Math.pow(2, 35) - 31;
@@ -3802,6 +3819,23 @@ Current version indicated by LITEVER below.
 			isValid = false;
 		}
 		return isValid;
+	}
+
+	function asyncRunner(generatorFn) { //allows async/await like syntax before it exists
+		return function (...args) {
+			const generator = generatorFn.apply(this, args);
+			function handle(result) {
+				if (result.done) return Promise.resolve(result.value);
+				return Promise.resolve(result.value).then(
+					res => handle(generator.next(res)),
+					err => handle(generator.throw(err))
+				);
+			} try {
+				return handle(generator.next());
+			} catch (ex) {
+				return Promise.reject(ex);
+			}
+		};
 	}
 
 	//tasks run on start
@@ -5477,9 +5511,16 @@ Current version indicated by LITEVER below.
 				}
 				else if (dch.message) {
 					synchro_polled_response = dch.message.content;
-					if(dch.message.content==null && dch.message.reasoning_content!=null && dch.message.reasoning_content!="") //vllm compat
+					if(dch.message.reasoning_content!=null && dch.message.reasoning_content!="") //vllm compat
 					{
-						synchro_polled_response = dch.message.reasoning_content;
+						if(dch.message.content==null)
+						{
+							synchro_polled_response = dch.message.reasoning_content;
+						}
+						else
+						{
+							synchro_polled_response = `<think>${dch.message.reasoning_content}</think>${dch.message.content}`;
+						}
 					}
 
 					if(oaiemulatecompletionscontent!="" && synchro_polled_response!="" && synchro_polled_response.startsWith(oaiemulatecompletionscontent))
@@ -6800,6 +6841,10 @@ Current version indicated by LITEVER below.
 		return (window.location.hostname.includes("koboldai.net") || window.location.hostname.includes("lostruins.github.io"));
 	}
 
+	function is_using_kcpp_with_embeddings() {
+		return (custom_kobold_endpoint != "" && koboldcpp_version && koboldcpp_version != "" && compare_version_str(koboldcpp_version, "1.84") >= 0 && koboldcpp_has_embeddings);
+	}
+
 	function determine_if_ban_eos(input_was_empty) {
 		if(localsettings.eos_ban_mode == 3)
 		{
@@ -6985,13 +7030,14 @@ Current version indicated by LITEVER below.
 	{
 		document.getElementById('loadfileinput').click();
 	}
+
 	var tempfileurl = null;
-	var tempfileobj = generate_base_storyobj();
+	var tempfileobj = null;
 	var newfilename = "";
 	function savenowfn()
 	{
 		var a = document.getElementById("tempfile");
-		var file = new Blob([JSON.stringify(tempfileobj)], { type: 'application/json' });
+		var file = new Blob([tempfileobj], { type: 'application/json' });
 		console.log("Normal save handling")
 		if (tempfileurl) {
 			window.URL.revokeObjectURL(tempfileurl);
@@ -7002,43 +7048,79 @@ Current version indicated by LITEVER below.
 		a.download = newfilename;
 		setTimeout(function(){a.click()},20);
 	}
+	function promptUserForLocalFile(fileCallback, allowedTypes = "")
+	{
+		//allowedTypes should be a string, because then you can accept MIME types like audio/*
+		let picker = document.getElementById('tempfilepicker');
+		picker.accept = allowedTypes;
+		picker.onchange = function (event) {
+			let input = event.target;
+			if (input.files.length > 0) {
+				let file = input.files[0];
+				let fileNameWithExt = file.name;
+				let extPos = fileNameWithExt.lastIndexOf(".");
+				let fileName = fileNameWithExt.substring(0, extPos);
+				let ext = fileNameWithExt.substring(extPos);
 
-	function save_file_button(use_existing_save=false) //for triggering an optional popup. if use save is true, assume temp obj is set
+				let readerText = new FileReader();
+				let readerDataURL = new FileReader();
+				readerText.onload = function () {
+					let plaintext = readerText.result; //basic plaintext
+					readerDataURL.onload = function() {
+						let content = readerDataURL.result; //raw data
+						fileCallback({ file, fileName, ext, content, plaintext });
+					};
+					readerDataURL.readAsDataURL(file);
+				};
+				readerText.readAsText(file); //first, attempt read as text, then read as data
+			}
+			picker.value = "";
+		}
+		picker.click();
+	}
+	function saveFileGeneric(fileName, fileContent, mimeType)
+	{
+		window.URL = window.URL || window.webkitURL;
+		var userAgent = window.navigator.userAgent;
+		tempfileobj = fileContent;
+		newfilename = fileName;
+
+		if (userAgent.match(/AppleWebKit/) && (userAgent.match(/iPad/i) || userAgent.match(/iPhone/i))) {
+			let ststr = fileContent;
+			var file = new Blob([ststr], { type: 'application/octet-stream' });
+			var file2 = new Blob([ststr], { type: mimeType });
+			console.log("Special save handling for iphones");
+			// iPad or iPhone needs an extra download
+			var reader = new FileReader();
+			var reader2 = new FileReader();
+			let datblob = window.URL.createObjectURL(file2);
+			reader.onload = function (e) {
+				reader2.readAsDataURL(file2);
+				reader2.onload = function (e) {
+					msgbox(`<button type="button" class="btn btn-primary" id="ios_save" onclick="savenowfn()">Click to Save</button>
+					<br><h5>Apple devices are known to have issues saving. If the above button does not work, try opening or right-click / long press one of the below links, and select (Save As)</h5>
+					<h4><li><a href="${reader.result}" class="color_blueurl" target="_blank" download="${fileName}">Raw File Data</a></li>
+					<li><a href="${reader2.result}" class="color_blueurl" target="_blank" download="${fileName}">JSON File Data</a></li>
+					<li><a href="${datblob}" class="color_blueurl" download="${fileName}">JSON URL Blob</a></li></h4>`, "Save File", true);
+				}
+			}
+			reader.readAsDataURL(file);
+		}
+		else
+		{
+			savenowfn();
+		}
+	}
+	function save_file_button(save_file_obj=null) //if null, generate new savefile, otherwise use provided
 	{
 		warn_unsaved = false;
 		const save_file = function()
 		{
-			if(!use_existing_save)
+			if(!save_file_obj)
 			{
-				tempfileobj = generate_savefile(localsettings.save_images, localsettings.export_settings, localsettings.export_settings);
+				save_file_obj = generate_savefile(localsettings.save_images, localsettings.export_settings, localsettings.export_settings);
 			}
-			newfilename = last_known_filename;
-
-			window.URL = window.URL || window.webkitURL;
-			var userAgent = window.navigator.userAgent;
-
-			if (userAgent.match(/AppleWebKit/) && (userAgent.match(/iPad/i) || userAgent.match(/iPhone/i))) {
-				let ststr = JSON.stringify(tempfileobj);
-				var file = new Blob([ststr], { type: 'application/octet-stream' });
-				var file2 = new Blob([ststr], { type: 'application/json' });
-				console.log("Special save handling for iphones")
-				// iPad or iPhone needs an extra download
-				var reader = new FileReader();
-				var reader2 = new FileReader();
-				let datblob = window.URL.createObjectURL(file2);
-				reader.onload = function (e) {
-					reader2.readAsDataURL(file2);
-					reader2.onload = function (e) {
-						msgbox(`<button type="button" class="btn btn-primary" id="ios_save" onclick="savenowfn()">Click to Save</button>
-						<br><h5>Apple devices are known to have issues saving. If the above button does not work, try opening or right-click / long press one of the below links, and select (Save As)</h5><h4><li><a href=` + reader.result + ` class='color_blueurl' target='_blank' download="`+newfilename+`">Raw File Data</a></li><li><a href=` + reader2.result + ` class='color_blueurl' target='_blank' download="`+newfilename+`">JSON File Data</a></li><li><a href=` + datblob + ` class='color_blueurl' download="`+newfilename+`">JSON URL Blob</a></li></h4>`, "Save Story", true)
-					}
-				}
-				reader.readAsDataURL(file);
-			}
-			else
-			{
-				savenowfn();
-			}
+			saveFileGeneric(last_known_filename, JSON.stringify(save_file_obj), "application/json");
 		}
 
 		if(localsettings.prompt_for_savename)
@@ -7128,6 +7210,7 @@ Current version indicated by LITEVER below.
 		new_save_storyobj.documentdb_searchrange = documentdb_searchrange;
 		new_save_storyobj.documentdb_chunksize = documentdb_chunksize;
 		new_save_storyobj.documentdb_data = documentdb_data;
+		new_save_storyobj.documentdb_useembeddings = documentdb_useembeddings;
 
 		if (export_settings) {
 			new_save_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
@@ -7205,8 +7288,9 @@ Current version indicated by LITEVER below.
 					}
 				} else {
 					//check for tavernai fields
+					let has_tav_wi_check = (new_loaded_storyobj && new_loaded_storyobj.entries && new_loaded_storyobj.entries["0"] && new_loaded_storyobj.entries["0"].hasOwnProperty("uid"));
 					if (!new_loaded_storyobj.scenarioVersion && (new_loaded_storyobj.name != null || new_loaded_storyobj.description != null ||
-						new_loaded_storyobj.personality != null || new_loaded_storyobj.spec=="chara_card_v2")) {
+						new_loaded_storyobj.personality != null || new_loaded_storyobj.spec=="chara_card_v2" || has_tav_wi_check)) {
 						load_tavern_obj(new_loaded_storyobj);
 					}
 					else if (new_loaded_storyobj.char_name != null || new_loaded_storyobj.char_persona != null) {
@@ -7435,6 +7519,10 @@ Current version indicated by LITEVER below.
 				if(storyobj.documentdb_data)
 				{
 					documentdb_data = storyobj.documentdb_data;
+				}
+				if(storyobj.documentdb_useembeddings)
+				{
+					documentdb_useembeddings = storyobj.documentdb_useembeddings;
 				}
 
 
@@ -7749,6 +7837,77 @@ Current version indicated by LITEVER below.
 			console.log("ERROR ALT GREETING NOT FOUND");
 		}
 	}
+
+	function getInfoSnippet(snippet) {
+		return `\n[Info Snippet${snippet.document ? ` from document "${snippet.document}"` : ""}: ${snippet.snippet}]\n`;
+	}
+
+	function replaceDocumentFromTextDB(documentName, documentContent) {
+		//we want to edit the LIVE copy, not the cached var in memory.
+		let curr_doc_db = document.getElementById("documentdb_data").value;
+		if (curr_doc_db.indexOf(`[DOCUMENT BREAK][${documentName}]`) !== -1) {
+			const regex = new RegExp(`(\\[DOCUMENT BREAK\\]\\[${documentName}\\])(.*?)(\\[DOCUMENT BREAK\\]|$)`, "s");
+			curr_doc_db = curr_doc_db.replace(regex, `$1${documentContent.trim()}$3`);
+		} else {
+			curr_doc_db += `[DOCUMENT BREAK][${documentName}]${documentContent.trim()}`;
+		}
+		document.getElementById("documentdb_data").value = curr_doc_db;
+	}
+
+	function importLorebookAsTextDB(lorebook)
+	{
+		let has_tav_wi_check = (lorebook && lorebook.entries && lorebook.entries["0"] && lorebook.entries["0"].hasOwnProperty("uid"));
+		if (lorebook && has_tav_wi_check)
+		{
+			let lbname = lorebook.name?lorebook.name:"UntitledLorebook";
+			var outputText = [];
+			var entries = (typeof lorebook.entries === "object") ? Object.keys(lorebook.entries).map(function (key) { return lorebook.entries[key]; }) : [];
+
+			for (var i = 0; i < entries.length; i++) {
+				var loreEntry = entries[i];
+				var name = lbname.trim();
+				var comment = loreEntry.comment || "";
+				var content = loreEntry.content || "";
+
+				if(comment == "" && content == "") {
+					continue; //skip blank entries
+				}
+
+				var keyList = []
+					.concat(loreEntry.key || [])
+					.concat(loreEntry.keys || [])
+					.concat(loreEntry.keysecondary || []);
+
+				// Remove duplicates
+				var seen = {};
+				var keys = [];
+				for (var j = 0; j < keyList.length; j++) {
+					var key = keyList[j];
+					if (!seen[key]) {
+						keys.push(key);
+						seen[key] = true;
+					}
+				}
+
+				var description = "### Name: " + name;
+				if (comment && comment !== name) {
+					description += "\n(Description: " + comment + ")";
+				}
+				if (keys.length > 0) {
+					description += "\n(Alternative names: " + keys.join(",") + ")";
+				}
+				description += "\nDetails: " + content.trim();
+				outputText.push(description);
+			}
+
+			if (outputText.length > 0) {
+				replaceDocumentFromTextDB(lbname, outputText.join("\n\n"));
+				return true;
+			}
+		}
+		return false;
+	}
+
 	function load_tavern_obj(obj)
 	{
 		let selectedgreeting = "";
@@ -7818,10 +7977,16 @@ Current version indicated by LITEVER below.
 			}
 			let combinedmem = sysprompt + memory + scenario + examplemsg;
 			let agnaidatafieldsempty = scenario + examplemsg + (obj.personality?obj.personality:"") + greeting;
+			let has_tav_wi_check = (obj && obj.entries && obj.entries["0"] && obj.entries["0"].hasOwnProperty("uid"));
 			//check if it's a world info only card, if so, do not restart game
-			if(combinedmem.trim()=="" && greeting=="" && obj.entries)
+			if(combinedmem.trim()=="" && greeting=="" && has_tav_wi_check)
 			{
-				current_wi = load_tavern_wi(obj,chatopponent,myname);
+				msgboxYesNo("Import World Info / Lorebook into TextDB?\n\nYes = TextDB Used\nNo = World Info Used\n\nIf unsure, select 'No'.","Import World Info / Lorebook Mode", ()=>{
+					importLorebookAsTextDB(obj); //can't fail since same wi check is done beforehand
+					documentdb_data = document.getElementById("documentdb_data").value; //save to db
+				},()=>{
+					current_wi = load_tavern_wi(obj,chatopponent,myname);
+				});
 			}
 			else if(agnaidatafieldsempty.trim()=="" && obj.entries && obj.kind=="memory")
 			{
@@ -9404,6 +9569,23 @@ Current version indicated by LITEVER below.
 		},false);
 	}
 
+	var toastTimeout = null;
+	function showToast(text, duration=2000) //simple disappearing message. set to empty string to hide
+	{
+		if(text=="")
+		{
+			clearTimeout(toastTimeout);
+			document.getElementById("toptoast").classList.add("hidden");
+			return;
+		}
+		document.getElementById("toptoast").classList.remove("hidden");
+		document.getElementById("toptoast").innerText = text;
+		clearTimeout(toastTimeout);
+		toastTimeout = setTimeout(() => {
+			document.getElementById("toptoast").classList.add("hidden");
+		}, duration);
+	}
+
 	var msgboxOnDone = hide_msgbox;
 	function hide_msgbox() {
 		//hide msgbox ONLY
@@ -10340,6 +10522,7 @@ Current version indicated by LITEVER below.
 									koboldcpp_admin_type = (data.admin?data.admin:0);
 									koboldcpp_has_savedatafile = (data.savedata?true:false);
 									koboldcpp_has_guidance = (data.guidance?true:false);
+									koboldcpp_has_embeddings = (data.embeddings ? true : false)
 									let has_password = (data.protected?true:false);
 									let has_txt2img = (data.txt2img?true:false);
 									let no_txt_model = (mdlname=="inactive");
@@ -11166,12 +11349,11 @@ Current version indicated by LITEVER below.
 	{
 		let ondl = function (loadedstorycompressed) {
 			if (loadedstorycompressed) {
-				tempfileobj = decompress_story(loadedstorycompressed);
-				if (tempfileobj) {
-					save_file_button(true);
+				let storyobj = decompress_story(loadedstorycompressed);
+				if (storyobj) {
+					save_file_button(storyobj);
 				}
 				else {
-					tempfileobj = generate_base_storyobj();
 					msgbox("Story could not be downloaded. Try loading it first.", "Download Failed");
 				}
 			} else {
@@ -12958,6 +13140,13 @@ Current version indicated by LITEVER below.
 		hide_popups();
 	}
 
+	function estimate_and_show_textDB_usage() {
+		let currentChunkSize = Number(document.getElementById("documentdb_chunksize").value);
+		let snippetEstimate = currentChunkSize * 1.5 * Number(document.getElementById("documentdb_numresults").value);
+		let numberOfChunks = Math.ceil(document.getElementById("documentdb_data").value.length / (currentChunkSize - (Math.min(currentChunkSize * 0.5, 500))));
+		document.getElementById("documentdb_snippetestimate").innerText = `Estimate of context usage: ${snippetEstimate / 3} tokens (${snippetEstimate} characters). Total chunks: ${numberOfChunks}. Cached chunks: ${Object.keys(embeddings_cache).length}`;
+	}
+
 	function confirm_memory() {
 		current_memory = document.getElementById("memorytext").value;
 		current_anote = document.getElementById("anotetext").value;
@@ -12970,6 +13159,7 @@ Current version indicated by LITEVER below.
 		documentdb_searchrange = document.getElementById("documentdb_searchrange").value;
 		documentdb_chunksize = document.getElementById("documentdb_chunksize").value;
 		documentdb_data = document.getElementById("documentdb_data").value;
+		documentdb_useembeddings = document.getElementById("documentdb_useembeddings").checked ? true : false;
 		documentdb_numresults = parseInt(documentdb_numresults);
 		documentdb_numresults = cleannum(documentdb_numresults,1,10);
 		documentdb_searchrange = parseInt(documentdb_searchrange);
@@ -13344,6 +13534,7 @@ Current version indicated by LITEVER below.
 			documentdb_searchrange = 300;
 			documentdb_chunksize = 800;
 			documentdb_data = "";
+			documentdb_useembeddings = false;
 		}
 		if(localsettings.inject_randomness_seed>0)
 		{
@@ -14651,7 +14842,7 @@ Current version indicated by LITEVER below.
 		});
 	}
 
-	function submit_generation(senttext)
+	const submit_generation = asyncRunner(function* (senttext)
 	{
 		warn_unsaved = true;
 		let newgen = senttext;
@@ -15186,7 +15377,7 @@ Current version indicated by LITEVER below.
 							fullDocument += "\n"+historicalContext;
 						}
 
-						let ltmSnippets = DatabaseMinisearch(fullDocument,ltmSearchQuery,recentTextStr);
+						let ltmSnippets = yield DatabaseMinisearch(fullDocument,ltmSearchQuery,recentTextStr);
 						if (ltmSnippets.length === 0)
 						{
 							console.log("No memory fragments found either as history is too short or no relevant content found");
@@ -15197,7 +15388,7 @@ Current version indicated by LITEVER below.
 							let ltmContent = "";
 							for(let i=0;i<ltmSnippets.length;++i)
 							{
-								ltmContent += `\n[Info Snippet: ${ltmSnippets[i].snippet}]\n`;
+								ltmContent += getInfoSnippet(ltmSnippets[i]);
 							}
 							wistr = ltmContent + wistr;
 						}
@@ -15364,7 +15555,7 @@ Current version indicated by LITEVER below.
 			sync_multiplayer(false);
 		}
 		is_impersonate_user = false;
-	}
+	});
 
 	function get_stop_sequences() //the input object may not always be the same!
 	{
@@ -20201,6 +20392,7 @@ Current version indicated by LITEVER below.
 			case 2:
 				document.getElementById("documentdb_tab").classList.add("active");
 				document.getElementById("documentdb_tab_container").classList.remove("hidden");
+				estimate_and_show_textDB_usage();
 				break;
 			default:
 				break;
@@ -20228,7 +20420,22 @@ Current version indicated by LITEVER below.
 		document.getElementById("documentdb_numresults").value = documentdb_numresults
 		document.getElementById("documentdb_searchrange").value = documentdb_searchrange;
 		document.getElementById("documentdb_chunksize").value = documentdb_chunksize;
+		document.getElementById("documentdb_numresults_slide").value = documentdb_numresults
+		document.getElementById("documentdb_searchrange_slide").value = documentdb_searchrange;
+		document.getElementById("documentdb_chunksize_slide").value = documentdb_chunksize;
 		document.getElementById("documentdb_data").value = documentdb_data;
+		document.getElementById("documentdb_useembeddings").checked = documentdb_useembeddings;
+		if(is_using_kcpp_with_embeddings())
+		{
+			document.getElementById("useembeddingslabel").classList.remove("color_red");
+			document.getElementById("documentdb_useembeddings").disabled = false;
+		}
+		else
+		{
+			document.getElementById("useembeddingslabel").classList.add("color_red");
+			document.getElementById("documentdb_useembeddings").disabled = true;
+			document.getElementById("documentdb_useembeddings").checked = false;
+		}
 	}
 
 	function toggle_logit_bias_string()
@@ -20691,6 +20898,37 @@ Current version indicated by LITEVER below.
 		()=>{
 			//do nothing on cancel
 		},true,true);
+	}
+
+	function export_wi_to_file()
+	{
+		save_wi();
+		update_wi();
+		let fdata = JSON.stringify(pending_wi_obj);
+		saveFileGeneric('world_info', fdata, 'application/json');
+	}
+	function import_wi_from_file()
+	{
+		promptUserForLocalFile((fileDetails) => {
+			try {
+				let { file, fileName, ext, content, plaintext } = fileDetails;
+				let wiToAdd = JSON.parse(plaintext);
+				if (wiToAdd && wiToAdd.length > 0)
+				{
+					for (let i = 0; i < wiToAdd.length; ++i)
+					{
+						let wi = wiToAdd[i];
+						var cg = wi.wigroup ? wi.wigroup : "";
+						wi.wigroup = cg;
+						pending_wi_obj.push(wi);
+					}
+				}
+				update_wi();
+			}
+			catch (e) {
+				console.log("WI File Import Failed: " + e);
+			}
+		});
 	}
 
 	var backLongPressTimer = null;
@@ -21652,15 +21890,160 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	function addDocumentToTextDB()
+	{
+		let tryImportLorebookAsTextDB = (str) => {
+			try {
+				let obj = JSON.parse(str);
+				return importLorebookAsTextDB(obj);
+			}
+			catch (e) {
+				return false
+			}
+		}
+		promptUserForLocalFile((fileDetails) => {
+			let { file, fileName, ext, content, plaintext } = fileDetails;
+			if (!plaintext) {
+				return; //not importable, not text
+			}
+			let importLorebookResult = tryImportLorebookAsTextDB(plaintext);
+			if (!importLorebookResult) {
+				replaceDocumentFromTextDB(fileName, plaintext);
+			}
+		});
+	}
+
+	const generateNewEmbedding = asyncRunner(function* (text) { //generates new embedding from kcpp
+		let reqOpt = {
+			method: 'POST', // or 'PUT'
+			headers: get_kobold_header(),
+			body: JSON.stringify({
+				"input": text,
+				"truncate": true
+			}),
+		};
+		if (globalabortcontroller) {
+			reqOpt.signal = globalabortcontroller.signal;
+		}
+		let sub_endpt = apply_proxy_url(`${custom_kobold_endpoint}/api/extra/embeddings`);
+		return fetch(sub_endpt, reqOpt).then((response) => response.json()).catch(err=>{
+			console.log("error while fetching embeddings: " + err);
+		});
+	});
+	const DBComputeAndLoadEmbedding = asyncRunner(function* (hash, documentName, documentContent) //gets a cached embedding, recomputes if missing
+	{
+		//if db is not initialized, init it
+		const isIndexedDBSupported = !!window.indexedDB;
+		if(isIndexedDBSupported && Object.keys(embeddings_cache).length === 0)
+		{
+			let iddb = yield indexeddb_load('EmbeddingsCache', '');
+			if (iddb && iddb != "") {
+				try {
+					embeddings_cache = JSON.parse(iddb);
+				} catch (e) {
+					console.log("Fail to parse embeddings cache");
+				}
+			}
+		}
+
+		// Check if the embedding is already cached
+		let currentEmbedding = embeddings_cache[hash];
+		if (!currentEmbedding) {
+			// Generate new embedding
+			const embedding = yield generateNewEmbedding(documentContent);
+			if (embedding && embedding.data && embedding.data.length > 0 && embedding.data[0].embedding) {
+				const newembedding = {
+					document: documentName ? documentName : "None",
+					hash: hash,
+					embedding: embedding.data[0].embedding,
+					snippet: documentContent,
+					modelUsed: embedding.model
+				};
+				embeddings_cache[hash] = newembedding;
+				if(isIndexedDBSupported)
+				{
+					indexeddb_save('EmbeddingsCache',JSON.stringify(embeddings_cache));
+				}
+			}
+		}
+		return embeddings_cache[hash];
+	});
+	function DBClearEmbeddings() //erases all cached embeddings
+	{
+		embeddings_cache = {};
+		const isIndexedDBSupported = !!window.indexedDB;
+		if(isIndexedDBSupported)
+		{
+			indexeddb_save('EmbeddingsCache',JSON.stringify(embeddings_cache));
+		}
+		estimate_and_show_textDB_usage();
+	}
+	const getRankedEmbeddings = asyncRunner(function* (searchTerm, paragraphs)
+	{
+		const cosineSimilarity = (A, B) => {
+			let dotproduct = 0;
+			let mA = 0;
+			let mB = 0;
+			for (let i = 0; i < A.length; i++) {
+				dotproduct += A[i] * B[i];
+				mA += A[i] * A[i];
+				mB += B[i] * B[i];
+			}
+			mA = Math.sqrt(mA);
+			mB = Math.sqrt(mB);
+			return dotproduct / (mA * mB);
+		}
+
+		// Generator-style "async" version of getEmbeddings
+		const getEmbeddings = function* (paragraphs) {
+			let embeddings = [];
+			for (let i = 0; i < paragraphs.length; i++) {
+				showToast(`Generating ${i + 1} / ${paragraphs.length} embeddings...`);
+				let documentContent = paragraphs[i].snippet;
+				let documentName = paragraphs[i].document;
+				let documentContentHash = cyrb_hash(`${documentContent}`, 0, 4);
+
+				let embeddingObj = yield DBComputeAndLoadEmbedding(documentContentHash, documentName, documentContent);
+
+				if (embeddingObj) {
+					embeddings.push(embeddingObj);
+				}
+			}
+			return embeddings;
+		};
+
+		// Compute search embedding
+		const searchEmbeddingList = yield* getEmbeddings([{ document: "UserInput", snippet: searchTerm }]);
+
+		// Compute paragraph embeddings
+		const otherEmbeddingList = yield* getEmbeddings(paragraphs);
+
+		if(searchEmbeddingList.length==0 || otherEmbeddingList.length==0)
+		{
+			showToast("Error Getting Embeddings");
+			return [];
+		}
+
+		// Compute similarity scores
+		for (let i = 0; i < otherEmbeddingList.length; i++) {
+			otherEmbeddingList[i].similarity = cosineSimilarity(searchEmbeddingList[0].embedding, otherEmbeddingList[i].embedding);
+		}
+
+		showToast("");
+
+		// Sort by descending similarity
+		otherEmbeddingList.sort((a, b) => a.similarity > b.similarity ? -1 : 1);
+		return otherEmbeddingList;
+	});
+
 	//LTM TextDB Memsnipper searching
 	//searches dbText for searchStr and recentTextStr, returns up to 3 results
-	function DatabaseMinisearch(dbText, searchStr, recentTextStr)
+	const DatabaseMinisearch = asyncRunner(function* (dbText, searchStr, recentTextStr, minSimilarity = 0.2)
 	{	//predefined minisearch constants
 		const chunkSize = documentdb_chunksize;
-		const chunkSizeOverlap = chunkSize*0.5;
+		const chunkSizeOverlap = Math.min(chunkSize*0.5, 500);
 		const maxResultsPerSection = 5; //returns up to 5 matches per section
 		const valuesToReturn = documentdb_numresults;
-		const minSimilarity = 0.2;
 
 		if(dbText=="" || searchStr=="")
 		{
@@ -21716,7 +22099,8 @@ Current version indicated by LITEVER below.
 			let comparisons = sectionSummary.map(doc => {
 				return {
 					match: doc.score,
-					snippet: doc.snippet
+					snippet: doc.snippet,
+					document: doc.document
 				};
 			}).sort((a, b) => {
 				return (a.match > b.match ? -1 : 1);
@@ -21743,76 +22127,104 @@ Current version indicated by LITEVER below.
 		searchStr = replace_search_placeholders(searchStr);
 		recentTextStr = replace_search_placeholders(recentTextStr);
 
-		let i = 0, startLoc = 0;
-		while (startLoc < allText.length && i < Number.MAX_SAFE_INTEGER) {
-			let actualChunkStart = Math.max(0, startLoc - chunkSizeOverlap);
-			let actualChunkEnd = Math.min(allText.length, actualChunkStart + chunkSize);
-			let currentSnippet = allText.substring(actualChunkStart, actualChunkEnd);
-			paragraphs.push(currentSnippet);
-			startLoc = actualChunkEnd;
-			i++;
+		let i = 0;
+        allText.split("[DOCUMENT BREAK]").forEach(doc => {
+            doc = doc.trim();
+            if (!doc) { return; }
+            let titleMatch = doc.match(/^\[([^\n]+?)\]/);
+            let title = null;
+            if (titleMatch !== null)
+            {
+                doc = doc.replace(titleMatch[0], "");
+                title = titleMatch[1];
+            }
+            let startLoc = 0;
+            while (startLoc < doc.length && i < Number.MAX_SAFE_INTEGER) {
+                let actualChunkStart = Math.max(0, startLoc - chunkSizeOverlap);
+                let actualChunkEnd = Math.min(doc.length, actualChunkStart + chunkSize);
+                let currentSnippet = doc.substring(actualChunkStart, actualChunkEnd);
+                paragraphs.push({snippet: currentSnippet, document: title});
+                startLoc = actualChunkEnd;
+                i++;
+            }
+        });
+        paragraphs = paragraphs.map(c => {
+            c.snippet = c.snippet.replace(/\n\n/g, "\n");
+            return c;
+        }).filter(c => !!c.snippet);
+
+		let miniSearch;
+		if (documentdb_useembeddings && is_using_kcpp_with_embeddings())
+		{
+			let searchResults = yield getRankedEmbeddings(searchStr, paragraphs);
+			searchResults = searchResults.filter(x=>x.similarity>minSimilarity);
+			searchResults = searchResults.slice(0, valuesToReturn);
+			return searchResults;
 		}
-		paragraphs = paragraphs.map(c => c.replace(/\n\n/g, "\n")).filter(s => !!s);
-		let pgcount = 0;
-		paragraphs = paragraphs.map(txt => {
-			pgcount += 1;
-			return {
-				id: pgcount,
-				snippet: txt,
-				text: stripToTokens(txt),
-				category: "context"
-			}
-		});
-
-		// a list of commonly used words that have little meaning and can be excluded from analysis.
-		const stopwords = [
-			'about', 'above', 'after', 'again', 'all', 'also', 'am', 'an', 'and', 'another',
-			'any', 'are', 'as', 'at', 'be', 'because', 'been', 'before', 'being', 'below',
-			'between', 'both', 'but', 'by', 'came', 'can', 'cannot', 'come', 'could', 'did',
-			'do', 'does', 'doing', 'during', 'each', 'few', 'for', 'from', 'further', 'get',
-			'got', 'has', 'had', 'he', 'have', 'her', 'here', 'him', 'himself', 'his', 'how',
-			'if', 'in', 'into', 'is', 'it', 'its', 'itself', 'like', 'make', 'many', 'me',
-			'might', 'more', 'most', 'much', 'must', 'my', 'myself', 'never', 'now', 'of', 'on',
-			'only', 'or', 'other', 'our', 'ours', 'ourselves', 'out', 'over', 'own',
-			'said', 'same', 'see', 'she', 'should', 'since', 'so', 'some', 'still', 'such', 'take', 'than',
-			'that', 'the', 'their', 'theirs', 'them', 'themselves', 'then', 'there', 'these', 'they',
-			'this', 'those', 'through', 'to', 'too', 'under', 'until', 'up', 'very', 'was',
-			'way', 'we', 'well', 'were', 'what', 'where', 'when', 'which', 'while', 'who',
-			'whom', 'with', 'would', 'why', 'you', 'your', 'yours', 'yourself',
-			'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
-			'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '$', '1',
-			'2', '3', '4', '5', '6', '7', '8', '9', '0', '_',
-			'll', 're'
-		];
-		//step 2: initialize minisearch engine
-		let miniSearch = new MiniSearch({
-			fields: ["text"], // fields to index for full-text search
-			storeFields: ['category', "snippet"], // fields to return with search results
-			searchOptions: {
-				fuzzy: 0,
-				bm25: { // https://lucaong.github.io/minisearch/types/MiniSearch.BM25Params.html
-					b: 0.7, // Normalisation for the length of the string
-					d: 0.7, // Minimum significance of a term showing up once
-					k: 1.5 // Term frequency falloff (higher values allow for bigger differences based on amount of repetition of terms)
+		else
+		{
+			let pgcount = 0;
+			paragraphs = paragraphs.map(paragraph => {
+				pgcount += 1;
+				return {
+					id: pgcount,
+					snippet: paragraph.snippet,
+					text: stripToTokens(paragraph.snippet),
+					category: "context",
+					document: paragraph.document
 				}
-			},
-			processTerm: (term, _fieldName) => {
-				let processedTerm = stopwords.includes(term.toLowerCase()) ? false : MiniSearch.getDefault("processTerm")(term);
-				return processedTerm;
-			},
-			tokenize: (str) => {
-				let terms = MiniSearch.getDefault("tokenize")(str);
-				return terms.concat(terms.map(porterStemmer));
-			}
-		});
-		miniSearch.addAll(paragraphs); //populate minisearch with paragraphs
+			});
 
-		//step 3: run the search over the dbText to generate matches
-		let searchResults = searchAndScore(searchStr,recentTextStr,paragraphs);
-		searchResults = searchResults.filter(x=>x.match>minSimilarity);
-		searchResults = searchResults.slice(0, valuesToReturn);
-		return searchResults;
-	}
+			// a list of commonly used words that have little meaning and can be excluded from analysis.
+			const stopwords = [
+				'about', 'above', 'after', 'again', 'all', 'also', 'am', 'an', 'and', 'another',
+				'any', 'are', 'as', 'at', 'be', 'because', 'been', 'before', 'being', 'below',
+				'between', 'both', 'but', 'by', 'came', 'can', 'cannot', 'come', 'could', 'did',
+				'do', 'does', 'doing', 'during', 'each', 'few', 'for', 'from', 'further', 'get',
+				'got', 'has', 'had', 'he', 'have', 'her', 'here', 'him', 'himself', 'his', 'how',
+				'if', 'in', 'into', 'is', 'it', 'its', 'itself', 'like', 'make', 'many', 'me',
+				'might', 'more', 'most', 'much', 'must', 'my', 'myself', 'never', 'now', 'of', 'on',
+				'only', 'or', 'other', 'our', 'ours', 'ourselves', 'out', 'over', 'own',
+				'said', 'same', 'see', 'she', 'should', 'since', 'so', 'some', 'still', 'such', 'take', 'than',
+				'that', 'the', 'their', 'theirs', 'them', 'themselves', 'then', 'there', 'these', 'they',
+				'this', 'those', 'through', 'to', 'too', 'under', 'until', 'up', 'very', 'was',
+				'way', 'we', 'well', 'were', 'what', 'where', 'when', 'which', 'while', 'who',
+				'whom', 'with', 'would', 'why', 'you', 'your', 'yours', 'yourself',
+				'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+				'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '$', '1',
+				'2', '3', '4', '5', '6', '7', '8', '9', '0', '_',
+				'll', 're'
+			];
+			//step 2: initialize minisearch engine
+			miniSearch = new MiniSearch({
+				fields: ["text"], // fields to index for full-text search
+				storeFields: ['category', "snippet", "document"], // fields to return with search results
+				searchOptions: {
+					fuzzy: 0,
+					bm25: { // https://lucaong.github.io/minisearch/types/MiniSearch.BM25Params.html
+						b: 0.7, // Normalisation for the length of the string
+						d: 0.7, // Minimum significance of a term showing up once
+						k: 1.5 // Term frequency falloff (higher values allow for bigger differences based on amount of repetition of terms)
+					}
+				},
+				processTerm: (term, _fieldName) => {
+					let processedTerm = stopwords.includes(term.toLowerCase()) ? false : MiniSearch.getDefault("processTerm")(term);
+					return processedTerm;
+				},
+				tokenize: (str) => {
+					let terms = MiniSearch.getDefault("tokenize")(str);
+					return terms.concat(terms.map(porterStemmer));
+				}
+			});
+			miniSearch.addAll(paragraphs); //populate minisearch with paragraphs
+
+			//step 3: run the search over the dbText to generate matches
+			let searchResults = searchAndScore(searchStr, recentTextStr, paragraphs);
+			searchResults = searchResults.filter(x => x.match > minSimilarity);
+			searchResults = searchResults.slice(0, valuesToReturn);
+			return searchResults;
+		}
+	});
 	</script>
 
 </head>
@@ -21916,8 +22328,8 @@ Current version indicated by LITEVER below.
 			</div>
 			<div id="connectstatusdiv">
 				<div id="connectstatus">Connecting</div>
-				<div class="hidden" style="font-size: 12px;" id="connectstatusmultiplayer"></div>
-				<div class="hidden color_orange" style="font-size: 12px;" id="connectstatusproxied">(Proxied)</div>
+				<div class="hidden" style="font-size: 10px;" id="connectstatusmultiplayer"></div>
+				<div class="hidden color_orange" style="font-size: 10px;" id="connectstatusproxied">(Proxied)</div>
 			</div>
 		</div>
 
@@ -22114,12 +22526,18 @@ Current version indicated by LITEVER below.
 				</div>
 
 				<div style="float:right;">
-					<div class="settinglabel"><button type="button" class="btn purplebtn widelbtn" style="padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;font-size:8px" id="wiexport" onclick="wi_group_export()">[Export / Import Group]</button></div>
-					<div class="settinglabel" style="padding: 4px;">
-						<div class="justifyleft settingsmall" title="Toggles all entries in entire group on/off">Toggle Group </div>
-						<input title="Toggle Entire Group" type="checkbox" id="toggle_wi_group" style="margin:0px 0 0;" onchange="toggle_wi_group_enabled()" checked>
+					<div class="settinglabel">
+						<button type="button" class="btn purplebtn widelbtn" style="padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;font-size:8px" id="wiexport" onclick="wi_group_export()">[Export / Import Group]</button>
+						<button type="button" class="btn purplebtn widelbtn" style="padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;font-size:8px" id="wiexport" onclick="export_wi_to_file()">[Export all WI to file]</button>
+						<button type="button" class="btn purplebtn widelbtn" style="padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;font-size:8px" id="wiexport" onclick="import_wi_from_file()">[Import all WI from file]</button>
 					</div>
-					<input title="World Info Quick Search" class="settinglabel miniinput" style="margin: 3px; width: 90px;" type="text" placeholder="Quick Search" value="" id="wiquicksearch" oninput="wi_quick_search()">
+					<div style="float:right;">
+						<div class="settinglabel" style="padding: 4px;">
+							<div class="justifyleft settingsmall" title="Toggles all entries in entire group on/off">Toggle Group </div>
+							<input title="Toggle Entire Group" type="checkbox" id="toggle_wi_group" style="margin:0px 0 0;" onchange="toggle_wi_group_enabled()" checked>
+						</div>
+						<input title="World Info Quick Search" class="settinglabel miniinput" style="margin: 3px; width: 90px;" type="text" placeholder="Quick Search" value="" id="wiquicksearch" oninput="wi_quick_search()">
+					</div>
 				</div>
 
 				<div class="settinglabel" style="padding: 4px;">
@@ -22157,40 +22575,80 @@ Current version indicated by LITEVER below.
 				</div>
 
 				<div class="settinglabel" style="padding: 4px;">
-					<div class="justifyleft settingsmall" title="Search Includes Context History">Search Includes Context History <span class="helpicon">?
-						<span class="helptext">If enabled, the entire story/chat history is used as a searchable document</span></span></div>
-					<input title="Search Context History" type="checkbox" id="documentdb_searchhistory" style="margin:0px 0 0;">
+					<div class="justifyleft settingsmall" id="useembeddingslabel" title="Use Embeddings for Searching">Use Embeddings for Searching <span class="helpicon">?
+						<span class="helptext">If enabled, the text DB is converted to vectors using the KoboldCPP embedding endpoint. If not, it uses the traditional TextDB keyword based search. Generally, embeddings are slower to generate initially (so when making changes to DB the next response might be very slow) - but may understand the context of the sentence better while also potentially supporting multiple languages.</span></span></div>
+					<input title="Use Embeddings for Searching" type="checkbox" id="documentdb_useembeddings" style="margin:0px 0 0;">
 				</div>
 
 				<div class="settinglabel" style="padding: 4px;">
-					<div class="justifyleft settingsmall">Num. Search Results <span class="helpicon">?
-					<span class="helptext">Controls how many snippets to retrieve from DB</span></span></div>
-					<input title="Number of Search Results" class="settinglabel miniinput"
-						style="height:16px;margin:0px 4px 0; width:90px;font-size:10px;" type="number"
-						min="1" max="5" step="1" pattern="\d+" placeholder="" value="" id="documentdb_numresults">
+					<div class="justifyleft settingsmall" title="Delete Embedding cache">Delete Embedding cache <span class="helpicon">?
+						<span class="helptext">When embeddings are enabled, they get generated by the KCPP server and then are cached in the web browser. This button clears the browser cache.</span></span></div>
+					<button title="Delete Embedding cache" class="btn btn-primary" onclick="DBClearEmbeddings()" style="margin:0px 0 0;">Delete Embedding cache</button>
 				</div>
+
 				<div class="settinglabel" style="padding: 4px;">
-					<div class="justifyleft settingsmall">Nearby Text Amount <span class="helpicon">?
-						<span class="helptext">Controls	amount of nearby text included in the search query</span></span>
-					</div>
-					<input title="Nearby Text Amount" class="settinglabel miniinput"
-						style="height:16px;margin:0px 4px 0; width:90px;font-size:10px;" type="number"
-						min="1" step="1" pattern="\d+" placeholder="" value="" id="documentdb_searchrange">
+					<div class="justifyleft settingsmall" title="Add document to TextDB">Add document to TextDB <span class="helpicon">?
+						<span class="helptext">Tries to extract the text from the document, adding (or overwriting) an existing document in the TextDB with the same name.</span></span></div>
+					<button title="Add document to TextDB" class="btn btn-primary" onclick="addDocumentToTextDB()" style="margin:0px 0 0;">Add document to TextDB</button>
 				</div>
+
 				<div class="settinglabel" style="padding: 4px;">
-					<div class="justifyleft settingsmall">Search Chunk Size <span class="helpicon">?
-					<span class="helptext">Controls the size of each snippet being searched for</span></span>
-					</div>
-					<input title="Search Chunk Size" class="settinglabel miniinput"
-						style="height:16px;margin:0px 4px 0; width:90px;font-size:10px;" type="number"
-						min="0" step="1" pattern="\d+" placeholder="" value="" id="documentdb_chunksize">
+					<div class="justifyleft settingsmall" title="Search Includes Context History">Search Includes Context History <span class="helpicon">?
+						<span class="helptext">If enabled, the entire story/chat history is used as a searchable document.</span></span></div>
+					<input title="Search Context History" type="checkbox" id="documentdb_searchhistory" style="margin:0px 0 0;">
 				</div>
+
+				<div class="settingitem" style="width: unset;">
+					<div class="settinglabel" style="padding: 4px;">
+						<div class="justifyleft settingsmall">Num. Search Results <span class="helpicon">?<span class="helptext">Controls how many search results to retrieve from DB. Each search result is added to the context as a snippet of the DB
+						document.</span></span></div>
+						<input title="Number of Search Results" inputmode="numeric" class="justifyright flex-push-right settingsmall" id="documentdb_numresults" oninput="
+						document.getElementById('documentdb_numresults_slide').value = this.value; estimate_and_show_textDB_usage();">
+					</div>
+					<div><input title="Number of Search Results Slider" type="range" min="1" max="10" step="1" id="documentdb_numresults_slide" oninput="
+						document.getElementById('documentdb_numresults').value = this.value; estimate_and_show_textDB_usage();"></div>
+					<div class="settingminmax">
+						<div class="justifyleft">1</div>
+						<div class="justifyright">10</div>
+					</div>
+				</div>
+
+				<div class="settingitem" style="width: unset;">
+					<div class="settinglabel" style="padding: 4px;">
+						<div class="justifyleft settingsmall">Extra Text For Search <span class="helpicon">?<span class="helptext">Adds the specified amount of characters from the context before the last user message to the search query.</span></span></div>
+						<input title="Extra Text For Search" inputmode="numeric" class="justifyright flex-push-right settingsmall" id="documentdb_searchrange" oninput="
+						document.getElementById('documentdb_searchrange_slide').value = this.value;">
+					</div>
+					<div><input title="Extra Text For Search Slider" type="range" min="50" max="500" step="10" id="documentdb_searchrange_slide" oninput="
+						document.getElementById('documentdb_searchrange').value = this.value;"></div>
+					<div class="settingminmax">
+						<div class="justifyleft">50</div>
+						<div class="justifyright">500</div>
+					</div>
+				</div>
+
+				<div class="settingitem" style="width: unset;">
+					<div class="settinglabel" style="padding: 4px;">
+						<div class="justifyleft settingsmall">Snippet Size <span class="helpicon">?<span class="helptext">Controls the size (in characters) of each snippet taken from the documents.</span></span></div>
+						<input title="Snippet Size" inputmode="numeric" class="justifyright flex-push-right settingsmall" id="documentdb_chunksize" oninput="
+						document.getElementById('documentdb_chunksize_slide').value = this.value; estimate_and_show_textDB_usage();">
+					</div>
+					<div><input title="Snippet Size Slider" type="range" min="100" max="3000" step="50" id="documentdb_chunksize_slide" oninput="
+						document.getElementById('documentdb_chunksize').value = this.value; estimate_and_show_textDB_usage();"></div>
+					<div class="settingminmax">
+						<div class="justifyleft">100</div>
+						<div class="justifyright">3000</div>
+					</div>
+				</div>
+
+				<div class="settinglabel settingsmall" style="padding: 4px;" id="documentdb_snippetestimate"></div>
+				<div class="settinglabel settingsmall" style="padding: 4px;">Please note, as with world info this can cause context reprocessing.  It is recommended to have at least 8K context size and a good prompt processing speed to use this feature.</div>
 				<div class="settinglabel">
 					<div class="justifyleft"><br>TextDB Storage<span class="helpicon">?<span
-						class="helptext">Paste as much raw text data here as you like. E.g. background information, reference documents, etc. This text will populate the database that will be chunked and searched by TextDB.</span></span></div>
+						class="helptext">Paste as much raw text data here as you like. E.g. background information, reference documents, etc. This text will populate the database that will be chunked and searched by TextDB. This can be split using "[DOCUMENT BREAK]" to split the overall database into smaller documents, and titles can be added with "[DOCUMENT BREAK][Title of document]This is the content of the document".</span></span></div>
 				</div>
-				<textarea title="Edit TextDB" class="form-control menuinput_multiline" id="documentdb_data" style="height: 120px;"
-					placeholder="Paste as much text data here as you like. This text will populate the database that will be searched by TextDB."></textarea>
+				<textarea title="Edit TextDB" class="form-control menuinput_multiline" oninput="estimate_and_show_textDB_usage()" id="documentdb_data" style="height: 120px;"
+					placeholder="Paste as much text data here as you like. This text will populate the database that will be searched by TextDB. This can be split using [DOCUMENT BREAK] to split the overall database into smaller documents, and titles can be added with [DOCUMENT BREAK][Title of document]This is the content of the document."></textarea>
 			</div>
 			<div id="memorycontainerfooter" class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="confirm_memory();save_wi();commit_wi_changes();render_gametext();sync_multiplayer(true);hide_popups()">OK</button>
@@ -24363,6 +24821,9 @@ Current version indicated by LITEVER below.
 		</div>
 	</div>
 
+	<div class="toptoast hidden" id="toptoast"></div>
+
+	<input type="file" id="tempfilepicker" style="display:none;" accept="*">
 
 </body>
 
