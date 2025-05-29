@@ -14842,7 +14842,7 @@ Current version indicated by LITEVER below.
 		});
 	}
 
-	async function submit_generation(senttext)
+	const submit_generation = asyncRunner(function* (senttext)
 	{
 		warn_unsaved = true;
 		let newgen = senttext;
@@ -15377,7 +15377,7 @@ Current version indicated by LITEVER below.
 							fullDocument += "\n"+historicalContext;
 						}
 
-						let ltmSnippets = await DatabaseMinisearch(fullDocument,ltmSearchQuery,recentTextStr);
+						let ltmSnippets = yield DatabaseMinisearch(fullDocument,ltmSearchQuery,recentTextStr);
 						if (ltmSnippets.length === 0)
 						{
 							console.log("No memory fragments found either as history is too short or no relevant content found");
@@ -15555,7 +15555,7 @@ Current version indicated by LITEVER below.
 			sync_multiplayer(false);
 		}
 		is_impersonate_user = false;
-	}
+	});
 
 	function get_stop_sequences() //the input object may not always be the same!
 	{
@@ -21913,7 +21913,7 @@ Current version indicated by LITEVER below.
 		});
 	}
 
-	async function generateNewEmbedding(text) { //generates new embedding from kcpp
+	const generateNewEmbedding = asyncRunner(function* (text) { //generates new embedding from kcpp
 		let reqOpt = {
 			method: 'POST', // or 'PUT'
 			headers: get_kobold_header(),
@@ -21926,37 +21926,36 @@ Current version indicated by LITEVER below.
 			reqOpt.signal = globalabortcontroller.signal;
 		}
 		let sub_endpt = apply_proxy_url(`${custom_kobold_endpoint}/api/extra/embeddings`);
-		return fetch(sub_endpt, reqOpt).then((response) => response.json());
-	}
-	async function DBComputeAndLoadEmbedding(hash,  documentName, documentContent) //gets a cached embedding, recomputes if missing
+		return fetch(sub_endpt, reqOpt).then((response) => response.json()).catch(err=>{
+			console.log("error while fetching embeddings: " + err);
+		});
+	});
+	const DBComputeAndLoadEmbedding = asyncRunner(function* (hash, documentName, documentContent) //gets a cached embedding, recomputes if missing
 	{
-		let generatorFn = async(hash, documentName, documentContent) => {
-			let embedding = await generateNewEmbedding(documentContent);
+		// Check if the embedding is already cached
+		let currentEmbedding = embeddings_cache[hash];
+		if (!currentEmbedding) {
+			// Generate new embedding
+			const embedding = yield generateNewEmbedding(documentContent);
 			if (embedding && embedding.data && embedding.data.length > 0 && embedding.data[0].embedding) {
-				return {
+				const newembedding = {
 					document: documentName ? documentName : "None",
 					hash: hash,
 					embedding: embedding.data[0].embedding,
 					snippet: documentContent,
 					modelUsed: embedding.model
-				}
+				};
+				embeddings_cache[hash] = newembedding;
 			}
-			return null;
-		};
-
-		let currentEmbedding = embeddings_cache[hash];
-		if (!currentEmbedding) {
-			let newembedding = await generatorFn(hash, documentName, documentContent);
-			embeddings_cache[newembedding.hash] = newembedding;
 		}
 		return embeddings_cache[hash];
-	}
+	});
 	function DBClearEmbeddings() //erases all cached embeddings
 	{
 		embeddings_cache = {};
 	}
-	async function getRankedEmbeddings(searchTerm, paragraphs) {
-
+	const getRankedEmbeddings = asyncRunner(function* (searchTerm, paragraphs)
+	{
 		const cosineSimilarity = (A, B) => {
 			let dotproduct = 0;
 			let mA = 0;
@@ -21971,38 +21970,51 @@ Current version indicated by LITEVER below.
 			return dotproduct / (mA * mB);
 		}
 
-		const getEmbeddings = async (paragraphs) => { //paragraphs is a list. each element is an object {snippet,document}
-			let embeddings = []
+		// Generator-style "async" version of getEmbeddings
+		const getEmbeddings = function* (paragraphs) {
+			let embeddings = [];
 			for (let i = 0; i < paragraphs.length; i++) {
 				showToast(`Generating ${i + 1} / ${paragraphs.length} embeddings...`);
-				let embeddingObj = null;
 				let documentContent = paragraphs[i].snippet;
 				let documentName = paragraphs[i].document;
 				let documentContentHash = cyrb_hash(`${documentContent}`, 0, 4);
-				embeddingObj = await DBComputeAndLoadEmbedding(documentContentHash, documentName, documentContent);
-				if (!!embeddingObj) {
-					embeddings.push(embeddingObj)
+
+				let embeddingObj = yield DBComputeAndLoadEmbedding(documentContentHash, documentName, documentContent);
+
+				if (embeddingObj) {
+					embeddings.push(embeddingObj);
 				}
 			}
-			return embeddings
+			return embeddings;
+		};
+
+		// Compute search embedding
+		const searchEmbeddingList = yield* getEmbeddings([{ document: "UserInput", snippet: searchTerm }]);
+
+		// Compute paragraph embeddings
+		const otherEmbeddingList = yield* getEmbeddings(paragraphs);
+
+		if(searchEmbeddingList.length==0 || otherEmbeddingList.length==0)
+		{
+			showToast("Error Getting Embeddings");
+			return [];
 		}
 
-		let searchEmbeddingList = await getEmbeddings([{ "document": "UserInput", "snippet": searchTerm }]);
-		let otherEmbeddingList = await getEmbeddings(paragraphs);
+		// Compute similarity scores
+		for (let i = 0; i < otherEmbeddingList.length; i++) {
+			otherEmbeddingList[i].similarity = cosineSimilarity(searchEmbeddingList[0].embedding, otherEmbeddingList[i].embedding);
+		}
 
-		let i = 0;
-		otherEmbeddingList.forEach(embedding => {
-			embedding.similarity = cosineSimilarity(searchEmbeddingList[0].embedding, embedding.embedding)
-		});
 		showToast("");
 
-		otherEmbeddingList.sort((a, b) => a.similarity > b.similarity ? -1 : 1)
-		return otherEmbeddingList
-	}
+		// Sort by descending similarity
+		otherEmbeddingList.sort((a, b) => a.similarity > b.similarity ? -1 : 1);
+		return otherEmbeddingList;
+	});
 
 	//LTM TextDB Memsnipper searching
 	//searches dbText for searchStr and recentTextStr, returns up to 3 results
-	async function DatabaseMinisearch(dbText, searchStr, recentTextStr, minSimilarity = 0.2)
+	const DatabaseMinisearch = asyncRunner(function* (dbText, searchStr, recentTextStr, minSimilarity = 0.2)
 	{	//predefined minisearch constants
 		const chunkSize = documentdb_chunksize;
 		const chunkSizeOverlap = Math.min(chunkSize*0.5, 500);
@@ -22120,7 +22132,7 @@ Current version indicated by LITEVER below.
 		let miniSearch;
 		if (documentdb_useembeddings && is_using_kcpp_with_embeddings())
 		{
-			let searchResults = await getRankedEmbeddings(searchStr, paragraphs);
+			let searchResults = yield getRankedEmbeddings(searchStr, paragraphs);
 			searchResults = searchResults.filter(x=>x.similarity>minSimilarity);
 			searchResults = searchResults.slice(0, valuesToReturn);
 			return searchResults;
@@ -22188,7 +22200,7 @@ Current version indicated by LITEVER below.
 			searchResults = searchResults.slice(0, valuesToReturn);
 			return searchResults;
 		}
-	}
+	});
 	</script>
 
 </head>
