@@ -4120,7 +4120,9 @@ Current version indicated by LITEVER below.
 		indexeddb_load("story",""),
 		indexeddb_load("bgimg",""),
 		indexeddb_load("savedcustomcss",""),
-	]).then(([loadedsettingsjson, loadedstorycompressed, loadedbackgroundimg, currcss]) => {
+		indexeddb_load("savedusermod",""),
+		indexeddb_load("usermodprops",""),
+	]).then(([loadedsettingsjson, loadedstorycompressed, loadedbackgroundimg, currcss, currmod, modpropsstr]) => {
 	try
 	{
 		if (loadedsettingsjson != null && loadedsettingsjson != "" && loadedstorycompressed != null && loadedstorycompressed != "") {
@@ -4192,6 +4194,31 @@ Current version indicated by LITEVER below.
 		{
 			console.log("Custom CSS reset.")
 			indexeddb_save("savedcustomcss", "");
+			window.history.replaceState(null, null, window.location.pathname);
+		}
+
+		//load custom mods
+		let resetmod = urlParams.get('resetmod');
+		if (currmod && currmod != "" && !resetmod && modpropsstr)
+		{
+			try {
+				let parsedprops = JSON.parse(modpropsstr);
+				if(parsedprops.persist)
+				{
+					console.log("Applying user mod on startup.");
+					var userModScript = new Function(currmod);
+					userModScript();
+					console.log("User mod applied.");
+				}
+			} catch (e) {
+				console.log("Failed to apply mod.");
+			}
+		}
+		else if(resetmod)
+		{
+			console.log("Custom Mod reset.")
+			indexeddb_save("savedusermod", "");
+			indexeddb_save("usermodprops", "");
 			window.history.replaceState(null, null, window.location.pathname);
 		}
 
@@ -13414,9 +13441,23 @@ Current version indicated by LITEVER below.
 	function apply_user_mod()
 	{
 		indexeddb_load("savedusermod","").then(currmod=>{
-			inputBoxOkCancel("Here, you can apply third-party mod scripts shared by other users.<br><br><span class='color_red'>Caution: This mod will have full access to your story and API keys, so only run third-party mods that you trust! For security, mods must always be manually applied every time.</span><br><br>Want to start modding? <a href='#' class='color_blueurl' onclick='simplemodexample()'>Click here</a> to load a simple example mod.","Apply Third-Party Mod",currmod,"Paste Mod Script Here",()=>{
+			indexeddb_load("usermodprops","").then(modpropsstr=>{
+			let applyonstart = false;
+			try
+			{
+				if (modpropsstr) {
+					let parsedprops = JSON.parse(modpropsstr);
+					if (parsedprops.persist) {
+						applyonstart = true;
+					}
+				}
+			} catch (e) { }
+			let txt = `Here, you can apply third-party mod scripts shared by other users.<br><br><span class='color_red'>Caution: This mod will have full access to your story and API keys, so only run third-party mods that you trust!<br><br>Mods must always be manually applied every time unless 'Apply Mod On Startup' is selected. If a startup mod breaks KoboldAI Lite, add ?resetmod=1 to the url to uninstall it.</span><br><br>Want to start modding? <a href='#' class='color_blueurl' onclick='simplemodexample()'>Click here</a> to load a simple example mod.<br><br><div><span>Apply Mod On Startup? (Extreme Caution!) </span><input type='checkbox' id='apply_mod_on_start' style='vertical-align: top;' ${applyonstart?'checked':''}></div>`;
+			inputBoxOkCancel(txt,"Apply Third-Party Mod",currmod,"Paste Mod Script Here",()=>{
 			let userinput = getInputBoxValue().trim();
+			applyonstart = (document.getElementById("apply_mod_on_start").checked?true:false);
 			indexeddb_save("savedusermod",userinput);
+			indexeddb_save("usermodprops",JSON.stringify({"persist":applyonstart}));
 			if(userinput!="" && userinput.trim()!="")
 			{
 				var userModScript = new Function(userinput);
@@ -13426,6 +13467,7 @@ Current version indicated by LITEVER below.
 			()=>{
 				//do nothing on cancel
 			},true,true);
+			});
 		});
 	}
 
@@ -13588,6 +13630,7 @@ Current version indicated by LITEVER below.
 			clear_bg_img();
 			pick_default_horde_models();
 			indexeddb_save("savedusermod","");
+			indexeddb_save("usermodprops","");
 			indexeddb_save("savedcustomcss", "");
 			let styleElement = document.getElementById('custom_css');
 			styleElement.innerHTML = "";
