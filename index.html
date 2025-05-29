@@ -21857,7 +21857,7 @@ Current version indicated by LITEVER below.
                 populateWordsFrequencyTables(freq, nTotalRows, arrayOfValidTextChildWithNrow)
             } catch (err) {
                 console.error("wordsFrequencyAnalyzers::err on webserver request/response:", err, "#")
-                console.log(`wordsFrequencyAnalyzers::wordsFrequencyURL: ${typeof wordsFrequencyURL}:`, wordsFrequencyURL, "#")
+                console.error(`wordsFrequencyAnalyzers::wordsFrequencyURL: ${typeof wordsFrequencyURL}:`, wordsFrequencyURL, "#")
                 setElementCssClassById("waiting-for-be", "collapse")
                 setElementCssClassById("waiting-for-be-error", "display-block")
             }
@@ -22056,6 +22056,8 @@ Current version indicated by LITEVER below.
         currentTableOfWordsScrollable.innerHTML = ""
         let currentTableTitle = document.getElementById("id-current-table-of-words-title")
         currentTableTitle.innerText = ""
+        const filterValue = document.getElementById("id-filtered-value")
+        filterValue.innerText = ""
         const choiceWordFreqAnalyzerEl = document.getElementById('id-input-webserver-wordfreq-checkbox')
         console.log("choiceWordFreqAnalyzerEl checked:", typeof choiceWordFreqAnalyzerEl.checked, choiceWordFreqAnalyzerEl.checked, "#")
         switch (choiceWordFreqAnalyzerEl.checked) {
@@ -22167,7 +22169,6 @@ Current version indicated by LITEVER below.
 	}
 
     function getRepetitionsText(iReduced) {
-        // return isMobile(tabletInnerSize) ? `${iReduced["word_prefix"]}: ${iReduced["count"]} reps.` : `${iReduced["word_prefix"]}: ${iReduced["count"]} repetitions`
         return `${iReduced["word_prefix"]}: ${iReduced["count"]}`
     }
 
@@ -22463,7 +22464,6 @@ Current version indicated by LITEVER below.
     }
 
     function backToListFromCurrentTable() {
-        // setPropertyElementsByArrayId(["id-filtered-value", "id-list-of-words-scrollable"], "display", "block")
         setPropertyById("id-list-of-words-container", "display", "block")
         setPropertyById("id-current-table-of-words-container", "display", "none")
         hideWordsFreqMobileMenu()
@@ -22514,14 +22514,10 @@ Current version indicated by LITEVER below.
         setPropertyById("words-freq-menu", "padding", "5px");
         setPropertyById("words-freq-menu", "padding-top", "5px");
         setPropertyById("words-freq-menu", "padding-right", "25px");
-        setPropertyById("words-freq-menu", "right", "7%");
     }
 
     function hideWordsFreqMobileMenu() {
-        // todo: debug
-        console.error("hideWordsFreqMobileMenu::")
         if (isMobile()) {
-            console.error("hideWordsFreqMobileMenu::mobile?", isMobile(), "#")
             setPropertyById("words-freq-menu", "display", "none");
             removePropertyById("words-freq-menu", "position");
             removePropertyById("words-freq-menu", "z-index");
@@ -22639,6 +22635,9 @@ Current version indicated by LITEVER below.
 	.margin2px-bottom {
 		margin-bottom: 2px;
 	}
+    .margin4px-top {
+        margin-top: 4px;
+    }
 	.margin4px-left {
 		margin-left: 4px;
 	}
@@ -22688,12 +22687,12 @@ Current version indicated by LITEVER below.
 		background-color: #4db4ea;
 	}
     #words-frequency {
-        max-height: calc(100vh - 400px);
+        max-height: calc(100vh - 404px);
     }
 
     .scrollable-table-container {
         overflow: auto;
-        max-height: calc(100vh - 400px);
+        max-height: calc(100vh - 404px);
     }
 
     #id-list-of-words-scrollable > list > li {
@@ -22729,15 +22728,22 @@ Current version indicated by LITEVER below.
     }
 
     /* Classic UI Main Text, lite.koboldai.net */
+    @media screen and (max-height: 1024px) and (max-width: 1366px) and (orientation: landscape) {
+        .scrollable-table-container {
+            max-height: calc(100vh - 394px);
+        }
+    }
+    @media screen and (max-width:1024px) and (orientation: portrait) {
+        .scrollable-table-container {
+            max-height: calc(100vh - 410px);
+        }
+    }
     @media screen and (max-width:1024px) and (orientation: portrait), screen and (max-height: 1024px) and (max-width: 1366px) and (orientation: landscape) {
         #words-frequency {
-            max-height: calc(100vh - 390px);
+            max-height: calc(100vh - 400px);
         }
         #id-col2-words-frequency > div > div > div > h4 {
             font-size: unset;
-        }
-        .scrollable-table-container {
-            max-height: calc(100vh - 390px);
         }
         .repetitions:after {
             content: "reps."
@@ -22746,16 +22752,29 @@ Current version indicated by LITEVER below.
             content: "occ."
         }
     }
+    @media screen and (max-height: 666px) and (min-width: 750px) and (max-width: 940px) and (orientation: landscape) {
+        #words-freq-menu {
+            right: calc(13px + calc(100vw - 750px) / 2);
+        }
+    }
     @media screen and (max-height: 666px) and (max-width: 940px) and (orientation: landscape) {
         .scrollable-table-container {
-            max-height: calc(100vh - 305px);
+            max-height: calc(100vh - 310px);
         }
     }
     @media screen and (max-width: 666px) and (max-width: 940px) and (orientation: portrait) {
         .scrollable-table-container {
-            max-height: calc(100vh - 330px);
+            max-height: calc(100vh - 350px);
             max-width: 30vw;
             width: 30vw;
+        }
+        #words-freq-menu {
+            right: 13px;
+        }
+    }
+    @media screen and (max-width: 750px) and (orientation: landscape) {
+        #words-freq-menu {
+            right: 13px;
         }
     }
     @media screen and (max-width: 767px) and (orientation: portrait), screen and (max-height: 767px) and (max-width: 1023px) and (orientation: landscape) {
@@ -22954,10 +22973,10 @@ Current version indicated by LITEVER below.
                     </div>
 
                     <span id="waiting-for-be" class="display-none">waiting for backend response...</span>
-                    <span id="waiting-for-be-error" class="collapse">Error! You are using the custom webserver: it's up&running? You could have outdated results.</span>
+                    <span id="waiting-for-be-error" class="collapse">Error! You are using the custom webserver: it's up&running? Any results may be out of date.</span>
                     <span id="waiting-for-be-error-embedded" class="collapse">Error!</span>
                     <!-- max-height-80perc instead of max-height-80vh -->
-                    <div id="words-frequency" class="display-flex" aria-label="words-frequency">
+                    <div id="words-frequency" class="display-flex margin4px-top" aria-label="words-frequency">
                         <div id="id-list-of-words-container" style="display: block" aria-label="id-list-of-words-container">
                             <span id="id-filtered-value"></span>
                             <div id="id-list-of-words-overflow-auto" class="overflow-auto" aria-label="id-list-of-words-overflow-auto">
