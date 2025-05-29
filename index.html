@@ -236,7 +236,7 @@ Current version indicated by LITEVER below.
 	/* Top nav menu */
 	#connectstatusdiv {
 		text-align: center;
-		font-size: 14px;
+		font-size: 13px;
 		font-weight: bold;
 		display: flex;
 		flex-direction: column;
@@ -2407,6 +2407,20 @@ Current version indicated by LITEVER below.
 		background-color: #c9302c;
 		background-image: none;
 		border-color: #ac2925
+	}
+
+	.toptoast {
+		position: fixed;
+		top: 70px;
+		left: 50%;
+		transform: translateX(-50%);
+		background-color: #568fc1;
+		color: white;
+		padding: 6px 10px;
+		border-radius: 8px;
+		font-size: 12px;
+		z-index: 9999;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 	}
 	</style>
 
@@ -9553,6 +9567,23 @@ Current version indicated by LITEVER below.
 				document.getElementById("tokenbans").value = ov;
 			}
 		},false);
+	}
+
+	var toastTimeout = null;
+	function showToast(text, duration=2000) //simple disappearing message. set to empty string to hide
+	{
+		if(text=="")
+		{
+			clearTimeout(toastTimeout);
+			document.getElementById("toptoast").classList.add("hidden");
+			return;
+		}
+		document.getElementById("toptoast").classList.remove("hidden");
+		document.getElementById("toptoast").innerText = text;
+		clearTimeout(toastTimeout);
+		toastTimeout = setTimeout(() => {
+			document.getElementById("toptoast").classList.add("hidden");
+		}, duration);
 	}
 
 	var msgboxOnDone = hide_msgbox;
@@ -21941,9 +21972,9 @@ Current version indicated by LITEVER below.
 		}
 
 		const getEmbeddings = async (paragraphs) => { //paragraphs is a list. each element is an object {snippet,document}
-			waitingToast.setText(`Generating embedding for search text: 0/${paragraphs.length}`);
 			let embeddings = []
 			for (let i = 0; i < paragraphs.length; i++) {
+				showToast(`Generating ${i + 1} / ${paragraphs.length} embeddings...`);
 				let embeddingObj = null;
 				let documentContent = paragraphs[i].snippet;
 				let documentName = paragraphs[i].document;
@@ -21952,23 +21983,18 @@ Current version indicated by LITEVER below.
 				if (!!embeddingObj) {
 					embeddings.push(embeddingObj)
 				}
-				waitingToast.setText(`Generating embedding for search text: ${i + 1}/${paragraphs.length}`);
 			}
 			return embeddings
 		}
 
-		waitingToast.show();
-		waitingToast.setText("Generating embedding for search text");
 		let searchEmbeddingList = await getEmbeddings([{ "document": "UserInput", "snippet": searchTerm }]);
 		let otherEmbeddingList = await getEmbeddings(paragraphs);
 
-		waitingToast.setText(`Searching embedding for search text: 0/${otherEmbeddingList.length}`);
 		let i = 0;
 		otherEmbeddingList.forEach(embedding => {
 			embedding.similarity = cosineSimilarity(searchEmbeddingList[0].embedding, embedding.embedding)
-			waitingToast.setText(`Searching embedding for search text: ${++i}/${otherEmbeddingList.length}`);
 		});
-		waitingToast.hide()
+		showToast("");
 
 		otherEmbeddingList.sort((a, b) => a.similarity > b.similarity ? -1 : 1)
 		return otherEmbeddingList
@@ -22266,8 +22292,8 @@ Current version indicated by LITEVER below.
 			</div>
 			<div id="connectstatusdiv">
 				<div id="connectstatus">Connecting</div>
-				<div class="hidden" style="font-size: 12px;" id="connectstatusmultiplayer"></div>
-				<div class="hidden color_orange" style="font-size: 12px;" id="connectstatusproxied">(Proxied)</div>
+				<div class="hidden" style="font-size: 10px;" id="connectstatusmultiplayer"></div>
+				<div class="hidden color_orange" style="font-size: 10px;" id="connectstatusproxied">(Proxied)</div>
 			</div>
 		</div>
 
@@ -24758,6 +24784,9 @@ Current version indicated by LITEVER below.
 			</div>
 		</div>
 	</div>
+
+	<div class="toptoast hidden" id="toptoast"></div>
+
 	<input type="file" id="tempfilepicker" style="display:none;" accept="*">
 
 </body>
@@ -24790,73 +24819,5 @@ else
 {
 	console.log("service workers API not available");
 }
-</script>
-
-
-<style>
-	div.waitingToast {
-		display: flex;
-		background-color: #4787be;
-		border: solid red 1px;
-		border-radius: 20px;
-		position: absolute;
-		bottom: 15%;
-		right: 5%;
-		padding-right: 20px;
-	}
-
-	div.waitingIcon {
-		height: 50px;
-		width: 50px;
-		position: unset;
-		margin: 10px;
-	}
-
-	div.waitingToastText {
-		align-content: center;
-		word-break: break-all;
-		max-width: 300px;
-	}
-</style>
-<script>
-	class WaitingToast {
-		#waitingDiv
-		#waitingText
-		constructor() {
-			this.waitingDiv = document.createElement("div")
-			this.waitingDiv.classList.add("waitingToast", "hidden")
-
-			let waitingIcon = document.createElement("div")
-			waitingIcon.classList.add("imgloader", "waitingIcon")
-			this.waitingDiv.appendChild(waitingIcon)
-
-			this.waitingText = document.createElement("div")
-			this.waitingText.classList.add("waitingToastText")
-			this.waitingDiv.appendChild(this.waitingText)
-
-			document.body.appendChild(this.waitingDiv)
-		}
-
-		show() {
-			this.waitingDiv.classList.remove("hidden")
-		}
-
-		hide() {
-			this.waitingDiv.classList.add("hidden")
-		}
-
-		setText(text) {
-			this.waitingText.innerText = text
-		}
-	}
-
-	window.waitingToast = new WaitingToast()
-
-	let originalTriggerAbortController = trigger_abort_controller
-
-	trigger_abort_controller = () => {
-		waitingToast.hide()
-		originalTriggerAbortController()
-	}
 </script>
 </html>
