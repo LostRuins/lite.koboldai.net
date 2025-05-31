@@ -22322,7 +22322,10 @@ Current version indicated by LITEVER below.
 
     const wordsFrequencyAnalyzers = {
         "id-input-webserver-wordfreq-checkbox": async function(arrayOfValidTextChildWithNrow) {
-            let bodyRequest = {"text": arrayOfValidTextChildWithNrow}
+            const nWordsStemmingEl = document.getElementById("id-n-words-stemming-enable")
+            const n = parseInt(nWordsStemmingEl.value)
+            console.log(`wordsFrequencyAnalyzers::nWordsStemming ${n}.`, typeof n, "#")
+            let bodyRequest = {"text": arrayOfValidTextChildWithNrow, "n": n}
             console.log("use the webserver for word freq analysis...")
             const wordsFrequencyURL = parseWebserverDomain()
             try {
@@ -22347,7 +22350,8 @@ Current version indicated by LITEVER below.
         'stemmer-embedded': function(inputText) {
             console.log("use the embedded functionality for word freq analysis...")
             try {
-                const bodyResponseJson = textStemming(inputText)
+                const nWordsStemmingEl = document.getElementById("id-n-words-stemming-enable")
+                const bodyResponseJson = textStemming(inputText, n=nWordsStemmingEl.value)
                 setElementCssClassById("waiting-for-be", "collapse")
                 let freq = bodyResponseJson["wordsStemsDict"]
                 let nTotalRows = bodyResponseJson["nTotalRows"]
@@ -22684,6 +22688,7 @@ Current version indicated by LITEVER below.
         let currentTableWordsFreq = document.createElement("table")
         currentTableWordsFreq.setAttribute("id", `id-table-${i}-nth`)
         currentTableWordsFreq.setAttribute("aria-label", `id-table-${i}-nth`)
+        currentTableWordsFreq.className = "scrollableWordsFreqTable"
 
         const titleCurrentTable = document.getElementById("id-current-table-of-words-title")
         titleCurrentTable.innerText = getRepetitionsText(iReduced) + " "
@@ -22856,7 +22861,7 @@ Current version indicated by LITEVER below.
             return false;
         }
 
-        function processNode(node, topIdx, childIdx = null, parentId = null) {
+        function processNode(node, topIdx, idxRowChild = null, idxRowParent = null) {
             // For nodes that are not SPAN, push their text if valid.
             if (node.nodeName !== "SPAN" && validNodeNames.includes(node.nodeName)) {
                 const textField = objectChildNodeNamesToParse[node.nodeName];
@@ -22865,8 +22870,8 @@ Current version indicated by LITEVER below.
                     validChildContent.push({
                         idxRow: topIdx,
                         text: textContent,
-                        idxRowChild: childIdx,
-                        idxRowParent: parentId
+                        idxRowChild: idxRowChild,
+                        idxRowParent: idxRowParent
                     });
                 }
             }
@@ -22878,14 +22883,14 @@ Current version indicated by LITEVER below.
                         validChildContent.push({
                             idxRow: topIdx,
                             text: textContent,
-                            idxRowChild: childIdx,
-                            idxRowParent: parentId
+                            idxRowChild: idxRowChild,
+                            idxRowParent: idxRowParent
                         });
                     }
                 }
             }
             if (node.childNodes && node.childNodes.length > 0) {
-                let newParentId = parentId;
+                let newParentId = idxRowParent;
                 if (node.nodeName === "SPAN") {
                     newParentId = topIdx;  // for nested nodes, use parent's top-level index.
                 }
@@ -22954,10 +22959,8 @@ Current version indicated by LITEVER below.
 
     function gotoCurrentTableOfWords() {
         if (isMobile()) {
-            console.log("gotoCurrentTableOfWords::isMobilePortrait()...")
             setPropertyElementsByArrayId(["id-current-table-of-words-btn-back", "id-current-table-of-words-container"], "display", "block")
-            // setPropertyElementsByArrayId(["id-list-of-words-scrollable", "id-filtered-value"], "display", "none")
-            setPropertyById("id-list-of-words-container", "display", "none")
+        	setPropertyById("id-list-of-words-container", "display", "none")
             hideWordsFreqMobileMenu()
         }
     }
@@ -23020,10 +23023,8 @@ Current version indicated by LITEVER below.
         setPropertyById("words-freq-menu", "display", "block");
         setPropertyById("words-freq-menu", "position", "fixed");
         setPropertyById("words-freq-menu", "z-index", "1");
-        setPropertyById("words-freq-menu", "width", "310px");
-        setPropertyById("words-freq-menu", "padding", "5px");
-        setPropertyById("words-freq-menu", "padding-top", "5px");
-        setPropertyById("words-freq-menu", "padding-right", "25px");
+        setPropertyById("words-freq-menu", "width", "320px");
+        setPropertyById("words-freq-menu", "padding", "10px 25px 10px 10px");
     }
 
     function hideWordsFreqMobileMenu() {
@@ -23077,24 +23078,18 @@ Current version indicated by LITEVER below.
 		margin-block-start: 2px;
 		margin-block-end: 2px;
 	}
-	#words-frequency > table > caption {
-		margin-left: 12px;
-		margin-top: 10px;
-		text-align: left;
-		font-weight: bold;
-	}
-    #words-frequency > div > table > thead > tr > td, #words-frequency > div > table > tbody > tr > td {
-		padding-left: 10px;
-		padding-right: 10px;
-	}
     #filter-words-frequency {
         height: 30px;
     }
     .calc100percMinus50px {
         width: calc(100% - 50px);
     }
-    #id-list-of-words-scrollable > list > li,#scrollable-table-container > table > tbody > tr > td {
+    #id-list-of-words-scrollable > list > li:first-child, .scrollableWordsFreqTable > tbody > tr > td:first-child {
+        border-top: 1px solid #646464;
+    }
+    #id-list-of-words-scrollable > list > li, .scrollableWordsFreqTable > tbody > tr > td {
         border: 1px solid #646464;
+		border-top: none;
     }
     .font-weight-bold {
         font-weight: bolder;
@@ -23155,6 +23150,13 @@ Current version indicated by LITEVER below.
     }
 	.margin4px-left {
 		margin-left: 4px;
+	}
+	.margin24px-left {
+		margin-left: 24px;
+	}
+	.text-wrap-force {
+		overflow-wrap: break-word;
+        hyphens: auto;
 	}
 	.overflow-hidden {
 		/* needed for scroll bar*/
@@ -23234,12 +23236,26 @@ Current version indicated by LITEVER below.
     #id-current-table-of-words-btn-back {
         display: none;
     }
+	.float-left {
+		float: left;
+	}
+	.float-right {
+		float: right;
+	}
 
     .repetitions:after {
         content: "repetitions"
     }
     .occurrences:after {
         content: "occurrences"
+    }
+    #id-n-words-stemming-enable.settinglabel.miniinput {
+        width: 30px;
+        height: 20px;
+        text-align: center;
+    }
+    #id-current-table-of-words-placeholder-right {
+        color: #404040;
     }
 
     /* tooltips on mobile devices */
@@ -23263,18 +23279,15 @@ Current version indicated by LITEVER below.
     /* Classic UI Main Text, lite.koboldai.net */
     @media screen and (max-height: 1024px) and (max-width: 1366px) and (orientation: landscape) {
         .scrollable-table-container {
-            max-height: calc(100vh - 394px);
+            max-height: calc(100vh - 380px);
         }
     }
     @media screen and (max-width:1024px) and (orientation: portrait) {
         .scrollable-table-container {
-            max-height: calc(100vh - 410px);
+            max-height: calc(100vh - 440px);
         }
     }
     @media screen and (max-width:1024px) and (orientation: portrait), screen and (max-height: 1024px) and (max-width: 1366px) and (orientation: landscape) {
-        #words-frequency {
-            max-height: calc(100vh - 400px);
-        }
         #id-col2-words-frequency > div > div > div > h4 {
             font-size: unset;
         }
@@ -23289,10 +23302,15 @@ Current version indicated by LITEVER below.
         #words-freq-menu {
             right: calc(13px + calc(100vw - 750px) / 2);
         }
+		#id-current-table-of-words-title {
+            max-width: 23vw;
+            width: 23vw;
+			padding-right: 24px;
+		}
     }
     @media screen and (max-height: 666px) and (max-width: 940px) and (orientation: landscape) {
         .scrollable-table-container {
-            max-height: calc(100vh - 310px);
+            max-height: calc(100vh - 300px);
         }
     }
     @media screen and (max-width: 666px) and (max-width: 940px) and (orientation: portrait) {
@@ -23310,7 +23328,9 @@ Current version indicated by LITEVER below.
             right: 13px;
         }
     }
-    @media screen and (max-width: 767px) and (orientation: portrait), screen and (max-height: 767px) and (max-width: 1023px) and (orientation: landscape) {
+    @media screen and (max-width: 767px) and (orientation: portrait),
+            screen and (max-height: 767px) and (orientation: landscape),
+            screen and (max-width: 1023px) and (orientation: landscape) {
         #id-words-frequency-table-title {
             display: none;
         }
@@ -23323,11 +23343,8 @@ Current version indicated by LITEVER below.
     }
     @media screen and (min-width: 768px) and (orientation: portrait),
             screen and (min-height: 768px) and (orientation: landscape),
-            screen and (min-width: 1025px) and (orientation: landscape) {
-        #id-container-mobile-menu {
-            display: none
-        }
-        #id-words-frequency-table-title-mobile {
+            screen and (min-width: 1024px) and (orientation: landscape) {
+        #id-container-mobile-menu, #id-current-table-of-words-placeholder-right, #id-words-frequency-table-title-mobile {
             display: none
         }
         #id-current-table-of-words-btn-back {
@@ -23346,6 +23363,7 @@ Current version indicated by LITEVER below.
         }
         #id-current-table-of-words-container {
             display: block !important;
+            margin-left: 5px;
         }
     }
 	/* end style section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer */
@@ -23511,7 +23529,7 @@ Current version indicated by LITEVER below.
                     <!-- max-height-80perc instead of max-height-80vh -->
                     <div id="words-frequency" class="display-flex margin4px-top" aria-label="words-frequency">
                         <div id="id-list-of-words-container" style="display: block" aria-label="id-list-of-words-container">
-                            <span id="id-filtered-value"></span>
+                            <span id="id-filtered-value" class="text-wrap-force"></span>
                             <div id="id-list-of-words-overflow-auto" class="overflow-auto" aria-label="id-list-of-words-overflow-auto">
                                 <div id="id-list-of-words-scrollable" class="scrollable-table-container">
                                     <a href="https://github.com/trincadev/my_ghost_writer">My Ghost Writer</a> will
@@ -23522,8 +23540,11 @@ Current version indicated by LITEVER below.
                         </div>
                         <div id="id-current-table-of-words-container" style="display: block">
                             <div class="display-flex">
-                                <span id="id-current-table-of-words-btn-back" onclick="backToListFromCurrentTable()" class="">↩️</span>
-                                <span id="id-current-table-of-words-title"></span>
+								<div>
+									<span id="id-current-table-of-words-placeholder-right" class="float-right margin24px-left">.</span>
+									<span id="id-current-table-of-words-btn-back" onclick="backToListFromCurrentTable()" class="float-left">↩️</span>
+									<span id="id-current-table-of-words-title" class="text-wrap-force"></span>
+								</div>
                             </div>
                             <div id="id-current-table-of-words-overflow-auto" class="overflow-auto" aria-label="id-current-table-of-words-overflow-auto">
                                 <div id="id-current-table-of-words-scrollable" class="scrollable-table-container"></div>
@@ -24796,7 +24817,7 @@ Current version indicated by LITEVER below.
 
                     <div id="expandwordsfreqstats" class="hidden">
 
-                        <div class="settinglabel" id="id-settings-wordsfreq-enable">
+                        <div class="settinglabel" id="id-settings-wordsfreq-settings-section">
                             <div class="justifyleft settingsmall">Enable Word Frequency Stats <span class="helpicon">?<span
                                     class="helptext">If enabled, it extracts word frequency stats.
                             The output it's a list of word prefixes (<a href="https://en.wikipedia.org/wiki/Stemming">stems</a>)
@@ -24809,6 +24830,24 @@ Current version indicated by LITEVER below.
                                     name="id-col2-words-frequency-enable"
                                     onchange="toggleOrCloseByBoolAndId('id-col2-words-frequency', this.checked);toggleOrCloseByBoolAndId('id-settings-wordsfreq-custom-webserver', this.checked);"
                             />
+                        </div>
+
+                        <div class="settinglabel" id="id-n-words-stemming-settings-section">
+                            <div class="display-flex">
+                                <div class="justifyleft settingsmall">Choose how many words do you want to consider at time while stemming the text.
+                                    <br>Better to use less than three words with very long texts (more than 5000 words).
+                                </div>
+                                <input
+                                        id="id-n-words-stemming-enable"
+                                        aria-label="id-n-words-stemming-enable"
+                                        name="id-n-words-stemming-enable"
+                                        type="number"
+                                        min="1"
+                                        max="9"
+                                        value="2"
+                                        class="margin4px settinglabel miniinput"
+                                />
+                            </div>
                         </div>
 
                         <div id="id-settings-wordsfreq-custom-webserver" class="collapse">
