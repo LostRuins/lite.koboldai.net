@@ -22426,12 +22426,10 @@ Current version indicated by LITEVER below.
             console.log("use the embedded functionality for word freq analysis...")
             try {
                 const nWordsStemmingEl = document.getElementById("id-n-words-stemming-enable")
-                const bodyResponseJson = textStemming(inputText, n=nWordsStemmingEl.value)
+                let { nTotalRows, wordsStemsDict } = textStemming(inputText, nWordsStemmingEl.value)
                 setElementCssClassById("waiting-for-be", "collapse")
-                let freq = bodyResponseJson["wordsStemsDict"]
-                let nTotalRows = bodyResponseJson["nTotalRows"]
                 console.log(`getWordsFreq::nTotalRows: '${nTotalRows}', populateWordsFrequencyTables...`)
-                populateWordsFrequencyTables(freq, nTotalRows, inputText)
+                populateWordsFrequencyTables(wordsStemsDict, nTotalRows, inputText)
             } catch (err) {
                 console.error("getWordsFrequency::err on useWordfreqWebserver:", err, "#")
                 setElementCssClassById("waiting-for-be", "collapse")
@@ -22468,10 +22466,10 @@ Current version indicated by LITEVER below.
             for (let ngramLen = 1; ngramLen <= n; ngramLen++) {
                 for (let i = 0; i <= tokens.length - ngramLen; i++) {
                     const ngramTokens = tokens.slice(i, i + ngramLen);
-                    const ngram = ngramTokens.join(" ");
                     const ngramOffsets = offsets.slice(i, i + ngramLen);
                     const start = ngramOffsets[0].start;
                     const end = ngramOffsets[ngramOffsets.length - 1].end;
+                    const ngram = row.slice(start, end);
                     const ngramLower = ngramTokens.map(w => w.toLowerCase());
                     const stem = ngramLower.map(porterStemmer).join(" ");
                     if (!wordsStemsDict[stem]) {
@@ -22490,7 +22488,6 @@ Current version indicated by LITEVER below.
                 }
             }
         });
-
         // Update word_prefix to the most common 'word' in offsets_array
         Object.values(wordsStemsDict).forEach(entry => {
             const words = entry.offsets_array.map(item => item.word);
