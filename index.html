@@ -13747,6 +13747,10 @@ Current version indicated by LITEVER below.
 			}
 		}
 		render_gametext(false);
+        /* My Ghost Writer edit mode warning */
+        if (wfo.wfoActive && wfo.nTotalRows != null) {
+            setElementCssClassById("edit-mode-toggled-warning", "display-block color-gold")
+        }
 	}
 	function exit_editmode()
 	{
@@ -22376,7 +22380,9 @@ Current version indicated by LITEVER below.
 		"words_frequency": {},
         "nTotalRows": null,
         "rowArray": [],
-        "currentCSSClassScrollable": "scrollable-table-container"
+        "currentCSSClassScrollable": "scrollable-table-container",
+        "stemmingBackend": false,
+        "wfoActive": false
 	}
 	const editorFieldLabel = "gametext"
 	const remoteWebServer = "http://localhost:7860"
@@ -22419,7 +22425,7 @@ Current version indicated by LITEVER below.
                 console.error("wordsFrequencyAnalyzers::err on webserver request/response:", err, "#")
                 console.error(`wordsFrequencyAnalyzers::wordsFrequencyURL: ${typeof wordsFrequencyURL}:`, wordsFrequencyURL, "#")
                 setElementCssClassById("waiting-for-be", "collapse")
-                setElementCssClassById("waiting-for-be-error", "display-block")
+                setElementCssClassById("waiting-for-be-error", "display-block color-red")
             }
         },
         'stemmer-embedded': function(inputText) {
@@ -22433,7 +22439,7 @@ Current version indicated by LITEVER below.
             } catch (err) {
                 console.error("getWordsFrequency::err on useWordfreqWebserver:", err, "#")
                 setElementCssClassById("waiting-for-be", "collapse")
-                setElementCssClassById("waiting-for-be-error-embedded", "display-block")
+                setElementCssClassById("waiting-for-be-error-embedded", "display-block color-red")
 
             }
         }
@@ -22628,6 +22634,7 @@ Current version indicated by LITEVER below.
         let {validChildContent} = getValidChildNodesFromEditorById(editorFieldLabel)
         setElementCssClassById("waiting-for-be-error", "collapse")
         setElementCssClassById("waiting-for-be-error-embedded", "collapse")
+        setElementCssClassById("edit-mode-toggled-warning", "collapse")
         setElementCssClassById("waiting-for-be", "display-block")
 		let wordsFrequencyTableTitleEl = document.getElementById("id-words-frequency-table-title")
         let wordsFrequencyTableTitleElMobile = document.getElementById("id-words-frequency-table-title-mobile")
@@ -23037,6 +23044,12 @@ Current version indicated by LITEVER below.
         }
     }
 
+    function toggleWordFreqCheckbox(checked) {
+        wfo.wfoActive = checked
+        toggleOrCloseByBoolAndId('id-col2-words-frequency', checked);
+        toggleOrCloseByBoolAndId('id-settings-wordsfreq-custom-webserver', checked);
+    }
+
     function toggleWebserverCheckbox() {
         const checked = document.getElementById("id-input-webserver-wordfreq-checkbox").checked
         toggleOrCloseByBoolAndId('id-input-webserver-wordfreq', checked);
@@ -23045,6 +23058,7 @@ Current version indicated by LITEVER below.
         toggleElementWithClassById("filter-words-frequency", "width-100perc")
         // at start THERE ISN'T the CSS class calc100percMinus50px: toggleElementWithClassById() will ADD it
         toggleElementWithClassById("filter-words-frequency", "calc100percMinus50px")
+        wfo.stemmingBackend = checked
         document.getElementById('id-wordfreq-show-analyzer').innerText=checked?'webserver':'embedded';
     }
 
@@ -23190,6 +23204,12 @@ Current version indicated by LITEVER below.
 		text-decoration: underline;
 		text-decoration-color: violet;
 	}
+    .color-red {
+        color: red;
+    }
+    .color-gold {
+        color: gold;
+    }
     .display-flex {
         display: flex;
     }
@@ -23329,6 +23349,9 @@ Current version indicated by LITEVER below.
     #id-current-table-of-words-placeholder-right {
         color: #404040;
     }
+    #words-freq-menu {
+        right: 13px;
+    }
 
     /* tooltips on mobile devices */
     @media (pointer: coarse), (hover: none) {
@@ -23371,7 +23394,7 @@ Current version indicated by LITEVER below.
         }
     }
     @media screen and (max-height: 666px) and (min-width: 750px) and (max-width: 940px) and (orientation: landscape) {
-        #words-freq-menu {
+        .adaptivecontainer #words-freq-menu {
             right: calc(13px + calc(100vw - 750px) / 2);
         }
 		#id-current-table-of-words-title {
@@ -23391,15 +23414,8 @@ Current version indicated by LITEVER below.
             max-width: 30vw;
             width: 30vw;
         }
-        #words-freq-menu {
-            right: 13px;
-        }
     }
-    @media screen and (max-width: 750px) and (orientation: landscape) {
-        #words-freq-menu {
-            right: 13px;
-        }
-    }
+
     @media screen and (max-width: 767px) and (orientation: portrait),
             screen and (max-height: 767px) and (orientation: landscape),
             screen and (max-width: 1023px) and (orientation: landscape) {
@@ -23596,8 +23612,13 @@ Current version indicated by LITEVER below.
                     </div>
 
                     <span id="waiting-for-be" class="display-none">waiting for backend response...</span>
-                    <span id="waiting-for-be-error" class="collapse">Error! You are using the custom webserver: it's up&running? Any results may be out of date.</span>
+                    <span id="waiting-for-be-error" class="collapse">Error! You are using the custom webserver: it's
+                        up&running? Any results may be out of date.</span>
                     <span id="waiting-for-be-error-embedded" class="collapse">Error!</span>
+                    <span id="edit-mode-toggled-warning" class="collapse">Warning: since you toggled the edit mode on
+                        or off (or changed the UI), it's possible that you have wrong word position index.
+                        You should get an up-to-dated ouput as soon as possible!
+                    </span>
                     <!-- max-height-80perc instead of max-height-80vh -->
                     <div id="words-frequency" class="display-flex margin4px-top" aria-label="words-frequency">
                         <div id="id-list-of-words-container" style="display: block" aria-label="id-list-of-words-container">
@@ -24890,18 +24911,29 @@ Current version indicated by LITEVER below.
                     <div id="expandwordsfreqstats" class="hidden">
 
                         <div class="settinglabel" id="id-settings-wordsfreq-settings-section">
-                            <div class="justifyleft settingsmall">Enable Word Frequency Stats <span class="helpicon">?<span
+                            <div class="justifyleft settingsmall">Enable Word Frequency Stats.<span class="helpicon">?<span
                                     class="helptext">If enabled, it extracts word frequency stats.
                             The output it's a list of word prefixes (<a href="https://en.wikipedia.org/wiki/Stemming">stems</a>)
-                            with associated words and their position within the editor, permitting to remove repetitions.</span></span>
+                            with associated words and their position within the editor, permitting to remove repetitions.
+                            </span></span>
                             </div>
                             <input
                                     type="checkbox"
                                     id="id-col2-words-frequency-enable"
                                     aria-label="id-col2-words-frequency-enable"
                                     name="id-col2-words-frequency-enable"
-                                    onchange="toggleOrCloseByBoolAndId('id-col2-words-frequency', this.checked);toggleOrCloseByBoolAndId('id-settings-wordsfreq-custom-webserver', this.checked);"
+                                    onchange="toggleWordFreqCheckbox(this.checked)"
                             />
+                        </div>
+                        <div class="settinglabel justifyleft">
+                            <div>
+                                <span>Available on:</span>
+                                <list>
+                                    <li>Classic UI (read-only and edit mode)</li>
+                                    <li>Aesthetic UI, edit mode only</li>
+                                    <li>Classic UI, edit mode only (open the Raw editor)</li>
+                                </list>
+                            </div>
                         </div>
 
                         <div class="settinglabel" id="id-n-words-stemming-settings-section">
