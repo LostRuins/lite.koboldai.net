@@ -3296,7 +3296,7 @@ Current version indicated by LITEVER below.
 		tokenstreammode: 2, //0=off,1=pollstream,2=sse
 		generate_images_model: "stable_diffusion", //"" is disabled and "*" is all, anything else is the model name pulled from stable horde
 		img_gen_from_instruct: true,
-		img_autogen: false,
+		img_autogen_type: 0, //0 is off, 1 is on, 2 is smart
 		img_allownsfw: true,
 		img_cfgscale: 7,
 		img_allowhd: true,
@@ -6374,7 +6374,7 @@ Current version indicated by LITEVER below.
 		});
 	}
 
-	function generate_comfy_image(req_payload)
+	function generate_comfy_image(req_payload, autoappend)
 	{
 		let splits = req_payload.prompt.split("###");
 		let prompt = splits[0].trim();
@@ -6444,6 +6444,26 @@ Current version indicated by LITEVER below.
 
 		let gen_endpoint = localsettings.saved_comfy_url + comfy_generate_endpoint;
 		console.log(genimg_payload);
+		let imgid = "Comfyimg"+(Math.floor(10000 + Math.random() * 90000)).toString();
+		let nimgtag = "[<|p|" + imgid + "|p|>]";
+		if (localsettings.img_newturn) {
+			if(localsettings.opmode == 4)
+			{
+				nimgtag = wrap_newgen_instruct_format(nimgtag,false);
+			}
+			else if(localsettings.opmode == 3)
+			{
+				nimgtag = wrap_newgen_chat_format(nimgtag);
+			}
+		}
+		if(autoappend)
+		{
+			gametext_arr.push(nimgtag);
+		}
+		image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:prompt, poll_category:2 };
+		image_db[imgid].aspect = (req_payload.params.width>=req_payload.params.height*2?5:(req_payload.params.height>=req_payload.params.width*2?4:(req_payload.params.width>req_payload.params.height?2:(req_payload.params.width<req_payload.params.height?1:0))));
+		image_db[imgid].imsource = 0; //0=generated,1=uploaded
+		image_db[imgid].imrefid = "";
 
 		fetch(gen_endpoint, {
 			method: 'POST',
@@ -6457,31 +6477,16 @@ Current version indicated by LITEVER below.
 			console.log(resp);
 			if(resp.prompt_id)
 			{
-				let imgid = resp.prompt_id.toString();
-				let nimgtag = "[<|p|" + imgid + "|p|>]";
-				if (localsettings.img_newturn) {
-					if(localsettings.opmode == 4)
-					{
-						nimgtag = wrap_newgen_instruct_format(nimgtag,false);
-					}
-					else if(localsettings.opmode == 3)
-					{
-						nimgtag = wrap_newgen_chat_format(nimgtag);
-					}
-				}
-				gametext_arr.push(nimgtag);
-				image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:prompt, poll_category:2 };
-				image_db[imgid].aspect = (req_payload.params.width>=req_payload.params.height*2?5:(req_payload.params.height>=req_payload.params.width*2?4:(req_payload.params.width>req_payload.params.height?2:(req_payload.params.width<req_payload.params.height?1:0))));
-				image_db[imgid].imsource = 0; //0=generated,1=uploaded
+				image_db[imgid].imrefid = resp.prompt_id.toString();
 			}else{
 				console.log("Generation Error!");
 				msgbox("Image Generation Failed!\n\nPlease make sure ComfyUI is running at "+localsettings.saved_comfy_url+" and properly configured!\n\nIt must be launched with the flag --listen --enable-cors-header '*' to enable API access\n");
 			}
-
 		}).catch((error) => {
 			console.log("Generation Error: " + error);
 			msgbox("Image Generation Failed!\n\nPlease make sure ComfyUI is running at "+localsettings.saved_comfy_url+" and properly configured!\n\nIt must be launched with the flag --listen --enable-cors-header '*' to enable API access\n");
 		});
+		return imgid;
 	}
 
 	function generate_a1111_image(req_payload, onImagesDone)
@@ -6615,7 +6620,7 @@ Current version indicated by LITEVER below.
 		},false);
 	}
 
-	function generate_pollinations_image(req_payload)
+	function generate_pollinations_image(req_payload, autoappend)
 	{
 		let splits = req_payload.prompt.split("###");
 		let prompt = splits[0].trim();
@@ -6646,10 +6651,14 @@ Current version indicated by LITEVER below.
 				nimgtag = wrap_newgen_chat_format(nimgtag);
 			}
 		}
-		gametext_arr.push(nimgtag);
+		if(autoappend)
+		{
+			gametext_arr.push(nimgtag);
+		}
 		image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:prompt, poll_category:0 };
 		image_db[imgid].aspect = (req_payload.params.width>=req_payload.params.height*2?5:(req_payload.params.height>=req_payload.params.width*2?4:(req_payload.params.width>req_payload.params.height?2:(req_payload.params.width<req_payload.params.height?1:0))));
 		image_db[imgid].imsource = 0; //0=generated,1=uploaded
+		image_db[imgid].imrefid = "";
 
 		fetch(gen_endpoint, {
 			method: 'GET',
@@ -6672,6 +6681,7 @@ Current version indicated by LITEVER below.
 			console.log("Generation Error: " + error);
 			msgbox("Image Generation Failed!\n\nCould not generate image with Pollinations.ai, maybe you are rate limited. Try again later.\n");
 		});
+		return imgid;
 	}
 
 	function set_horde_key()
@@ -12346,7 +12356,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("img_crop").checked = localsettings.img_crop;
 		document.getElementById("img_newturn").checked = localsettings.img_newturn;
 		document.getElementById("img_stacking").checked = localsettings.img_stacking;
-		document.getElementById("img_autogen").checked = localsettings.img_autogen;
+		document.getElementById("img_autogen_type").value = localsettings.img_autogen_type;
 		document.getElementById("img_gen_from_instruct").checked = localsettings.img_gen_from_instruct;
 		document.getElementById("save_images").checked = localsettings.save_images;
 		document.getElementById("save_remote_images").checked = localsettings.save_remote_images;
@@ -12810,11 +12820,11 @@ Current version indicated by LITEVER below.
 		localsettings.image_negprompt = document.getElementById("negpromptinput").value;
 		localsettings.grammar = pendinggrammar;
 		localsettings.tokenstreammode = document.getElementById("tokenstreammode").value;
+		localsettings.img_autogen_type = document.getElementById("img_autogen_type").value;
 		localsettings.img_crop = (document.getElementById("img_crop").checked ? true : false);
 		localsettings.img_newturn = (document.getElementById("img_newturn").checked ? true : false);
 		localsettings.img_stacking = (document.getElementById("img_stacking").checked ? true : false);
 		localsettings.img_allowhd = (document.getElementById("img_allowhd").checked ? true : false);
-		localsettings.img_autogen = (document.getElementById("img_autogen").checked ? true : false);
 		localsettings.img_gen_from_instruct = (document.getElementById("img_gen_from_instruct").checked ? true : false);
 		localsettings.save_images = (document.getElementById("save_images").checked ? true : false);
 		localsettings.save_remote_images = (document.getElementById("save_remote_images").checked ? true : false);
@@ -14048,7 +14058,7 @@ Current version indicated by LITEVER below.
 		{
 			sentence = replace_placeholders(sentence)
 		}
-		generate_new_image(sentence, base64img);
+		generate_new_image(sentence, base64img, true);
 		document.getElementById("btn_genimg").disabled = true;
 		document.getElementById("btn_genimg2").disabled = true;
 		document.getElementById("corpo_chat_img_btn").disabled = true;
@@ -14117,6 +14127,7 @@ Current version indicated by LITEVER below.
 		image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:"", poll_category:0 };
 		image_db[imgid].aspect = 0;
 		image_db[imgid].imsource = 1; //0=generated,1=uploaded
+		image_db[imgid].imrefid = "";
 		let imgres = localsettings.img_allowhd?VHD_RES_PX:NO_HD_RES_PX;
 		compressImage(origImg, (newDataUri, outAspect) => {
 			image_db[imgid].done = true;
@@ -14994,7 +15005,7 @@ Current version indicated by LITEVER below.
 		retry_in_progress = false;
 
 		//match the request for creating images in instruct modes
-		if(newgen!="" && localsettings.img_gen_from_instruct && localsettings.opmode == 4 && localsettings.generate_images_mode!=0 && !newgen.includes("\n"))
+		if(newgen!="" && localsettings.img_gen_from_instruct && localsettings.opmode == 4 && localsettings.generate_images_mode!=0 && localsettings.img_autogen_type!=2 && !newgen.includes("\n"))
 		{
 			let newgenlc = newgen.toLowerCase().trim();
 			if (newgenlc.startsWith("draw ") ||
@@ -15157,6 +15168,13 @@ Current version indicated by LITEVER below.
 			}
 
 			let max_allowed_characters = getMaxAllowedCharacters(truncated_context, maxctxlen, maxgenamt);
+
+			//allow autogen images
+			if (localsettings.img_autogen_type == 2 && localsettings.generate_images_mode != 0)
+			{
+				let injected = "[Important Note: This GUI is capable of generating images as outputs. Whenever you want to generate any image, simply output the image description within t2i prompt tags like this <t2i>any image description here</t2i> and an image will be generated and inserted inline there. This can be done anytime, anywhere.]\n\n";
+				truncated_context = injected + truncated_context;
+			}
 
 			//for adventure mode, inject hidden context, even more if there's nothing in memory
 			if (localsettings.opmode == 2  && localsettings.adventure_context_mod)
@@ -15326,7 +15344,7 @@ Current version indicated by LITEVER below.
 
 
 			//determine if a new generated image is needed, chatmode is excluded, instruct is excluded
-			if (localsettings.generate_images_mode != 0 && localsettings.img_autogen) {
+			if (localsettings.generate_images_mode != 0 && localsettings.img_autogen_type==1) {
 				//if adventure mode, generate every action
 				if (((localsettings.opmode == 3 || localsettings.opmode == 4) && newgen!="")
 				|| (localsettings.opmode == 2 && newgen.startsWith("\n\n\> "))
@@ -16627,8 +16645,8 @@ Current version indicated by LITEVER below.
 		return inputtext;
 	}
 
-	function generate_new_image(sentence, base64img="") {
-
+	function generate_new_image(sentence, base64img="", autoappend=true) //base64img is for img2img, autoappend automatically adds it to gametext arr
+	{
 		if(base64img!="")
 		{
 			let parts = base64img.split(',');
@@ -16636,7 +16654,6 @@ Current version indicated by LITEVER below.
 				base64img = parts[1];
 			}
 		}
-
 
 		if(localsettings.image_styles && localsettings.image_styles!="")
 		{
@@ -16750,9 +16767,30 @@ Current version indicated by LITEVER below.
 			genimg_payload["params"]["clip_skip"] = localsettings.img_clipskip;
 		}
 
+		let imgid = ""; //this will be autorandomized and returned
+
 		if(localsettings.generate_images_mode==1) //horde
 		{
-
+			imgid = "Hordeimg"+(Math.floor(10000 + Math.random() * 90000)).toString();
+			let nimgtag = "[<|p|" + imgid + "|p|>]";
+			if (localsettings.img_newturn) {
+				if(localsettings.opmode == 4)
+				{
+					nimgtag = wrap_newgen_instruct_format(nimgtag,false);
+				}
+				else if(localsettings.opmode == 3)
+				{
+					nimgtag = wrap_newgen_chat_format(nimgtag);
+				}
+			}
+			if(autoappend)
+			{
+				gametext_arr.push(nimgtag);
+			}
+			image_db[imgid] = { done: false, queue: "Starting", result: "", prompt:sentence, poll_category:1 };
+			image_db[imgid].aspect = (iwidth>=iheight*2?5:(iheight>=iwidth*2?4:(iwidth>iheight?2:(iwidth<iheight?1:0))));
+			image_db[imgid].imsource = 0; //0=generated,1=uploaded
+			image_db[imgid].imrefid = ""; //this will store the real horde ID to poll
 			fetch(stablehorde_submit_endpoint, {
 				method: 'POST', // or 'PUT'
 				headers: {
@@ -16767,22 +16805,8 @@ Current version indicated by LITEVER below.
 				console.log('genimg result:', data);
 				if (data.id && data.id != "") {
 					//for now, append the new image directly into the gtarr
-					let nimgtag = "[<|p|" + data.id + "|p|>]";
-					if (localsettings.img_newturn) {
-						if(localsettings.opmode == 4)
-						{
-							nimgtag = wrap_newgen_instruct_format(nimgtag,false);
-						}
-						else if(localsettings.opmode == 3)
-						{
-							nimgtag = wrap_newgen_chat_format(nimgtag);
-						}
-					}
-					gametext_arr.push(nimgtag);
-					image_db[data.id] = { done: false, queue: "Starting", result: "", prompt:sentence, poll_category:1 };
-					image_db[data.id].aspect = (iwidth>=iheight*2?5:(iheight>=iwidth*2?4:(iwidth>iheight?2:(iwidth<iheight?1:0))));
-					image_db[data.id].imsource = 0; //0=generated,1=uploaded
-					console.log("New image queued " + nimgtag);
+					image_db[imgid].imrefid = data.id;
+					console.log("New image queued " + data.id + " for " + nimgtag);
 				}
 				else {
 					//something went wrong.	do nothing.
@@ -16798,7 +16822,7 @@ Current version indicated by LITEVER below.
 		{
 			let desired_model = document.getElementById("generate_images_local_model").value;
 			genimg_payload.models = [desired_model];
-			let imgid = "A1111img"+(Math.floor(10000 + Math.random() * 90000)).toString();
+			imgid = "A1111img"+(Math.floor(10000 + Math.random() * 90000)).toString();
 			let nimgtag = "[<|p|" + imgid + "|p|>]";
 			if (localsettings.img_newturn) {
 				if(localsettings.opmode == 4)
@@ -16810,10 +16834,14 @@ Current version indicated by LITEVER below.
 					nimgtag = wrap_newgen_chat_format(nimgtag);
 				}
 			}
-			gametext_arr.push(nimgtag);
+			if(autoappend)
+			{
+				gametext_arr.push(nimgtag);
+			}
 			image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:sentence, poll_category:0 };
 			image_db[imgid].aspect = (iwidth>=iheight*2?5:(iheight>=iwidth*2?4:(iwidth>iheight?2:(iwidth<iheight?1:0))));
 			image_db[imgid].imsource = 0; //0=generated,1=uploaded
+			image_db[imgid].imrefid = "";
 			generate_a1111_image(genimg_payload,(outputimg)=>{
 				if(outputimg)
 				{
@@ -16838,7 +16866,7 @@ Current version indicated by LITEVER below.
 			}
 			else
 			{
-				let imgid = "DALLEimg"+(Math.floor(10000 + Math.random() * 90000)).toString();
+				imgid = "DALLEimg"+(Math.floor(10000 + Math.random() * 90000)).toString();
 				let nimgtag = "[<|p|" + imgid + "|p|>]";
 				if (localsettings.img_newturn) {
 					if(localsettings.opmode == 4)
@@ -16850,10 +16878,14 @@ Current version indicated by LITEVER below.
 						nimgtag = wrap_newgen_chat_format(nimgtag);
 					}
 				}
-				gametext_arr.push(nimgtag);
+				if(autoappend)
+				{
+					gametext_arr.push(nimgtag);
+				}
 				image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:sentence, poll_category:0 };
 				image_db[imgid].aspect = 0;
 				image_db[imgid].imsource = 0; //0=generated,1=uploaded
+				image_db[imgid].imrefid = "";
 				generate_dalle_image(genimg_payload,(outputimg,outputerr)=>{
 					if(outputimg)
 					{
@@ -16875,14 +16907,16 @@ Current version indicated by LITEVER below.
 		{
 			let desired_model = document.getElementById("generate_images_comfy_model").value;
 			genimg_payload.models = [desired_model];
-			generate_comfy_image(genimg_payload);
+			imgid = generate_comfy_image(genimg_payload, autoappend);
 		}
 		else if(localsettings.generate_images_mode==5) //pollinations
 		{
 			let desired_model = document.getElementById("generate_images_pollinations_model").value;
 			genimg_payload.models = [desired_model];
-			generate_pollinations_image(genimg_payload);
+			imgid = generate_pollinations_image(genimg_payload, autoappend);
 		}
+
+		return imgid;
 	}
 
 	function interrogate_new_image(base64img, imghash, use_horde=true)
@@ -17270,6 +17304,17 @@ Current version indicated by LITEVER below.
 			}
 		}
 
+		//apply t2i image replacements
+		if (localsettings.img_autogen_type == 2 && localsettings.generate_images_mode != 0)
+		{
+			const pat = /<t2i>(.*?)<\/t2i>/g;
+			gentxt = gentxt.replace(pat, function (m,p1) {
+				let newimgid = generate_new_image(p1, "", false);
+				let nimgtag = "[<|p|" + newimgid + "|p|>]";
+				return nimgtag;
+			});
+		}
+
 		//trim trailing whitespace, and multiple newlines
 		if (localsettings.trimwhitespace) {
 			gentxt = gentxt.replace(/[\t\r\n ]+$/, '');
@@ -17584,100 +17629,107 @@ Current version indicated by LITEVER below.
 		for (let key in image_db) {
 			let img = image_db[key];
 			if (img.done == false && img.poll_category==1) { //horde image polling
-				//call check
-				fetch(stablehorde_poll_endpoint + "/" + key)
-					.then(x => x.json())
-					.then((data) => {
-						console.log('pollimg result:', data);
-						if (data.faulted == true || data.is_possible == false) {
-							msgbox("Pending image generation could not complete.");
-							console.log("removing from images: " + key);
-							delete image_db[key];
-						}
-						else if (data.done == true) {
-							//fetch final image
-							img.done = true;
-							fetch(stablehorde_output_endpoint + "/" + key)
-								.then(y => y.json())
-								.then((finalimg) => {
-									console.log('finalimg recv for ' + key);
-									if (finalimg.faulted == true || finalimg.is_possible == false) {
-										msgbox("Pending image generation could not complete.");
-										console.log("removing from images: " + key);
+				let hordeid = img.imrefid;
+				if (hordeid && hordeid != "") {
+					//call check
+					fetch(stablehorde_poll_endpoint + "/" + hordeid)
+						.then(x => x.json())
+						.then((data) => {
+							console.log('pollimg result:', data);
+							if (data.faulted == true || data.is_possible == false) {
+								msgbox("Pending image generation could not complete.");
+								console.log("removing from images: " + key);
+								delete image_db[key];
+							}
+							else if (data.done == true) {
+								//fetch final image
+								img.done = true;
+								fetch(stablehorde_output_endpoint + "/" + hordeid)
+									.then(y => y.json())
+									.then((finalimg) => {
+										console.log('finalimg recv for ' + key);
+										if (finalimg.faulted == true || finalimg.is_possible == false) {
+											msgbox("Pending image generation could not complete.");
+											console.log("removing from images: " + key);
+											delete image_db[key];
+										}
+										else {
+											img.queue = 0;
+											let origImg = "data:image/jpeg;base64," + finalimg.generations[0].img;
+											//console.log("Original image: " + origImg);
+											let imgres = localsettings.img_allowhd ? (localsettings.img_aspect == 0 ? NO_HD_RES_PX : HD_RES_PX) : NO_HD_RES_PX;
+											compressImage(origImg, (newDataUri) => {
+												img.result = newDataUri;
+											}, false, imgres);
+										}
+									})
+									.catch((error) => {
+										console.error('Error:', error);
+										msgbox("Image poll error: " + error);
 										delete image_db[key];
-									}
-									else {
-										img.queue = 0;
-										let origImg = "data:image/jpeg;base64," + finalimg.generations[0].img;
-										//console.log("Original image: " + origImg);
-										let imgres = localsettings.img_allowhd?(localsettings.img_aspect==0?NO_HD_RES_PX:HD_RES_PX):NO_HD_RES_PX;
-										compressImage(origImg, (newDataUri) => {
-											img.result = newDataUri;
-										}, false, imgres);
-									}
-								})
-								.catch((error) => {
-									console.error('Error:', error);
-									msgbox("Image poll error: " + error);
-									delete image_db[key];
-								});
-						}
-						else {
-							//update timer
-							img.queue = (data.queue_position == null ? "Error" : data.queue_position);
-						}
-					})
-					.catch((error) => {
-						console.error('Error:', error);
-						msgbox("Image poll error: " + error);
-						delete image_db[key];
-					});
-			}
-			else if (img.done == false && img.poll_category==2) //comfyui image polling
-			{
-				//comfyui polling
-				fetch(localsettings.saved_comfy_url + comfy_history_endpoint + "/" + key, {
-					method: 'GET',
-					headers: {
-						'Content-Type': 'application/json',
-					}
-				})
-				.then(x => x.json())
-				.then(resp2 => {
-					console.log(resp2);
-					if(resp2 && resp2[key] && resp2[key].status && resp2[key].status.completed)
-					{
-						img.done = true;
-						let finalfilename = resp2[key].outputs["9"].images[0].filename;
-						//fetch final image
-						fetch(localsettings.saved_comfy_url + comfy_results_endpoint + finalfilename)
-						.then((response) => {
-							return response.blob(); // Convert the response into a Blob
-						})
-						.then((finalimg) => {
-							console.log('finalimg recv for ' + key);
-							const reader = new FileReader();
-							reader.onloadend = () => {
-								img.queue = 0;
-								let origImg = reader.result;
-								let imgres = localsettings.img_allowhd?(localsettings.img_aspect==0?NO_HD_RES_PX:HD_RES_PX):NO_HD_RES_PX;
-								compressImage(origImg, (newDataUri) => {
-									img.result = newDataUri;
-								}, false, imgres);
-							};
-							reader.readAsDataURL(finalimg);
+									});
+							}
+							else {
+								//update timer
+								img.queue = (data.queue_position == null ? "Error" : data.queue_position);
+							}
 						})
 						.catch((error) => {
 							console.error('Error:', error);
 							msgbox("Image poll error: " + error);
 							delete image_db[key];
 						});
-					}
-				}).catch((error) => {
-					console.log("Generation Error: " + error);
-					delete image_db[key];
-					msgbox("Image Generation Failed!\n\nPlease make sure ComfyUI is running at "+localsettings.saved_comfy_url+" and properly configured!\n\nIt must be launched with the flag --listen --enable-cors-header '*' to enable API access\n");
-				});
+				}
+			}
+			else if (img.done == false && img.poll_category==2) //comfyui image polling
+			{
+				let comfyid = img.imrefid;
+				if(comfyid && comfyid!="")
+				{
+					//comfyui polling
+					fetch(localsettings.saved_comfy_url + comfy_history_endpoint + "/" + comfyid, {
+						method: 'GET',
+						headers: {
+							'Content-Type': 'application/json',
+						}
+					})
+					.then(x => x.json())
+					.then(resp2 => {
+						console.log(resp2);
+						if(resp2 && resp2[comfyid] && resp2[comfyid].status && resp2[comfyid].status.completed)
+						{
+							img.done = true;
+							let finalfilename = resp2[comfyid].outputs["9"].images[0].filename;
+							//fetch final image
+							fetch(localsettings.saved_comfy_url + comfy_results_endpoint + finalfilename)
+							.then((response) => {
+								return response.blob(); // Convert the response into a Blob
+							})
+							.then((finalimg) => {
+								console.log('finalimg recv for ' + comfyid);
+								const reader = new FileReader();
+								reader.onloadend = () => {
+									img.queue = 0;
+									let origImg = reader.result;
+									let imgres = localsettings.img_allowhd?(localsettings.img_aspect==0?NO_HD_RES_PX:HD_RES_PX):NO_HD_RES_PX;
+									compressImage(origImg, (newDataUri) => {
+										img.result = newDataUri;
+									}, false, imgres);
+								};
+								reader.readAsDataURL(finalimg);
+							})
+							.catch((error) => {
+								console.error('Error:', error);
+								msgbox("Image poll error: " + error);
+								delete image_db[key];
+							});
+						}
+					}).catch((error) => {
+						console.log("Generation Error: " + error);
+						delete image_db[key];
+						msgbox("Image Generation Failed!\n\nPlease make sure ComfyUI is running at "+localsettings.saved_comfy_url+" and properly configured!\n\nIt must be launched with the flag --listen --enable-cors-header '*' to enable API access\n");
+					});
+				}
 			}
 		}
 
@@ -23378,8 +23430,12 @@ Current version indicated by LITEVER below.
 									<input title="Detect ImgGen Instructions" type="checkbox" id="img_gen_from_instruct" style="margin:0px 0px 0px auto;">
 								</div>
 								<div class="settinglabel">
-									<div class="justifyleft settingsmall"  title="Automatically generates images periodically as you write">Autogenerate </div>
-								   <input title="Autogenerate Images" type="checkbox" id="img_autogen" style="margin:0px 0px 0px auto;">
+									<div class="justifyleft settingsmall">Autogenerate Images <span class="helpicon">?<span class="helptext">Automatically generates images at intervals as you write. Smart mode lets the AI itself choose when to generate images.</span></span></div>
+									<select title="Autogenerate Images" style="padding:1px; height:auto; width: 34px; appearance: none; font-size: 7pt; margin:0px 0px 0px auto;" class="form-control" id="img_autogen_type">
+										<option value="0">Off</option>
+										<option value="1">On</option>
+										<option value="2">Smart</option>
+									</select>
 								</div>
 								<div class="settinglabel">
 									<div class="justifyleft settingsmall"  title="Includes images when saving to json file">Save Images </div>
