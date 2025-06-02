@@ -3166,6 +3166,7 @@ Current version indicated by LITEVER below.
 	var koboldcpp_has_websearch = false;
 	var koboldcpp_has_savedatafile = false;
 	var koboldcpp_has_embeddings = false;
+	var koboldcpp_has_txt2img = false;
 	var koboldcpp_admin_type = 0; //0 = no admin, 1=has admin, 2=protected admin
 	var lastSearchQuery = "";
 	var lastSearchResults = [];
@@ -6335,6 +6336,21 @@ Current version indicated by LITEVER below.
 			a1111_is_connected = false;
 		});
 		}).catch((error) => {
+			if(silent && koboldcpp_has_txt2img && custom_kobold_endpoint!="" && custom_kobold_endpoint!=default_a1111_base && localsettings.saved_a1111_url==default_a1111_base)
+			{
+				//they are probably using the wrong base. let's try changing it.
+				console.log("Trying to fix bad image endpoint, switch to kcpp...");
+				fetch(custom_kobold_endpoint + a1111_models_endpoint)
+				.then(x => x.json())
+				.then(testmodels => {
+					if(testmodels && testmodels.length > 0)
+					{
+						console.log("Switch to kcpp img endpoint.");
+						localsettings.saved_a1111_url = custom_kobold_endpoint;
+						connect_to_a1111(true);
+					}
+				}).catch((err) => {});
+			}
 			if(!silent)
 			{
 				msgbox("A1111 Connect Error: " + error+"\nPlease make sure KoboldCpp / Forge / A1111 is running and properly configured!\nIn your local install of Automatic1111 WebUi, modify webui-user.bat and add these flags to enable API access:\n\nset COMMANDLINE_ARGS= --api --listen --cors-allow-origins=*\n");
@@ -6988,15 +7004,16 @@ Current version indicated by LITEVER below.
 	function upload_to_dpaste()
 	{
 		let serverurl = document.getElementById("dpaste_server_url").value;
-		let cstoryjson = generate_compressed_story(false,localsettings.export_settings,false);
 		if(serverurl=="")
 		{
+			let cstoryjsonsmall = generate_compressed_story(false,localsettings.export_settings,false);
 			document.getElementById("shareasurl").classList.add("hidden");
 			document.getElementById("shareastext").classList.remove("hidden");
-			let fullurl = "https://lite.koboldai.net/?s=" + cstoryjson;
+			let fullurl = "https://lite.koboldai.net/?s=" + cstoryjsonsmall;
 			document.getElementById("sharestorytext").innerHTML = "<a href=\"" + fullurl + "\">" + fullurl + "</a>";
 			return;
 		}
+		let cstoryjson = generate_compressed_story(localsettings.save_images,localsettings.export_settings,localsettings.export_settings);
 
 		msgboxYesNo("Really upload current story? This action cannot be undone.","Confirm Upload Story",()=>{
 			let expiry = document.getElementById("dpaste_duration").value;
@@ -10657,7 +10674,7 @@ Current version indicated by LITEVER below.
 									koboldcpp_has_guidance = (data.guidance?true:false);
 									koboldcpp_has_embeddings = (data.embeddings ? true : false)
 									let has_password = (data.protected?true:false);
-									let has_txt2img = (data.txt2img?true:false);
+									koboldcpp_has_txt2img = (data.txt2img?true:false);
 									let no_txt_model = (mdlname=="inactive");
 									update_websearch_button_visibility();
 
@@ -10745,7 +10762,7 @@ Current version indicated by LITEVER below.
 											if(localsettings.generate_images_mode==2 && localsettings.saved_a1111_url==desiredkoboldendpoint)
 											{
 												localsettings.generate_images_mode = 0;
-												localsettings.saved_a1111_url = default_a1111_base
+												localsettings.saved_a1111_url = default_a1111_base;
 												render_gametext(true);
 											}
 										}
@@ -10767,14 +10784,14 @@ Current version indicated by LITEVER below.
 											}
 										},false,false,true);
 									}
-									else if(localflag && has_txt2img && no_txt_model && safe_to_overwrite())
+									else if(localflag && koboldcpp_has_txt2img && no_txt_model && safe_to_overwrite())
 									{
 										msgboxYesNo("This KoboldCpp instance seems to be running an Image Generation model without any Text Generation model loaded.\n\nWould you like to launch StableUI (Dedicated Image Generation WebUI bundled with KoboldCpp)?\n\nIf unsure, select 'No'.","Launch StableUI?", ()=>{
 											go_to_stableui();
 										},()=>{
 										});
 									}
-									else if(localflag && no_txt_model && !has_txt2img && !koboldcpp_has_vision && !koboldcpp_has_whisper && !koboldcpp_has_tts && !is_using_kcpp_with_admin())
+									else if(localflag && no_txt_model && !koboldcpp_has_txt2img && !koboldcpp_has_vision && !koboldcpp_has_whisper && !koboldcpp_has_tts && !is_using_kcpp_with_admin())
 									{
 										msgboxYesNo("This KoboldCpp instance has no models loaded. You can still use the WebUI to edit or view existing stories.<br><br>Would you like to connect to an external API service?","No Models Loaded",
 										()=>{
@@ -13798,6 +13815,19 @@ Current version indicated by LITEVER below.
 			inputtxt = escape_html(inputtxt);
 			inputtxt = unescape_html_alternate(inputtxt);
 		}
+		//removal of t2i segments
+		if (localsettings.img_autogen_type == 2)
+		{
+			inputtxt = escape_html_alternate(inputtxt);
+			inputtxt = unescape_html(inputtxt);
+			const pat = /<t2i>(.*?)<\/t2i>/g;
+			inputtxt = inputtxt.replace(pat, function (m,p1) {
+				return "";
+			});
+			inputtxt = escape_html(inputtxt);
+			inputtxt = unescape_html_alternate(inputtxt);
+		}
+
 		if((localsettings.thinking_action==1 || localsettings.thinking_action==2) && localsettings.thinking_pattern!="") //removal of cot
 		{
 			inputtxt = escape_html_alternate(inputtxt);
@@ -15172,7 +15202,7 @@ Current version indicated by LITEVER below.
 			//allow autogen images
 			if (localsettings.img_autogen_type == 2 && localsettings.generate_images_mode != 0)
 			{
-				let injected = "[Important Note: This GUI is capable of generating images as outputs. Whenever you want to generate any image, simply output the image description within t2i prompt tags like this <t2i>any image description here</t2i> and an image will be generated and inserted inline there. This can be done anytime, anywhere.]\n\n";
+				let injected = "[Important Note: This GUI is capable of generating images as outputs. Whenever you want to generate any image, simply output the image description within t2i prompt tags like this <t2i>any image description here</t2i> and an image will be generated and inserted inline there. This can be done anytime, anywhere, it will happen automatically on display.]\n\n";
 				truncated_context = injected + truncated_context;
 			}
 
@@ -17310,7 +17340,7 @@ Current version indicated by LITEVER below.
 			const pat = /<t2i>(.*?)<\/t2i>/g;
 			gentxt = gentxt.replace(pat, function (m,p1) {
 				let newimgid = generate_new_image(p1, "", false);
-				let nimgtag = "[<|p|" + newimgid + "|p|>]";
+				let nimgtag = m+"[<|p|" + newimgid + "|p|>]";
 				return nimgtag;
 			});
 		}
@@ -23430,10 +23460,10 @@ Current version indicated by LITEVER below.
 									<input title="Detect ImgGen Instructions" type="checkbox" id="img_gen_from_instruct" style="margin:0px 0px 0px auto;">
 								</div>
 								<div class="settinglabel">
-									<div class="justifyleft settingsmall">Autogenerate Images <span class="helpicon">?<span class="helptext">Automatically generates images at intervals as you write. Smart mode lets the AI itself choose when to generate images.</span></span></div>
+									<div class="justifyleft settingsmall">Autogenerate Images <span class="helpicon">?<span class="helptext">Allows the AI to generate images on its own. Basic automatically generates images at fixed intervals as you write. Smart mode lets the AI itself choose when to generate images.</span></span></div>
 									<select title="Autogenerate Images" style="padding:1px; height:auto; width: 34px; appearance: none; font-size: 7pt; margin:0px 0px 0px auto;" class="form-control" id="img_autogen_type">
 										<option value="0">Off</option>
-										<option value="1">On</option>
+										<option value="1">Basic</option>
 										<option value="2">Smart</option>
 									</select>
 								</div>
