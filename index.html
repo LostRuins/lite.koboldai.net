@@ -23119,13 +23119,23 @@ Current version indicated by LITEVER below.
     }
 
     function addClassById(idElement, className) {
-        let elementWithClassToChange = document.getElementById(idElement)
-        elementWithClassToChange.classList.add(className);
+        let el = document.getElementById(idElement)
+        try {
+            el.classList.add(className);
+        } catch (err) {
+            console.error("addClassById::idElement:", typeof idElement, idElement, ", classname:", typeof className, className, ", el:", typeof el, el, "#")
+            console.error("addClassById::err: this element exists?", err, "#")
+        }
     }
 
     function removeClassById(idElement, className) {
-        let elementWithClassToChange = document.getElementById(idElement)
-        elementWithClassToChange.classList.remove(className);
+        let el = document.getElementById(idElement)
+        try {
+            el.classList.remove(className);
+        } catch (err) {
+            console.error("removeClassById::idElement:", typeof idElement, idElement, ", classname:", typeof className, className, ", el:", typeof el, el, "#")
+            console.error("removeClassById::err: this element exists?", err, "#")
+        }
     }
 
     function toggleOrCloseByBoolAndId(idElement, boolFlag, className="collapse") {
@@ -23210,7 +23220,7 @@ Current version indicated by LITEVER below.
     function showWordsFreqMobileMenu() {
         setPropertyById("id-words-frequency-table-title-mobile-no-info", "display", "none");
         setPropertyById("words-freq-menu", "display", "block");
-        setPropertyById("words-freq-menu", "position", "fixed");
+        setPropertyById("words-freq-menu", "position", "absolute");
         setPropertyById("words-freq-menu", "z-index", "1");
         setPropertyById("words-freq-menu", "width", "320px");
         setPropertyById("words-freq-menu", "padding", "10px 25px 10px 10px");
@@ -23218,6 +23228,7 @@ Current version indicated by LITEVER below.
 
     function hideWordsFreqMobileMenu() {
         if (isMobile()) {
+            removeClassById("id-navtoggler-words-freq", "active")
             setPropertyById("words-freq-menu", "display", "none");
             removePropertyById("words-freq-menu", "position");
             removePropertyById("words-freq-menu", "z-index");
@@ -23249,6 +23260,8 @@ Current version indicated by LITEVER below.
     }
 
     function toggleWordsFreqMobileMenu() {
+        const btn = document.getElementById('id-navtoggler-words-freq');
+        btn.classList.toggle('active');
         const dropdownMenuContent = document.getElementById("words-freq-menu")
         let styleDropdownMenuContent = window.getComputedStyle(dropdownMenuContent)
         if (styleDropdownMenuContent["display"] === "none") {
@@ -23325,8 +23338,8 @@ Current version indicated by LITEVER below.
     .grid-template-1x2 {
         grid-template-columns: 1fr 1fr;
     }
-	.col-flex50 {
-		flex: 50%;
+	.col-flex {
+		flex: 42vw;
 	}
 	.border-gray-litekoboldai {
 		border: 1px solid #646464;
@@ -23374,30 +23387,48 @@ Current version indicated by LITEVER below.
         color: white;
     }
     .navbar-button-bar-words-freq {
-        display: block;
-        height: 1px;
-        width: 14px;
-        border: 1px solid #fff;
-        margin: -2px;
-    }
-    .navbar-button-bar-words-freq+.navbar-button-bar-words-freq {
-        margin-top: 4px;
-    }
+         display: block;
+         height: 1px;
+         width: 115%;
+         border: 1px solid #fff;
+         margin: -1px;
+         background: #fff;
+     }
     .navtoggler-words-freq {
+        opacity: 0.45;
         background-color: #337ab7;
         border: 1px solid #646464;
         height: 20px;
         width: 24px;
-        border-radius: 2px;
         float: right;
-        margin-top: -2px;
-        margin-right: -2px;
+        margin-top: -6px;
+        margin-right: -6px;
         position: relative;
         z-index: 2;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
     }
-	.navtoggler-words-freq:hover {
-		background-color: #4db4ea;
-	}
+    .navtoggler-words-freq:hover {
+        background-color: #4db4ea;
+    }
+    .navbar-button-bar-words-freq+.navbar-button-bar-words-freq {
+        margin-top: 4px;
+    }
+
+    /* Hamburger to X transform */
+    .navtoggler-words-freq.active {
+        background-color: #de5b5b;
+    }
+    .navtoggler-words-freq.active .navbar-button-bar-words-freq:nth-child(1) {
+        transform: translateY(5px) rotate(45deg);
+    }
+    .navtoggler-words-freq.active .navbar-button-bar-words-freq:nth-child(2) {
+        opacity: 0;
+    }
+    .navtoggler-words-freq.active .navbar-button-bar-words-freq:nth-child(3) {
+        transform: translateY(-5px) rotate(-45deg);
+    }
     #words-frequency {
         max-height: calc(100vh - 404px);
     }
@@ -23675,11 +23706,11 @@ Current version indicated by LITEVER below.
 				</span>
 
 				<!-- start HTML section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer -->
-                <div id="id-col2-words-frequency" aria-label="id-col2-words-frequency" class="col-flex50 border-gray-litekoboldai padding5px margin4px overflow-hidden font-size-12px collapse">
+                <div id="id-col2-words-frequency" aria-label="id-col2-words-frequency" class="col-flex border-gray-litekoboldai padding5px margin4px overflow-hidden font-size-12px collapse">
 
                     <div id="id-container-mobile-menu" aria-label="id-container-mobile-menu" class="">
                         <span id="id-words-frequency-table-title-mobile-no-info" aria-label="id-words-frequency-table-title" class="">Text stats</span>
-                        <button id="id-navtoggler-words-freq" aria-label="id-navtoggler-words-freq" title="Text stats" class="navtoggler-words-freq" type="button" onclick="toggleWordsFreqMobileMenu();" tabindex="0">
+                        <button id="id-navtoggler-words-freq" aria-label="id-navtoggler-words-freq" title="Text stats" class="navtoggler-words-freq display-flex" type="button" onclick="toggleWordsFreqMobileMenu();" tabindex="0">
                             <span class="navbar-button-bar-words-freq"></span>
                             <span class="navbar-button-bar-words-freq"></span>
                             <span class="navbar-button-bar-words-freq"></span>
