@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 248;
+	const LITEVER = 249;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -7362,7 +7362,7 @@ Current version indicated by LITEVER below.
 					}
 				} else {
 					//check for tavernai fields
-					let has_tav_wi_check = (new_loaded_storyobj && new_loaded_storyobj.entries && new_loaded_storyobj.entries["0"] && new_loaded_storyobj.entries["0"].hasOwnProperty("uid"));
+					let has_tav_wi_check = has_tavern_wi_check(new_loaded_storyobj);
 					if (!new_loaded_storyobj.scenarioVersion && (new_loaded_storyobj.name != null || new_loaded_storyobj.description != null ||
 						new_loaded_storyobj.personality != null || new_loaded_storyobj.spec=="chara_card_v2" || has_tav_wi_check)) {
 						load_tavern_obj(new_loaded_storyobj);
@@ -7837,6 +7837,18 @@ Current version indicated by LITEVER below.
 			}
 		});
 	}
+	function has_tavern_wi_check(obj)
+	{
+		let checkresult = false;
+		if (obj && obj.entries) {
+			const keys = Object.keys(obj.entries);
+			if (keys.length > 0) {
+				const firstEntry = obj.entries[keys[0]];
+				checkresult = firstEntry && firstEntry.hasOwnProperty("uid");
+			}
+		}
+		return checkresult;
+	}
 
 	function load_agnai_wi(obj,chatopponent,myname)
 	{
@@ -7930,7 +7942,7 @@ Current version indicated by LITEVER below.
 
 	function importLorebookAsTextDB(lorebook)
 	{
-		let has_tav_wi_check = (lorebook && lorebook.entries && lorebook.entries["0"] && lorebook.entries["0"].hasOwnProperty("uid"));
+		let has_tav_wi_check = has_tavern_wi_check(lorebook);
 		if (lorebook && has_tav_wi_check)
 		{
 			let lbname = lorebook.name?lorebook.name:"UntitledLorebook";
@@ -8051,7 +8063,7 @@ Current version indicated by LITEVER below.
 			}
 			let combinedmem = sysprompt + memory + scenario + examplemsg;
 			let agnaidatafieldsempty = scenario + examplemsg + (obj.personality?obj.personality:"") + greeting;
-			let has_tav_wi_check = (obj && obj.entries && obj.entries["0"] && obj.entries["0"].hasOwnProperty("uid"));
+			let has_tav_wi_check = has_tavern_wi_check(obj);
 			//check if it's a world info only card, if so, do not restart game
 			if(combinedmem.trim()=="" && greeting=="" && has_tav_wi_check)
 			{
@@ -8101,6 +8113,10 @@ Current version indicated by LITEVER below.
 				else if(obj.entries && obj.entries.length>0)
 				{
 					current_wi = load_agnai_wi(obj,chatopponent,myname);
+				}
+				else if (has_tav_wi_check)
+				{
+					current_wi = load_tavern_wi(obj,chatopponent,myname);
 				}
 			}
 			update_for_sidepanel();
