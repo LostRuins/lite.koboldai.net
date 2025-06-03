@@ -13854,9 +13854,9 @@ Current version indicated by LITEVER below.
 			}
 		}
 		render_gametext(false);
-        /* My Ghost Writer edit mode warning */
+        /* My Ghost Writer: this will parse again the text because of edit mode toggle */
         if (wfo.wfoActive && wfo.nTotalRows != null) {
-            setElementCssClassById("edit-mode-toggled-warning", "display-block color-gold")
+            getWordsFrequency()
         }
 	}
 	function exit_editmode()
@@ -22561,7 +22561,6 @@ Current version indicated by LITEVER below.
         "wfoActive": false
 	}
 	const editorFieldLabel = "gametext"
-	const remoteWebServer = "http://localhost:7860"
 	const underlinedPrimary = "underlinedYellow"
     const underlinedSecondary = "underlinedWhite"
 	const underlinedClicked = "underlinedViolet"
@@ -22577,47 +22576,18 @@ Current version indicated by LITEVER below.
     const tabletInnerSize = 1024
     const minNCharsMore = 10
 
-    const wordsFrequencyAnalyzers = {
-        "id-input-webserver-wordfreq-checkbox": async function(arrayOfValidTextChildWithNrow) {
+    function wordsFrequencyAnalyzer(inputText) {
+        console.log("use the embedded functionality for word freq analysis...")
+        try {
             const nWordsStemmingEl = document.getElementById("id-n-words-stemming-enable")
-            const n = parseInt(nWordsStemmingEl.value)
-            console.log(`wordsFrequencyAnalyzers::nWordsStemming ${n}.`, typeof n, "#")
-            let bodyRequest = {"text": arrayOfValidTextChildWithNrow, "n": n}
-            console.log("use the webserver for word freq analysis...")
-            const wordsFrequencyURL = parseWebserverDomain()
-            try {
-                let response = await fetch(wordsFrequencyURL, {
-                    method: "POST",
-                    body: JSON.stringify(bodyRequest)
-                })
-                console.assert(response.status === 200, `response.status: ${response.status}!`)
-                let bodyResponseJson = await response.json()
-                setElementCssClassById("waiting-for-be", "collapse")
-                let freq = bodyResponseJson["words_frequency"]
-                let nTotalRows = bodyResponseJson["n_total_rows"]
-                console.log(`wordsFrequencyAnalyzers::nTotalRows: '${nTotalRows}'`)
-                populateWordsFrequencyTables(freq, nTotalRows, arrayOfValidTextChildWithNrow)
-            } catch (err) {
-                console.error("wordsFrequencyAnalyzers::err on webserver request/response:", err, "#")
-                console.error(`wordsFrequencyAnalyzers::wordsFrequencyURL: ${typeof wordsFrequencyURL}:`, wordsFrequencyURL, "#")
-                setElementCssClassById("waiting-for-be", "collapse")
-                setElementCssClassById("waiting-for-be-error", "display-block color-red")
-            }
-        },
-        'stemmer-embedded': function(inputText) {
-            console.log("use the embedded functionality for word freq analysis...")
-            try {
-                const nWordsStemmingEl = document.getElementById("id-n-words-stemming-enable")
-                let { nTotalRows, wordsStemsDict } = textStemming(inputText, nWordsStemmingEl.value)
-                setElementCssClassById("waiting-for-be", "collapse")
-                console.log(`getWordsFreq::nTotalRows: '${nTotalRows}', populateWordsFrequencyTables...`)
-                populateWordsFrequencyTables(wordsStemsDict, nTotalRows, inputText)
-            } catch (err) {
-                console.error("getWordsFrequency::err on useWordfreqWebserver:", err, "#")
-                setElementCssClassById("waiting-for-be", "collapse")
-                setElementCssClassById("waiting-for-be-error-embedded", "display-block color-red")
-
-            }
+            let { nTotalRows, wordsStemsDict } = textStemming(inputText, nWordsStemmingEl.value)
+            setElementCssClassById("waiting-for-output", "collapse")
+            console.log(`getWordsFreq::nTotalRows: '${nTotalRows}', populateWordsFrequencyTables...`)
+            populateWordsFrequencyTables(wordsStemsDict, nTotalRows, inputText)
+        } catch (err) {
+            console.error("getWordsFrequency::err on wordsFrequencyAnalyzer:", err, "#")
+            setElementCssClassById("waiting-for-output", "collapse")
+            setElementCssClassById("waiting-for-error-embedded", "display-block color-red")
         }
     }
 
@@ -22795,23 +22765,13 @@ Current version indicated by LITEVER below.
         } catch {}
 	}
 
-    function parseWebserverDomain () {
-        const remoteWebServerEl = document.getElementById("id-input-webserver-wordfreq")
-        console.log("remoteWebServer.value:", remoteWebServerEl.value, "#")
-        const remoteWebServerValue = remoteWebServerEl.value ?? remoteWebServer
-        const remoteWebServerDomain = remoteWebServerValue.trim().replace(/\/+$/, '')
-        return `${remoteWebServerDomain}/words-frequency`
-    }
-
-	async function getWordsFrequency() {
+	function getWordsFrequency() {
         if (isMobile()) {
             hideWordsFreqMobileMenu()
         }
         let {validChildContent} = getValidChildNodesFromEditorById(editorFieldLabel)
-        setElementCssClassById("waiting-for-be-error", "collapse")
-        setElementCssClassById("waiting-for-be-error-embedded", "collapse")
-        setElementCssClassById("edit-mode-toggled-warning", "collapse")
-        setElementCssClassById("waiting-for-be", "display-block")
+        setElementCssClassById("waiting-for-error-embedded", "collapse")
+        setElementCssClassById("waiting-for-output", "display-block")
 		let wordsFrequencyTableTitleEl = document.getElementById("id-words-frequency-table-title")
         let wordsFrequencyTableTitleElMobile = document.getElementById("id-words-frequency-table-title-mobile")
 
@@ -22825,19 +22785,8 @@ Current version indicated by LITEVER below.
         currentTableTitle.innerText = ""
         const filterValue = document.getElementById("id-filtered-value")
         filterValue.innerText = ""
-        const choiceWordFreqAnalyzerEl = document.getElementById('id-input-webserver-wordfreq-checkbox')
-        console.log("choiceWordFreqAnalyzerEl checked:", typeof choiceWordFreqAnalyzerEl.checked, choiceWordFreqAnalyzerEl.checked, "#")
-        switch (choiceWordFreqAnalyzerEl.checked) {
-            case true: // webserver
-                await wordsFrequencyAnalyzers['id-input-webserver-wordfreq-checkbox'](validChildContent)
-                break;
-            case false: // embedded
-                wordsFrequencyAnalyzers['stemmer-embedded'](validChildContent)
-                break;
-            default:
-                console.warn("No valid analyzer selected.");
-                break;
-		}
+        wordsFrequencyAnalyzer(validChildContent)
+        backToListFromCurrentTable()
 	}
 
 	function dynamicSort(property, order) {
@@ -23096,12 +23045,6 @@ Current version indicated by LITEVER below.
         return value
     }
 
-    function updateWordsFreqIfPressEnterSimple() {
-        if(event.key==='Enter'){
-            updateWordsFrequencyTables()
-        }
-	}
-
     function getValidChildNodesFromEditorById(idElement) {
         const editorElement = document.getElementById(idElement);
         let validChildContent = [];
@@ -23201,15 +23144,7 @@ Current version indicated by LITEVER below.
 
     async function updateWordsFreqIfPressEnter() {
         if (event.key === 'Enter') {
-            const webserverIsCheckedEl = document.getElementById("id-input-webserver-wordfreq-checkbox")
-            const webserverIsChecked = webserverIsCheckedEl.checked
-            if (!webserverIsChecked) {
-                await getWordsFrequency()
-            } else {
-                // in case id-input-webserver-wordfreq-checkbox is checked, this will only fire updateWordsFrequencyTables()
-                // use instead btn-filter-words-frequency to fire getWordsFrequency()
-                updateWordsFrequencyTables()
-            }
+            getWordsFrequency()
             if (isMobile()) {
                 backToListFromCurrentTable()
             }
@@ -23227,19 +23162,7 @@ Current version indicated by LITEVER below.
     function toggleWordFreqCheckbox(checked) {
         wfo.wfoActive = checked
         toggleOrCloseByBoolAndId('id-col2-words-frequency', checked);
-        toggleOrCloseByBoolAndId('id-settings-wordsfreq-custom-webserver', checked);
-    }
-
-    function toggleWebserverCheckbox() {
-        const checked = document.getElementById("id-input-webserver-wordfreq-checkbox").checked
-        toggleOrCloseByBoolAndId('id-input-webserver-wordfreq', checked);
-        toggleOrCloseByBoolAndId('btn-filter-words-frequency', checked);
-        // at start THERE IS the CSS class width-100perc: toggleElementWithClassById() will REMOVE it
-        toggleElementWithClassById("filter-words-frequency", "width-100perc")
-        // at start THERE ISN'T the CSS class calc100percMinus50px: toggleElementWithClassById() will ADD it
-        toggleElementWithClassById("filter-words-frequency", "calc100percMinus50px")
-        wfo.stemmingBackend = checked
-        document.getElementById('id-wordfreq-show-analyzer').innerText=checked?'webserver':'embedded';
+        toggleOrCloseByBoolAndId('id-n-words-stemming-settings-section', checked);
     }
 
     function backToListFromCurrentTable() {
@@ -23770,7 +23693,6 @@ Current version indicated by LITEVER below.
                                 <span id="id-words-frequency-table-title-mobile" aria-label="id-words-frequency-table-title" class="">Text stats</span>
                                 <br id="id-words-frequency-table-title-mobile-br" style="display: none">
                                 <input type="search" id="filter-words-frequency" aria-label="filter-words-frequency" placeholder="Filter/update" class="background-color-verydarkgrey width-100perc" onkeydown="updateWordsFreqIfPressEnter()"/>
-                                <span type="button" class="btn btn-primary mainnav collapse" id="btn-filter-words-frequency" aria-label="btn-filter-words-frequency" onclick="getWordsFrequency()">🚀</span>
                             </div>
                             <div id="id-container-sort-order-word-list" aria-label="id-container-sort-order-word-list" class="nav-item display-flex margin4px-left words-freq-select-parent">
                                 <label id="words-freq-select-order" aria-label="words-freq-select-order" class="words-freq-select">
@@ -23791,14 +23713,8 @@ Current version indicated by LITEVER below.
 
                     </div>
 
-                    <span id="waiting-for-be" aria-label="waiting-for-be" class="display-none">waiting for backend response...</span>
-                    <span id="waiting-for-be-error" aria-label="waiting-for-be-error" class="collapse">Error! You are
-                        using the custom webserver: it's up&running? Any results may be out of date.</span>
-                    <span id="waiting-for-be-error-embedded" aria-label="waiting-for-be-error-embedded" class="collapse">Error!</span>
-                    <span id="edit-mode-toggled-warning" aria-label="edit-mode-toggled-warning" class="collapse">
-                        Warning: since you toggled the edit mode on or off (or changed the UI), it's possible that you
-                        have wrong word position index. You should get an up-to-dated ouput as soon as possible!
-                    </span>
+                    <span id="waiting-for-output" aria-label="waiting-for-output" class="display-none">waiting for output...</span>
+                    <span id="waiting-for-error-embedded" aria-label="waiting-for-error-embedded" class="collapse">Error!</span>
                     <!-- max-height-80perc instead of max-height-80vh -->
                     <div id="words-frequency" class="display-flex margin4px-top" aria-label="words-frequency">
                         <div id="id-list-of-words-container" style="display: block" aria-label="id-list-of-words-container">
@@ -25103,7 +25019,7 @@ Current version indicated by LITEVER below.
                     <div id="expandwordsfreqstats" class="hidden">
 
                         <div class="settinglabel" id="id-settings-wordsfreq-settings-section">
-                            <div class="justifyleft settingsmall">Enable Word Frequency Stats.<span class="helpicon">?<span
+                            <div class="justifyleft">Enable Word Frequency Stats.<span class="helpicon">?<span
                                     class="helptext">If enabled, it extracts word frequency stats.
                             The output it's a list of word prefixes (<a href="https://en.wikipedia.org/wiki/Stemming">stems</a>)
                             with associated words and their position within the editor, permitting to remove repetitions.
@@ -25128,9 +25044,9 @@ Current version indicated by LITEVER below.
                             </div>
                         </div>
 
-                        <div class="settinglabel" id="id-n-words-stemming-settings-section">
+                        <div class="settinglabel collapse" id="id-n-words-stemming-settings-section">
                             <div class="display-flex">
-                                <div class="justifyleft settingsmall">Choose how many words do you want to consider at time while stemming the text.
+                                <div class="justifyleft">Choose how many words do you want to consider at time while stemming the text.
                                     <br>Better to use less than three words with very long texts (more than 5000 words).
                                 </div>
                                 <input
@@ -25146,20 +25062,6 @@ Current version indicated by LITEVER below.
                             </div>
                         </div>
 
-                        <div id="id-settings-wordsfreq-custom-webserver" class="collapse">
-                            <div class="justifyleft settingsmall color-white">Enable a <a href="https://github.com/trincadev/my_ghost_writer/">My Ghost Writer</a>
-                                    webserver to get words stats (now using <span id="id-wordfreq-show-analyzer" aria-label="id-wordfreq-show-analyzer">embedded</span> functionality) <span class="helpicon">?<span
-                                    class="helptext">If you have a custom web server, you can specify the URL here. Otherwise, leave it disabled to use the embedded functionality.</span></span>
-                                <input
-                                        type="checkbox"
-                                        id="id-input-webserver-wordfreq-checkbox"
-                                        aria-label="id-input-webserver-wordfreq-checkbox"
-                                        name="id-input-webserver-wordfreq-checkbox"
-                                        onchange="toggleWebserverCheckbox()"
-                                />
-                            </div>
-                            <input type="URL" id="id-input-webserver-wordfreq" aria-label="id-input-webserver-wordfreq" value="http://localhost:7860" class="width-100perc collapse"/>
-                        </div>
                     </div>
                     <!-- end settings for My Ghost Writer -->
 
