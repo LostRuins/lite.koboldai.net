@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 249;
+	const LITEVER = 250;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -2163,6 +2163,9 @@ Current version indicated by LITEVER below.
 	.color_offwhite {
 		color: #bedae9;
 	}
+	.color_white {
+		color: #ffffff;
+	}
 	.color_darkgreen {
 		color: #63975c;
 	}
@@ -2999,6 +3002,8 @@ Current version indicated by LITEVER below.
 	const koboldcpp_tts_endpoint = "/api/extra/tts";
 	const koboldcpp_admin_list_endpoint = "/api/admin/list_options";
 	const koboldcpp_admin_reload_endpoint = "/api/admin/reload_config";
+	const koboldcpp_admin_savestate_endpoint = "/api/admin/save_state";
+	const koboldcpp_admin_loadstate_endpoint = "/api/admin/load_state";
 	const koboldcpp_savedata_list_endpoint = "/api/extra/data/list";
 	const koboldcpp_savedata_save_endpoint = "/api/extra/data/save";
 	const koboldcpp_savedata_load_endpoint = "/api/extra/data/load";
@@ -11090,6 +11095,7 @@ Current version indicated by LITEVER below.
 	function display_admin_container()
 	{
 		mainmenu_untab(false);
+		document.getElementById("loadstatetxt").innerText = "";
 		let fetch_kcpps_configs = function(adminkey)
 		{
 			let header = {'Content-Type': 'application/json'};
@@ -11201,6 +11207,62 @@ Current version indicated by LITEVER below.
 			}
 		}).catch((error) => {
 			console.log("Error: " + error);
+			msgbox(error,"Error");
+		});
+	}
+
+	function trigger_admin_savestate()
+	{
+		document.getElementById("loadstatetxt").innerText = "Saving State...";
+		let header = {'Content-Type': 'application/json'};
+		if(last_admin_key!="")
+		{
+			header['Authorization'] = 'Bearer ' + last_admin_key;
+		}
+		fetch(custom_kobold_endpoint + koboldcpp_admin_savestate_endpoint, {
+			method: 'POST',
+			headers: header
+		})
+		.then(x => x.json())
+		.then(values => {
+			console.log(values);
+			if(values.success)
+			{
+				document.getElementById("loadstatetxt").innerText = `State Saved (${values.new_tokens} tokens in ${parseInt(values.new_state_size/(1024*1024))} MB)`;
+			}else{
+				document.getElementById("loadstatetxt").innerText = `Save State Failed!`;
+			}
+		}).catch((error) => {
+			console.log("Error: " + error);
+			document.getElementById("loadstatetxt").innerText = `Save State Failed!`;
+			msgbox(error,"Error");
+		});
+	}
+
+	function trigger_admin_loadstate()
+	{
+		document.getElementById("loadstatetxt").innerText = "Loading State...";
+		let header = {'Content-Type': 'application/json'};
+		if(last_admin_key!="")
+		{
+			header['Authorization'] = 'Bearer ' + last_admin_key;
+		}
+		fetch(custom_kobold_endpoint + koboldcpp_admin_loadstate_endpoint, {
+			method: 'POST',
+			headers: header
+		})
+		.then(x => x.json())
+		.then(values => {
+			console.log(values);
+			if(values.success)
+			{
+				document.getElementById("loadstatetxt").innerText = `State Loaded (${values.new_tokens} tokens)`;
+			}else{
+				document.getElementById("loadstatetxt").innerText = `Load State Failed!`;
+			}
+		}).catch((error) => {
+			console.log("Error: " + error);
+			document.getElementById("loadstatetxt").innerText = `Load State Failed!`;
 			msgbox(error,"Error");
 		});
 	}
@@ -22770,7 +22832,7 @@ Current version indicated by LITEVER below.
 
 				<div style="float:right;">
 					<div class="settinglabel">
-						<button type="button" class="btn purplebtn widelbtn" style="padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;font-size:8px" id="wiexport" onclick="wi_group_export()">[Export / Import Group]</button>
+						<button type="button" class="btn purplebtn widelbtn" style="padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;font-size:8px" id="wiexport" onclick="wi_group_export()">[Edit Group]</button>
 						<button type="button" class="btn purplebtn widelbtn" style="padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;font-size:8px" id="wiexport" onclick="export_wi_to_file()">[Export all WI to file]</button>
 						<button type="button" class="btn purplebtn widelbtn" style="padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;font-size:8px" id="wiexport" onclick="import_wi_from_file()">[Import all WI from file]</button>
 					</div>
@@ -24714,21 +24776,31 @@ Current version indicated by LITEVER below.
 
 	<div class="popupcontainer flex hidden" id="admincontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup flexsizevsmall">
+		<div class="nspopup flexsizesmall">
 			<div class="popuptitlebar">
-				<div class="popuptitletext">Change Loaded KoboldCpp Config</div>
+				<div class="popuptitletext">KoboldCpp Admin Config</div>
 			</div>
-			<div class="menutext">
-				<b></b>Warning: This will terminate the current KoboldCpp instance and relaunch it with a new config.</b><br><br>
-				If an invalid configuration is selected, the new server may fail to relaunch!<br><br>
-				<div>
-					<select title="Select New Config" style="padding:4px;" class="form-control" id="adminconfigdropdown">
-					</select>
+			<br>
+			<div>
+				<b class="color_white" style="padding: 5px;">Save / Load Context State:</b><br>
+				<div style="display:flex;padding: 5px;">
+				<button type="button" style="margin:2px;width:50%" class="btn btn-primary" onclick="trigger_admin_savestate()">Save State</button>
+				<button type="button" style="margin:2px;width:50%" class="btn btn-primary" onclick="trigger_admin_loadstate()">Load State</button>
 				</div>
+				<div class="menutext" id="loadstatetxt"></div>
+			</div>
+			<br>
+			<div>
+				<b class="color_white" style="padding: 5px;">Change Loaded Model / Config:</b><br>
+				<div style="display:flex;padding: 5px;">
+					<select title="Select New Config" style="padding:4px; width:calc(100% - 150px)" class="form-control" id="adminconfigdropdown">
+					</select>
+					<button type="button" style="margin-left:2px;width:146px" class="btn btn-primary" onclick="trigger_admin_reload()">Reload KoboldCpp</button>
+				</div>
+				<div class="menutext">Warning: This will terminate the current KoboldCpp instance and relaunch it with a new config. If an invalid configuration is selected, the new server may fail to relaunch!</div>
 				<br>
 			</div>
 			<div class="popupfooter">
-				<button type="button" style="width:200px" class="btn btn-primary" onclick="trigger_admin_reload()">Reload KoboldCpp</button>
 				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
 			</div>
 		</div>
