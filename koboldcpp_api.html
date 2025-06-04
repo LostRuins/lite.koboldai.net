@@ -1909,8 +1909,20 @@
                                  "application/json": {
                                   "example": {
                                      "success": true,
-                                     "old_state_size": 0,
-                                     "old_tokens": 0,
+                                     "old_states": [
+                                       {
+                                          "tokens": 0,
+                                          "size": 0
+                                       },
+                                       {
+                                          "tokens": 0,
+                                          "size": 0
+                                       },
+                                       {
+                                          "tokens": 0,
+                                          "size": 0
+                                       }
+                                    ],
                                      "new_state_size": 0,
                                      "new_tokens": 0,
                                   },
@@ -1920,13 +1932,21 @@
                                            "type": "boolean",
                                            "description": "Whether the operation was successful."
                                         },
-                                        "old_state_size": {
-                                           "type": "number",
-                                           "description": "Bytes currently in used for existing save state."
-                                        },
-                                        "old_tokens": {
-                                           "type": "number",
-                                           "description": "How many tokens in currently existing save state."
+                                        "old_states": {
+                                           "type": "array",
+                                            "items": {
+                                            "type": "object",
+                                            "properties": {
+                                               "tokens": {
+                                               "type": "number",
+                                               "description": "Tokens in this saved state."
+                                               },
+                                               "size": {
+                                               "type": "number",
+                                               "description": "Size of this saved state in bytes."
+                                               }
+                                             }
+                                           }
                                         },
                                         "new_state_size": {
                                            "type": "number",
@@ -1952,6 +1972,25 @@
                 "/api/admin/save_state": {
                    "post": {
                       "description": "Creates a new KV cache save state in memory. Overwrites any existing saved state.",
+                      "requestBody": {
+                         "content": {
+                            "application/json": {
+                               "example": {
+                                  "slot": 0,
+                               },
+                               "schema": {
+                                  "properties": {
+                                     "slot": {
+                                        "type": "number",
+                                        "description": "Which slot index to save/load the state to/from."
+                                     },
+                                  },
+                                  "type": "object"
+                               }
+                            }
+                         },
+                         "required": true
+                      },
                       "responses": {
                          "200": {
                             "content": {
@@ -1991,6 +2030,25 @@
                 "/api/admin/load_state": {
                    "post": {
                       "description": "Reloads a previous KV cache save state into context.",
+                      "requestBody": {
+                         "content": {
+                            "application/json": {
+                               "example": {
+                                  "slot": 0,
+                               },
+                               "schema": {
+                                  "properties": {
+                                     "slot": {
+                                        "type": "number",
+                                        "description": "Which slot index to save/load the state to/from."
+                                     },
+                                  },
+                                  "type": "object"
+                               }
+                            }
+                         },
+                         "required": true
+                      },
                       "responses": {
                          "200": {
                             "content": {
@@ -2024,7 +2082,7 @@
                 },
                 "/api/admin/clear_state": {
                    "post": {
-                      "description": "Frees any previous KV cache save state.",
+                      "description": "Frees all previous KV cache save state.",
                       "responses": {
                          "200": {
                             "content": {
@@ -2045,7 +2103,7 @@
                             "description": "Successful request"
                          }
                       },
-                      "summary": "Frees any previous KV cache save state.",
+                      "summary": "Frees all previous KV cache save state.",
                       "tags": [
                          "api/admin"
                       ]

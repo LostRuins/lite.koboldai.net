@@ -11213,7 +11213,8 @@ Current version indicated by LITEVER below.
 
 	function trigger_admin_savestate()
 	{
-		document.getElementById("loadstatetxt").innerText = "Saving State...";
+		let slot = parseInt(document.getElementById("savestate_selection").value);
+		document.getElementById("loadstatetxt").innerText = `Saving State ${slot}...`;
 		let header = {'Content-Type': 'application/json'};
 		if(last_admin_key!="")
 		{
@@ -11221,27 +11222,31 @@ Current version indicated by LITEVER below.
 		}
 		fetch(custom_kobold_endpoint + koboldcpp_admin_savestate_endpoint, {
 			method: 'POST',
-			headers: header
+			headers: header,
+			body: JSON.stringify({
+				"slot": slot
+			})
 		})
 		.then(x => x.json())
 		.then(values => {
 			console.log(values);
 			if(values.success)
 			{
-				document.getElementById("loadstatetxt").innerText = `State Saved (${values.new_tokens} tokens in ${parseInt(values.new_state_size/(1024*1024))} MB)`;
+				document.getElementById("loadstatetxt").innerText = `State ${slot} Saved (${values.new_tokens} tokens in ${parseInt(values.new_state_size/(1024*1024))} MB)`;
 			}else{
-				document.getElementById("loadstatetxt").innerText = `Save State Failed!`;
+				document.getElementById("loadstatetxt").innerText = `Save State ${slot} Failed!`;
 			}
 		}).catch((error) => {
 			console.log("Error: " + error);
-			document.getElementById("loadstatetxt").innerText = `Save State Failed!`;
+			document.getElementById("loadstatetxt").innerText = `Save State ${slot} Failed!`;
 			msgbox(error,"Error");
 		});
 	}
 
 	function trigger_admin_loadstate()
 	{
-		document.getElementById("loadstatetxt").innerText = "Loading State...";
+		let slot = parseInt(document.getElementById("savestate_selection").value);
+		document.getElementById("loadstatetxt").innerText = `Loading State ${slot}...`;
 		let header = {'Content-Type': 'application/json'};
 		if(last_admin_key!="")
 		{
@@ -11249,20 +11254,23 @@ Current version indicated by LITEVER below.
 		}
 		fetch(custom_kobold_endpoint + koboldcpp_admin_loadstate_endpoint, {
 			method: 'POST',
-			headers: header
+			headers: header,
+			body: JSON.stringify({
+				"slot": slot
+			})
 		})
 		.then(x => x.json())
 		.then(values => {
 			console.log(values);
 			if(values.success)
 			{
-				document.getElementById("loadstatetxt").innerText = `State Loaded (${values.new_tokens} tokens)`;
+				document.getElementById("loadstatetxt").innerText = `State ${slot} Loaded (${values.new_tokens} tokens)`;
 			}else{
-				document.getElementById("loadstatetxt").innerText = `Load State Failed!`;
+				document.getElementById("loadstatetxt").innerText = `Load State ${slot} Failed!`;
 			}
 		}).catch((error) => {
 			console.log("Error: " + error);
-			document.getElementById("loadstatetxt").innerText = `Load State Failed!`;
+			document.getElementById("loadstatetxt").innerText = `Load State ${slot} Failed!`;
 			msgbox(error,"Error");
 		});
 	}
@@ -24806,8 +24814,13 @@ Current version indicated by LITEVER below.
 			<div>
 				<b class="color_white" style="padding: 5px;">Save / Load Context State:</b><br>
 				<div style="display:flex;padding: 5px;">
-				<button type="button" style="margin:2px;width:50%" class="btn btn-primary" onclick="trigger_admin_savestate()">Save State</button>
-				<button type="button" style="margin:2px;width:50%" class="btn btn-primary" onclick="trigger_admin_loadstate()">Load State</button>
+				<select title="State Slot Selection" style="padding:4px;width:30%" class="form-control" id="savestate_selection">
+					<option value="0" selected="selected">State 0</option>
+					<option value="1">State 1</option>
+					<option value="2">State 2</option>
+				</select>
+				<button type="button" style="margin:2px;width:35%" class="btn btn-primary" onclick="trigger_admin_savestate()">Save State</button>
+				<button type="button" style="margin:2px;width:35%" class="btn btn-primary" onclick="trigger_admin_loadstate()">Load State</button>
 				</div>
 				<div class="menutext" id="loadstatetxt"></div>
 			</div>
