@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 251;
+	const LITEVER = 252;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3806,7 +3806,8 @@ Current version indicated by LITEVER below.
 	}
 	function format_streaming_text(input)
 	{
-		if(localsettings.opmode==4 && localsettings.render_streaming_markdown && localsettings.instruct_has_markdown)
+		let inEditMode = (document.getElementById("allowediting").checked ? true : false);
+		if(localsettings.opmode==4 && localsettings.render_streaming_markdown && localsettings.instruct_has_markdown && !inEditMode)
 		{
 			input = simpleMarkdown(input, localsettings.instruct_has_latex);
 		}
@@ -9512,6 +9513,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("groupselectcontainer").classList.contains("hidden") &&
 			document.getElementById("addimgcontainer").classList.contains("hidden") &&
 			document.getElementById("pasteimgcontainer").classList.contains("hidden") &&
+			document.getElementById("webcamcontainer").classList.contains("hidden") &&
 			document.getElementById("choosesharecontainer").classList.contains("hidden") &&
 			document.getElementById("advancedloadfile").classList.contains("hidden") &&
 			document.getElementById("welcomecontainer").classList.contains("hidden") &&
@@ -9550,10 +9552,12 @@ Current version indicated by LITEVER below.
 		document.getElementById("groupselectcontainer").classList.add("hidden");
 		document.getElementById("addimgcontainer").classList.add("hidden");
 		document.getElementById("pasteimgcontainer").classList.add("hidden");
+		document.getElementById("webcamcontainer").classList.add("hidden");
 		document.getElementById("choosesharecontainer").classList.add("hidden");
 		document.getElementById("advancedloadfile").classList.add("hidden");
 		document.getElementById("welcomecontainer").classList.add("hidden");
 		document.getElementById("admincontainer").classList.add("hidden");
+		stop_webcam();
 		mainmenu_untab(false);
 	}
 
@@ -14360,6 +14364,46 @@ Current version indicated by LITEVER below.
 			);
 			dragdropimgsetup = true;
 		}
+	}
+
+	var webcamStream = null;
+	function add_img_btn_webcam()
+	{
+		document.getElementById("addimgcontainer").classList.add("hidden");
+		document.getElementById("webcamcontainer").classList.remove("hidden");
+		const video = document.getElementById('webcamvideo');
+		if(webcamStream)
+		{
+			stop_webcam();
+		}
+		navigator.mediaDevices.getUserMedia({ video: true })
+		.then(stream => {
+			webcamStream = stream;
+			video.srcObject = stream;
+		})
+		.catch(err => {
+			console.error('Error accessing webcam:', err);
+		});
+	}
+	function stop_webcam()
+	{
+		if (webcamStream) {
+			const video = document.getElementById('webcamvideo');
+			webcamStream.getTracks().forEach(track => track.stop());
+			video.srcObject = null;  // Clear video source
+			console.log("Webcam stopped.");
+		}
+		webcamStream = null;
+	}
+	function capture_webcam_btn()
+	{
+		const video = document.getElementById('webcamvideo');
+		const canvas = document.getElementById('webcamcanvas');
+		const context = canvas.getContext('2d');
+		context.drawImage(video, 0, 0, canvas.width, canvas.height);
+		const dataURL = canvas.toDataURL('image/png');
+		self_upload_img(dataURL);  // Call your upload function
+		hide_popups();
 	}
 
 	function add_img_btn_upload()
@@ -20147,6 +20191,11 @@ Current version indicated by LITEVER below.
 		corpo_editing_turn = -1;
 		render_gametext(needsave,false);
 	}
+	function corpo_edit_chunk_resend(idx)
+	{
+		corpo_edit_chunk_save();
+		corpo_retry_chunk(idx+1);
+	}
 
 	var cosmetic_corpo_ai_nick = "KoboldAI";
 	function corpo_click_avatar()
@@ -20271,7 +20320,7 @@ Current version indicated by LITEVER below.
 				}
 			}
 
-			let resendbtn = (curr.myturn?`<button type="button" class="btn btn-primary" style="margin:2px;float:right;" onclick="corpo_edit_chunk_resend()">Resend</button>`:``);
+			let resendbtn = ((curr.myturn && i<chatunits.length-1)?`<button type="button" class="btn btn-primary" style="margin:2px;float:right;" onclick="corpo_edit_chunk_resend(${i})">Resend</button>`:``);
 			let bodypart = (corpo_editing_turn == i ?
 				`<div class="corpo_edit_outer">
 				<div class="corpo_edit_inner" id="corpo_edit_inp_lengthtester" style="white-space: nowrap; visibility: hidden; height: 0px; position:absolute; width: auto;"></div>
@@ -25084,6 +25133,9 @@ Current version indicated by LITEVER below.
 				<button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_upload()">Upload Image File</button>
 			</div>
 			<div class="menutext">
+				<button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_webcam()">Capture From Camera</button>
+			</div>
+			<div class="menutext">
 				<button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_paste()">Drag Drop / Paste from Clipboard</button>
 			</div>
 			<div class="menutext">
@@ -25109,6 +25161,21 @@ Current version indicated by LITEVER below.
 			<input type="text" id="pasteimgwin" style="width:100%; height:100px; text-align: center;" oninput="clear_paste_window()" onpaste="return img_paste_event(event)" value="" placeholder="[Drag/Paste Image Here]">
 			<br>
 			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="webcamcontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup flexsizevsmall">
+			<div class="popuptitlebar">
+				<div class="popuptitletext">Capture Image From Camera</div>
+			</div>
+			<video id="webcamvideo" width="100%" height="300" autoplay></video>
+			<canvas id="webcamcanvas" width="512" height="512" style="display:none;"></canvas>
+			<div class="popupfooter">
+				<button id="webcambutton" type="button" class="btn btn-primary" onclick="capture_webcam_btn()">Capture</button>
 				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
 			</div>
 		</div>
