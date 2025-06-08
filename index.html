@@ -22551,7 +22551,6 @@ Current version indicated by LITEVER below.
 
 	/** start script section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer */
 	const wordsFrequencyTableTitleText = "Text stats"
-    const wordsFrequencyTableTitleMobileText = "Text stats"
 	let wfo = {
 		"words_frequency": {},
         "nTotalRows": null,
@@ -22680,20 +22679,6 @@ Current version indicated by LITEVER below.
 		return dataValue
 	}
 
-	function previewFile() {
-		const editor = document.getElementById(editorFieldLabel);
-		const [file] = document.querySelector("input[type=file]").files;
-		const reader = new FileReader();
-		reader.addEventListener("load", () => {
-				// this will then display a text file
-				editor.innerText = reader.result;
-			}, false
-		);
-		if (file) {
-			reader.readAsText(file);
-		}
-	}
-
     function scrollToGivenPoint(editorElement, yClientOffset, negativeMultiplierFontSize = 3) {
         const editorComputedStyle = window.getComputedStyle(editorElement)
         const fontSize = parseInt(editorComputedStyle.getPropertyValue("font-size"), 10)
@@ -22766,17 +22751,11 @@ Current version indicated by LITEVER below.
 	}
 
 	function getWordsFrequency() {
-        if (isMobile()) {
-            hideWordsFreqMobileMenu()
-        }
         let {validChildContent} = getValidChildNodesFromEditorById(editorFieldLabel)
         setElementCssClassById("waiting-for-error-embedded", "collapse")
         setElementCssClassById("waiting-for-output", "display-block")
-		let wordsFrequencyTableTitleEl = document.getElementById("id-words-frequency-table-title")
-        let wordsFrequencyTableTitleElMobile = document.getElementById("id-words-frequency-table-title-mobile")
-
-		wordsFrequencyTableTitleEl.innerText = wordsFrequencyTableTitleText
-        wordsFrequencyTableTitleElMobile.innerText = wordsFrequencyTableTitleMobileText
+        let wordsFrequencyTableTitleEl = document.getElementById("id-words-frequency-table-title")
+        wordsFrequencyTableTitleEl.innerText = wordsFrequencyTableTitleText
         let listOfWords = document.getElementById("id-list-of-words-scrollable")
         listOfWords.innerHTML = ""
         let currentTableOfWordsScrollable = document.getElementById("id-current-table-of-words-scrollable")
@@ -22786,7 +22765,11 @@ Current version indicated by LITEVER below.
         const filterValue = document.getElementById("id-filtered-value")
         filterValue.innerText = ""
         wordsFrequencyAnalyzer(validChildContent)
-        backToListFromCurrentTable()
+        document.getElementById("id-words-frequency-description").innerText = ""
+        hideWordsFreqMobileMenu()
+        if (isMobile()) {
+            backToListFromCurrentTable()
+        }
 	}
 
 	function dynamicSort(property, order) {
@@ -22849,9 +22832,15 @@ Current version indicated by LITEVER below.
 		let inputFilterValue = inputFilter.value
 		if (inputFilterValue !== undefined && inputFilter.value !== "") {
             reduced = arrayFilterNestedValue(reduced, inputFilterValue)
-            filterValue.innerText = `'${inputFilterValue}', ${reduced.length} `
+            const filteredValueContent = document.createElement("span")
+            filteredValueContent.innerText = `${inputFilterValue}`
+            filteredValueContent.className = 'title-dropdown-ellipsis background-color-verydarkgrey'
+            const numberOfOccurrences = document.createElement("span")
+            numberOfOccurrences.innerText = `: ${reduced.length} `
             const occurrences = document.createElement("span")
-            occurrences.className = "occurrences"
+            occurrences.className = "occurrences margin4px-left"
+            filterValue.append(filteredValueContent)
+            filterValue.append(numberOfOccurrences)
             filterValue.append(occurrences)
 		}
 
@@ -22859,19 +22848,15 @@ Current version indicated by LITEVER below.
         currentTableOfWordsScrollable.innerHTML = ""
         let currentTableTitle = document.getElementById("id-current-table-of-words-title")
         currentTableTitle.innerText = ""
-		let wordsFrequencyTableTitleEl = document.getElementById("id-words-frequency-table-title")
-		wordsFrequencyTableTitleEl.innerText = `${reducedLenBeforeFilt} stems, ${nTotalRows} rows`
-        let wordsFrequencyTableTitleMobileEl = document.getElementById("id-words-frequency-table-title-mobile")
-        wordsFrequencyTableTitleMobileEl.innerText = `${reducedLenBeforeFilt} stems, ${nTotalRows} rows`
+        let wordsFrequencyTableTitleEl = document.getElementById("id-words-frequency-table-title")
+        wordsFrequencyTableTitleEl.innerText = `${reducedLenBeforeFilt} stems, ${nTotalRows} rows`
 
         const wordListElement = document.createElement("list")
 		for (let i=0; i<reduced.length; i++ ) {
             insertListOfWords(i, reduced[i], wordListElement, currentTableOfWordsScrollable);
         }
         listOfWords.append(wordListElement)
-        if (isMobile()) {
-            hideWordsFreqMobileMenu()
-        }
+        hideWordsFreqMobileMenu()
 	}
 
     function populateWordsFrequencyTables(wordsFrequencyObj, nTotalRows, rowArray) {
@@ -22895,10 +22880,17 @@ Current version indicated by LITEVER below.
         currentTableWordsFreq.className = "scrollableWordsFreqTable"
 
         const titleCurrentTable = document.getElementById("id-current-table-of-words-title")
-        titleCurrentTable.innerText = getRepetitionsText(iReduced) + " "
-        titleCurrentTable.title = `stem: '${iReduced.stem}'`
+        titleCurrentTable.innerHTML = ""
+        const titleCurrentTableContent = document.createElement("span")
+        titleCurrentTableContent.innerText = `${iReduced["word_prefix"]} `
+        titleCurrentTableContent.className = 'title-dropdown-ellipsis background-color-verydarkgrey'
+        const nRepetitionsSpan = document.createElement("span")
+        nRepetitionsSpan.innerText = `: ${iReduced["count"]} `
         const repetitionSpan = document.createElement("span")
-        repetitionSpan.className = "repetitions"
+        repetitionSpan.className = "repetitions margin4px-left"
+        titleCurrentTable.title = `stem: '${iReduced.stem}'`
+        titleCurrentTable.append(titleCurrentTableContent)
+        titleCurrentTable.append(nRepetitionsSpan)
         titleCurrentTable.append(repetitionSpan)
         let currentTBody = document.createElement("tbody")
         let offsetsArray = iReduced.offsets_array
@@ -22927,9 +22919,10 @@ Current version indicated by LITEVER below.
             insertCurrentTable(i, iReduced, currentTableOfWords)
             setElementCssClassByOldClass(underlinedClicked, underlinedPrimary)
             a.className = underlinedClicked
-            if(isMobile()) {
-                gotoCurrentTableOfWords()
-                hideWordsFreqMobileMenu()
+            hideWordsFreqMobileMenu()
+            if (isMobile()) {
+                setPropertyElementsByArrayId(["id-current-table-of-words-btn-back", "id-current-table-of-words-container"], "display", "block")
+                setPropertyById("id-list-of-words-container", "display", "none")
             }
         });
         a.title = `stem: '${iReduced.stem}'`
@@ -23155,17 +23148,10 @@ Current version indicated by LITEVER below.
     async function updateWordsFreqIfPressEnter() {
         if (event.key === 'Enter') {
             getWordsFrequency()
+            hideWordsFreqMobileMenu()
             if (isMobile()) {
                 backToListFromCurrentTable()
             }
-        }
-    }
-
-    function gotoCurrentTableOfWords() {
-        if (isMobile()) {
-            setPropertyElementsByArrayId(["id-current-table-of-words-btn-back", "id-current-table-of-words-container"], "display", "block")
-        	setPropertyById("id-list-of-words-container", "display", "none")
-            hideWordsFreqMobileMenu()
         }
     }
 
@@ -23178,28 +23164,30 @@ Current version indicated by LITEVER below.
     function backToListFromCurrentTable() {
         setPropertyById("id-list-of-words-container", "display", "block")
         setPropertyById("id-current-table-of-words-container", "display", "none")
-        hideWordsFreqMobileMenu()
     }
 
-    function isMobileLandscape(compareSize=mobileInnerSize) {
-        console.log("isMobilePortrait::window.innerWidth:", window.innerWidth, window.screen.orientation, "#")
-        const orientation = window.screen.orientation
-        return window.innerHeight <= compareSize && (orientation.type === "landscape-primary" || orientation.type === "landscape-secondary")
+    function isLowAndWide(compareSize=mobileInnerSize) {
+        return  window.innerHeight <= compareSize && window.innerWidth >= compareSize
+    }
+
+    function isMobileLandscape(compareHeightSize=mobileInnerSize, compareWidthSize=mobilePortraitInnerSize) {
+        return window.innerHeight <= compareHeightSize && window.innerWidth >= compareHeightSize && window.innerWidth <= compareWidthSize // || window.innerHeight <= compareHeightSize && (orientation.type === "landscape-primary" || orientation.type === "landscape-secondary")
     }
 
     function isMobilePortrait(compareSize=mobileInnerSize) {
-        console.log("isMobilePortrait::window.innerWidth:", window.innerWidth, window.screen.orientation, "#")
-        const orientation = window.screen.orientation
-        return window.innerWidth <= compareSize && (orientation.type === "portrait-primary" || orientation.type === "portrait-secondary")
+        return window.innerWidth <= compareSize //&& (orientation.type === "portrait-primary" || orientation.type === "portrait-secondary")
     }
 
-    function isMobile(compareSize=mobileInnerSize) {
-        return isMobileLandscape(compareSize) || isMobilePortrait(compareSize)
+    function isMobile(compareSize=mobileInnerSize, compareSizeResponsive=mobilePortraitInnerSize) {
+        return isMobileLandscape(compareSize, compareSizeResponsive) || isMobilePortrait(compareSize)
+    }
+
+    function isMobileOrLowWide(compareSize=mobileInnerSize, compareSizeResponsive=mobilePortraitInnerSize) {
+        return isMobilePortrait(compareSize) || isLowAndWide(compareSize)
     }
 
     function setPropertyElementsByArrayId(idElementArray, propertyName, propertyValue) {
         for (let idElement in idElementArray) {
-            console.log("setPropertyElementsByArrayId::idElementArray:", idElement, idElementArray[idElement], "#")
             setPropertyById(idElementArray[idElement], propertyName, propertyValue)
         }
     }
@@ -23213,12 +23201,11 @@ Current version indicated by LITEVER below.
         try {
             elementById.style.removeProperty(propertyName);
         } catch (e) {
-            console.error("removePropertyById::", idElement, propertyName, ", e:", e, "#")
+            console.error("removePropertyById::idElement:", typeof idElement, idElement, ", propertyName:", typeof propertyName, propertyName, ", e:", e, "#")
         }
     }
 
     function showWordsFreqMobileMenu() {
-        setPropertyById("id-words-frequency-table-title-mobile-no-info", "display", "none");
         setPropertyById("words-freq-menu", "display", "block");
         setPropertyById("words-freq-menu", "position", "absolute");
         setPropertyById("words-freq-menu", "z-index", "1");
@@ -23227,8 +23214,8 @@ Current version indicated by LITEVER below.
     }
 
     function hideWordsFreqMobileMenu() {
-        if (isMobile()) {
-            removeClassById("id-navtoggler-words-freq", "active")
+        if (isMobileOrLowWide()) {
+            removeClassById("id-navtoggler-words-freq", "open-menu")
             setPropertyById("words-freq-menu", "display", "none");
             removePropertyById("words-freq-menu", "position");
             removePropertyById("words-freq-menu", "z-index");
@@ -23242,7 +23229,7 @@ Current version indicated by LITEVER below.
 
     function toggleWordsFreqMobileMenu() {
         const btn = document.getElementById('id-navtoggler-words-freq');
-        btn.classList.toggle('active');
+        btn.classList.toggle('open-menu');
         const dropdownMenuContent = document.getElementById("words-freq-menu")
         let styleDropdownMenuContent = window.getComputedStyle(dropdownMenuContent)
         if (styleDropdownMenuContent["display"] === "none") {
@@ -23320,7 +23307,7 @@ Current version indicated by LITEVER below.
         grid-template-columns: 1fr 1fr;
     }
 	.col-flex {
-		flex: 42vw;
+		flex: 60vw;
 	}
 	.border-gray-litekoboldai {
 		border: 1px solid #646464;
@@ -23346,8 +23333,32 @@ Current version indicated by LITEVER below.
 	.text-wrap-force {
 		overflow-wrap: break-word;
         hyphens: auto;
+        width: 100%;
+        /*
+        max-height: 70vw;
+        max-width: 70vw;
+        */
 	}
-	.overflow-hidden {
+    .flex-parent-composed-title {
+        display: flex;
+        align-items: baseline;
+    }
+    .title-dropdown-ellipsis {
+        flex: 1 1 0;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: min-content;
+    }
+    .title-dropdown-ellipsis-btn {
+        background-color: #337ab7;
+        color: white;
+    }
+    .title-dropdown-ellipsis-btn-x {
+        background-color: #de5b5b;
+    }
+    .overflow-hidden {
 		/* needed for scroll bar*/
 		overflow: hidden;
 	}
@@ -23381,14 +23392,16 @@ Current version indicated by LITEVER below.
         border: 1px solid #646464;
         height: 20px;
         width: 24px;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+    .navtoggler-words-freq-position {
         float: right;
         margin-top: -6px;
         margin-right: -6px;
         position: relative;
         z-index: 2;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
     }
     .navtoggler-words-freq:hover {
         background-color: #4db4ea;
@@ -23398,25 +23411,46 @@ Current version indicated by LITEVER below.
     }
 
     /* Hamburger to X transform */
-    .navtoggler-words-freq.active {
+    .navtoggler-words-freq.open-menu {
         background-color: #de5b5b;
     }
-    .navtoggler-words-freq.active .navbar-button-bar-words-freq:nth-child(1) {
+    .navtoggler-words-freq.open-menu .navbar-button-bar-words-freq:nth-child(1) {
         transform: translateY(5px) rotate(45deg);
     }
-    .navtoggler-words-freq.active .navbar-button-bar-words-freq:nth-child(2) {
+    .navtoggler-words-freq.open-menu .navbar-button-bar-words-freq:nth-child(2) {
         opacity: 0;
     }
-    .navtoggler-words-freq.active .navbar-button-bar-words-freq:nth-child(3) {
+    .navtoggler-words-freq.open-menu .navbar-button-bar-words-freq:nth-child(3) {
         transform: translateY(-5px) rotate(-45deg);
     }
     #words-frequency {
-        max-height: calc(100vh - 404px);
+        display: flex;
+        flex-direction: row;
+        height: calc(98vh - 345px);
+        gap: 6px;
     }
-
-    .scrollable-table-container {
+    #id-list-of-words-container,
+    #id-current-table-of-words-container {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 0;
+        min-width: 0; /* important for flex children */
+    }
+    #id-list-of-words-overflow-auto,
+    #id-current-table-of-words-overflow-auto {
+        flex: 1 1 0;
+        min-height: 100%;
         overflow: auto;
-        max-height: calc(100vh - 404px);
+        display: flex;
+        flex-direction: column;
+    }
+    .scrollable-table-container {
+        flex: 1 1 0;
+        min-height: 100%;
+        overflow: auto;
+    }
+    #id-words-frequency-description {
+        align-self: flex-start !important;
     }
 
     #id-list-of-words-scrollable > list > li {
@@ -23431,6 +23465,8 @@ Current version indicated by LITEVER below.
     .words-freq-select select {
         background: #404040;
         color:white;
+        margin-right: 4px;
+        margin-top: 4px;
     }
 
     #words-freq-menu {
@@ -23487,20 +23523,46 @@ Current version indicated by LITEVER below.
         }
     }
     /* Classic UI Main Text, lite.koboldai.net */
-    @media screen and (max-height: 1024px) and (max-width: 1366px) and (orientation: landscape) {
+    /*@media screen and (max-width:536px) and (orientation: portrait) {*/
+    @media screen and (max-width:536px) {
+        #words-frequency {
+            height: calc(98vh - 304px) !important;
+            gap: 2px !important;
+        }
+        .col-flex {
+            flex: 70vw;
+        }
+    }
+    /*@media screen and (max-height: 1024px) and (max-width: 1366px) and (orientation: landscape) {*/
+    @media screen and (max-height: 767px) and (orientation: landscape) {
+        #words-frequency {
+            height: calc(98vh - 284px);
+            gap: 2px;
+        }
+        /*
         .scrollable-table-container {
             max-height: calc(100vh - 380px);
-        }
+        }*/
     }
     @media screen and (max-width:1024px) and (orientation: portrait) {
+        #words-frequency {
+            height: calc(98vh - 285px);
+            gap: 2px;
+        }
+        #id-container-sort-order-word-list.margin4px-left {
+            margin-left: 0;
+        }
+        /*
         .scrollable-table-container {
             max-height: calc(100vh - 440px);
-        }
+        }*/
     }
-    @media screen and (max-width:1024px) and (orientation: portrait), screen and (max-height: 1024px) and (max-width: 1366px) and (orientation: landscape) {
-        #id-col2-words-frequency > div > div > div > h4 {
-            font-size: unset;
-        }
+    @media screen and (max-width:1024px), screen and (max-height: 1024px) and (max-width: 1366px) {
+		/*
+        #words-frequency {
+            height: calc(98vh - 285px);
+            gap: 2px;
+        }*/
         .repetitions:after {
             content: "reps."
         }
@@ -23508,46 +23570,72 @@ Current version indicated by LITEVER below.
             content: "occ."
         }
     }
-    @media screen and (max-height: 666px) and (min-width: 750px) and (max-width: 940px) and (orientation: landscape) {
-        .adaptivecontainer #words-freq-menu {
-            right: calc(13px + calc(100vw - 750px) / 2);
-        }
+    @media screen and (max-height: 666px) and (min-width: 750px) and (max-width: 1024px) {
 		#id-current-table-of-words-title {
             max-width: 23vw;
             width: 23vw;
 			padding-right: 24px;
 		}
     }
-    @media screen and (max-height: 666px) and (max-width: 940px) and (orientation: landscape) {
-        .scrollable-table-container {
-            max-height: calc(100vh - 300px);
+	@media (min-width: 768px) {
+        .adaptivecontainer #words-freq-menu {
+            right: calc(13px + calc(100vw - 750px) / 2);
         }
-    }
-    @media screen and (max-width: 666px) and (max-width: 940px) and (orientation: portrait) {
-        .scrollable-table-container {
-            max-height: calc(100vh - 350px);
+	}
+	@media (min-width: 992px) {
+        .adaptivecontainer #words-freq-menu {
+            right: calc(13px + calc(100vw - 970px) / 2);
+		}
+	}
+	@media (min-width: 1200px) {
+        .adaptivecontainer #words-freq-menu {
+            right: calc(13px + calc(100vw - 1170px) / 2);
+		}
+	}
+
+    @media screen and (max-width: 767px) and (orientation: portrait) {
+        .scrollable-table-container > table, .scrollable-table-container > list {
             max-width: 30vw;
             width: 30vw;
-        }
-    }
-
-    @media screen and (max-width: 767px) and (orientation: portrait),
-            screen and (max-height: 767px) and (orientation: landscape),
-            screen and (max-width: 1023px) and (orientation: landscape) {
-        #id-words-frequency-table-title {
-            display: none;
-        }
-        #id-words-frequency-table-title-mobile {
-            display: block;
         }
         #words-freq-menu {
             display: none;
         }
     }
-    @media screen and (min-width: 768px) and (orientation: portrait),
-            screen and (min-height: 768px) and (orientation: landscape),
-            screen and (min-width: 1024px) and (orientation: landscape) {
-        #id-container-mobile-menu, #id-current-table-of-words-placeholder-right, #id-words-frequency-table-title-mobile {
+    @media screen and (max-width: 767px) and (orientation: portrait),
+            screen and (max-height: 767px) and (orientation: landscape),
+            screen and (max-width: 1023px) and (orientation: landscape) {
+        #words-freq-menu {
+            display: none;
+        }
+    }
+    @media screen and (min-width: 768px) and (orientation: portrait) {
+        #id-container-filter-sort-order {
+            display: block;
+        }
+        #words-frequency {
+            height: calc(98vh - 370px);
+            gap: 2px;
+        }
+    }
+    @media  screen and (min-width: 768px) {
+        #id-list-of-words-container {
+            display: block !important;
+        }
+        #id-current-table-of-words-container {
+            display: block !important;
+            margin-left: 5px;
+        }
+        #id-current-table-of-words-btn-back {
+            display: none !important;
+        }
+    }
+    /* todo: testare rimuovere  screen and (min-width: 768px) and (orientation: portrait)??? */
+    @media /*screen and (min-width: 768px) and (orientation: portrait),
+            screen and (min-height: 768px) and (orientation: landscape), */
+            screen and (min-height: 768px) and (min-width: 768px) {
+            /* screen and (min-height: 768px) and (min-width: 1024px) and (orientation: landscape) { */
+        #id-container-mobile-menu, #id-current-table-of-words-placeholder-right {
             display: none
         }
         #id-current-table-of-words-btn-back {
@@ -23567,6 +23655,12 @@ Current version indicated by LITEVER below.
         #id-current-table-of-words-container {
             display: block !important;
             margin-left: 5px;
+        }
+    }
+    /*@media screen and (min-width:1024px) and (orientation: portrait), screen and (min-height: 1024px) and (min-width: 1366px) and (orientation: landscape) { */
+    @media screen and (min-width: 1366px) {
+        #id-col2-words-frequency.col-flex {
+            flex: 42vw;
         }
     }
 	/* end style section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer */
@@ -23686,27 +23780,32 @@ Current version indicated by LITEVER below.
 					<noscript><style>#tempgtloadtxt { display: none; } #gametext { white-space: normal!important; }</style><p>Sorry, KoboldAI Lite requires Javascript to function.</p></noscript>
 				</span>
 
-				<!-- start HTML section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer -->
-                <div id="id-col2-words-frequency" aria-label="id-col2-words-frequency" class="col-flex border-gray-litekoboldai padding5px margin4px overflow-hidden font-size-12px collapse">
+                <!-- start HTML section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer -->
+                <div id="id-col2-words-frequency" aria-label="id-col2-words-frequency"
+                    class="col-flex border-gray-litekoboldai padding5px margin4px overflow-hidden font-size-12px collapse">
 
                     <div id="id-container-mobile-menu" aria-label="id-container-mobile-menu" class="">
-                        <span id="id-words-frequency-table-title-mobile-no-info" aria-label="id-words-frequency-table-title" class="">Text stats</span>
-                        <button id="id-navtoggler-words-freq" aria-label="id-navtoggler-words-freq" title="Text stats" class="navtoggler-words-freq display-flex" type="button" onclick="toggleWordsFreqMobileMenu();" tabindex="0">
-                            <span class="navbar-button-bar-words-freq"></span>
-                            <span class="navbar-button-bar-words-freq"></span>
-                            <span class="navbar-button-bar-words-freq"></span>
+                        <button id="id-navtoggler-words-freq" aria-label="id-navtoggler-words-freq" title="Text stats"
+                            class="navtoggler-words-freq navtoggler-words-freq-position display-flex" type="button"
+                            onclick="toggleWordsFreqMobileMenu();" tabindex="0">
+                            <span id="id-navbar-button-bar-words-freq-1" aria-label="id-navbar-button-bar-words-freq-1" class="navbar-button-bar-words-freq"></span>
+                            <span id="id-navbar-button-bar-words-freq-2" aria-label="id-navbar-button-bar-words-freq-2" class="navbar-button-bar-words-freq"></span>
+                            <span id="id-navbar-button-bar-words-freq-3" aria-label="id-navbar-button-bar-words-freq-3" class="navbar-button-bar-words-freq"></span>
                         </button>
                     </div>
 
                     <div id="words-freq-menu" aria-label="words-freq-menu" class="">
                         <div id="id-container-filter-sort-order" aria-label="id-container-filter-sort-order" class="">
                             <div id="id-container-filter-word-list" aria-label="id-container-filter-word-list" class="display-ruby">
-                                <h4 id="id-words-frequency-table-title" aria-label="id-words-frequency-table-title">Text stats</h4>
-                                <span id="id-words-frequency-table-title-mobile" aria-label="id-words-frequency-table-title" class="">Text stats</span>
-                                <br id="id-words-frequency-table-title-mobile-br" style="display: none">
-                                <input type="search" id="filter-words-frequency" aria-label="filter-words-frequency" placeholder="Filter/update" class="background-color-verydarkgrey width-100perc" onkeydown="updateWordsFreqIfPressEnter()"/>
+                                <span id="id-words-frequency-table-title" aria-label="id-words-frequency-table-title" class="">
+									Text stats (press Enter)
+								</span>
+                                <input type="search" id="filter-words-frequency" aria-label="filter-words-frequency"
+                                    placeholder="Filter/update" class="background-color-verydarkgrey width-100perc"
+                                    onkeydown="updateWordsFreqIfPressEnter()" />
                             </div>
-                            <div id="id-container-sort-order-word-list" aria-label="id-container-sort-order-word-list" class="nav-item display-flex margin4px-left words-freq-select-parent">
+                            <div id="id-container-sort-order-word-list" aria-label="id-container-sort-order-word-list"
+                                class="nav-item display-flex margin4px-left words-freq-select-parent">
                                 <label id="words-freq-select-order" aria-label="words-freq-select-order" class="words-freq-select">
                                     <select id="id-select-order-by" aria-label="id-select-order-by">
                                         <option id="order-by-up-opt" aria-label="order-by-up-opt" value="asc">order: ascend</option>
@@ -23716,7 +23815,7 @@ Current version indicated by LITEVER below.
                                 <label id="words-freq-select-sort" aria-label="words-freq-select-sort" class="words-freq-select">
                                     <select id="id-select-sort-by" aria-label="id-select-sort-by">
                                         <option id="sort-by-found-words-opt" aria-label="sort-by-found-words-opt" value="count">sort by:count</option>
-                                        <option id="sort-by-name-opt" aria-label="sort-by-name-opt" value="word_prefix">sort by:name</option>
+                                        <option id="sort-by-name-opt" aria-label="sort-by-name-opt" value="word_prefix">sort by:name </option>
                                         <option id="sort-by-ngram-words-opt" aria-label="sort-by-ngram-words-opt" value="n_words_ngram">n° ngram words</option>
                                     </select>
                                 </label>
@@ -23728,32 +23827,37 @@ Current version indicated by LITEVER below.
                     <span id="waiting-for-output" aria-label="waiting-for-output" class="display-none">waiting for output...</span>
                     <span id="waiting-for-error-embedded" aria-label="waiting-for-error-embedded" class="collapse">Error!</span>
                     <!-- max-height-80perc instead of max-height-80vh -->
-                    <div id="words-frequency" class="display-flex margin4px-top" aria-label="words-frequency">
+                    <div id="words-frequency" aria-label="words-frequency" class="display-flex margin4px-top">
+                        <span id="id-words-frequency-description" aria-label="id-words-frequency-description">
+                            <a href="https://github.com/trincadev/my_ghost_writer">My Ghost Writer</a> will
+                            analyze your text and report in this section some statistics and a list of words
+                            grouped into <a href="https://en.wikipedia.org/wiki/Word_stem">stems</a>.
+                        </span>
                         <div id="id-list-of-words-container" style="display: block" aria-label="id-list-of-words-container">
-                            <span id="id-filtered-value" aria-label="id-filtered-value" class="text-wrap-force"></span>
+                            <div id="id-filtered-value" aria-label="id-filtered-value" class="flex-parent-composed-title"></div>
                             <div id="id-list-of-words-overflow-auto" aria-label="id-list-of-words-overflow-auto" class="overflow-auto">
-                                <div id="id-list-of-words-scrollable" aria-label="id-list-of-words-scrollable" class="scrollable-table-container">
-                                    <a href="https://github.com/trincadev/my_ghost_writer">My Ghost Writer</a> will
-                                    analyze your text and report in this section some statistics and a list of words
-                                    grouped into <a href="https://en.wikipedia.org/wiki/Word_stem">stems</a>.
+                                <div id="id-list-of-words-scrollable" aria-label="id-list-of-words-scrollable"
+                                    class="scrollable-table-container">
                                 </div>
                             </div>
                         </div>
-                        <div id="id-current-table-of-words-container" style="display: block">
-                            <div class="display-flex">
-								<div>
-									<span id="id-current-table-of-words-placeholder-right" aria-label="id-current-table-of-words-placeholder-right" class="float-right margin24px-left">.</span>
-									<span id="id-current-table-of-words-btn-back" aria-label="id-current-table-of-words-btn-back" onclick="backToListFromCurrentTable()" class="float-left">↩️</span>
-									<span id="id-current-table-of-words-title" aria-label="id-current-table-of-words-title" class="text-wrap-force"></span>
-								</div>
+                        <div id="id-current-table-of-words-container" aria-label="id-current-table-of-words-container"
+                            style="display: block">
+                            <div id="id-current-table-of-words-parent" aria-label="id-current-table-of-words-parent"
+                                style="display: flex">
+                                <!-- <span id="id-current-table-of-words-placeholder-right" aria-label="id-current-table-of-words-placeholder-right" class="float-right margin24px-left">.</span> -->
+                                <span id="id-current-table-of-words-btn-back" aria-label="id-current-table-of-words-btn-back" onclick="backToListFromCurrentTable()" class="float-left">↩️</span>
+                                <span id="id-current-table-of-words-title" aria-label="id-current-table-of-words-title"
+                                    class="text-wrap-force display-flex"></span>
                             </div>
                             <div id="id-current-table-of-words-overflow-auto" class="overflow-auto" aria-label="id-current-table-of-words-overflow-auto">
-                                <div id="id-current-table-of-words-scrollable" aria-label="id-current-table-of-words-scrollable" class="scrollable-table-container"></div>
+                                <div id="id-current-table-of-words-scrollable" aria-label="id-current-table-of-words-scrollable"
+                                    class="scrollable-table-container"></div>
                             </div>
                         </div>
                     </div>
                 </div>
-				<!-- end HTML section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer -->
+                <!-- end HTML section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer -->
 
 			</div>
 		</div>
@@ -25016,61 +25120,52 @@ Current version indicated by LITEVER below.
 					</div>
 
                     <!-- start settings for My Ghost Writer -->
-                    <div style="padding:3px;" class="justifyleft settinglabel">Word Frequency Stats <span class="helpicon">?<span class="helptext">Configure 'My Ghost Writer' for extracting word frequency statistics.</span></span>
-                        <button
-                                id="id-expand-wordsfreqstats"
-                                aria-label="id-expand-wordsfreqstats"
-                                type="button"
-                                title="Word Frequency Stats"
-                                class="btn btn-primary"
-                                style="font-size:12px;padding:2px 2px;"
-                                onclick="expand_tokens_section('expandwordsfreqstats')"
-                        >Expand Section</button>
+                    <div id="id-words-frequency-settings" aria-label="id-words-frequency-settings" style="padding:3px;"
+                        class="justifyleft settinglabel">Word Frequency Stats <span id="id-words-frequency-help-icon"
+                            aria-label="id-words-frequency-help-icon" class="helpicon">?<span id="id-words-frequency-help-text"
+                                aria-label="id-words-frequency-help-text" class="helptext">Configure 'My Ghost Writer' for extracting word
+                                frequency statistics.</span></span>
+                        <button id="id-expand-wordsfreqstats" aria-label="id-expand-wordsfreqstats" type="button"
+                            title="Word Frequency Stats" class="btn btn-primary" style="font-size:12px;padding:2px 2px;"
+                            onclick="expand_tokens_section('expandwordsfreqstats')">Expand Section</button>
                     </div>
 
                     <div id="expandwordsfreqstats" class="hidden">
 
                         <div class="settinglabel" id="id-settings-wordsfreq-settings-section">
-                            <div class="justifyleft">Enable Word Frequency Stats.<span class="helpicon">?<span
-                                    class="helptext">If enabled, it extracts word frequency stats.
-                            The output it's a list of word prefixes (<a href="https://en.wikipedia.org/wiki/Stemming">stems</a>)
-                            with associated words and their position within the editor, permitting to remove repetitions.
-                            </span></span>
+                            <div id="id-words-frequency-enable-description" aria-label="id-words-frequency-enable-description"
+                                class="justifyleft">Enable Word Frequency Stats.<span id="id-words-frequency-enable-help-icon"
+                                    aria-label="id-words-frequency-enable-help-icon" class="helpicon">?<span
+                                        id="id-words-frequency-enable-help-text" aria-label="id-words-frequency-enable-help-text"
+                                        class="helptext">If enabled, it extracts word frequency stats.
+                                        The output it's a list of word prefixes (<a href="https://en.wikipedia.org/wiki/Stemming">stems</a>)
+                                        with associated words and their position within the editor, permitting to remove repetitions.
+                                    </span></span>
                             </div>
-                            <input
-                                    type="checkbox"
-                                    id="id-col2-words-frequency-enable"
-                                    aria-label="id-col2-words-frequency-enable"
-                                    name="id-col2-words-frequency-enable"
-                                    onchange="toggleWordFreqCheckbox(this.checked)"
-                            />
+                            <input type="checkbox" id="id-col2-words-frequency-enable" aria-label="id-col2-words-frequency-enable"
+                                name="id-col2-words-frequency-enable" onchange="toggleWordFreqCheckbox(this.checked)" />
                         </div>
                         <div class="settinglabel justifyleft">
                             <div>
                                 <span>Available on:</span>
-                                <list>
+                                <ul id="id-words-frequency-available-on-list" aria-label="id-words-frequency-available-on-list">
                                     <li>Classic UI (read-only and edit mode)</li>
                                     <li>Aesthetic UI, edit mode only</li>
                                     <li>Classic UI, edit mode only (open the Raw editor)</li>
-                                </list>
+                                </ul>
                             </div>
                         </div>
 
                         <div class="settinglabel collapse" id="id-n-words-stemming-settings-section">
-                            <div class="display-flex">
-                                <div class="justifyleft">Choose how many words do you want to consider at time while stemming the text.
+                            <div id="id-words-frequency-stemming-container" aria-label="id-words-frequency-stemming-container"
+                                class="display-flex">
+                                <div id="id-words-frequency-stemming-description" aria-label="id-words-frequency-stemming-description"
+                                    class="justifyleft">Choose how many words do you want to consider at time while stemming the text.
                                     <br>Better to use less than three words with very long texts (more than 5000 words).
                                 </div>
-                                <input
-                                        id="id-n-words-stemming-enable"
-                                        aria-label="id-n-words-stemming-enable"
-                                        name="id-n-words-stemming-enable"
-                                        type="number"
-                                        min="1"
-                                        max="9"
-                                        value="2"
-                                        class="margin4px settinglabel miniinput"
-                                />
+                                <input id="id-n-words-stemming-enable" aria-label="id-n-words-stemming-enable"
+                                    name="id-n-words-stemming-enable" type="number" min="1" max="9" value="2"
+                                    class="margin4px settinglabel miniinput" />
                             </div>
                         </div>
 
