@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 250;
+	const LITEVER = 251;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -8852,9 +8852,26 @@ Current version indicated by LITEVER below.
 				.then(rb => {
 					if (rb.ok) {
 						return rb.blob();
-					} else {
-						throw new Error('Cannot fetch tavern image');
 					}
+					if (rb.status == 404) //sometimes cards get renamed. try to get real URL and fetch once more
+					{
+						return fetch(`https://api.chub.ai/api/characters/${userInput}`)
+						.then(rx => rx.json())
+						.then(rb2=>{
+							let realimgurl = rb2.node.max_res_url;
+							return fetch(realimgurl).then(rb3 => {
+								if (rb3.ok) {
+									return rb3.blob();
+								}
+								throw new Error('Cannot fetch tavern image');
+							}).catch(error3 => {
+								throw new Error('Cannot fetch tavern image');
+							});
+						}).catch(error2 => {
+							throw new Error('Cannot fetch tavern image');
+						});
+					}
+					throw new Error('Cannot fetch tavern image');
 				})
 				.then(blob => {
 					preview_temp_scenario();
@@ -9106,7 +9123,7 @@ Current version indicated by LITEVER below.
 		}
 
 		document.getElementById("scenariogrid").innerHTML = scenarios;
-		document.getElementById("scenariodesc").innerText = "No Scenario Selected. Scroll for more options.";
+		document.getElementById("scenariodesc").innerHTML = `No Scenario Selected. Scroll down for more options.<br><br><a href="#" class="color_blueurl mainnav" onclick="hide_popups();document.getElementById('loadfileinput').click()">Alternatively, click [HERE] to load card from PNG file.</a>`;
 		togglescenarioautopick();
 	}
 
@@ -20254,12 +20271,14 @@ Current version indicated by LITEVER below.
 				}
 			}
 
+			let resendbtn = (curr.myturn?`<button type="button" class="btn btn-primary" style="margin:2px;float:right;" onclick="corpo_edit_chunk_resend()">Resend</button>`:``);
 			let bodypart = (corpo_editing_turn == i ?
 				`<div class="corpo_edit_outer">
 				<div class="corpo_edit_inner" id="corpo_edit_inp_lengthtester" style="white-space: nowrap; visibility: hidden; height: 0px; position:absolute; width: auto;"></div>
 				<textarea class="corpo_edit_inner" id="corpo_edit_inp" type="text" name="crpeditinp"  role="presentation" autocomplete="noppynop" spellcheck="true" rows="1" wrap="on" placeholder="Edit Message" value="" oninput="corpoedit_resize_input();"/>${stash_image_placeholders(curr.msg, false)}</textarea>
 				</div>
 				<button type="button" class="btn btn-primary" style="margin:2px;float:right;" onclick="corpo_edit_chunk_start(-1)">Cancel</button>
+				${resendbtn}
 				<button type="button" class="btn btn-primary" style="margin:2px;float:right;" onclick="corpo_edit_chunk_save()">Save</button>
 				<button type="button" class="btn btn-primary bg_red" style="margin:2px;float:left;" onclick="corpo_edit_chunk_delete()">Delete</button>`:
 				`<div class="corpostyleitemcontent">${processed_msg}</div>`);
