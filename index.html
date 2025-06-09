@@ -22551,7 +22551,7 @@ Current version indicated by LITEVER below.
 
 	/** start script section - My Ghost Writer - https://github.com/trincadev/my_ghost_writer */
 	const wordsFrequencyTableTitleText = "Text stats"
-	let wfo = {
+	const wfo = {
 		"words_frequency": {},
         "nTotalRows": null,
         "rowArray": [],
@@ -22604,42 +22604,53 @@ Current version indicated by LITEVER below.
 
     function textStemming(textSplitNewline, n = 2) {
         const wordsStemsDict = {};
-        let nTotalRows = textSplitNewline.length;
-
+        const nTotalRows = textSplitNewline.length;
         textSplitNewline.forEach((data) => {
-            const row = data.text;
-            const idxRow = data.idxRow;
-            const idxRowChild = data.idxRowChild ?? null;
-            const idxRowParent = data.idxRowParent ?? null;
-            const tokens = customWordPunctTokenize(row);
-            const offsets = getOffsets(row, tokens);
-
-            for (let ngramLen = 1; ngramLen <= n; ngramLen++) {
-                for (let i = 0; i <= tokens.length - ngramLen; i++) {
-                    const ngramTokens = tokens.slice(i, i + ngramLen);
-                    const ngramOffsets = offsets.slice(i, i + ngramLen);
-                    const start = ngramOffsets[0].start;
-                    const end = ngramOffsets[ngramOffsets.length - 1].end;
-                    const ngram = row.slice(start, end);
-                    const ngramLower = ngramTokens.map(w => w.toLowerCase());
-                    const stem = ngramLower.map(porterStemmer).join(" ");
-                    if (!wordsStemsDict[stem]) {
-                        wordsStemsDict[stem] = {
-                            count: 0, word_prefix: ngram, offsets_array: [], n_words_ngram: ngramLen, "stem": stem
-                        };
-                    }
-                    wordsStemsDict[stem].count += 1;
-                    wordsStemsDict[stem].offsets_array.push({
-                        word: ngram,
-                        offsets: [start, end],
-                        n_row: idxRow,
-                        n_row_child: idxRowChild,
-                        n_row_parent: idxRowParent
-                    });
-                }
-            }
+            processRowForStemming(data, n, wordsStemsDict);
         });
-        // Update word_prefix to the most common 'word' in offsets_array
+        updateWordPrefixes(wordsStemsDict);
+        return { nTotalRows, wordsStemsDict };
+    }
+
+    function processRowForStemming(data, n, wordsStemsDict) {
+        const row = data.text;
+        const idxRow = data.idxRow;
+        const idxRowChild = data.idxRowChild ?? null;
+        const idxRowParent = data.idxRowParent ?? null;
+        const tokens = customWordPunctTokenize(row);
+        const offsets = getOffsets(row, tokens);
+
+        for (let ngramLen = 1; ngramLen <= n; ngramLen++) {
+            for (let i = 0; i <= tokens.length - ngramLen; i++) {
+                addNgramToDict(tokens, offsets, i, ngramLen, row, idxRow, idxRowChild, idxRowParent, wordsStemsDict);
+            }
+        }
+    }
+
+    function addNgramToDict(tokens, offsets, i, ngramLen, row, idxRow, idxRowChild, idxRowParent, wordsStemsDict) {
+        const ngramTokens = tokens.slice(i, i + ngramLen);
+        const ngramOffsets = offsets.slice(i, i + ngramLen);
+        const start = ngramOffsets[0].start;
+        const end = ngramOffsets[ngramOffsets.length - 1].end;
+        const ngram = row.slice(start, end);
+        const ngramLower = ngramTokens.map(w => w.toLowerCase());
+        const stem = ngramLower.map(porterStemmer).join(" ");
+        if (!wordsStemsDict[stem]) {
+            wordsStemsDict[stem] = {
+                count: 0, word_prefix: ngram, offsets_array: [], n_words_ngram: ngramLen, "stem": stem
+            };
+        }
+        wordsStemsDict[stem].count += 1;
+        wordsStemsDict[stem].offsets_array.push({
+            word: ngram,
+            offsets: [start, end],
+            n_row: idxRow,
+            n_row_child: idxRowChild,
+            n_row_parent: idxRowParent
+        });
+    }
+
+    function updateWordPrefixes(wordsStemsDict) {
         Object.values(wordsStemsDict).forEach(entry => {
             const words = entry.offsets_array.map(item => item.word);
             if (words.length > 0) {
@@ -22655,7 +22666,6 @@ Current version indicated by LITEVER below.
                 entry.word_prefix = maxWord;
             }
         });
-        return {nTotalRows, wordsStemsDict};
     }
 
     function getOffsets(text, tokens) {
@@ -22744,10 +22754,10 @@ Current version indicated by LITEVER below.
     }
 
     function setElementCssClassByOldClass(oldClassName, currentClass) {
-        try {
-            let oldClassElement = document.getElementsByClassName(oldClassName)
-            oldClassElement[0].className = currentClass
-        } catch {}
+        let oldClassElement = document.getElementsByClassName(oldClassName);
+        if (oldClassElement.length > 0) {
+            oldClassElement[0].className = currentClass;
+        }
 	}
 
 	function getWordsFrequency() {
@@ -22796,8 +22806,8 @@ Current version indicated by LITEVER below.
                 result = result.concat(extractStringValues(item));
             }
         } else if (typeof obj === "object" && obj !== null) {
-            for (const key in obj) {
-                result = result.concat(extractStringValues(obj[key]));
+            for (const key in obj) { // object, can't use 'for...of'
+                result = result.concat(extractStringValues(obj[key]))
             }
         }
         return result;
@@ -22814,6 +22824,7 @@ Current version indicated by LITEVER below.
 		let nTotalRows = wfo["nTotalRows"]
 		if (nTotalRows === null || nTotalRows < 1) {
 			alert("let's get some data before updating the result table...")
+            return
 		}
 		let _wfo = wfo["words_frequency"]
 		let reduced = Object.values(_wfo)
@@ -22933,47 +22944,54 @@ Current version indicated by LITEVER below.
         wordListElement.appendChild(li);
 	}
 
-    function insertCellIntoTRow(currentTBody, i, ii, nthOffset) {
-        let rowArray = wfo["rowArray"]
-        let nthRowBody = currentTBody.insertRow()
-        nthRowBody.setAttribute("id", `id-table-${i}-row-${ii}-nth`)
-        nthRowBody.setAttribute("aria-label", `id-table-${i}-row-${ii}-nth`)
-        const nthRowIdx = nthOffset["n_row"]
-        let currentCell = nthRowBody.insertCell()
-        let currentUrl = document.createElement("a")
-        currentUrl.addEventListener("click", function() {
-            let nRow = nthRowIdx
-            let nRowChild = nthOffset["n_row_child"]
-            let nRowParent = nthOffset["n_row_parent"]
-            let offsetWord = nthOffset["offsets"]
-            setCaret(nRow, offsetWord, nRowChild, nRowParent)
-            setElementCssClassByOldClass(underlinedClickedTable, underlinedPrimaryTable)
-            currentUrl.className = underlinedClickedTable
-            hideWordsFreqMobileMenu()
-        })
-        currentUrl.className = underlinedPrimaryTable
-        currentUrl.setAttribute("id", `id-table-${i}-row-${ii}-nth-link`)
-        currentUrl.setAttribute("aria-label", `id-table-${i}-row-${ii}-nth-link`)
-        const wfoContainerWidth = getStylePropertyById("id-col2-words-frequency", "width", "int")
-        const listOfWordsWidth = getStylePropertyById("id-list-of-words-scrollable", "width", "int")
-        const sentencesContainerWidth = wfoContainerWidth - listOfWordsWidth
-        let nCharsMore = Math.floor(sentencesContainerWidth / 20)
-        if (nCharsMore < minNCharsMore) {
-            nCharsMore = minNCharsMore
-        }
-        console.log(`insertCellIntoTRow::sentencesContainerWidth: ${sentencesContainerWidth}px, nCharsMore: ${nCharsMore}.`)
-        const {substring0, substringWord, substring2} = getSubstringForTextWithGivenOffset(rowArray, nthRowIdx, nthOffset, nCharsMore)
+	function insertCellIntoTRow(currentTBody, i, ii, nthOffset) {
+		const rowArray = wfo["rowArray"];
+		const nthRowBody = currentTBody.insertRow();
+		nthRowBody.setAttribute("id", `id-table-${i}-row-${ii}-nth`);
+		nthRowBody.setAttribute("aria-label", `id-table-${i}-row-${ii}-nth`);
+		const nthRowIdx = nthOffset["n_row"];
+		const currentCell = nthRowBody.insertCell();
+		const currentUrl = createWordLink(i, ii, nthOffset, nthRowIdx, rowArray);
+		currentCell.appendChild(currentUrl);
+	}
 
-        const span0 = document.createElement("span").innerText = substring0
-        const spanWord = document.createElement("span")
-        spanWord.setAttribute("class", underlinedSecondaryTable)
-        spanWord.innerText = substringWord
-        const span2 = document.createElement("span").innerText = substring2
-        currentUrl.append(span0)
-        currentUrl.append(spanWord)
-        currentUrl.append(span2)
-        currentCell.appendChild(currentUrl)
-    }
+	function createWordLink(i, ii, nthOffset, nthRowIdx, rowArray) {
+		const currentUrl = document.createElement("a");
+		currentUrl.addEventListener("click", function() {
+			let nRow = nthRowIdx;
+			let nRowChild = nthOffset["n_row_child"];
+			let nRowParent = nthOffset["n_row_parent"];
+			let offsetWord = nthOffset["offsets"];
+			setCaret(nRow, offsetWord, nRowChild, nRowParent);
+			setElementCssClassByOldClass(underlinedClickedTable, underlinedPrimaryTable);
+			currentUrl.className = underlinedClickedTable;
+			hideWordsFreqMobileMenu();
+		});
+		currentUrl.className = underlinedPrimaryTable;
+		currentUrl.setAttribute("id", `id-table-${i}-row-${ii}-nth-link`);
+		currentUrl.setAttribute("aria-label", `id-table-${i}-row-${ii}-nth-link`);
+
+		const wfoContainerWidth = getStylePropertyById("id-col2-words-frequency", "width", "int");
+		const listOfWordsWidth = getStylePropertyById("id-list-of-words-scrollable", "width", "int");
+		const sentencesContainerWidth = wfoContainerWidth - listOfWordsWidth;
+		let nCharsMore = Math.floor(sentencesContainerWidth / 20);
+		if (nCharsMore < minNCharsMore) {
+			nCharsMore = minNCharsMore;
+		}
+		const { substring0, substringWord, substring2 } = getSubstringForTextWithGivenOffset(rowArray, nthRowIdx, nthOffset, nCharsMore);
+
+		currentUrl.append(createSpan(substring0));
+		currentUrl.append(createSpan(substringWord, underlinedSecondaryTable));
+		currentUrl.append(createSpan(substring2));
+		return currentUrl;
+	}
+
+	function createSpan(text, className) {
+		const span = document.createElement("span");
+		if (className) span.setAttribute("class", className);
+		span.innerText = text;
+		return span;
+	}
 
     function getSubstringForTextWithGivenOffset(rowArray, nthRowIdx, nthOffset, nCharsMore = 30) {
         try {
@@ -23038,68 +23056,52 @@ Current version indicated by LITEVER below.
         return value
     }
 
-    function getValidChildNodesFromEditorById(idElement) {
-        const editorElement = document.getElementById(idElement);
-        let validChildContent = [];
-        const validNodeNames = Object.keys(objectChildNodeNamesToParse);
+	function getValidChildNodesFromEditorById(idElement) {
+		const editorElement = document.getElementById(idElement);
+		const validChildContent = [];
+		const validNodeNames = Object.keys(objectChildNodeNamesToParse);
 
-        function hasValidChild(node) {
-            for (let i = 0; i < node.childNodes.length; i++) {
-                const child = node.childNodes[i];
-                if (validNodeNames.includes(child.nodeName)) {
-                    const prop = objectChildNodeNamesToParse[child.nodeName];
-                    if (child[prop] && child[prop].trim() !== "") {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
+		function hasValidChild(node) {
+			return Array.from(node.childNodes).some(child => {
+				if (validNodeNames.includes(child.nodeName)) {
+					const prop = objectChildNodeNamesToParse[child.nodeName];
+					return child[prop] && child[prop].trim() !== "";
+				}
+				return false;
+			});
+		}
 
-        function processNode(node, topIdx, idxRowChild = null, idxRowParent = null) {
-            // For nodes that are not SPAN, push their text if valid.
-            if (node.nodeName !== "SPAN" && validNodeNames.includes(node.nodeName)) {
-                const textField = objectChildNodeNamesToParse[node.nodeName];
-                const textContent = node[textField];
-                if (textContent && textContent.trim() !== "") {
-                    validChildContent.push({
-                        idxRow: topIdx,
-                        text: textContent,
-                        idxRowChild: idxRowChild,
-                        idxRowParent: idxRowParent
-                    });
-                }
-            }
-            if (node.nodeName === "SPAN") {
-                if (!hasValidChild(node)) {
-                    const textField = objectChildNodeNamesToParse[node.nodeName];
-                    const textContent = node[textField];
-                    if (textContent && textContent.trim() !== "") {
-                        validChildContent.push({
-                            idxRow: topIdx,
-                            text: textContent,
-                            idxRowChild: idxRowChild,
-                            idxRowParent: idxRowParent
-                        });
-                    }
-                }
-            }
-            if (node.childNodes && node.childNodes.length > 0) {
-                let newParentId = idxRowParent;
-                if (node.nodeName === "SPAN") {
-                    newParentId = topIdx;  // for nested nodes, use parent's top-level index.
-                }
-                for (let i = 0; i < node.childNodes.length; i++) {
-                    processNode(node.childNodes[i], topIdx, i, newParentId);
-                }
-            }
-        }
-        // Process each top-level child node of the editor.
-        for (let i = 0; i < editorElement.childNodes.length; i++) {
-            processNode(editorElement.childNodes[i], i);
-        }
-        return { validChildContent, editorElement };
-    }
+		function processNode(node, topIdx, idxRowChild = null, idxRowParent = null) {
+			if (node.nodeName !== "SPAN" && validNodeNames.includes(node.nodeName)) {
+				pushValidContent(node, topIdx, idxRowChild, idxRowParent);
+			}
+			if (node.nodeName === "SPAN" && !hasValidChild(node)) {
+				pushValidContent(node, topIdx, idxRowChild, idxRowParent);
+			}
+			if (node.childNodes && node.childNodes.length > 0) {
+				let newParentId = node.nodeName === "SPAN" ? topIdx : idxRowParent;
+				Array.from(node.childNodes).forEach((child, i) => {
+					processNode(child, topIdx, i, newParentId);
+				});
+			}
+		}
+
+		function pushValidContent(node, topIdx, idxRowChild, idxRowParent) {
+			const textField = objectChildNodeNamesToParse[node.nodeName];
+			const textContent = node[textField];
+			if (textContent && textContent.trim() !== "") {
+				validChildContent.push({
+					idxRow: topIdx,
+					text: textContent,
+					idxRowChild: idxRowChild,
+					idxRowParent: idxRowParent
+				});
+			}
+		}
+
+		Array.from(editorElement.childNodes).forEach((child, i) => processNode(child, i));
+		return { validChildContent, editorElement };
+	}
 
     /** specific for lite.koboldai.net */
     function toggleElementWithClassById(idElement, className="collapse") {
@@ -23132,16 +23134,13 @@ Current version indicated by LITEVER below.
     }
 
     function toggleOrCloseByBoolAndId(idElement, boolFlag, className="collapse") {
-        switch (boolFlag) {
-            case boolFlag === true:
-                toggleElementWithClassById(idElement, className)
-                break;
-            case boolFlag === false:
-                addClassById(idElement, "collapse")
-                break;
-            default:
-                console.error("toggleOrCloseByBoolAndId::something is wrong: idElement => ", idElement, "#")
-                console.error("toggleOrCloseByBoolAndId::something is wrong: boolFlag => ", boolFlag, "#")
+        if (boolFlag === true) {
+            toggleElementWithClassById(idElement, className);
+        } else if (boolFlag === false) {
+            addClassById(idElement, "collapse");
+        } else {
+            console.error("toggleOrCloseByBoolAndId::something is wrong: idElement => ", idElement, "#");
+            console.error("toggleOrCloseByBoolAndId::something is wrong: boolFlag => ", boolFlag, "#");
         }
     }
 
@@ -23187,8 +23186,8 @@ Current version indicated by LITEVER below.
     }
 
     function setPropertyElementsByArrayId(idElementArray, propertyName, propertyValue) {
-        for (let idElement in idElementArray) {
-            setPropertyById(idElementArray[idElement], propertyName, propertyValue)
+        for (const element of idElementArray) {
+            setPropertyById(element, propertyName, propertyValue)
         }
     }
 
@@ -23710,7 +23709,7 @@ Current version indicated by LITEVER below.
 		<div id="outerbodybg"></div>
 		<div id="topmenu" class="topmenu">
 			<div style="width: 100%;">
-				<button title="Main Menu Options" class="navtoggler mainnav" type="button" onclick="toggleTopNav()">
+                <button title="Main Menu Options" class="navtoggler mainnav" type="button" onclick="toggleTopNav()">
 					<span class="navbar-button-bar"></span>
 					<span class="navbar-button-bar"></span>
 					<span class="navbar-button-bar"></span>
