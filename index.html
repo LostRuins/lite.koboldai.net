@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 250;
+	const LITEVER = 252;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -2053,6 +2053,10 @@ Current version indicated by LITEVER below.
 		flex-direction: column;
 		text-align: center;
 	}
+	.corpowelcomesmall
+	{
+		font-size: 12px;
+	}
 	.corpomainbtm
 	{
 		padding-left: 2px;
@@ -3802,7 +3806,8 @@ Current version indicated by LITEVER below.
 	}
 	function format_streaming_text(input)
 	{
-		if(localsettings.opmode==4 && localsettings.render_streaming_markdown && localsettings.instruct_has_markdown)
+		let inEditMode = (document.getElementById("allowediting").checked ? true : false);
+		if(localsettings.opmode==4 && localsettings.render_streaming_markdown && localsettings.instruct_has_markdown && !inEditMode)
 		{
 			input = simpleMarkdown(input, localsettings.instruct_has_latex);
 		}
@@ -8848,9 +8853,26 @@ Current version indicated by LITEVER below.
 				.then(rb => {
 					if (rb.ok) {
 						return rb.blob();
-					} else {
-						throw new Error('Cannot fetch tavern image');
 					}
+					if (rb.status == 404) //sometimes cards get renamed. try to get real URL and fetch once more
+					{
+						return fetch(`https://api.chub.ai/api/characters/${userInput}`)
+						.then(rx => rx.json())
+						.then(rb2=>{
+							let realimgurl = rb2.node.max_res_url;
+							return fetch(realimgurl).then(rb3 => {
+								if (rb3.ok) {
+									return rb3.blob();
+								}
+								throw new Error('Cannot fetch tavern image');
+							}).catch(error3 => {
+								throw new Error('Cannot fetch tavern image');
+							});
+						}).catch(error2 => {
+							throw new Error('Cannot fetch tavern image');
+						});
+					}
+					throw new Error('Cannot fetch tavern image');
 				})
 				.then(blob => {
 					preview_temp_scenario();
@@ -9102,7 +9124,7 @@ Current version indicated by LITEVER below.
 		}
 
 		document.getElementById("scenariogrid").innerHTML = scenarios;
-		document.getElementById("scenariodesc").innerText = "No Scenario Selected. Scroll for more options.";
+		document.getElementById("scenariodesc").innerHTML = `No Scenario Selected. Scroll down for more options.<br><br><a href="#" class="color_blueurl mainnav" onclick="hide_popups();document.getElementById('loadfileinput').click()">Alternatively, click [HERE] to load card from PNG file.</a>`;
 		togglescenarioautopick();
 	}
 
@@ -9491,6 +9513,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("groupselectcontainer").classList.contains("hidden") &&
 			document.getElementById("addimgcontainer").classList.contains("hidden") &&
 			document.getElementById("pasteimgcontainer").classList.contains("hidden") &&
+			document.getElementById("webcamcontainer").classList.contains("hidden") &&
 			document.getElementById("choosesharecontainer").classList.contains("hidden") &&
 			document.getElementById("advancedloadfile").classList.contains("hidden") &&
 			document.getElementById("welcomecontainer").classList.contains("hidden") &&
@@ -9529,10 +9552,12 @@ Current version indicated by LITEVER below.
 		document.getElementById("groupselectcontainer").classList.add("hidden");
 		document.getElementById("addimgcontainer").classList.add("hidden");
 		document.getElementById("pasteimgcontainer").classList.add("hidden");
+		document.getElementById("webcamcontainer").classList.add("hidden");
 		document.getElementById("choosesharecontainer").classList.add("hidden");
 		document.getElementById("advancedloadfile").classList.add("hidden");
 		document.getElementById("welcomecontainer").classList.add("hidden");
 		document.getElementById("admincontainer").classList.add("hidden");
+		stop_webcam();
 		mainmenu_untab(false);
 	}
 
@@ -11213,7 +11238,8 @@ Current version indicated by LITEVER below.
 
 	function trigger_admin_savestate()
 	{
-		document.getElementById("loadstatetxt").innerText = "Saving State...";
+		let slot = parseInt(document.getElementById("savestate_selection").value);
+		document.getElementById("loadstatetxt").innerText = `Saving State ${slot}...`;
 		let header = {'Content-Type': 'application/json'};
 		if(last_admin_key!="")
 		{
@@ -11221,27 +11247,31 @@ Current version indicated by LITEVER below.
 		}
 		fetch(custom_kobold_endpoint + koboldcpp_admin_savestate_endpoint, {
 			method: 'POST',
-			headers: header
+			headers: header,
+			body: JSON.stringify({
+				"slot": slot
+			})
 		})
 		.then(x => x.json())
 		.then(values => {
 			console.log(values);
 			if(values.success)
 			{
-				document.getElementById("loadstatetxt").innerText = `State Saved (${values.new_tokens} tokens in ${parseInt(values.new_state_size/(1024*1024))} MB)`;
+				document.getElementById("loadstatetxt").innerText = `State ${slot} Saved (${values.new_tokens} tokens in ${parseInt(values.new_state_size/(1024*1024))} MB)`;
 			}else{
-				document.getElementById("loadstatetxt").innerText = `Save State Failed!`;
+				document.getElementById("loadstatetxt").innerText = `Save State ${slot} Failed!`;
 			}
 		}).catch((error) => {
 			console.log("Error: " + error);
-			document.getElementById("loadstatetxt").innerText = `Save State Failed!`;
+			document.getElementById("loadstatetxt").innerText = `Save State ${slot} Failed!`;
 			msgbox(error,"Error");
 		});
 	}
 
 	function trigger_admin_loadstate()
 	{
-		document.getElementById("loadstatetxt").innerText = "Loading State...";
+		let slot = parseInt(document.getElementById("savestate_selection").value);
+		document.getElementById("loadstatetxt").innerText = `Loading State ${slot}...`;
 		let header = {'Content-Type': 'application/json'};
 		if(last_admin_key!="")
 		{
@@ -11249,20 +11279,23 @@ Current version indicated by LITEVER below.
 		}
 		fetch(custom_kobold_endpoint + koboldcpp_admin_loadstate_endpoint, {
 			method: 'POST',
-			headers: header
+			headers: header,
+			body: JSON.stringify({
+				"slot": slot
+			})
 		})
 		.then(x => x.json())
 		.then(values => {
 			console.log(values);
 			if(values.success)
 			{
-				document.getElementById("loadstatetxt").innerText = `State Loaded (${values.new_tokens} tokens)`;
+				document.getElementById("loadstatetxt").innerText = `State ${slot} Loaded (${values.new_tokens} tokens)`;
 			}else{
-				document.getElementById("loadstatetxt").innerText = `Load State Failed!`;
+				document.getElementById("loadstatetxt").innerText = `Load State ${slot} Failed!`;
 			}
 		}).catch((error) => {
 			console.log("Error: " + error);
-			document.getElementById("loadstatetxt").innerText = `Load State Failed!`;
+			document.getElementById("loadstatetxt").innerText = `Load State ${slot} Failed!`;
 			msgbox(error,"Error");
 		});
 	}
@@ -14335,6 +14368,67 @@ Current version indicated by LITEVER below.
 			);
 			dragdropimgsetup = true;
 		}
+	}
+
+	var webcamStream = null;
+	function add_img_btn_webcam()
+	{
+		document.getElementById("addimgcontainer").classList.add("hidden");
+		document.getElementById("webcamcontainer").classList.remove("hidden");
+		const video = document.getElementById('webcamvideo');
+
+		if (webcamStream) {
+			stop_webcam();
+		}
+
+		navigator.mediaDevices.getUserMedia({
+			video: {
+				facingMode: { exact: "environment" } // Request back camera
+			}
+		})
+		.then(stream => {
+			webcamStream = stream;
+			video.srcObject = stream;
+		})
+		.catch(err => {
+			console.error('Error accessing webcam:', err);
+
+			// Fallback: try default camera if back camera not available
+			navigator.mediaDevices.getUserMedia({ video: true })
+			.then(fallbackStream => {
+				webcamStream = fallbackStream;
+				video.srcObject = fallbackStream;
+			})
+			.catch(fallbackErr => {
+				console.error('Fallback error accessing webcam:', fallbackErr);
+			});
+		});
+	}
+	function stop_webcam()
+	{
+		if (webcamStream) {
+			const video = document.getElementById('webcamvideo');
+			webcamStream.getTracks().forEach(track => track.stop());
+			video.srcObject = null;  // Clear video source
+			console.log("Webcam stopped.");
+		}
+		webcamStream = null;
+	}
+	function capture_webcam_btn()
+	{
+		const video = document.getElementById('webcamvideo');
+		const canvas = document.getElementById('webcamcanvas');
+		const context = canvas.getContext('2d');
+		const videoWidth = video.videoWidth;
+		const videoHeight = video.videoHeight;
+		// Draw the cropped square to 512x512 canvas
+		const sideLength = Math.min(videoWidth, videoHeight);
+		const sx = (videoWidth - sideLength) / 2;
+		const sy = (videoHeight - sideLength) / 2;
+		context.drawImage(video, sx, sy, sideLength, sideLength, 0, 0, 512, 512);
+		const dataURL = canvas.toDataURL('image/png');
+		self_upload_img(dataURL);  // Call your upload function
+		hide_popups();
 	}
 
 	function add_img_btn_upload()
@@ -17653,6 +17747,14 @@ Current version indicated by LITEVER below.
 				let pat = new RegExp(localsettings.thinking_pattern, "gmi");
 				gentxtspeak = gentxtspeak.replace(pat, '');
 			}
+			//remove t2i
+			if (localsettings.img_autogen_type == 2)
+			{
+				const pat = /<t2i>(.*?)<\/t2i>/g;
+				gentxtspeak = gentxtspeak.replace(pat, "");
+				const pat2 = /{{\[IMG_.{1,8}_REF\]}}/g;
+				gentxtspeak = gentxtspeak.replace(pat2, "");
+			}
 
 			tts_speak(gentxtspeak);
 		}
@@ -19272,7 +19374,7 @@ Current version indicated by LITEVER below.
 				{
 					let curr = instruct_turns[i];
 					let currmsg = curr.msg;
-					if(localsettings.instruct_has_markdown && (synchro_pending_stream==""||(i+1)<instruct_turns.length))
+					if(localsettings.instruct_has_markdown && (localsettings.render_streaming_markdown||synchro_pending_stream==""||(i+1)<instruct_turns.length))
 					{
 						//if a list has a starttag on the same line, add a newline before it
 						currmsg = currmsg.replace(/(\n[-*] .+?)(%SpcStg%)/g, "$1\n$2");
@@ -19701,6 +19803,7 @@ Current version indicated by LITEVER below.
 		return `<div class='corpowelcome'>
 			<img src="`+niko_square+`" style="height:80px;width:auto;padding:10px;border-radius: 20%;"/>
 			<p>How can I help you today?</p>
+			${(welcome!=""?`<br><div class='corpowelcomesmall'><em>${escape_html(welcome)}</em></div>`:``)}
 			</div>`;
 	}
 
@@ -20113,6 +20216,11 @@ Current version indicated by LITEVER below.
 		corpo_editing_turn = -1;
 		render_gametext(needsave,false);
 	}
+	function corpo_edit_chunk_resend(idx)
+	{
+		corpo_edit_chunk_save();
+		corpo_retry_chunk(idx+1);
+	}
 
 	var cosmetic_corpo_ai_nick = "KoboldAI";
 	function corpo_click_avatar()
@@ -20237,12 +20345,14 @@ Current version indicated by LITEVER below.
 				}
 			}
 
+			let resendbtn = ((curr.myturn && i<chatunits.length-1)?`<button type="button" class="btn btn-primary" style="margin:2px;float:right;" onclick="corpo_edit_chunk_resend(${i})">Resend</button>`:``);
 			let bodypart = (corpo_editing_turn == i ?
 				`<div class="corpo_edit_outer">
 				<div class="corpo_edit_inner" id="corpo_edit_inp_lengthtester" style="white-space: nowrap; visibility: hidden; height: 0px; position:absolute; width: auto;"></div>
 				<textarea class="corpo_edit_inner" id="corpo_edit_inp" type="text" name="crpeditinp"  role="presentation" autocomplete="noppynop" spellcheck="true" rows="1" wrap="on" placeholder="Edit Message" value="" oninput="corpoedit_resize_input();"/>${stash_image_placeholders(curr.msg, false)}</textarea>
 				</div>
 				<button type="button" class="btn btn-primary" style="margin:2px;float:right;" onclick="corpo_edit_chunk_start(-1)">Cancel</button>
+				${resendbtn}
 				<button type="button" class="btn btn-primary" style="margin:2px;float:right;" onclick="corpo_edit_chunk_save()">Save</button>
 				<button type="button" class="btn btn-primary bg_red" style="margin:2px;float:left;" onclick="corpo_edit_chunk_delete()">Delete</button>`:
 				`<div class="corpostyleitemcontent">${processed_msg}</div>`);
@@ -25195,8 +25305,11 @@ Current version indicated by LITEVER below.
 								<option value="2">2x</option>
 								<option value="3">3x</option>
 								<option value="5">5x</option>
-								<option value="8">8x</option>
 								<option value="10">10x</option>
+								<option value="15">15x</option>
+								<option value="20">20x</option>
+								<option value="30">30x</option>
+								<option value="50">50x</option>
 							</select>
 							<select title="Idle Responses Duration" style="padding:1px; height:auto; width: 27px; appearance: none; font-size: 7pt;" class="form-control" id="idle_duration">
 								<option value="5">5s</option>
@@ -26050,8 +26163,13 @@ Current version indicated by LITEVER below.
 			<div>
 				<b class="color_white" style="padding: 5px;">Save / Load Context State:</b><br>
 				<div style="display:flex;padding: 5px;">
-				<button type="button" style="margin:2px;width:50%" class="btn btn-primary" onclick="trigger_admin_savestate()">Save State</button>
-				<button type="button" style="margin:2px;width:50%" class="btn btn-primary" onclick="trigger_admin_loadstate()">Load State</button>
+				<select title="State Slot Selection" style="padding:4px;width:30%" class="form-control" id="savestate_selection">
+					<option value="0" selected="selected">State 0</option>
+					<option value="1">State 1</option>
+					<option value="2">State 2</option>
+				</select>
+				<button type="button" style="margin:2px;width:35%" class="btn btn-primary" onclick="trigger_admin_savestate()">Save State</button>
+				<button type="button" style="margin:2px;width:35%" class="btn btn-primary" onclick="trigger_admin_loadstate()">Load State</button>
 				</div>
 				<div class="menutext" id="loadstatetxt"></div>
 			</div>
@@ -26288,6 +26406,9 @@ Current version indicated by LITEVER below.
 				<button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_upload()">Upload Image File</button>
 			</div>
 			<div class="menutext">
+				<button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_webcam()">Capture From Camera</button>
+			</div>
+			<div class="menutext">
 				<button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_paste()">Drag Drop / Paste from Clipboard</button>
 			</div>
 			<div class="menutext">
@@ -26313,6 +26434,21 @@ Current version indicated by LITEVER below.
 			<input type="text" id="pasteimgwin" style="width:100%; height:100px; text-align: center;" oninput="clear_paste_window()" onpaste="return img_paste_event(event)" value="" placeholder="[Drag/Paste Image Here]">
 			<br>
 			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="webcamcontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup flexsizevsmall">
+			<div class="popuptitlebar">
+				<div class="popuptitletext">Capture Image From Camera</div>
+			</div>
+			<video id="webcamvideo" width="100%" height="300" autoplay></video>
+			<canvas id="webcamcanvas" width="512" height="512" style="display:none;"></canvas>
+			<div class="popupfooter">
+				<button id="webcambutton" type="button" class="btn btn-primary" onclick="capture_webcam_btn()">Capture</button>
 				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
 			</div>
 		</div>
