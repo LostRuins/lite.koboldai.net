@@ -14372,17 +14372,32 @@ Current version indicated by LITEVER below.
 		document.getElementById("addimgcontainer").classList.add("hidden");
 		document.getElementById("webcamcontainer").classList.remove("hidden");
 		const video = document.getElementById('webcamvideo');
-		if(webcamStream)
-		{
+
+		if (webcamStream) {
 			stop_webcam();
 		}
-		navigator.mediaDevices.getUserMedia({ video: true })
+
+		navigator.mediaDevices.getUserMedia({
+			video: {
+				facingMode: { exact: "environment" } // Request back camera
+			}
+		})
 		.then(stream => {
 			webcamStream = stream;
 			video.srcObject = stream;
 		})
 		.catch(err => {
 			console.error('Error accessing webcam:', err);
+
+			// Fallback: try default camera if back camera not available
+			navigator.mediaDevices.getUserMedia({ video: true })
+			.then(fallbackStream => {
+				webcamStream = fallbackStream;
+				video.srcObject = fallbackStream;
+			})
+			.catch(fallbackErr => {
+				console.error('Fallback error accessing webcam:', fallbackErr);
+			});
 		});
 	}
 	function stop_webcam()
