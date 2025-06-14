@@ -2206,6 +2206,18 @@ Current version indicated by LITEVER below.
 	.color_pink {
 		color: #ffbdbd;
 	}
+	.color_wordsearch_target
+	{
+		color: violet;
+		text-decoration: underline;
+		text-decoration-color: violet;
+	}
+	.color_wordsearch_surrounding
+	{
+		color: yellow;
+		text-decoration: underline;
+		text-decoration-color: yellow;
+	}
 
 	.bg_black {
 		background-color: #202020;
@@ -3368,6 +3380,7 @@ Current version indicated by LITEVER below.
 		websearch_multipass: false,
 		websearch_retain: false,
 		websearch_template: "",
+		wordsearch_enabled: false,
 
 		max_context_length: (localflag?4096:2048),
 		max_length: (localflag?512:256),
@@ -12354,6 +12367,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("run_in_background").checked = run_in_background;
 		document.getElementById("auto_ctxlen").checked = localsettings.auto_ctxlen;
 		document.getElementById("auto_genamt").checked = localsettings.auto_genamt;
+		document.getElementById("wordsearch_toggle").checked = localsettings.wordsearch_enabled;
 		if(localflag)
 		{
 			document.getElementById("auto_ctxlen_panel").classList.add("hidden");
@@ -12944,6 +12958,7 @@ Current version indicated by LITEVER below.
 		localsettings.voice_langcode = document.getElementById("voice_langcode").value;
 		localsettings.auto_ctxlen = (document.getElementById("auto_ctxlen").checked ? true : false);
 		localsettings.auto_genamt = (document.getElementById("auto_genamt").checked ? true : false);
+		localsettings.wordsearch_enabled = (document.getElementById("wordsearch_toggle").checked ? true : false);
 
 		localsettings.image_styles = document.getElementById("imagestyleinput").value;
 		localsettings.image_negprompt = document.getElementById("negpromptinput").value;
@@ -13241,9 +13256,20 @@ Current version indicated by LITEVER below.
 	function toggle_uistyle()
 	{
 		//show or hide the 'Customize UI' button based on whether the Aesthetic Instruct UI Mode is active or not.
-		if (document.getElementById('gui_type').value==2) { document.getElementById('btn_aesthetics').classList.remove('hidden'); }
-		else { document.getElementById('btn_aesthetics').classList.add('hidden'); }
+		if (document.getElementById('gui_type').value == 2) {
+			document.getElementById('btn_aesthetics').classList.remove('hidden');
+		}
+		else {
+			document.getElementById('btn_aesthetics').classList.add('hidden');
+		}
 		document.getElementById("guitypedesc").innerText = get_theme_desc(document.getElementById('gui_type').value);
+
+		if (document.getElementById('gui_type').value == 0) {
+			document.getElementById('classicmodeoptions').classList.remove('hidden');
+		}
+		else {
+			document.getElementById('classicmodeoptions').classList.add('hidden');
+		}
 	}
 
 	function select_welcome_ui()
@@ -13346,8 +13372,12 @@ Current version indicated by LITEVER below.
 			document.getElementById('gui_type').value = 0;
 		}
 
-		if (document.getElementById('gui_type').value==2) { document.getElementById('btn_aesthetics').classList.remove('hidden'); }
-		else { document.getElementById('btn_aesthetics').classList.add('hidden'); }
+		if (document.getElementById('gui_type').value == 2) {
+			document.getElementById('btn_aesthetics').classList.remove('hidden');
+		}
+		else {
+			document.getElementById('btn_aesthetics').classList.add('hidden');
+		}
 
 		toggle_uistyle();
 	}
@@ -13786,6 +13816,8 @@ Current version indicated by LITEVER below.
 		document.getElementById("input_text").value = "";
 		document.getElementById("corpo_cht_inp").value = "";
 		document.getElementById("cht_inp").value = "";
+		let wsresultsContainer = document.getElementById("wordsearch_results");
+		if(wsresultsContainer){wsresultsContainer.innerHTML="";}
 		chat_resize_input();
 		image_db = {};
 		interrogation_db = {};
@@ -19795,6 +19827,14 @@ Current version indicated by LITEVER below.
 		{
 			document.getElementById("searchingtxt").classList.add("hidden");
 		}
+
+		if(localsettings.wordsearch_enabled)
+		{
+			document.getElementById("wordsearch_panel").classList.remove("hidden");
+		}else
+		{
+			document.getElementById("wordsearch_panel").classList.add("hidden");
+		}
 	}
 
 	function render_corpo_welcome()
@@ -22657,6 +22697,209 @@ Current version indicated by LITEVER below.
 			return searchResults;
 		}
 	});
+
+	/** Inspired by My Ghost Writer from trincadev - https://github.com/trincadev/my_ghost_writer */
+	//scan through full context to ngram a possible set of candidates
+	function trigger_wordsearch_candidates() {
+		const searchBox = document.getElementById("wordsearch_input");
+		const resultsContainer = document.getElementById("wordsearch_results");
+		const sortByFreq = document.getElementById("wordsearch_sort").value=="0";
+		const query = searchBox.value.trim();
+		resultsContainer.innerHTML = "";
+
+		let ngramParser = function (text, n) {
+			const words = text.split(/ +/).filter(word => word.length > 0);
+			const ngrams = {};
+			let prevNgram = null;
+
+			for (let i = 0; i <= words.length - n; i++) {
+				let ngram = words.slice(i, i + n).join(' ');
+				//strip leading and trailing punctuation
+				ngram = ngram.replace(/^[,\.?!()\[\]{}\`:;\-\'\"—]+|[,\.?!()\[\]{}\`:;\-\'\"—]+$/g, '');
+				if (ngram === prevNgram) continue; // skip duplicate overlaps
+				prevNgram = ngram;
+
+				if (ngrams[ngram]) {
+					ngrams[ngram]++;
+				} else {
+					ngrams[ngram] = 1;
+				}
+			}
+			const sortedNgrams = Object.entries(ngrams).sort((a, b) => b[1] - a[1]);
+			return sortedNgrams.map(entry => ({ ng: entry[0], cnt: entry[1] }));
+		};
+
+		let prepare_candidates_from_text = function(query) {
+			const fullgametext = concat_gametext(true, "").toLowerCase();
+			let querylc = query.toLowerCase();
+			let candidateDict = {};
+
+			let textrows = fullgametext.split("\n").filter(x=>x);
+
+			for(let l=0;l<textrows.length;++l)
+			{
+				for(let i=1;i<=3;++i) //ngram of 3
+				{
+					let res = ngramParser(textrows[l],i);
+					if(querylc!="")
+					{
+						res = res.filter(x=>x.ng.toLowerCase().includes(querylc));
+					}
+					let lim = Math.min(res.length,250);
+					for(let j=0;j<lim;++j)
+					{
+						if (!candidateDict[res[j].ng]) {
+							candidateDict[res[j].ng] = res[j].cnt;
+						} else {
+							candidateDict[res[j].ng] += res[j].cnt;
+						}
+					}
+				}
+			}
+
+			//todo: counts are not correct because of substrings. let's manually count each item for now
+			for(let key in candidateDict)
+			{
+				candidateDict[key] = (fullgametext.split(key).length - 1);
+			}
+
+			if(querylc!="")
+			{
+				let basecount = (fullgametext.split(querylc).length - 1); //count of the pure substring
+				candidateDict[query] = basecount;
+			}
+
+			return candidateDict;
+		}
+
+		let candidateDict = prepare_candidates_from_text(query);
+		var candidateItems = Object.keys(candidateDict).map(function(key) {
+			return [key, candidateDict[key]];
+		});
+
+		if(sortByFreq)
+		{
+			candidateItems.sort(function(first, second) {
+				return second[1] - first[1];
+			});
+		}else
+		{
+			//sort alphabetically
+			candidateItems.sort(function(first, second) {
+				if (first[0] < second[0]) {
+					return -1;
+				}
+				if (first[0] > second[0]) {
+					return 1;
+				}
+				return 0;
+			});
+
+		}
+
+
+		for(let i=0;i<candidateItems.length;++i)
+		{
+			let key = candidateItems[i][0];
+			let count = candidateItems[i][1];
+			const btn = document.createElement("div");
+			btn.style.border = "1px solid #646464";
+			btn.innerHTML = `<a href="#"><span class="color_wordsearch_surrounding">${key} (${count})</span></a>`;
+			let searchstr = key;
+			btn.onclick = () => {
+				trigger_wordsearch_results(searchstr);
+			};
+			resultsContainer.appendChild(btn);
+		}
+	}
+	function trigger_wordsearch_candidates_key()
+	{
+		if (event.key === 'Enter') {
+			trigger_wordsearch_candidates();
+        }
+	}
+
+	function trigger_wordsearch_results(query) {
+		const resultsContainer = document.getElementById("wordsearch_results");
+		const gametext = document.getElementById("gametext");
+		query = query.trim();
+		resultsContainer.innerHTML = "";
+		if (!query) return;
+
+		let extract_surrounding_text = function(range, contextLength) {
+			const textNode = range.startContainer;
+			if (textNode.nodeType !== Node.TEXT_NODE) return;
+			const textContent = textNode.textContent;
+			const startOffset = range.startOffset;
+			const endOffset = range.endOffset;
+			// Compute raw bounds
+			let start = Math.max(0, startOffset - contextLength);
+			let end = Math.min(textContent.length, endOffset + contextLength);
+			// Clamp to word boundaries
+			start = textContent.lastIndexOf(' ', start);
+			end = textContent.indexOf(' ', end);
+			if (start === -1) start = 0;
+			if (end === -1) end = textContent.length;
+			const before = textContent.slice(start, startOffset);
+			const middle = textContent.slice(startOffset, endOffset);
+			const after = textContent.slice(endOffset,end);
+			return {"before":before, "middle":middle, "after":after, "full":`${before}${middle}${after}`};
+		}
+
+		let search_text_for_strings = function(query) { //search text nodes for all instances of query
+			const gametext = document.getElementById("gametext");
+			let matchRanges = [];
+			const walker = document.createTreeWalker(gametext, NodeFilter.SHOW_TEXT, null, false);
+
+			while (walker.nextNode()) {
+				const node = walker.currentNode;
+				const text = node.nodeValue;
+				let idx = 0;
+				while ((idx = text.toLowerCase().indexOf(query.toLowerCase(), idx)) !== -1) {
+				const range = document.createRange();
+				range.setStart(node, idx);
+				range.setEnd(node, idx + query.length);
+				matchRanges.push({ range, preview: text.substr(idx, query.length) });
+				idx += query.length;
+				}
+			}
+			return matchRanges;
+		}
+
+		let matchRanges = search_text_for_strings(query);
+
+		const topper = document.createElement("div");
+		topper.style.border = "1px solid #646464";
+		topper.innerText = `${matchRanges.length} results`;
+		resultsContainer.appendChild(topper);
+		matchRanges.forEach(({ range, preview }, i) => {
+			const btn = document.createElement("div");
+			btn.style.border = "1px solid #646464";
+			let nearbytext = extract_surrounding_text(range, 8);  //8 chars clamped to word bounds
+			btn.innerHTML = `<a href="#"><span class="color_wordsearch_surrounding">${nearbytext.before}</span><span class="color_wordsearch_target">${nearbytext.middle}</span><span class="color_wordsearch_surrounding">${nearbytext.after}</span></a>`;
+			btn.onclick = () => {
+				const sel = window.getSelection();
+				sel.removeAllRanges();
+				sel.addRange(range);
+
+				// Scroll the container
+				const rect = range.getBoundingClientRect();
+				const containerRect = gametext.getBoundingClientRect();
+				if (rect.top < containerRect.top || rect.bottom > containerRect.bottom) {
+					if (range.startContainer && range.startContainer.nodeType === Node.TEXT_NODE) {
+						const span = document.createElement("span");
+						span.style.display = "inline";
+						span.style.background = "transparent";
+						span.id = "temp-scroll-target";
+						range.insertNode(span); // Insert a temporary marker, then scroll to it
+						document.querySelector("#temp-scroll-target").scrollIntoView({ behavior: "smooth", block: "center" });
+						span.remove(); //remove temp marker
+					}
+				}
+			};
+			resultsContainer.appendChild(btn);
+		});
+	}
 	</script>
 
 </head>
@@ -22773,6 +23016,20 @@ Current version indicated by LITEVER below.
 					<p id="tempgtloadtxt">Loading...</p>
 					<noscript><style>#tempgtloadtxt { display: none; } #gametext { white-space: normal!important; }</style><p>Sorry, KoboldAI Lite requires Javascript to function.</p></noscript>
 				</span>
+				<div class="hidden" id="wordsearch_panel" style="flex:250px">
+					<div style="display:flex; padding:6px">
+					<input title="Word Search Input" class="form-control menuinput_inline" style="width: calc(100% - 34px); margin-right:2px;" type="text" placeholder="WordSearch" value="" onkeyup="trigger_wordsearch_candidates_key();" id="wordsearch_input">
+					<button title="Perform WordSearch" type="button" class="btn btn-primary" style="width:30px;padding:4px 4px;" onclick="trigger_wordsearch_candidates();">🔎</button>
+					</div>
+					<div style="display:flex; padding:6px">
+					<p style="margin-right:6px">Sort: </p>
+					<select title="Sort" style="padding:2px; font-size:14px; height:24px; width: calc(100% - 50px);" class="form-control" id="wordsearch_sort">
+						<option value="0">Frequency</option>
+						<option value="1">Alphabetical</option>
+					</select>
+					</div>
+					<div id="wordsearch_results" style="height:calc(100% - 98px);overflow-y: auto;"></div>
+				</div>
 			</div>
 		</div>
 
@@ -22886,6 +23143,8 @@ Current version indicated by LITEVER below.
 				</div>
 			</div>
 		</div>
+
+
 	</div>
 
 	<div class="popupcontainer flex hidden" id="memorycontainer">
@@ -23132,6 +23391,10 @@ Current version indicated by LITEVER below.
 								<option id="uipicker_corpo" value="3">Corpo Theme</option>
 							</select>
 							<button type="button" class="btn btn-primary" id="btn_aesthetics" onclick="openAestheticUISettingsMenu()" style="border-color: #bbbbbb; width:100%; height:30px; padding:0px 8px; margin: 3px 0 3px 0;">⚙️ Customize</button>
+							<div id="classicmodeoptions" style="margin:4px;" class="settinglabel hidden">
+							<div class="justifyleft settingsmall">Word Frequency Analysis <span class="helpicon">?<span class="helptext">Shows a tool that displays word frequency and locations, inspired by trincadev MyGhostWriter. Counts across newlines may be inaccurate.</span></span></div>
+							   <input title="WordSearch Tool" type="checkbox" id="wordsearch_toggle" style="margin:0px 0px 0px 0px;">
+							</div>
 							<div id="guitypedesc" class="settingsdesctxt"></div>
 						</div>
 					</div>
