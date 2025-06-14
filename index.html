@@ -13919,6 +13919,10 @@ Current version indicated by LITEVER below.
 			}
 		}
 		render_gametext(false);
+        /* My Ghost Writer: this will parse again the text because of edit mode toggle */
+        if (localsettings.wordsearch_enabled) {
+            trigger_wordsearch_candidates()
+        }
 	}
 	function exit_editmode()
 	{
@@ -22696,187 +22700,207 @@ Current version indicated by LITEVER below.
 	});
 
 	/** Inspired by My Ghost Writer from trincadev - https://github.com/trincadev/my_ghost_writer */
-	//scan through full context to ngram a possible set of candidates
-	function trigger_wordsearch_candidates() {
-		const searchBox = document.getElementById("wordsearch_input");
-		const resultsContainer = document.getElementById("wordsearch_results");
-		const sortByFreq = document.getElementById("wordsearch_sort").value=="0";
-		const query = searchBox.value.trim();
-		resultsContainer.innerHTML = "";
+    // ES6-compatible regex for words with Latin letters (with diacritics), digits, apostrophes, hyphens, still to improve
+    const WORD_REGEX = /[A-Za-zÀ-ÖØ-öø-ÿ0-9"'-’]+/g;
 
-		let ngramParser = function (text, n) {
-			const words = text.split(/\s+/).filter(word => word.length > 0);
-			const ngrams = {};
-			for (let i = 0; i <= words.length - n; i++) {
-				const ngram = words.slice(i, i + n).join(' ');
-				if (ngrams[ngram]) {
-					ngrams[ngram]++;
-				} else {
-					ngrams[ngram] = 1;
-				}
-			}
-			const sortedNgrams = Object.entries(ngrams).sort((a, b) => b[1] - a[1]);
-			return sortedNgrams.map(entry => ({ ng: entry[0], cnt: entry[1] }));
-		}
-
-		let prepare_candidates_from_text = function(query) {
-			const fullgametext = concat_gametext(true, "").toLowerCase();
-			let querylc = query.toLowerCase();
-			let candidateDict = {};
-			if(querylc!="")
-			{
-				let basecount = (fullgametext.split(querylc).length - 1); //count of the pure substring
-				candidateDict[query] = basecount;
-			}
-
-			for(let i=1;i<=3;++i) //ngram of 3
-			{
-				let res = ngramParser(fullgametext,i);
-				if(querylc!="")
-				{
-					res = res.filter(x=>x.ng.toLowerCase().includes(querylc));
-				}
-				let lim = Math.min(res.length,250);
-				for(let j=0;j<lim;++j)
-				{
-					if (!candidateDict[res[j].ng]) {
-						candidateDict[res[j].ng] = res[j].cnt;
-					} else {
-						candidateDict[res[j].ng] = Math.max(candidateDict[res[j].ng], res[j].cnt);
-					}
-				}
-			}
-			return candidateDict;
-		}
-
-		let candidateDict = prepare_candidates_from_text(query);
-		var candidateItems = Object.keys(candidateDict).map(function(key) {
-			return [key, candidateDict[key]];
-		});
-
-		if(sortByFreq)
-		{
-			candidateItems.sort(function(first, second) {
-				return second[1] - first[1];
-			});
-		}else
-		{
-			//sort alphabetically
-			candidateItems.sort(function(first, second) {
-				if (first[0] < second[0]) {
-					return -1;
-				}
-				if (first[0] > second[0]) {
-					return 1;
-				}
-				return 0;
-			});
-
-		}
-
-
-		for(let i=0;i<candidateItems.length;++i)
-		{
-			let key = candidateItems[i][0];
-			let count = candidateItems[i][1];
-			const btn = document.createElement("div");
-			btn.style.border = "1px solid #646464";
-			btn.innerHTML = `<a href="#"><span class="color_wordsearch_surrounding">${key} (${count}+)</span></a>`;
-			let searchstr = key;
-			btn.onclick = () => {
-				trigger_wordsearch_results(searchstr);
-			};
-			resultsContainer.appendChild(btn);
-		}
-	}
-	function trigger_wordsearch_candidates_key()
-	{
-		if (event.key === 'Enter') {
-			trigger_wordsearch_candidates();
+    // N-gram parser: generates n-grams from an array of words
+    function ngramParser(words, n) {
+        const ngrams = {};
+        for (let i = 0; i <= words.length - n; i++) {
+            const ngram = words.slice(i, i + n).join(' ');
+            ngrams[ngram] = (ngrams[ngram] || 0) + 1;
         }
-	}
+        return ngrams;
+    }
 
-	function trigger_wordsearch_results(query) {
-		const resultsContainer = document.getElementById("wordsearch_results");
-		const gametext = document.getElementById("gametext");
-		query = query.trim();
-		resultsContainer.innerHTML = "";
-		if (!query) return;
+    function prepare_candidates_from_text(query, textrows, maxNgram = 3, perLineLimit = 250) {
+        let candidateDict = {};
+        const querylc = query.toLowerCase();
 
-		let extract_surrounding_text = function(range, contextLength) {
-			const textNode = range.startContainer;
-			if (textNode.nodeType !== Node.TEXT_NODE) return;
-			const textContent = textNode.textContent;
-			const startOffset = range.startOffset;
-			const endOffset = range.endOffset;
-			// Compute raw bounds
-			let start = Math.max(0, startOffset - contextLength);
-			let end = Math.min(textContent.length, endOffset + contextLength);
-			// Clamp to word boundaries
-			start = textContent.lastIndexOf(' ', start);
-			end = textContent.indexOf(' ', end);
-			if (start === -1) start = 0;
-			if (end === -1) end = textContent.length;
-			const before = textContent.slice(start, startOffset);
-			const middle = textContent.slice(startOffset, endOffset);
-			const after = textContent.slice(endOffset,end);
-			return {"before":before, "middle":middle, "after":after, "full":`${before}${middle}${after}`};
-		}
+        // For each line, generate n-grams and count
+        for (let l = 0; l < textrows.length; ++l) {
+            const line = textrows[l].toLowerCase();
+            const words = line.match(WORD_REGEX) || [];
+            for (let n = 1; n <= maxNgram; ++n) {
+                const ngrams = ngramParser(words, n);
+                // Sort and limit per line
+                const sortedNgrams = Object.entries(ngrams).sort((a, b) => b[1] - a[1]);
+                const lim = Math.min(sortedNgrams.length, perLineLimit);
+                for (let j = 0; j < lim; ++j) {
+                    const [ng, cnt] = sortedNgrams[j];
+                    // Include only n-grams that contain the query substring (case-insensitive, anywhere)
+                    if (querylc && !ng.includes(querylc)) continue;
+                    candidateDict[ng] = (candidateDict[ng] || 0) + cnt;
+                }
+            }
+        }
+        return candidateDict;
+    }
+	
+	function trigger_wordsearch_candidates() {
+        const searchBox = document.getElementById("wordsearch_input");
+        const resultsContainer = document.getElementById("wordsearch_results");
+        const sortByFreq = document.getElementById("wordsearch_sort").value === "0";
+        const query = searchBox.value.trim().toLowerCase();
+        resultsContainer.innerHTML = "";
 
-		let search_text_for_strings = function(query) { //search text nodes for all instances of query
-			const gametext = document.getElementById("gametext");
-			let matchRanges = [];
-			const walker = document.createTreeWalker(gametext, NodeFilter.SHOW_TEXT, null, false);
+        // Get all text rows (lines/paragraphs)
+        const gametext = document.getElementById("gametext");
+        const textrows = Array.from(gametext.childNodes)
+            .filter(node => node.nodeType === Node.TEXT_NODE || node.nodeType === Node.ELEMENT_NODE)
+            .map(node => node.textContent);
 
-			while (walker.nextNode()) {
-				const node = walker.currentNode;
-				const text = node.nodeValue;
-				let idx = 0;
-				while ((idx = text.toLowerCase().indexOf(query.toLowerCase(), idx)) !== -1) {
-				const range = document.createRange();
-				range.setStart(node, idx);
-				range.setEnd(node, idx + query.length);
-				matchRanges.push({ range, preview: text.substr(idx, query.length) });
-				idx += query.length;
-				}
-			}
-			return matchRanges;
-		}
+        // --- Efficient n-gram counting ---
+        const maxNgram = 3;
+        const ngramCounts = {};
+        for (let l = 0; l < textrows.length; ++l) {
+            const line = textrows[l];
+            const words = (line.match(WORD_REGEX) || []);
+            for (let n = 1; n <= maxNgram; ++n) {
+                for (let i = 0; i <= words.length - n; i++) {
+                    // Lowercase the ngram for normalization, but keep apostrophes/hyphens
+                    const ngram = words.slice(i, i + n).join(' ').toLowerCase();
+                    ngramCounts[ngram] = (ngramCounts[ngram] || 0) + 1;
+                }
+            }
+        }
 
-		let matchRanges = search_text_for_strings(query);
+        // --- Substring Filter (case-insensitive, all n-grams are lowercase) ---
+        let candidateItems = Object.entries(ngramCounts)
+            .filter(([ng, count]) => (!query || ng.includes(query)) && count > 0);
 
-		const topper = document.createElement("div");
-		topper.style.border = "1px solid #646464";
-		topper.innerText = `${matchRanges.length} results`;
-		resultsContainer.appendChild(topper);
-		matchRanges.forEach(({ range, preview }, i) => {
-			const btn = document.createElement("div");
-			btn.style.border = "1px solid #646464";
-			let nearbytext = extract_surrounding_text(range, 8);  //8 chars clamped to word bounds
-			btn.innerHTML = `<a href="#"><span class="color_wordsearch_surrounding">${nearbytext.before}</span><span class="color_wordsearch_target">${nearbytext.middle}</span><span class="color_wordsearch_surrounding">${nearbytext.after}</span></a>`;
-			btn.onclick = () => {
-				const sel = window.getSelection();
-				sel.removeAllRanges();
-				sel.addRange(range);
+        // Sort
+        if (sortByFreq) {
+            candidateItems.sort((a, b) => b[1] - a[1]);
+        } else {
+            candidateItems.sort((a, b) => a[0].localeCompare(b[0]));
+        }
 
-				// Scroll the container
-				const rect = range.getBoundingClientRect();
-				const containerRect = gametext.getBoundingClientRect();
-				if (rect.top < containerRect.top || rect.bottom > containerRect.bottom) {
-					if (range.startContainer && range.startContainer.nodeType === Node.TEXT_NODE) {
-						const span = document.createElement("span");
-						span.style.display = "inline";
-						span.style.background = "transparent";
-						span.id = "temp-scroll-target";
-						range.insertNode(span); // Insert a temporary marker, then scroll to it
-						document.querySelector("#temp-scroll-target").scrollIntoView({ behavior: "smooth", block: "center" });
-						span.remove(); //remove temp marker
-					}
-				}
-			};
-			resultsContainer.appendChild(btn);
-		});
-	}
+        // Display results
+        for (let i = 0; i < candidateItems.length; ++i) {
+            let key = candidateItems[i][0];
+            let count = candidateItems[i][1];
+            const btn = document.createElement("div");
+            btn.style.border = "1px solid #646464";
+            btn.innerHTML = `<a href="#" id="id-candidate-${i}-nth" aria-label="id-candidate-${i}-nth">
+                <span class="color_wordsearch_surrounding" id="id-key-count-${i}-nth" aria-label="id-key-count-${i}-nth">${key} (${count})</span>
+            </a>`;
+            let searchstr = key;
+            btn.onclick = () => {
+                trigger_wordsearch_results(searchstr, i);
+            };
+            resultsContainer.appendChild(btn);
+        }
+        // Add count feedback
+        const countElem = document.createElement("span");
+        countElem.id = "wordsearch_candidates_count";
+        countElem.setAttribute("aria-label", "wordsearch_candidates_count");
+        countElem.textContent = `${candidateItems.length} result(s) found`;
+        resultsContainer.prepend(countElem);
+    }
+
+    function trigger_wordsearch_candidates_key(event) {
+        if (event.key === 'Enter') {
+            trigger_wordsearch_candidates();
+        }
+    }
+
+    // DOM-based, robust search for exact word/n-gram matches
+    function trigger_wordsearch_results(query, idParent) {
+        const resultsContainer = document.getElementById("wordsearch_results");
+        const gametext = document.getElementById("gametext");
+        query = query.trim();
+        resultsContainer.innerHTML = "";
+        if (!query) return;
+
+        const queryWords = query.match(WORD_REGEX) || [];
+        if (queryWords.length === 0) return;
+
+        // Helper: extract context for preview
+        function extract_surrounding_text(range, contextLength) {
+            const textNode = range.startContainer;
+            if (textNode.nodeType !== Node.TEXT_NODE) return;
+            const textContent = textNode.textContent;
+            const startOffset = range.startOffset;
+            const endOffset = range.endOffset;
+            let start = Math.max(0, startOffset - contextLength);
+            let end = Math.min(textContent.length, endOffset + contextLength);
+            start = textContent.lastIndexOf(' ', start);
+            end = textContent.indexOf(' ', end);
+            if (start === -1) start = 0;
+            if (end === -1) end = textContent.length;
+            const before = textContent.slice(start, startOffset);
+            const middle = textContent.slice(startOffset, endOffset);
+            const after = textContent.slice(endOffset, end);
+            return {"before": before, "middle": middle, "after": after, "full": `${before}${middle}${after}`};
+        }
+
+        // Search for exact matches in the DOM
+        function search_text_for_strings(queryWords) {
+            let matchRanges = [];
+            const walker = document.createTreeWalker(gametext, NodeFilter.SHOW_TEXT, null, false);
+            while (walker.nextNode()) {
+                const node = walker.currentNode;
+                const text = node.nodeValue;
+                let words = [];
+                let match;
+                while ((match = WORD_REGEX.exec(text)) !== null) {
+                    words.push({ word: match[0], index: match.index });
+                }
+                for (let i = 0; i <= words.length - queryWords.length; i++) {
+                    let windowWords = words.slice(i, i + queryWords.length);
+                    // Compare as lowercased, exact match
+                    if (windowWords.map(w => w.word.toLowerCase()).join(' ') === queryWords.map(w => w.toLowerCase()).join(' ')) {
+                        const startIdx = windowWords[0].index;
+                        const endIdx = windowWords[windowWords.length - 1].index + windowWords[windowWords.length - 1].word.length;
+                        const range = document.createRange();
+                        range.setStart(node, startIdx);
+                        range.setEnd(node, endIdx);
+                        matchRanges.push({ range, preview: text.slice(startIdx, endIdx) });
+                    }
+                }
+            }
+            return matchRanges;
+        }
+
+        let matchRanges = search_text_for_strings(queryWords);
+
+        const topper = document.createElement("div");
+        topper.style.border = "1px solid #646464";
+        topper.innerText = `${matchRanges.length} results`;
+        resultsContainer.appendChild(topper);
+        matchRanges.forEach(({ range, preview }, i) => {
+            const btn = document.createElement("div");
+            btn.style.border = "1px solid #646464";
+            let nearbytext = extract_surrounding_text(range, 8);
+            btn.innerHTML = `<a href="#" id="id-${idParent}-range-${i}-nth" aria-label="id-${idParent}-range-${i}-nth">
+                <span id="id-${idParent}-wordsearch-result-before-${i}-nth" aria-label="id-${idParent}-wordsearch-result-before-${i}-nth" class="color_wordsearch_surrounding">${nearbytext.before}</span>
+                <span id="id-${idParent}-wordsearch-result-target-${i}-nth" aria-label="id-${idParent}-wordsearch-result-target-${i}-nth" class="color_wordsearch_target">${nearbytext.middle}</span>
+                <span id="id-${idParent}-wordsearch-result-after-${i}-nth" aria-label="id-${idParent}-wordsearch-result-after-${i}-nth" class="color_wordsearch_surrounding">${nearbytext.after}</span>
+            </a>`;
+            btn.onclick = () => {
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+
+                // Scroll the container
+                const rect = range.getBoundingClientRect();
+                const containerRect = gametext.getBoundingClientRect();
+                if (rect.top < containerRect.top || rect.bottom > containerRect.bottom) {
+                    if (range.startContainer && range.startContainer.nodeType === Node.TEXT_NODE) {
+                        const span = document.createElement("span");
+                        span.style.display = "inline";
+                        span.style.background = "transparent";
+                        span.id = "temp-scroll-target";
+                        range.insertNode(span);
+                        document.querySelector("#temp-scroll-target").scrollIntoView({ behavior: "smooth", block: "center" });
+                        span.remove();
+                    }
+                }
+            };
+            resultsContainer.appendChild(btn);
+        });
+    }
 	</script>
 
 </head>
@@ -22924,7 +22948,7 @@ Current version indicated by LITEVER below.
 		<div id="outerbodybg"></div>
 		<div id="topmenu" class="topmenu">
 			<div style="width: 100%;">
-				<button title="Main Menu Options" class="navtoggler mainnav" type="button" onclick="toggleTopNav()">
+                <button title="Main Menu Options" class="navtoggler mainnav" type="button" onclick="toggleTopNav()" id="id-mobile-main-menu-options" aria-label="id-mobile-main-menu-options">
 					<span class="navbar-button-bar"></span>
 					<span class="navbar-button-bar"></span>
 					<span class="navbar-button-bar"></span>
@@ -22995,7 +23019,7 @@ Current version indicated by LITEVER below.
 				</span>
 				<div class="hidden" id="wordsearch_panel" style="flex:250px">
 					<div style="display:flex; padding:6px">
-					<input title="Word Search Input" class="form-control menuinput_inline" style="width: calc(100% - 34px); margin-right:2px;" type="text" placeholder="WordSearch" value="" onkeyup="trigger_wordsearch_candidates_key();" id="wordsearch_input">
+					<input title="Word Search Input" class="form-control menuinput_inline" style="width: calc(100% - 34px); margin-right:2px;" type="search" placeholder="WordSearch" value="" onkeyup="trigger_wordsearch_candidates_key(event);" id="wordsearch_input">
 					<button title="Perform WordSearch" type="button" class="btn btn-primary" style="width:30px;padding:4px 4px;" onclick="trigger_wordsearch_candidates();">🔎</button>
 					</div>
 					<div style="display:flex; padding:6px">
