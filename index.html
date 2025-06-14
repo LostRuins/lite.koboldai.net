@@ -11164,6 +11164,7 @@ Current version indicated by LITEVER below.
 						el.value = values[i];
 						dropdown.appendChild(el);
 					}
+					change_admin_config_selection();
 					document.getElementById("admincontainer").classList.remove("hidden");
 				}
 				else
@@ -11189,6 +11190,36 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	function change_admin_config_selection()
+	{
+		let targetfile = document.getElementById("adminconfigdropdown").value;
+		if(targetfile && targetfile.endsWith(".gguf"))
+		{
+			let overridedropdown = document.getElementById("adminconfigoverridedropdown");
+			overridedropdown.classList.remove("hidden");
+			var dropdown = document.getElementById("adminconfigdropdown");
+			for (var i = overridedropdown.options.length; i >= 0; i--) {
+				var option = overridedropdown.options[i];
+				overridedropdown.remove(option);
+			}
+			var el = document.createElement("option");
+			el.textContent = "Default Config";
+			el.value = "";
+			overridedropdown.appendChild(el);
+			for(var i=0;i<dropdown.options.length;++i)
+			{
+				let str = dropdown.options[i].value;
+				if(str.endsWith(".gguf") || str=="unload_model")
+				{continue;}
+				var el = document.createElement("option");
+				el.textContent = str;
+				el.value = str;
+				overridedropdown.appendChild(el);
+			}
+		}else{
+			document.getElementById("adminconfigoverridedropdown").classList.add("hidden");
+		}
+	}
 	var adminrebootflag = 0;
 	function trigger_admin_reload()
 	{
@@ -11199,7 +11230,14 @@ Current version indicated by LITEVER below.
 			msgbox("No config file was selected.");
 			return;
 		}
+
 		let header = {'Content-Type': 'application/json'};
+		let payload = {"filename": targetfile};
+		if(!document.getElementById("adminconfigoverridedropdown").classList.contains("hidden"))
+		{
+			payload["overrideconfig"] = document.getElementById("adminconfigoverridedropdown").value;
+		}
+
 		if(last_admin_key!="")
 		{
 			header['Authorization'] = 'Bearer ' + last_admin_key;
@@ -11207,9 +11245,7 @@ Current version indicated by LITEVER below.
 		fetch(custom_kobold_endpoint + koboldcpp_admin_reload_endpoint, {
 			method: 'POST',
 			headers: header,
-			body: JSON.stringify({
-				"filename": targetfile
-			})
+			body: JSON.stringify(payload)
 		})
 		.then(x => x.json())
 		.then(values => {
@@ -25224,7 +25260,9 @@ Current version indicated by LITEVER below.
 			<div>
 				<b class="color_white" style="padding: 5px;">Change Loaded Model / Config:</b><br>
 				<div style="display:flex;padding: 5px;">
-					<select title="Select New Config" style="padding:4px; width:calc(100% - 150px)" class="form-control" id="adminconfigdropdown">
+					<select title="Select New Config" style="padding:4px; width:100%" class="form-control" id="adminconfigdropdown" onchange="change_admin_config_selection()">
+					</select>
+					<select title="Override Config" style="padding:4px; width:100%" class="form-control hidden" id="adminconfigoverridedropdown">
 					</select>
 					<button type="button" style="margin-left:2px;width:146px" class="btn btn-primary" onclick="trigger_admin_reload()">Reload KoboldCpp</button>
 				</div>
