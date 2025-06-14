@@ -22705,10 +22705,17 @@ Current version indicated by LITEVER below.
 		resultsContainer.innerHTML = "";
 
 		let ngramParser = function (text, n) {
-			const words = text.split(/\s+/).filter(word => word.length > 0);
+			const words = text.split(/ +/).filter(word => word.length > 0);
 			const ngrams = {};
+			let prevNgram = null;
+
 			for (let i = 0; i <= words.length - n; i++) {
-				const ngram = words.slice(i, i + n).join(' ');
+				let ngram = words.slice(i, i + n).join(' ');
+				//strip leading and trailing punctuation
+				ngram = ngram.replace(/^[,\.?!()\[\]{}\`:;\-\'\"—]+|[,\.?!()\[\]{}\`:;\-\'\"—]+$/g, '');
+				if (ngram === prevNgram) continue; // skip duplicate overlaps
+				prevNgram = ngram;
+
 				if (ngrams[ngram]) {
 					ngrams[ngram]++;
 				} else {
@@ -22717,35 +22724,48 @@ Current version indicated by LITEVER below.
 			}
 			const sortedNgrams = Object.entries(ngrams).sort((a, b) => b[1] - a[1]);
 			return sortedNgrams.map(entry => ({ ng: entry[0], cnt: entry[1] }));
-		}
+		};
 
 		let prepare_candidates_from_text = function(query) {
 			const fullgametext = concat_gametext(true, "").toLowerCase();
 			let querylc = query.toLowerCase();
 			let candidateDict = {};
+
+			let textrows = fullgametext.split("\n").filter(x=>x);
+
+			for(let l=0;l<textrows.length;++l)
+			{
+				for(let i=1;i<=3;++i) //ngram of 3
+				{
+					let res = ngramParser(textrows[l],i);
+					if(querylc!="")
+					{
+						res = res.filter(x=>x.ng.toLowerCase().includes(querylc));
+					}
+					let lim = Math.min(res.length,250);
+					for(let j=0;j<lim;++j)
+					{
+						if (!candidateDict[res[j].ng]) {
+							candidateDict[res[j].ng] = res[j].cnt;
+						} else {
+							candidateDict[res[j].ng] += res[j].cnt;
+						}
+					}
+				}
+			}
+
+			//todo: counts are not correct because of substrings. let's manually count each item for now
+			for(let key in candidateDict)
+			{
+				candidateDict[key] = (fullgametext.split(key).length - 1);
+			}
+
 			if(querylc!="")
 			{
 				let basecount = (fullgametext.split(querylc).length - 1); //count of the pure substring
 				candidateDict[query] = basecount;
 			}
 
-			for(let i=1;i<=3;++i) //ngram of 3
-			{
-				let res = ngramParser(fullgametext,i);
-				if(querylc!="")
-				{
-					res = res.filter(x=>x.ng.toLowerCase().includes(querylc));
-				}
-				let lim = Math.min(res.length,250);
-				for(let j=0;j<lim;++j)
-				{
-					if (!candidateDict[res[j].ng]) {
-						candidateDict[res[j].ng] = res[j].cnt;
-					} else {
-						candidateDict[res[j].ng] = Math.max(candidateDict[res[j].ng], res[j].cnt);
-					}
-				}
-			}
 			return candidateDict;
 		}
 
@@ -22781,7 +22801,7 @@ Current version indicated by LITEVER below.
 			let count = candidateItems[i][1];
 			const btn = document.createElement("div");
 			btn.style.border = "1px solid #646464";
-			btn.innerHTML = `<a href="#"><span class="color_wordsearch_surrounding">${key} (${count}+)</span></a>`;
+			btn.innerHTML = `<a href="#"><span class="color_wordsearch_surrounding">${key} (${count})</span></a>`;
 			let searchstr = key;
 			btn.onclick = () => {
 				trigger_wordsearch_results(searchstr);
@@ -23369,7 +23389,7 @@ Current version indicated by LITEVER below.
 							</select>
 							<button type="button" class="btn btn-primary" id="btn_aesthetics" onclick="openAestheticUISettingsMenu()" style="border-color: #bbbbbb; width:100%; height:30px; padding:0px 8px; margin: 3px 0 3px 0;">⚙️ Customize</button>
 							<div id="classicmodeoptions" style="margin:4px;" class="settinglabel hidden">
-							<div class="justifyleft settingsmall">WordSearch Tool <span class="helpicon">?<span class="helptext">Shows a tool that displays word frequency and locations, inspired by trincadev MyGhostWriter. Counts across newlines may be inaccurate.</span></span></div>
+							<div class="justifyleft settingsmall">Word Frequency Analysis <span class="helpicon">?<span class="helptext">Shows a tool that displays word frequency and locations, inspired by trincadev MyGhostWriter. Counts across newlines may be inaccurate.</span></span></div>
 							   <input title="WordSearch Tool" type="checkbox" id="wordsearch_toggle" style="margin:0px 0px 0px 0px;">
 							</div>
 							<div id="guitypedesc" class="settingsdesctxt"></div>
