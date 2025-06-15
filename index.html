@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 252;
+	const LITEVER = 253;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3097,6 +3097,7 @@ Current version indicated by LITEVER below.
 	const HD_RES_PX = 768;
 	const VHD_RES_PX = 960;
 	const NO_HD_RES_PX = 512;
+	const PREVIEW_RES_PX = 200;
 	const AVATAR_PX = 384;
 	const SAVE_SLOTS = 10;
 	const num_regex_rows = 4;
@@ -11163,6 +11164,7 @@ Current version indicated by LITEVER below.
 						el.value = values[i];
 						dropdown.appendChild(el);
 					}
+					change_admin_config_selection();
 					document.getElementById("admincontainer").classList.remove("hidden");
 				}
 				else
@@ -11188,6 +11190,36 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	function change_admin_config_selection()
+	{
+		let targetfile = document.getElementById("adminconfigdropdown").value;
+		if(targetfile && targetfile.endsWith(".gguf"))
+		{
+			let overridedropdown = document.getElementById("adminconfigoverridedropdown");
+			overridedropdown.classList.remove("hidden");
+			var dropdown = document.getElementById("adminconfigdropdown");
+			for (var i = overridedropdown.options.length; i >= 0; i--) {
+				var option = overridedropdown.options[i];
+				overridedropdown.remove(option);
+			}
+			var el = document.createElement("option");
+			el.textContent = "Default Config";
+			el.value = "";
+			overridedropdown.appendChild(el);
+			for(var i=0;i<dropdown.options.length;++i)
+			{
+				let str = dropdown.options[i].value;
+				if(str.endsWith(".gguf") || str=="unload_model")
+				{continue;}
+				var el = document.createElement("option");
+				el.textContent = str;
+				el.value = str;
+				overridedropdown.appendChild(el);
+			}
+		}else{
+			document.getElementById("adminconfigoverridedropdown").classList.add("hidden");
+		}
+	}
 	var adminrebootflag = 0;
 	function trigger_admin_reload()
 	{
@@ -11198,7 +11230,14 @@ Current version indicated by LITEVER below.
 			msgbox("No config file was selected.");
 			return;
 		}
+
 		let header = {'Content-Type': 'application/json'};
+		let payload = {"filename": targetfile};
+		if(!document.getElementById("adminconfigoverridedropdown").classList.contains("hidden"))
+		{
+			payload["overrideconfig"] = document.getElementById("adminconfigoverridedropdown").value;
+		}
+
 		if(last_admin_key!="")
 		{
 			header['Authorization'] = 'Bearer ' + last_admin_key;
@@ -11206,9 +11245,7 @@ Current version indicated by LITEVER below.
 		fetch(custom_kobold_endpoint + koboldcpp_admin_reload_endpoint, {
 			method: 'POST',
 			headers: header,
-			body: JSON.stringify({
-				"filename": targetfile
-			})
+			body: JSON.stringify(payload)
 		})
 		.then(x => x.json())
 		.then(values => {
@@ -13672,6 +13709,17 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	function simplecssexample()
+	{
+		let simplemodscript = `/* This custom CSS changes all buttons to yellow */
+		.btn-primary {
+			color: black!important;
+			background-color: yellow!important;
+			border-color: black!important;
+		}
+		`;
+		document.getElementById("inputboxcontainerinputarea").value = simplemodscript;
+	}
 	function simplemodexample()
 	{
 		let simplemodscript = `// This mod changes your top menu to a yellow gradient, then displays the current temperature setting as a popup\n`
@@ -13695,7 +13743,7 @@ Current version indicated by LITEVER below.
 					}
 				}
 			} catch (e) { }
-			let txt = `Here, you can apply third-party mod scripts shared by other users.<br><br><span class='color_red'>Caution: This mod will have full access to your story and API keys, so only run third-party mods that you trust!<br><br>Mods must always be manually applied every time unless 'Apply Mod On Startup' is selected. If a startup mod breaks KoboldAI Lite, add ?resetmod=1 to the url to uninstall it.</span><br><br>Want to start modding? <a href='#' class='color_blueurl' onclick='simplemodexample()'>Click here</a> to load a simple example mod.<br><br><div><span>Apply Mod On Startup? (Extreme Caution!) </span><input type='checkbox' id='apply_mod_on_start' style='vertical-align: top;' ${applyonstart?'checked':''}></div>`;
+			let txt = `Here, you can apply third-party mod scripts shared by other users.<br><br><span class='color_red'>Caution: This mod will have full access to your story and API keys, so only run third-party mods that you trust!<br><br>Mods must always be manually applied every time unless 'Apply Mod On Startup' is selected. If a startup mod breaks KoboldAI Lite, add ?resetmod=1 to the url to uninstall it.</span><br><br>Want to start modding? <a href='#' class='color_blueurl' onclick='simplemodexample()'>Click here</a> to load a simple example mod.<br><br><div><span>Apply Mod On Startup? (Extreme Caution!) </span><input type='checkbox' id='apply_mod_on_start' style='vertical-align: top;' ${applyonstart?'checked':''}></div><div><button type="button" class="btn btn-primary" onclick="load_inputbox_from_file()">Import UserMod From File</button></div>`;
 			inputBoxOkCancel(txt,"Apply Third-Party Mod",currmod,"Paste Mod Script Here",()=>{
 			let userinput = getInputBoxValue().trim();
 			applyonstart = (document.getElementById("apply_mod_on_start").checked?true:false);
@@ -13713,18 +13761,42 @@ Current version indicated by LITEVER below.
 			});
 		});
 	}
+	function load_inputbox_from_file()
+	{
+		promptUserForLocalFile((fileDetails) => {
+			try {
+				let { file, fileName, ext, content, plaintext } = fileDetails;
+				if(plaintext && plaintext!="")
+				{
+					if(document.getElementById("inputboxcontainerinputarea").classList.contains("hidden"))
+					{
+						document.getElementById("inputboxcontainerinput").value = plaintext;
+					}
+					else
+					{
+						document.getElementById("inputboxcontainerinputarea").value = plaintext;
+					}
+				}
+			}
+			catch (e) {
+				console.log("Load Inputbox File Failed: " + e);
+			}
+		});
+	}
 
 	function sanitize_css(input)
 	{
-		input = input.replace(/<\s*\/?\s*\w+\s*[^>]*>/gi, ""); //replace html tags
-		input = input.replace(/</g, "");  // Remove any remaining `<` characters
-		input = input.replace(/(?:javascript|data|vbscript|file):/gi, "");
+		input = input.replace(/<\s*\/?\s*\w+\s*[^>]*>/gi, "");
+		input = input.replace(/</g, "");
+		input = input.replace(/(?:javascript|vbscript|file):/gi, "");
+		//remove all data elements that aren't jpg, png, gif, webp;base64
+		input = input.replace(/data:(?!image\/(jpeg|png|gif|webp);base64,)[^)'";\s]*/gi, "");
 		return input;
 	}
 	function apply_custom_css()
 	{
 		indexeddb_load("savedcustomcss","").then(currcss=>{
-			inputBoxOkCancel("Here, you can apply third-party custom CSS styles shared by other users.<br><br><span class='color_red'>Caution: This will modify the existing document, so only use third-party CSS styles that you trust! Custom CSS is persistent, but can be reset in this menu.</span><br><br>You can return to default styles by clearing the box below. If you get stuck, add ?resetcss=1 to the URL to clear custom styles.","Apply Custom CSS Styles",currcss,"Paste CSS Styles Here",()=>{
+			inputBoxOkCancel(`Here, you can apply third-party custom CSS styles shared by other users.<br><br><span class='color_red'>Caution: This will modify the existing document, so only use third-party CSS styles that you trust! Custom CSS is persistent, but can be reset in this menu.</span><br><br>Need help? <a href='#' class='color_blueurl' onclick='simplecssexample()'>Click here</a> to load a simple example CSS theme. You can return to default styles by clearing the box below. If you get stuck, add ?resetcss=1 to the URL to clear custom styles. <div><button type="button" class="btn btn-primary" onclick="load_inputbox_from_file()">Import CSS From File</button></div>`,"Apply Custom CSS Styles",currcss,"Paste CSS Styles Here",()=>{
 			let userinput = sanitize_css(getInputBoxValue().trim());
 			indexeddb_save("savedcustomcss", userinput);
 			let styleElement = document.getElementById('custom_css');
@@ -17414,7 +17486,7 @@ Current version indicated by LITEVER below.
 	}
 
 	function render_image_html(data, pend_txt = "", siclass="storyimgfloat") {
-		var dim = (localsettings.opmode == 2 ? 160 : 180); //adventure mode has smaller pictures
+		var dim = PREVIEW_RES_PX; //image preview. adventure mode has smaller pictures
 		dimW = dim;
 		dimH = dim;
 		let reinvertcolor = localsettings.invert_colors?" invert_colors":"";
@@ -21746,7 +21818,7 @@ Current version indicated by LITEVER below.
 			}
 
 			this.code_block_background = 'rgb(0, 0, 0)';
-			this.code_block_foreground = 'rgb(180, 35, 40)';
+			this.code_block_foreground = 'rgb(210, 50, 50)';
 		}
 
 		padding() { return `${this.background_padding[2]}px ${this.background_padding[1]}px ${this.background_padding[3]}px ${this.background_padding[0]}px`; }
@@ -22049,6 +22121,11 @@ Current version indicated by LITEVER below.
 		`<style>
 			.you-portrait-image`+classSuffixStr+` {margin: 10px 6px; background:url(`+ as.you_portrait +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
 			.AI-portrait-image`+classSuffixStr+` {margin: 10px 6px; background:url(`+ (as.AI_portrait!="default"?as.AI_portrait:niko_square) +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
+			code
+			{
+				color: ${as.code_block_foreground};
+				background-color: ${as.code_block_background};
+			}
 		</style>
 		`;
 
@@ -22211,7 +22288,7 @@ Current version indicated by LITEVER below.
 					});
 				}
 				else {
-					blocks[i] = blocks[i].replaceAll('```', '`').replaceAll('``', '`').replace(/`(.*?)`/g, function (m,m2) {return `<code style='background-color:black'>${m2.replace(/[“”]/g, "\"")}</code>`;}); //remove fancy quotes too
+					blocks[i] = blocks[i].replaceAll('```', '`').replaceAll('``', '`').replace(/`(.*?)`/g, function (m,m2) {return `<code>${m2.replace(/[“”]/g, "\"")}</code>`;}); //remove fancy quotes too
 				}
 			}
 			return [blocks.join(''),codestashes];
@@ -22238,7 +22315,7 @@ Current version indicated by LITEVER below.
 	}
 
 	function updateTextPreview() {
-		let preview = `You are Mikago, a prestigious bot that's a supervillain.\n\nRoleplay in first person, be prestigious, don't be a bot. This is a fantasy world.\n\nCode blocks should be wrapped in triple backticks, like so:\n\`\`\`\n<Some_\n-- multiline\n--- code here$\n\`\`\`\n[AI_REPLY]\n*takes my hat off to greet the squad* "Greetings, I am Mikago, the prestigious!" *bows to the crew*\n*clears my throat* "Now, I'm sure there are many questions, but all will be answered in due time." *deep breath*\n[USER_REPLY]\n*draws my sword* "Yes. You should know the code to calculate the factorial of a number."\nThe crew also draws their weapons and point them at you, not giving you any space.\n[AI_REPLY]\n*backs off* "Woah, easy there.." *makes some steps backwards, but then stops*\n"I would normally take this as an insult to my prestige, but I understand your caution.." *takes a deep breath*\n"Well, if it's to prove myself, here goes the python code to calculate the factorial of a number.."\n\nMikago opens a live-code-portal with his magic and writes the code that was requested.\n\`\`\`\ndef factorial(n):\n  if n == 0:\n    return 1\n  else:\n    return n * factorial(n-1)\n\`\`\`\n*looks at you, getting impatient* "Are we ok now.. or do you want me to write the code of a game next?"\n[USER_REPLY]\n*sheathes my sword and approaches for a hug* "Oh, Mikago, my old friend, it is really you!"`;
+		let preview = `You are Mikago, a prestigious bot that's a supervillain.\n\nRoleplay in first person, be prestigious, don't be a bot. This is a fantasy world.\n\nCode blocks should be wrapped in triple backticks, like so:\n\`\`\`\n-- multiline\n--- code here\n\`\`\`\n[AI_REPLY]\n*takes my hat off to greet the squad* "Greetings, I am Mikago, the prestigious!" *bows to the crew*\n*clears my throat* "Now, I'm sure there are many questions, but all will be answered in due time." *deep breath*\n[USER_REPLY]\n*draws my sword* "Yes. You should know the code to calculate the factorial of a number."\nThe crew also draws their weapons and point them at you, not giving you any space.\n[AI_REPLY]\n*backs off* "Woah, easy there.." *makes some steps backwards, but then stops*\n"I would normally take this as an insult to my prestige, but I understand your caution.." *takes a deep breath*\n"Well, if it's to prove myself, here goes the python code to calculate the factorial of a number.."\n\nMikago opens a live-code-portal with his magic and writes the code that was requested.\n\`\`\`\ndef factorial(n):\n  if n == 0:\n    return 1\n  else:\n    return n * factorial(n-1)\n\`\`\`\n*looks at you, getting impatient* "Are we ok now.. or do you want me to write the code of a game next?"\n[USER_REPLY]\n*sheathes my sword and approaches for a hug* "Oh, Mikago, my old friend, it is really you!"`;
 
 		if(localsettings.opmode==3)
 		{
@@ -23101,7 +23178,7 @@ Current version indicated by LITEVER below.
 					<button title="Toggle Adventure Mode" onclick="btn_adventure_mode()" id="chat_btnmode_adventure" class="chat_btnmode_adventure actionmode hidden mainnav" type="button"></button>
 					<div id="cht_inp_bg" class="cht_inp_bg">
 					<div class="cht_inp_bg_inner" id="cht_inp_lengthtester" style="white-space: nowrap; visibility: hidden; height: 0px; position:absolute; width: auto;"></div>
-					<textarea title="User Input" class="cht_inp_bg_inner mainnav" id="cht_inp" type="text" name="chtchtinp"  role="presentation" autocomplete="noppynop" spellcheck="true" rows="1" wrap="on" placeholder="Type a message" value="" oninput="update_submit_button();chat_resize_input();" onpaste="return img_paste_event(event)" onkeypress="return chat_handle_typing(event)"/></textarea>
+					<textarea title="User Input" class="cht_inp_bg_inner mainnav" id="cht_inp" type="text" name="chtchtinp"  role="presentation" autocomplete="noppynop" spellcheck="true" rows="1" wrap="on" placeholder="Type a message" value="" oninput="update_submit_button();chat_resize_input();" onpaste="return img_paste_event(event)" onkeypress="return chat_handle_typing(event)"></textarea>
 					</div>
 					<button title="Submit" onclick="submit_generation_button(true)" onmousedown="ptt_start()" onmouseup="ptt_end()" id="chat_msg_send_btn" class="chat_msg_send_btn mainnav" type="button"></button>
 					<button title="Abort" onclick="abort_generation()" id="chat_msg_send_btn_abort" class="hidden chat_msg_send_btn_abort mainnav" type="button"></button>
@@ -23135,7 +23212,7 @@ Current version indicated by LITEVER below.
 						<div class="corpo_chat_outer">
 							<button title="Image" onclick="add_img_btn_menu()" id="corpo_chat_img_btn" class="corpo_chat_img_btn mainnav" type="button"></button>
 							<div class="corpo_chat_inner" id="corpo_cht_inp_lengthtester" style="white-space: nowrap; visibility: hidden; height: 0px; position:absolute; width: auto;"></div>
-							<textarea title="User Input" class="corpo_chat_inner mainnav" id="corpo_cht_inp" type="text" name="crpchtinp"  role="presentation" autocomplete="noppynop" spellcheck="true" rows="1" wrap="on" placeholder="Message KoboldAI" value="" oninput="update_submit_button();chat_resize_input();" onpaste="return img_paste_event(event)" onkeypress="return chat_handle_typing(event)"/></textarea>
+							<textarea title="User Input" class="corpo_chat_inner mainnav" id="corpo_cht_inp" type="text" name="crpchtinp"  role="presentation" autocomplete="noppynop" spellcheck="true" rows="1" wrap="on" placeholder="Message KoboldAI" value="" oninput="update_submit_button();chat_resize_input();" onpaste="return img_paste_event(event)" onkeypress="return chat_handle_typing(event)"></textarea>
 							<button title="Submit" onclick="submit_generation_button(true)" id="corpo_chat_send_btn" class="corpo_chat_send_btn mainnav" type="button"></button>
 							<button title="Abort" onclick="abort_generation()" id="corpo_chat_send_btn_abort" class="hidden corpo_chat_send_btn_abort mainnav" type="button"></button>
 						</div>
@@ -23393,7 +23470,7 @@ Current version indicated by LITEVER below.
 							</select>
 							<button type="button" class="btn btn-primary" id="btn_aesthetics" onclick="openAestheticUISettingsMenu()" style="border-color: #bbbbbb; width:100%; height:30px; padding:0px 8px; margin: 3px 0 3px 0;">⚙️ Customize</button>
 							<div id="classicmodeoptions" style="margin:4px;" class="settinglabel hidden">
-							<div class="justifyleft settingsmall">WordSearch Tool <span class="helpicon">?<span class="helptext">Shows a tool that displays word frequency and locations, inspired by trincadev MyGhostWriter. Counts across newlines may be inaccurate.</span></span></div>
+							<div class="justifyleft settingsmall">Word Frequency Analysis <span class="helpicon">?<span class="helptext">Shows a tool that displays word frequency and locations, inspired by trincadev MyGhostWriter. Counts across newlines may be inaccurate.</span></span></div>
 							   <input title="WordSearch Tool" type="checkbox" id="wordsearch_toggle" style="margin:0px 0px 0px 0px;">
 							</div>
 							<div id="guitypedesc" class="settingsdesctxt"></div>
@@ -24034,7 +24111,7 @@ Current version indicated by LITEVER below.
 									<option value="voiceclone">voiceclone</option>
 									</select></td>
 									<td><input class="settinglabel miniinput" type="text" value="" placeholder="(Name)" id="kcpp_tts_voice_custom" style="margin-left:3px; height:18px; width:44px; padding: 2px;"></td>
-									<td><button id="kcpp_tts_voice_clone" type="button" class="btn btn-primary" style="width:100%; padding:2px 3px;margin-top:2px;font-size:11px;" onclick="set_voice_clone()">Set VCJson</button></tr>
+									<td><button id="kcpp_tts_voice_clone" type="button" class="btn btn-primary" style="width:100%; padding:2px 3px;margin-top:2px;font-size:11px;" onclick="set_voice_clone()">Set VCJson</button></td></tr>
 								</table>
 								</div>
 							</div>
@@ -24291,7 +24368,7 @@ Current version indicated by LITEVER below.
 					</div>
 					<div id="expandguidance" class="hidden">
 						<div class="color_red hidden" id="noguidance">Classifier-Free Guidance may be unavailable.</div>
-						<div style="color:#ffffff;">Classifier-Free Guidance prompt functions as a negative prompt when Guidance Scale is above 1, and a positive prompt at Guidance Scale is below 1. Disabled if scale is exactly 1 or CFG prompt is blank.</em><br></div>
+						<div style="color:#ffffff;">Classifier-Free Guidance prompt functions as a negative prompt when Guidance Scale is above 1, and a positive prompt at Guidance Scale is below 1. Disabled if scale is exactly 1 or CFG prompt is blank.<br></div>
 						<div style="display: flex; column-gap: 4px; margin-top: 4px; margin-bottom: 4px;">
 						<input class="form-control menuinput_inline" type="text" placeholder="Enter CFG Prompt" value="" id="guidance_prompt">
 						<div style="padding:1px" class="settinglabel">Scale<br>(0-5): </div><input class="form-control menuinput_inline" style="margin-left:4px;width:70px;" inputmode="numeric" placeholder="(Off)" value="" id="guidance_scale"></div>
@@ -25192,7 +25269,9 @@ Current version indicated by LITEVER below.
 			<div>
 				<b class="color_white" style="padding: 5px;">Change Loaded Model / Config:</b><br>
 				<div style="display:flex;padding: 5px;">
-					<select title="Select New Config" style="padding:4px; width:calc(100% - 150px)" class="form-control" id="adminconfigdropdown">
+					<select title="Select New Config" style="padding:4px; width:100%" class="form-control" id="adminconfigdropdown" onchange="change_admin_config_selection()">
+					</select>
+					<select title="Override Config" style="padding:4px; width:100%" class="form-control hidden" id="adminconfigoverridedropdown">
 					</select>
 					<button type="button" style="margin-left:2px;width:146px" class="btn btn-primary" onclick="trigger_admin_reload()">Reload KoboldCpp</button>
 				</div>
@@ -25513,7 +25592,7 @@ Current version indicated by LITEVER below.
 
 	<div class="popupcontainer flex hidden" id="inputboxcontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup flexsize moderate">
+		<div class="nspopup flexsize higher">
 			<div class="popuptitlebar">
 				<div class="popuptitletext" id="inputboxcontainertitle"></div>
 			</div>
@@ -25549,7 +25628,7 @@ Current version indicated by LITEVER below.
 
 	<div class="popupcontainer flex hidden" id="msgboxcontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup flexsizesmall moderate">
+		<div class="nspopup flexsizesmall higher">
 			<div class="popuptitlebar">
 				<div class="popuptitletext" id="msgboxtitle"></div>
 			</div>
