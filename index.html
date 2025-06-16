@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script>
-	const LITEVER = 254;
+	const LITEVER = 255;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3032,6 +3032,7 @@ Current version indicated by LITEVER below.
 
 	const default_oai_image_endpoint = "/images/generations";
 	const default_oai_tts_endpoint = "/audio/speech";
+	const default_oai_embeddings_endpoint = "/embeddings";
 	const default_dalle_model_name = "dall-e-3";
 
 	const claude_submit_endpoint = "/complete";
@@ -3137,13 +3138,12 @@ Current version indicated by LITEVER below.
 	var current_wi = []; //each item stores a wi object.
 	var wi_insertlocation = 0; //after memory
 	var wi_searchdepth = 0; //search everything
-	var documentdb_enabled = false;
+	var documentdb_provider = 0; //0 = disables, 1 = textdb, 2 = kcpp, 3 = openai embeddings
 	var documentdb_searchhistory = false;
 	var documentdb_numresults = 3;
 	var documentdb_searchrange = 300;
 	var documentdb_chunksize = 800;
 	var documentdb_data = "";
-	var documentdb_useembeddings = false
 	var generateimagesinterval = 750; //if generated images is enabled, it will trigger after every 700 new characters in context.
 	var nextgeneratedimagemilestone = generateimagesinterval; //used to keep track of when to generate the next image
 	var image_db = {}; //stores a dictionary of pending images
@@ -3247,6 +3247,8 @@ Current version indicated by LITEVER below.
 		saved_dalle_model: default_dalle_model_name,
 		saved_oai_tts_key: "",
 		saved_oai_tts_url: (default_oai_base + "/v1" + default_oai_tts_endpoint),
+		saved_oai_embd_key: "",
+		saved_oai_embd_url: (default_oai_base + "/v1" + default_oai_embeddings_endpoint),
 		saved_openrouter_key: "",
 		saved_mistralai_key: "",
 		saved_featherless_key: "",
@@ -6847,6 +6849,29 @@ Current version indicated by LITEVER below.
 		},false);
 	}
 
+	function set_oai_embd_key()
+	{
+		inputBox("Enter OpenAI Compatible Embeddings API Key","OpenAI Compatible Embeddings API Key",localsettings.saved_oai_embd_key,"Input OpenAI Compatible Embeddings API Key", ()=>{
+			let userinput = getInputBoxValue();
+			userinput = userinput.trim();
+			if (userinput != null && userinput!="") {
+				localsettings.saved_oai_embd_key = userinput.trim();
+			}
+		},false,false,true);
+	}
+	function set_oai_embd_url()
+	{
+		inputBox("Enter OpenAI Compatible TTS API URL","OpenAI Compatible Embeddings API URL",localsettings.saved_oai_embd_url,"Input OpenAI Compatible Embeddings API URL", ()=>{
+			let userinput = getInputBoxValue();
+			userinput = userinput.trim();
+			if (userinput != null && userinput!="") {
+				localsettings.saved_oai_embd_url = userinput.trim();
+			}else{
+				localsettings.saved_oai_embd_url = (default_oai_base + "/v1" + default_oai_embeddings_endpoint);
+			}
+		},false);
+	}
+
 	function generate_dalle_image(req_payload, onImagesDone)
 	{
 		//split the prompt
@@ -7356,13 +7381,12 @@ Current version indicated by LITEVER below.
 		new_save_storyobj.wisearchdepth = wi_searchdepth;
 		new_save_storyobj.wiinsertlocation = wi_insertlocation;
 		new_save_storyobj.personal_notes = personal_notes;
-		new_save_storyobj.documentdb_enabled = documentdb_enabled;
+		new_save_storyobj.documentdb_provider = documentdb_provider;
 		new_save_storyobj.documentdb_searchhistory = documentdb_searchhistory;
 		new_save_storyobj.documentdb_numresults = documentdb_numresults;
 		new_save_storyobj.documentdb_searchrange = documentdb_searchrange;
 		new_save_storyobj.documentdb_chunksize = documentdb_chunksize;
 		new_save_storyobj.documentdb_data = documentdb_data;
-		new_save_storyobj.documentdb_useembeddings = documentdb_useembeddings;
 
 		if (export_settings) {
 			new_save_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
@@ -7648,9 +7672,9 @@ Current version indicated by LITEVER below.
 				if (storyobj.personal_notes) {
 					personal_notes = storyobj.personal_notes;
 				}
-				if(storyobj.documentdb_enabled)
+				if(storyobj.documentdb_provider)
 				{
-					documentdb_enabled = storyobj.documentdb_enabled;
+					documentdb_provider = storyobj.documentdb_provider;
 				}
 				if(storyobj.documentdb_searchhistory)
 				{
@@ -7672,11 +7696,6 @@ Current version indicated by LITEVER below.
 				{
 					documentdb_data = storyobj.documentdb_data;
 				}
-				if(storyobj.documentdb_useembeddings)
-				{
-					documentdb_useembeddings = storyobj.documentdb_useembeddings;
-				}
-
 
 				// adapting legacy fields - these are all now moved to SETTINGS
 				if (storyobj.extrastopseq) {
@@ -7794,6 +7813,8 @@ Current version indicated by LITEVER below.
 					let tmp_oai4 = localsettings.saved_dalle_url;
 					let tmp_oai5 = localsettings.saved_oai_tts_key;
 					let tmp_oai6 = localsettings.saved_oai_tts_url;
+					let tmp_oai7 = localsettings.saved_oai_embd_key;
+					let tmp_oai8 = localsettings.saved_oai_embd_url;
 					let tmp_or1 = localsettings.saved_openrouter_key;
 					let tmp_mai = localsettings.saved_mistralai_key;
 					let tmp_fai = localsettings.saved_featherless_key;
@@ -7850,6 +7871,8 @@ Current version indicated by LITEVER below.
 					localsettings.saved_dalle_url = tmp_oai4;
 					localsettings.saved_oai_tts_key = tmp_oai5;
 					localsettings.saved_oai_tts_url = tmp_oai6;
+					localsettings.saved_oai_embd_key = tmp_oai7;
+					localsettings.saved_oai_embd_url = tmp_oai8;
 					localsettings.saved_openrouter_key = tmp_or1;
 					localsettings.saved_mistralai_key = tmp_mai;
 					localsettings.saved_featherless_key = tmp_fai;
@@ -11079,6 +11102,8 @@ Current version indicated by LITEVER below.
 					localsettings.saved_dalle_url = custom_oai_endpoint + default_oai_image_endpoint;
 					localsettings.saved_oai_tts_key = custom_oai_key;
 					localsettings.saved_oai_tts_url = custom_oai_endpoint + default_oai_tts_endpoint;
+					localsettings.saved_oai_embd_key = custom_oai_key;
+					localsettings.saved_oai_embd_url = custom_oai_endpoint + default_oai_embeddings_endpoint;
 				}
 				else if(epchoice==7)
 				{
@@ -13622,13 +13647,12 @@ Current version indicated by LITEVER below.
 		current_anotetemplate = document.getElementById("anotetemplate").value;
 		anote_strength = document.getElementById("anote_strength").value;
 		newlineaftermemory = (document.getElementById("newlineaftermemory").checked?true:false);
-		documentdb_enabled = document.getElementById("documentdb_enabled").checked?true:false;
+		documentdb_provider = document.getElementById("documentdb_provider").value;
 		documentdb_searchhistory = document.getElementById("documentdb_searchhistory").checked?true:false;
 		documentdb_numresults = document.getElementById("documentdb_numresults").value;
 		documentdb_searchrange = document.getElementById("documentdb_searchrange").value;
 		documentdb_chunksize = document.getElementById("documentdb_chunksize").value;
 		documentdb_data = document.getElementById("documentdb_data").value;
-		documentdb_useembeddings = document.getElementById("documentdb_useembeddings").checked ? true : false;
 		documentdb_numresults = parseInt(documentdb_numresults);
 		documentdb_numresults = cleannum(documentdb_numresults,1,10);
 		documentdb_searchrange = parseInt(documentdb_searchrange);
@@ -14049,13 +14073,12 @@ Current version indicated by LITEVER below.
 			wi_searchdepth = 0;
 			wi_insertlocation = 0;
 			current_anotetemplate = "[Author's note: <|>]";
-			documentdb_enabled = false;
+			documentdb_provider = 0; //disabled
 			documentdb_searchhistory = false;
 			documentdb_numresults = 3;
 			documentdb_searchrange = 300;
 			documentdb_chunksize = 800;
 			documentdb_data = "";
-			documentdb_useembeddings = false;
 		}
 		if(localsettings.inject_randomness_seed>0)
 		{
@@ -15955,7 +15978,7 @@ Current version indicated by LITEVER below.
 			}
 
 			// TextDB Long term memory minisearch
-			if (documentdb_enabled)
+			if (documentdb_provider > 0)
 			{
 				// Finds the relevant memory fragments, formats them in a similar way to an authors note and inserts them before WI
 				const ltmSearchQuery = !!rawNewText ? rawNewText : gametext_arr.length > 0 ? gametext_arr.slice(-1)[0] : undefined;
@@ -21087,7 +21110,7 @@ Current version indicated by LITEVER below.
 		start_editing_wi();
 		update_wi();
 
-		document.getElementById("documentdb_enabled").checked = documentdb_enabled;
+		document.getElementById("documentdb_provider").value = documentdb_provider;
 		document.getElementById("documentdb_searchhistory").checked = documentdb_searchhistory;
 		document.getElementById("documentdb_numresults").value = documentdb_numresults
 		document.getElementById("documentdb_searchrange").value = documentdb_searchrange;
@@ -21096,17 +21119,32 @@ Current version indicated by LITEVER below.
 		document.getElementById("documentdb_searchrange_slide").value = documentdb_searchrange;
 		document.getElementById("documentdb_chunksize_slide").value = documentdb_chunksize;
 		document.getElementById("documentdb_data").value = documentdb_data;
-		document.getElementById("documentdb_useembeddings").checked = documentdb_useembeddings;
+		let providerdropdown = document.getElementById("documentdb_provider");
+		const kcppEmbeddingDropdownOption = Array.from(providerdropdown.options).find(opt => opt.value === "2");
 		if(is_using_kcpp_with_embeddings())
 		{
-			document.getElementById("useembeddingslabel").classList.remove("color_red");
-			document.getElementById("documentdb_useembeddings").disabled = false;
+			kcppEmbeddingDropdownOption.disabled = false;
 		}
 		else
 		{
-			document.getElementById("useembeddingslabel").classList.add("color_red");
-			document.getElementById("documentdb_useembeddings").disabled = true;
-			document.getElementById("documentdb_useembeddings").checked = false;
+			if(document.getElementById("documentdb_provider").value=="2")
+			{
+				document.getElementById("documentdb_provider").value = 1;
+			}
+			kcppEmbeddingDropdownOption.disabled = true;
+		}
+		toggle_documentdb_provider();
+	}
+
+	function toggle_documentdb_provider()
+	{
+		if(document.getElementById("documentdb_provider").value=="3")
+		{
+			document.getElementById("documentdb_oai_buttons").classList.remove("hidden");
+		}
+		else
+		{
+			document.getElementById("documentdb_oai_buttons").classList.add("hidden");
 		}
 	}
 
@@ -22605,21 +22643,47 @@ Current version indicated by LITEVER below.
 	}
 
 	const generateNewEmbedding = asyncRunner(function* (text) { //generates new embedding from kcpp
-		let reqOpt = {
-			method: 'POST', // or 'PUT'
-			headers: get_kobold_header(),
-			body: JSON.stringify({
-				"input": text,
-				"truncate": true
-			}),
-		};
-		if (globalabortcontroller) {
-			reqOpt.signal = globalabortcontroller.signal;
+
+		if (documentdb_provider == 3) //openai embeddings provider
+		{
+			let selmodel = document.getElementById("oai_embd_model").value;
+			let reqOpt = {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'Authorization': 'Bearer ' + localsettings.saved_oai_embd_key
+				},
+				body: JSON.stringify({
+						"input": text,
+						"model": selmodel,
+						"encoding_format": "float"
+				})
+			};
+			if (globalabortcontroller) {
+				reqOpt.signal = globalabortcontroller.signal;
+			}
+			let sub_endpt = localsettings.saved_oai_embd_url;
+			return fetch(sub_endpt, reqOpt).then((response) => response.json()).catch(err=>{
+				console.log("error while fetching embeddings: " + err);
+			});
+
+		} else { //kcpp embeddings provider
+			let reqOpt = {
+				method: 'POST', // or 'PUT'
+				headers: get_kobold_header(),
+				body: JSON.stringify({
+					"input": text,
+					"truncate": true
+				}),
+			};
+			if (globalabortcontroller) {
+				reqOpt.signal = globalabortcontroller.signal;
+			}
+			let sub_endpt = apply_proxy_url(`${custom_kobold_endpoint}/api/extra/embeddings`);
+			return fetch(sub_endpt, reqOpt).then((response) => response.json()).catch(err=>{
+				console.log("error while fetching embeddings: " + err);
+			});
 		}
-		let sub_endpt = apply_proxy_url(`${custom_kobold_endpoint}/api/extra/embeddings`);
-		return fetch(sub_endpt, reqOpt).then((response) => response.json()).catch(err=>{
-			console.log("error while fetching embeddings: " + err);
-		});
 	});
 	const DBComputeAndLoadEmbedding = asyncRunner(function* (hash, documentName, documentContent) //gets a cached embedding, recomputes if missing
 	{
@@ -22845,7 +22909,7 @@ Current version indicated by LITEVER below.
         }).filter(c => !!c.snippet);
 
 		let miniSearch;
-		if (documentdb_useembeddings && is_using_kcpp_with_embeddings())
+		if ((documentdb_provider==2 && is_using_kcpp_with_embeddings()) || documentdb_provider==3)
 		{
 			let searchResults = yield getRankedEmbeddings(searchStr, paragraphs);
 			searchResults = searchResults.filter(x=>x.similarity>minSimilarity);
@@ -23480,26 +23544,35 @@ Current version indicated by LITEVER below.
 			<div class="context_tab_container" id="documentdb_tab_container">
 				<div class="settinglabel" style="padding: 4px;">Automatically search and include relevant snippets from a text document or history.</div>
 				<div class="settinglabel" style="padding: 4px;">
-					<div class="justifyleft settingsmall" title="Enable TextDB">Enable TextDB </div>
-					<input title="Enable TextDB" type="checkbox" id="documentdb_enabled" style="margin:0px 0 0;">
-				</div>
-
-				<div class="settinglabel" style="padding: 4px;">
-					<div class="justifyleft settingsmall" id="useembeddingslabel" title="Use Embeddings for Searching">Use Embeddings for Searching <span class="helpicon">?
-						<span class="helptext">If enabled, the text DB is converted to vectors using the KoboldCPP embedding endpoint. If not, it uses the traditional TextDB keyword based search. Generally, embeddings are slower to generate initially (so when making changes to DB the next response might be very slow) - but may understand the context of the sentence better while also potentially supporting multiple languages.</span></span></div>
-					<input title="Use Embeddings for Searching" type="checkbox" id="documentdb_useembeddings" style="margin:0px 0 0;">
+					<div class="justifyleft settingsmall" title="Select TextDB Provider">Select TextDB Provider <span class="helpicon">?
+						<span class="helptext">Disabled does not use TextDB. Local TextDB does all searches directly in browser with strings. KoboldCpp Embeddings relies on a loaded Kcpp Embeddings model to generate embeddings. OpenAI Embeddings uses a remote OpenAI API to generate embeddings.</span></span></div>
+					<select title="Select TextDB Provider" style="height:20px;padding:0px;margin:0px 4px 0; width:150px;font-size:12px;" class="form-control" onchange="toggle_documentdb_provider()" id="documentdb_provider">
+						<option value="0">Disabled</option>
+						<option value="1">Local TextDB</option>
+						<option value="2">KoboldCpp Embeddings</option>
+						<option value="3">OpenAI Embeddings</option>
+					</select>
+					<div id="documentdb_oai_buttons" style="display: flex;">
+						<button type="button" class="btn btn-primary" style="margin:0px; padding:0px; padding-left:2px;padding-right:2px;font-size:11px;margin-right:2px;" onclick="set_oai_embd_url()">Set URL</button>
+						<button type="button" class="btn btn-primary" style="margin:0px; padding:0px; padding-left:2px;padding-right:2px;font-size:11px;" onclick="set_oai_embd_key()">Set Key</button>
+						<select title="Select OpenAI Embed Model" style="height:20px;padding:0px;margin:0px 4px 0; width:150px;font-size:12px;" class="form-control" id="oai_embd_model">
+							<option value="text-embedding-3-small">text-embedding-3-small</option>
+							<option value="text-embedding-3-large">text-embedding-3-large</option>
+							<option value="text-embedding-ada-002">text-embedding-ada-002</option>
+						</select>
+					</div>
 				</div>
 
 				<div class="settinglabel" style="padding: 4px;">
 					<div class="justifyleft settingsmall" title="Delete Embedding cache">Delete Embedding cache <span class="helpicon">?
 						<span class="helptext">When embeddings are enabled, they get generated by the KCPP server and then are cached in the web browser. This button clears the browser cache.</span></span></div>
-					<button title="Delete Embedding cache" class="btn btn-primary" onclick="DBClearEmbeddings()" style="margin:0px 0 0;">Delete Embedding cache</button>
+					<button title="Delete Embedding cache" class="btn btn-primary" onclick="DBClearEmbeddings()" style="font-size:12px;padding:2px 2px;margin:0px 0 0;">Delete Embedding cache</button>
 				</div>
 
 				<div class="settinglabel" style="padding: 4px;">
 					<div class="justifyleft settingsmall" title="Add document to TextDB">Add document to TextDB <span class="helpicon">?
 						<span class="helptext">Tries to extract the text from the document, adding (or overwriting) an existing document in the TextDB with the same name.</span></span></div>
-					<button title="Add document to TextDB" class="btn btn-primary" onclick="addDocumentToTextDB()" style="margin:0px 0 0;">Add document to TextDB</button>
+					<button title="Add document to TextDB" class="btn btn-primary" onclick="addDocumentToTextDB()" style="font-size:12px;padding:2px 2px;margin:0px 0 0;">Add document to TextDB</button>
 				</div>
 
 				<div class="settinglabel" style="padding: 4px;">
