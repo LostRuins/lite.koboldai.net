@@ -22976,6 +22976,37 @@ Current version indicated by LITEVER below.
         }
     }
 
+    function scrollToGivenPoint(editorElement, yClientOffset, negativeMultiplierFontSize = 3) {
+        const editorComputedStyle = window.getComputedStyle(editorElement)
+        const fontSize = parseInt(editorComputedStyle.getPropertyValue("font-size"), 10)
+        const negativeOffset = fontSize * negativeMultiplierFontSize
+        const scrollHeight = editorElement.scrollHeight
+        if (yClientOffset < (scrollHeight - negativeOffset)) {
+            yClientOffset -= negativeOffset
+        }
+        editorElement.scrollTo(0, yClientOffset, {behavior: "smooth" });
+    }
+    function getOffsetsWithElement(el) {
+        return {top: el.offsetTop, height: el.offsetHeight}
+    }
+    function getBoundingClientRect(el) {
+        let bounds = el.getBoundingClientRect();
+        return {x: bounds.left, y: bounds.y, bottom: bounds.bottom, top: bounds.top};
+    }
+    function scrollToCaret(range, editorFieldLabel) {
+        const editorElement = document.getElementById(editorFieldLabel)
+        editorElement.scrollTo(0, 0) // workaround: first reset the scroll position moving it at editorElement beginning
+        editorElement.focus();
+        const offsetsEditor = getOffsetsWithElement(editorElement)
+        const yBase = offsetsEditor.top
+        const height = offsetsEditor.height
+
+        const {y} = getBoundingClientRect(range)
+        // scroll to the top of the current viewport minus half the current visible height
+        const yClientOffset = y - yBase - parseInt(height / 2)
+        scrollToGivenPoint(editorElement, yClientOffset)
+    }
+
     // DOM-based, robust search for exact word/n-gram matches
     function trigger_wordsearch_results(query, idParent) {
         const resultsContainer = document.getElementById("wordsearch_results");
@@ -23062,23 +23093,25 @@ Current version indicated by LITEVER below.
                 const sel = window.getSelection();
                 sel.removeAllRanges();
                 sel.addRange(range);
-
-                // Scroll the container
-                const rect = range.getBoundingClientRect();
-                const containerRect = gametext.getBoundingClientRect();
                 removeClassById(underlinedClickedUrl);
                 btn.className = underlinedClickedUrl;
-
-                if (rect.top < containerRect.top || rect.bottom > containerRect.bottom) {
-                    if (range.startContainer && range.startContainer.nodeType === Node.TEXT_NODE) {
-                        const span = document.createElement("span");
-                        span.style.display = "inline";
-                        span.style.background = "transparent";
-                        span.id = "temp-scroll-target";
-                        range.insertNode(span);
-                        document.querySelector("#temp-scroll-target").scrollIntoView({ behavior: "smooth", block: "center" });
-                        span.remove();
-                    }
+                function isSafari() {
+                    return /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+                }
+                if (isSafari()) {
+                    scrollToCaret(range, "gametext", sel);
+                } else {
+                    const span = document.createElement("span");
+                    span.style.display = "inline";
+                    span.style.background = "transparent";
+                    span.id = "temp-scroll-target";
+                    const tempRange = range.cloneRange();
+                    tempRange.collapse(true);
+                    tempRange.insertNode(span);
+                    span.scrollIntoView({ behavior: "smooth", block: "center" });
+                    setTimeout(() => {
+                        if (span.parentNode) span.parentNode.removeChild(span);
+                    }, 500);
                 }
             };
             resultsContainer.appendChild(btn);
