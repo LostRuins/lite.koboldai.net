@@ -3132,6 +3132,7 @@ Current version indicated by LITEVER below.
 	var current_memory = ""; //stored memory
 	var current_anote = ""; //stored author note
 	var current_anotetemplate = "[Author\'s note: <|>]";
+	var last_submitted_rewind_prefix = ""; //used for the never_rewind_ctx feature, a snapshot of some text beforewhich everything must be truncated
 
 	var anote_strength = 320; //distance from end
 	var newlineaftermemory = true;
@@ -14041,6 +14042,7 @@ Current version indicated by LITEVER below.
 		waiting_for_tool_call = 0;
 		oaiemulatecompletionscontent = "";
 		last_reply_was_empty = false;
+		last_submitted_rewind_prefix = "";
 		pending_context_preinjection = "";
 		pending_context_postinjection = "";
 		document.getElementById("input_text").value = "";
@@ -16054,6 +16056,25 @@ Current version indicated by LITEVER below.
 
 			//now we resize the context such that the memory and authors note can fit inside
 			truncated_context = substring_to_boundary(truncated_context, max_allowed_characters);
+			if(localsettings.never_rewind_ctx)
+			{
+				if(last_submitted_rewind_prefix!="")
+				{
+					//if we spot the previous prefix in the first 512 chars, everything before it is removed
+					let foundmatch = truncated_context.indexOf(last_submitted_rewind_prefix);
+					if(foundmatch > 0 && foundmatch < 512)
+					{
+						//trim away everything before
+						truncated_context = truncated_context.substring(foundmatch);
+						truncated_context = start_trim_to_sentence(truncated_context);
+					}
+				}
+				last_submitted_rewind_prefix = truncated_context.substring(0, 128); //snapshot newest prefix, first 128 chars
+			}
+			else
+			{
+				last_submitted_rewind_prefix = "";
+			}
 
 			//append memory to the start of the context, clipping excess space if needed
 			//only do this processing if memory or anote is not blank
@@ -21123,7 +21144,7 @@ Current version indicated by LITEVER below.
 		const kcppEmbeddingDropdownOption = Array.from(providerdropdown.options).find(opt => opt.value === "2");
 		if(is_using_kcpp_with_embeddings())
 		{
-			kcppEmbeddingDropdownOption.disabled = false;
+			kcppEmbeddingDropdownOption.classList.remove("hidden");
 		}
 		else
 		{
@@ -21131,7 +21152,7 @@ Current version indicated by LITEVER below.
 			{
 				document.getElementById("documentdb_provider").value = 1;
 			}
-			kcppEmbeddingDropdownOption.disabled = true;
+			kcppEmbeddingDropdownOption.classList.add("hidden");
 		}
 		toggle_documentdb_provider();
 	}
@@ -23550,7 +23571,7 @@ Current version indicated by LITEVER below.
 						<option value="0">Disabled</option>
 						<option value="1">Local TextDB</option>
 						<option value="2">KoboldCpp Embeddings</option>
-						<option value="3">OpenAI Embeddings</option>
+						<option value="3">OpenAI API Embeddings</option>
 					</select>
 					<div id="documentdb_oai_buttons" style="display: flex;">
 						<button type="button" class="btn btn-primary" style="margin:0px; padding:0px; padding-left:2px;padding-right:2px;font-size:11px;margin-right:2px;" onclick="set_oai_embd_url()">Set URL</button>
