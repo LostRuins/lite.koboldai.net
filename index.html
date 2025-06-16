@@ -3059,6 +3059,7 @@ Current version indicated by LITEVER below.
 	const comfy_generate_endpoint = "/prompt";
 	const comfy_history_endpoint = "/history";
 	const comfy_results_endpoint = "/view?filename=";
+	const comfy_upload_endpoint = "/api/upload/image";
 
 	const xtts_gen_endpoint = "/tts_to_audio/";
 	const xtts_voices_endpoint = "/speakers_list";
@@ -3365,6 +3366,7 @@ Current version indicated by LITEVER below.
 		render_streaming_markdown: true,
 		raw_instruct_tags: false, //experimental flag
 		show_endpoint_selector: false,
+		never_rewind_ctx: false,
 
 		//section migrated from story itself
 		extrastopseq: "",
@@ -6416,11 +6418,37 @@ Current version indicated by LITEVER below.
 		});
 	}
 
+	function uploadBase64ImgToComfy(base64Data,filename) {
+		if (base64Data==null || base64Data == '') {
+			return Promise.resolve(); //return instantly
+		}
+		let upload_endpoint = localsettings.saved_comfy_url + comfy_upload_endpoint;
+		const binary = atob(base64Data);
+		const bytes = new Uint8Array(binary.length);
+		for (let i = 0; i < binary.length; i++) {
+			bytes[i] = binary.charCodeAt(i);
+		}
+		const blob = new Blob([bytes], { type: 'image/jpeg' });
+		const formData = new FormData();
+		formData.append('image', blob, filename);
+		formData.append('overwrite',1);
+		return fetch(`${upload_endpoint}`, {
+			method: 'POST',
+			body: formData,
+		}).then(response => {
+			if (!response.ok) {
+				throw new Error(`Upload failed with status ${response.status}`);
+			}
+			return response;
+		});
+	}
+
 	function generate_comfy_image(req_payload, autoappend)
 	{
 		let splits = req_payload.prompt.split("###");
 		let prompt = splits[0].trim();
 		let negprompt = (splits.length > 1 ? splits[1] : "");
+		let comfyimg2imgname = 'kcpp_img2img.jpg';
 
 		let genimg_payload = {
 			"prompt": {
@@ -6484,6 +6512,25 @@ Current version indicated by LITEVER below.
 			}
 		};
 
+		if(req_payload["source_image"]) //override with img2img nodes
+		{
+			genimg_payload["prompt"]["5"] = {
+				"class_type": "LoadImage",
+				"inputs": {
+					"image": comfyimg2imgname
+				}
+			};
+			genimg_payload["prompt"]["10"] = {
+				"class_type": "VAEEncode",
+				"inputs": {
+					"pixels": ["5", 0],
+					"vae": ["4", 2]
+				}
+			};
+			genimg_payload["prompt"]["3"]["inputs"]["latent_image"] = ["10", 0];
+			genimg_payload["prompt"]["3"]["inputs"]["denoise"] = req_payload["params"]["denoising_strength"];
+		}
+
 		let gen_endpoint = localsettings.saved_comfy_url + comfy_generate_endpoint;
 		console.log(genimg_payload);
 		let imgid = "Comfyimg"+(Math.floor(10000 + Math.random() * 90000)).toString();
@@ -6507,6 +6554,7 @@ Current version indicated by LITEVER below.
 		image_db[imgid].imsource = 0; //0=generated,1=uploaded
 		image_db[imgid].imrefid = "";
 
+		uploadBase64ImgToComfy(req_payload["source_image"],comfyimg2imgname).then(() => {
 		fetch(gen_endpoint, {
 			method: 'POST',
 			headers: {
@@ -6527,6 +6575,10 @@ Current version indicated by LITEVER below.
 		}).catch((error) => {
 			console.log("Generation Error: " + error);
 			msgbox("Image Generation Failed!\n\nPlease make sure ComfyUI is running at "+localsettings.saved_comfy_url+" and properly configured!\n\nIt must be launched with the flag --listen --enable-cors-header '*' to enable API access\n");
+		});
+		}).catch((error) => {
+			console.log("Upload Img2Img Error: " + error);
+			msgbox("Image Upload Failed!\n\nPlease make sure ComfyUI is running at "+localsettings.saved_comfy_url+" and properly configured!\n\nIt must be launched with the flag --listen --enable-cors-header '*' to enable API access\n");
 		});
 		return imgid;
 	}
@@ -12391,6 +12443,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("instruct_endtag_end").value = localsettings.instruct_endtag_end;
 		document.getElementById("raw_instruct_tags").checked = localsettings.raw_instruct_tags;
 		document.getElementById("show_endpoint_selector").checked = localsettings.show_endpoint_selector;
+		document.getElementById("never_rewind_ctx").checked = localsettings.never_rewind_ctx;
 		document.getElementById("render_streaming_markdown").checked = localsettings.render_streaming_markdown;
 		document.getElementById("min_p").value = localsettings.min_p;
 		document.getElementById("dynatemp_range").value = localsettings.dynatemp_range;
@@ -12919,6 +12972,7 @@ Current version indicated by LITEVER below.
 		localsettings.persist_session = (document.getElementById("persist_session").checked ? true : false);
 		localsettings.raw_instruct_tags = (document.getElementById("raw_instruct_tags").checked ? true : false);
 		localsettings.show_endpoint_selector = (document.getElementById("show_endpoint_selector").checked ? true : false);
+		localsettings.never_rewind_ctx = (document.getElementById("never_rewind_ctx").checked ? true : false);
 		localsettings.render_streaming_markdown = (document.getElementById("render_streaming_markdown").checked ? true : false);
 		if(document.getElementById("opmode").value==1)
 		{
@@ -15307,7 +15361,7 @@ Current version indicated by LITEVER below.
 			//if there is no memory, then we can be a lot of lenient with the character counts since the backend will truncate excess anyway
 			chars_per_token = 4.8;
 		}
-		if (is_using_kcpp_with_added_memory()) //easily handle overflow
+		if (is_using_kcpp_with_added_memory() && !localsettings.never_rewind_ctx) //easily handle overflow
 		{
 			chars_per_token = 6;
 		}
@@ -15984,7 +16038,7 @@ Current version indicated by LITEVER below.
 			{
 				truncated_memory = replace_placeholders(truncated_memory,false,false,true);
 				truncated_anote = replace_placeholders(truncated_anote,false,false,false);
-				if(!is_using_kcpp_with_added_memory())
+				if(!is_using_kcpp_with_added_memory() || localsettings.never_rewind_ctx)
 				{
 					let augmented_len = truncated_memory.length + truncated_context.length + truncated_anote.length;
 					let excess_len = augmented_len - max_allowed_characters; //if > 0, then we exceeded context window
@@ -16011,7 +16065,7 @@ Current version indicated by LITEVER below.
 				}
 				anote_insert_idx = clamp(anote_insert_idx, 0, truncated_context.length);
 				truncated_context = truncated_context.slice(0, anote_insert_idx) + truncated_anote + truncated_context.slice(anote_insert_idx);
-				if(!is_using_kcpp_with_added_memory())
+				if(!is_using_kcpp_with_added_memory() || localsettings.never_rewind_ctx)
 				{
 					truncated_context = truncated_memory + truncated_context;
 				}
@@ -16019,7 +16073,7 @@ Current version indicated by LITEVER below.
 
 			truncated_context = replace_placeholders(truncated_context,false,false,true);
 
-			if(is_using_kcpp_with_added_memory())
+			if(is_using_kcpp_with_added_memory() && !localsettings.never_rewind_ctx)
 			{
 				last_token_budget = (truncated_memory.length + truncated_context.length)  + "/" + max_allowed_characters;
 			}
@@ -16049,7 +16103,7 @@ Current version indicated by LITEVER below.
 				"models": selected_models.map((m) => { return m.name }),
 			};
 
-			if(is_using_kcpp_with_added_memory())
+			if(is_using_kcpp_with_added_memory() && !localsettings.never_rewind_ctx)
 			{
 				submit_payload.params.memory = truncated_memory;
 				submit_payload.params.trim_stop = true;
@@ -24618,6 +24672,11 @@ Current version indicated by LITEVER below.
 							<div class="justifyleft settingsmall">ShowEndpointSelector <span class="helpicon">?<span
 								class="helptext">Allows you to change the connected custom endpoint at runtime even in local mode.</span></span></div>
 						   <input title="Show Local Endpoint Selector" type="checkbox" id="show_endpoint_selector" style="margin:0px 0px 0px 0px;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">NeverRewindCtxWindow <span class="helpicon">?<span
+								class="helptext">Prevents ever rewinding to context that has already been shifted out of the context window. </span></span></div>
+						   <input title="Never Rewind Context Window" type="checkbox" id="never_rewind_ctx" style="margin:0px 0px 0px 0px;">
 						</div>
 					</div>
 
