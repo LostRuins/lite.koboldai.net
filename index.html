@@ -3132,7 +3132,6 @@ Current version indicated by LITEVER below.
 	var current_memory = ""; //stored memory
 	var current_anote = ""; //stored author note
 	var current_anotetemplate = "[Author\'s note: <|>]";
-	var last_submitted_rewind_prefix = ""; //used for the never_rewind_ctx feature, a snapshot of some text beforewhich everything must be truncated
 
 	var anote_strength = 320; //distance from end
 	var newlineaftermemory = true;
@@ -3369,7 +3368,6 @@ Current version indicated by LITEVER below.
 		render_streaming_markdown: true,
 		raw_instruct_tags: false, //experimental flag
 		show_endpoint_selector: false,
-		never_rewind_ctx: false,
 
 		//section migrated from story itself
 		extrastopseq: "",
@@ -12469,7 +12467,6 @@ Current version indicated by LITEVER below.
 		document.getElementById("instruct_endtag_end").value = localsettings.instruct_endtag_end;
 		document.getElementById("raw_instruct_tags").checked = localsettings.raw_instruct_tags;
 		document.getElementById("show_endpoint_selector").checked = localsettings.show_endpoint_selector;
-		document.getElementById("never_rewind_ctx").checked = localsettings.never_rewind_ctx;
 		document.getElementById("render_streaming_markdown").checked = localsettings.render_streaming_markdown;
 		document.getElementById("min_p").value = localsettings.min_p;
 		document.getElementById("dynatemp_range").value = localsettings.dynatemp_range;
@@ -12998,7 +12995,6 @@ Current version indicated by LITEVER below.
 		localsettings.persist_session = (document.getElementById("persist_session").checked ? true : false);
 		localsettings.raw_instruct_tags = (document.getElementById("raw_instruct_tags").checked ? true : false);
 		localsettings.show_endpoint_selector = (document.getElementById("show_endpoint_selector").checked ? true : false);
-		localsettings.never_rewind_ctx = (document.getElementById("never_rewind_ctx").checked ? true : false);
 		localsettings.render_streaming_markdown = (document.getElementById("render_streaming_markdown").checked ? true : false);
 		if(document.getElementById("opmode").value==1)
 		{
@@ -14042,7 +14038,6 @@ Current version indicated by LITEVER below.
 		waiting_for_tool_call = 0;
 		oaiemulatecompletionscontent = "";
 		last_reply_was_empty = false;
-		last_submitted_rewind_prefix = "";
 		pending_context_preinjection = "";
 		pending_context_postinjection = "";
 		document.getElementById("input_text").value = "";
@@ -15386,7 +15381,7 @@ Current version indicated by LITEVER below.
 			//if there is no memory, then we can be a lot of lenient with the character counts since the backend will truncate excess anyway
 			chars_per_token = 4.8;
 		}
-		if (is_using_kcpp_with_added_memory() && !localsettings.never_rewind_ctx) //easily handle overflow
+		if (is_using_kcpp_with_added_memory()) //easily handle overflow
 		{
 			chars_per_token = 6;
 		}
@@ -16056,25 +16051,6 @@ Current version indicated by LITEVER below.
 
 			//now we resize the context such that the memory and authors note can fit inside
 			truncated_context = substring_to_boundary(truncated_context, max_allowed_characters);
-			if(localsettings.never_rewind_ctx)
-			{
-				if(last_submitted_rewind_prefix!="")
-				{
-					//if we spot the previous prefix in the first 512 chars, everything before it is removed
-					let foundmatch = truncated_context.indexOf(last_submitted_rewind_prefix);
-					if(foundmatch > 0 && foundmatch < 512)
-					{
-						//trim away everything before
-						truncated_context = truncated_context.substring(foundmatch);
-						truncated_context = start_trim_to_sentence(truncated_context);
-					}
-				}
-				last_submitted_rewind_prefix = truncated_context.substring(0, 128); //snapshot newest prefix, first 128 chars
-			}
-			else
-			{
-				last_submitted_rewind_prefix = "";
-			}
 
 			//append memory to the start of the context, clipping excess space if needed
 			//only do this processing if memory or anote is not blank
@@ -16082,7 +16058,7 @@ Current version indicated by LITEVER below.
 			{
 				truncated_memory = replace_placeholders(truncated_memory,false,false,true);
 				truncated_anote = replace_placeholders(truncated_anote,false,false,false);
-				if(!is_using_kcpp_with_added_memory() || localsettings.never_rewind_ctx)
+				if(!is_using_kcpp_with_added_memory())
 				{
 					let augmented_len = truncated_memory.length + truncated_context.length + truncated_anote.length;
 					let excess_len = augmented_len - max_allowed_characters; //if > 0, then we exceeded context window
@@ -16109,7 +16085,7 @@ Current version indicated by LITEVER below.
 				}
 				anote_insert_idx = clamp(anote_insert_idx, 0, truncated_context.length);
 				truncated_context = truncated_context.slice(0, anote_insert_idx) + truncated_anote + truncated_context.slice(anote_insert_idx);
-				if(!is_using_kcpp_with_added_memory() || localsettings.never_rewind_ctx)
+				if(!is_using_kcpp_with_added_memory())
 				{
 					truncated_context = truncated_memory + truncated_context;
 				}
@@ -16117,7 +16093,7 @@ Current version indicated by LITEVER below.
 
 			truncated_context = replace_placeholders(truncated_context,false,false,true);
 
-			if(is_using_kcpp_with_added_memory() && !localsettings.never_rewind_ctx)
+			if(is_using_kcpp_with_added_memory())
 			{
 				last_token_budget = (truncated_memory.length + truncated_context.length)  + "/" + max_allowed_characters;
 			}
@@ -16147,7 +16123,7 @@ Current version indicated by LITEVER below.
 				"models": selected_models.map((m) => { return m.name }),
 			};
 
-			if(is_using_kcpp_with_added_memory() && !localsettings.never_rewind_ctx)
+			if(is_using_kcpp_with_added_memory())
 			{
 				submit_payload.params.memory = truncated_memory;
 				submit_payload.params.trim_stop = true;
@@ -24766,11 +24742,6 @@ Current version indicated by LITEVER below.
 							<div class="justifyleft settingsmall">ShowEndpointSelector <span class="helpicon">?<span
 								class="helptext">Allows you to change the connected custom endpoint at runtime even in local mode.</span></span></div>
 						   <input title="Show Local Endpoint Selector" type="checkbox" id="show_endpoint_selector" style="margin:0px 0px 0px 0px;">
-						</div>
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall">NeverRewindCtxWindow <span class="helpicon">?<span
-								class="helptext">Prevents ever rewinding to context that has already been shifted out of the context window. </span></span></div>
-						   <input title="Never Rewind Context Window" type="checkbox" id="never_rewind_ctx" style="margin:0px 0px 0px 0px;">
 						</div>
 					</div>
 
