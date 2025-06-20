@@ -13949,11 +13949,18 @@ Current version indicated by LITEVER below.
 
 	function sanitize_css(input)
 	{
-		input = input.replace(/<\s*\/?\s*\w+\s*[^>]*>/gi, "");
-		input = input.replace(/</g, "");
-		input = input.replace(/(?:javascript|vbscript|file):/gi, "");
-		//remove all data elements that aren't jpg, png, gif, webp;base64
-		input = input.replace(/data:(?!image\/(jpeg|jpg|png|gif|webp);base64,)[^;\s]*(?:;[^,\s]*)*(?:,[^)\s'"]*)?/gi, "");
+		let safeImages = [];
+		let counter = 0;
+		input = input.replace(/<\s*\/?\s*\w+\s*[^>]*>/gi, ""); //replace html tags
+		input = input.replace(/</g, "");  // Remove any remaining `<` characters
+		input = input.replace(/data:image\/(jpeg|jpg|png|gif|webp);base64,[A-Za-z0-9+\/=]+/gi, function(match) {
+			safeImages.push(match);
+			return "__SAFE_IMG_" + (counter++) + "__";
+		});
+		input = input.replace(/(?:javascript|data|vbscript|file):/gi, "");
+		for(let i = 0; i < safeImages.length; i++) {
+			input = input.replace("__SAFE_IMG_" + i + "__", safeImages[i]);
+		}
 		return input;
 	}
 	function apply_custom_css()
