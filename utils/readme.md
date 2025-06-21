@@ -1,5 +1,8 @@
 ## These are scripts to split and join the main html for easier editing
 
+### Note for contributors:
+- This tool is intended to help segment the HTML file for easier editing during development. However, any pull requests MUST be submitted in the original single HTML file format.
+
 To run them:
 1. Run `npm install` to install the `html-lexer` dependency (which itself is dependency free)
 2. Run `npm run split` or `npm run split index.html` to generate the split files from the monolithic HTML
