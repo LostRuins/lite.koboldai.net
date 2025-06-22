@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 256;
+	const LITEVER = 257;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3213,7 +3213,7 @@ Current version indicated by LITEVER below.
 	var passed_ai_warning_local = false;
 	var welcome = "";
 	var personal_notes = "";
-	var voice_typing_mode = 0; //0=off, 1=on, 2=ptt
+	var voice_typing_mode = 0; //0=off, 1=on, 2=ptt, 3=ttt
 	var koboldcpp_has_whisper = false; //does backend support voice typing
 	var voice_is_recording = false; //currently recording voice?
 	var voice_is_processing = false; //currently processing voice?
@@ -15312,6 +15312,12 @@ Current version indicated by LITEVER below.
 	var recent_voice_duration = 0;
 	function ptt_start()
 	{
+		if(voice_typing_mode==3 && voice_is_speaking)
+		{
+			//stop toggle to talk
+			ptt_end(true);
+			return;
+		}
 		if(voice_typing_mode>0)
 		{
 			voice_is_speaking = true;
@@ -15330,8 +15336,12 @@ Current version indicated by LITEVER below.
 			}
 		}
 	}
-	function ptt_end()
+	function ptt_end(force=false)
 	{
+		if(voice_typing_mode==3 && !force)
+		{
+			return; //do nothing for toggle to talk unless forced
+		}
 		var voice_end_delay = localsettings.voice_end_delay;
 		if(voice_typing_mode>0)
 		{
@@ -19473,7 +19483,7 @@ Current version indicated by LITEVER below.
 					document.getElementById("btnsend").innerHTML = "<div class='showmiclivebig'></div><span style='font-size:12px'>Record</span>";
 				} else if (ready_to_record()) {
 					document.getElementById("chat_msg_send_btn").classList.add("showmic");
-					document.getElementById("btnsend").innerHTML = "<div class='showmicbig'></div><span style='font-size:12px'>"+(voice_typing_mode==1?"Standby":"PTT")+"</span>";
+					document.getElementById("btnsend").innerHTML = "<div class='showmicbig'></div><span style='font-size:12px'>"+(voice_typing_mode==1?"Standby":(voice_typing_mode==2?"PTT":"TTT"))+"</span>";
 				} else {
 					document.getElementById("chat_msg_send_btn").classList.add("showmicoff");
 					document.getElementById("btnsend").innerHTML = "<div class='showmicoffbig'></div><span style='font-size:12px'>Busy</span>";
@@ -23375,7 +23385,7 @@ Current version indicated by LITEVER below.
 				</div>
 				<div style="position: relative; padding-right: 2px;">
 					<button type="button" class="btn wait mainnav" id="btnsend" disabled
-						onclick="submit_generation_button(false)" onmousedown="ptt_start()" onmouseup="ptt_end()">Loading</button>
+						onclick="submit_generation_button(false)" onpointerdown="ptt_start()" onpointerup="ptt_end()">Loading</button>
 						<a href="#" id="abortgen" class="hidden bg_black mainnav" style="text-align: center;color: #ffaaaa;" onclick="abort_generation()"><b style="display: block;">[ABORT]</b></a>
 						<span id="searchingtxt" class="hidden bg_black mainnav" style="text-align: center;color: #49a8e4; font-size: 9px;"><b style="display: block;">WebSearch...</b></span>
 				</div>
@@ -24375,6 +24385,7 @@ Current version indicated by LITEVER below.
 								<option value="0">Off</option>
 								<option value="1">Detect Voice</option>
 								<option value="2">Push-To-Talk</option>
+								<option value="3">Toggle-To-Talk</option>
 							</select>
 						</div>
 						<div class="inlinelabel" style="font-size: 11px;">
@@ -25168,9 +25179,9 @@ Current version indicated by LITEVER below.
 			</div>
 
 			<div id="koboldcustom" class="menutext">
-				You can use this to connect to a KoboldAI instance running via a remote tunnel such as <span class="color_orange" style="font-weight: bold;">trycloudflare, localtunnel, ngrok</span>.<br><br>
-				Localhost IPs require host mode enabled. You can use the remote address displayed in the <span class="color_orange" style="font-weight: bold;">terminal console</span> or <span class="color_orange" style="font-weight: bold;">colab window</span>, note that the model must be loaded first.<br><br>
-				<span class="color_green" style="font-weight: bold;">Please input URL of the KoboldAI instance.</span><br><br>
+				You can use this to connect to a KoboldCpp or KoboldAI instance running via a remote tunnel such as <span class="color_orange" style="font-weight: bold;">trycloudflare, localtunnel, ngrok</span>.<br><br>
+				You can use the remote address displayed in the <span class="color_orange" style="font-weight: bold;">terminal console</span> or <span class="color_orange" style="font-weight: bold;">colab window</span>, note that the model must be loaded first.<br><br>
+				<span class="color_green" style="font-weight: bold;">Please input URL of the KoboldCpp or KoboldAI instance.</span><br><br>
 				<input class="form-control" title="Enter KoboldCpp Custom Endpoint" id="customkoboldendpoint" placeholder="https://sample-remote-address.trycloudflare.com" value="">
 				<input class="form-control" title="Enter KoboldCpp API Key" type="password" id="customkoboldkey" placeholder="KoboldAI API Key (Optional)" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
 				<div class="borderbox flex flex-push-right">
