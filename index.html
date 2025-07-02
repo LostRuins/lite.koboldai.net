@@ -3208,6 +3208,7 @@ Current version indicated by LITEVER below.
 	var schedule_multiplayer_major_change = false;
 	var last_request_str = "No Requests Available"; //full context of last submitted request
 	var last_response_obj = null;
+	var last_response_streamlog = "";
 	var lastcheckgenkey = ""; //for checking polled-streaming unique id when generating in kcpp
 	var kai_poll_recoverykey = ""; //for recovering a lost polled streaming in case of disconnect.
 	var globalabortcontroller = null;
@@ -5634,6 +5635,10 @@ Current version indicated by LITEVER below.
 				},
 				transform(chunk, ctrl) {
 					ctrl.buf += chunk;
+					if(chunk)
+					{
+						last_response_streamlog += chunk;
+					}
 					let evs = [];
 					let m;
 					while ((m = /^data: ?(.*)(\r?\n){2}/m.exec(ctrl.buf)) !== null) {
@@ -9342,6 +9347,10 @@ Current version indicated by LITEVER below.
 		if(last_response_obj!=null)
 		{
 			lr += "\n\nResponse:\n" + JSON.stringify(last_response_obj);
+		}
+		if(last_response_streamlog)
+		{
+			lr += "\n\nResponse:\n" + last_response_streamlog;
 		}
 		msgbox(lr,"Last Request Info",false);
 	}
@@ -14041,6 +14050,7 @@ Current version indicated by LITEVER below.
 		redo_arr = [];
 		last_request_str = "No Requests Available";
 		last_response_obj = null;
+		last_response_streamlog = "";
 		retry_prev_text = [];
 		retry_preserve_last = false;
 		retry_in_progress = false;
@@ -16471,6 +16481,7 @@ Current version indicated by LITEVER below.
 
 				last_request_str = JSON.stringify(submit_payload);
 				last_response_obj = null;
+				last_response_streamlog = "";
 				if (localsettings.tokenstreammode==2 && is_using_kcpp_with_sse()) {
 					let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_stream_endpoint);
 					kobold_api_stream_sse(sub_endpt, submit_payload);
@@ -16643,6 +16654,7 @@ Current version indicated by LITEVER below.
 
 				last_request_str = JSON.stringify(oai_payload);
 				last_response_obj = null;
+				last_response_streamlog = "";
 				let oaiheaders = {
 					'Content-Type': 'application/json',
 					'Authorization': 'Bearer ' + custom_oai_key
@@ -16780,6 +16792,7 @@ Current version indicated by LITEVER below.
 
 				last_request_str = JSON.stringify(claude_payload);
 				last_response_obj = null;
+				last_response_streamlog = "";
 
 				let claudeheaders = {
 					'Content-Type': 'application/json',
@@ -16970,6 +16983,7 @@ Current version indicated by LITEVER below.
 
 				last_request_str = JSON.stringify(payload);
 				last_response_obj = null;
+				last_response_streamlog = "";
 
 				let geminiheaders = { 'Content-Type': 'application/json' };
 				if(is_browser_supports_sse() && localsettings.tokenstreammode!=0)
@@ -17018,6 +17032,7 @@ Current version indicated by LITEVER below.
 
 				last_request_str = JSON.stringify(cohere_payload);
 				last_response_obj = null;
+				last_response_streamlog = "";
 				let cohere_headers = {
 					'Content-Type': 'application/json',
 					'Authorization': 'Bearer ' + custom_cohere_key
@@ -17093,6 +17108,7 @@ Current version indicated by LITEVER below.
 
 			last_request_str = JSON.stringify(submit_payload);
 			last_response_obj = null;
+			last_response_streamlog = "";
 
 			fetch(horde_submit_endpoint, {
 				method: 'POST', // or 'PUT'
