@@ -19669,7 +19669,7 @@ Current version indicated by LITEVER below.
 				`<br>You are using the models <span class="color_green">${selmodelstr}</span>${(selected_workers.length == 0 ? `` : ` (Pinned to ${selected_workers.length} worker IDs)`)}.`+
 				`${whorun}.`+
 				(multiplayer_active?(!multiplayer_pinged?`<br><br><span class="color_orange">[ Trying to join Multiplayer... ]</span>`:`<br><br><span class="color_green">[ Multiplayer is <b>Active</b>! This session is shared with other server participants.]<br>[ You can leave via exit button in top right corner. ]</span>`):(is_using_kcpp_with_multiplayer()?`<br><br>[ <a href="#" tabindex="${mainmenu_is_untab?`-1`:`0`}" class="color_blueurl mainnav" onclick="join_multiplayer()"><span class="color_green">Multiplayer Available</span> - Click Here To Join</a> ]`:``))+
-				`<br><br><b><span class="color_orange">${nowmode} Selected</span></b> - Enter a prompt below to begin!`+
+				`<br><br><span class="color_orange" style="font-weight: bold;">${nowmode} Selected</span> - Enter a prompt below to begin!`+
 				`<br>Or, <a href="#" tabindex="${mainmenu_is_untab?`-1`:`0`}" class="color_blueurl mainnav" onclick="document.getElementById('loadfileinput').click()">load a <b>JSON File</b> or a <b>Character Card</b> here.</a>`+
 				`<br>Or, <a href="#" tabindex="${mainmenu_is_untab?`-1`:`0`}" class="color_blueurl mainnav" onclick="display_scenarios()">select a <b>Quick Start Scenario</b> here.</a>`+
 				`<br>${(welcome!=""?`<br><em>${escape_html(welcome)}</em>`:``)}`;
@@ -22482,7 +22482,9 @@ Current version indicated by LITEVER below.
 		{
 			let curr = chatunits[i];
 
-			//for aesthetic mode, use fancy quotes, but we must exclude anything in codeblocks
+			//for aesthetic mode, use fancy quotes, but we must exclude anything in codeblocks, and html tags
+			let temphtmlstash = [];
+			curr.msg = curr.msg.replace(/<[^>]*>/g, (htmlPart) => { temphtmlstash.push(htmlPart); return `[temp_replaced_html_${temphtmlstash.length - 1}]`; });
 			curr.msg = curr.msg.split(/(```[\s\S]*?\n[\s\S]*?```)/g).map(partA => {
 				if (partA.startsWith('```') && partA.endsWith('```')) {
 					return partA; // leave as is
@@ -22500,6 +22502,9 @@ Current version indicated by LITEVER below.
 					return combinedB;
 				}
 			}).join('');
+			curr.msg = curr.msg.replace(/\[temp_replaced_html_(.*?)\]/gm, (match, p) => {
+				return temphtmlstash[p];
+			});
 
 			curr = repack_postprocess_turn(curr, countmap);
 			if(!curr.msg)
