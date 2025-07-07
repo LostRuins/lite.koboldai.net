@@ -3955,7 +3955,7 @@ Current version indicated by LITEVER below.
 				const reader = new FileReader();
 				reader.onload = function(img) {
 					let origImg = img.target.result;
-					self_upload_img(origImg);
+					self_upload_file_dispatch(origImg);
 				}
 				reader.readAsDataURL(file);
 			}
@@ -9710,7 +9710,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("charactercreator").classList.contains("hidden") &&
 			document.getElementById("zoomedimgcontainer").classList.contains("hidden") &&
 			document.getElementById("groupselectcontainer").classList.contains("hidden") &&
-			document.getElementById("addimgcontainer").classList.contains("hidden") &&
+			document.getElementById("addmediacontainer").classList.contains("hidden") &&
 			document.getElementById("pasteimgcontainer").classList.contains("hidden") &&
 			document.getElementById("webcamcontainer").classList.contains("hidden") &&
 			document.getElementById("choosesharecontainer").classList.contains("hidden") &&
@@ -9749,7 +9749,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("charactercreator").classList.add("hidden");
 		document.getElementById("zoomedimgcontainer").classList.add("hidden");
 		document.getElementById("groupselectcontainer").classList.add("hidden");
-		document.getElementById("addimgcontainer").classList.add("hidden");
+		document.getElementById("addmediacontainer").classList.add("hidden");
 		document.getElementById("pasteimgcontainer").classList.add("hidden");
 		document.getElementById("webcamcontainer").classList.add("hidden");
 		document.getElementById("choosesharecontainer").classList.add("hidden");
@@ -14517,13 +14517,13 @@ Current version indicated by LITEVER below.
 			sentence = replace_placeholders(sentence)
 		}
 		generate_new_image(sentence, base64img, true);
-		document.getElementById("btn_genimg").disabled = true;
-		document.getElementById("btn_genimg2").disabled = true;
+		document.getElementById("btn_addmedia").disabled = true;
+		document.getElementById("btn_addmedia2").disabled = true;
 		document.getElementById("corpo_chat_img_btn").disabled = true;
 		//disable it for 5 sec to prevent spam
 		setTimeout(() => {
-			document.getElementById("btn_genimg").disabled = false;
-			document.getElementById("btn_genimg2").disabled = false;
+			document.getElementById("btn_addmedia").disabled = false;
+			document.getElementById("btn_addmedia2").disabled = false;
 			document.getElementById("corpo_chat_img_btn").disabled = false;
 		}, 5000);
 	}
@@ -14551,7 +14551,7 @@ Current version indicated by LITEVER below.
 		{
 			msgbox("Error: Your current story is blank.\nAdd some text, or try generating from custom prompt instead.","Story is Blank")
 		}
-		document.getElementById("addimgcontainer").classList.add("hidden");
+		document.getElementById("addmediacontainer").classList.add("hidden");
 	}
 
 	function add_img_btn_custom()
@@ -14564,7 +14564,19 @@ Current version indicated by LITEVER below.
 				do_manual_gen_image(sentence);
 			}
 		},false);
-		document.getElementById("addimgcontainer").classList.add("hidden");
+		document.getElementById("addmediacontainer").classList.add("hidden");
+	}
+
+	function self_upload_file_dispatch(data)
+	{
+		if(data.startsWith("data:audio"))
+		{
+			self_upload_audio(data);
+		}
+		else
+		{
+			self_upload_img(data);
+		}
 	}
 
 	function self_upload_img(origImg)
@@ -14582,7 +14594,7 @@ Current version indicated by LITEVER below.
 			}
 		}
 		gametext_arr.push(nimgtag);
-		image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:"", poll_category:0 };
+		image_db[imgid] = { done: false, queue: "Processing", result: "", prompt:"", poll_category:0 };
 		image_db[imgid].aspect = 0;
 		image_db[imgid].imsource = 1; //0=generated,1=uploaded
 		image_db[imgid].imrefid = "";
@@ -14609,6 +14621,48 @@ Current version indicated by LITEVER below.
 		}, false, imgres,0.35,true);
 	}
 
+	function self_upload_audio(origAudio)
+	{
+		// let imgid = "selfuploadaudio"+(Math.floor(10000 + Math.random() * 90000)).toString();
+		// let nimgtag = "[<|p|" + imgid + "|p|>]";
+		// if (localsettings.img_newturn) {
+		// 	if(localsettings.opmode == 4)
+		// 	{
+		// 		nimgtag = wrap_newgen_instruct_format(nimgtag,false);
+		// 	}
+		// 	else if(localsettings.opmode == 3)
+		// 	{
+		// 		nimgtag = wrap_newgen_chat_format(nimgtag);
+		// 	}
+		// }
+		// gametext_arr.push(nimgtag);
+		// image_db[imgid] = { done: false, queue: "Processing", result: "", prompt:"", poll_category:0 };
+		// image_db[imgid].aspect = 0;
+		// image_db[imgid].imsource = 1; //0=generated,1=uploaded
+		// image_db[imgid].imrefid = "";
+
+		// compressImage(origImg, (newDataUri, outAspect) => {
+		// 	image_db[imgid].done = true;
+		// 	image_db[imgid].result = newDataUri;
+		// 	if(outAspect<=0.5)
+		// 	{
+		// 		image_db[imgid].aspect = 4; //portrait_long
+		// 	}
+		// 	else if(outAspect<0.7)
+		// 	{
+		// 		image_db[imgid].aspect = 1; //portrait
+		// 	}
+		// 	else if(outAspect>=2)
+		// 	{
+		// 		image_db[imgid].aspect = 5; //landscape_long
+		// 	}
+		// 	else if(outAspect>1.4)
+		// 	{
+		// 		image_db[imgid].aspect = 2; //landscape
+		// 	}
+		// }, false, imgres,0.35,true);
+	}
+
 	function clear_paste_window()
 	{
 		document.getElementById("pasteimgwin").value = "";
@@ -14625,7 +14679,7 @@ Current version indicated by LITEVER below.
 				var reader = new FileReader();
 				reader.onload = function(event){
 					let origImg = event.target.result;
-					self_upload_img(origImg);
+					self_upload_file_dispatch(origImg);
 				};
 				reader.readAsDataURL(blob);
 				founditem = true;
@@ -14638,7 +14692,7 @@ Current version indicated by LITEVER below.
 	var dragdropimgsetup = false;
 	function add_img_btn_paste()
 	{
-		document.getElementById("addimgcontainer").classList.add("hidden");
+		document.getElementById("addmediacontainer").classList.add("hidden");
 		document.getElementById("pasteimgcontainer").classList.remove("hidden");
 
 		if(!dragdropimgsetup)
@@ -14657,7 +14711,7 @@ Current version indicated by LITEVER below.
 					const reader = new FileReader();
 					reader.onload = function(img) {
 						let origImg = img.target.result;
-						self_upload_img(origImg);
+						self_upload_file_dispatch(origImg);
 					}
 					reader.readAsDataURL(file);
 					document.getElementById("pasteimgcontainer").classList.add("hidden");
@@ -14686,7 +14740,7 @@ Current version indicated by LITEVER below.
 	var webcamStream = null;
 	function add_img_btn_webcam()
 	{
-		document.getElementById("addimgcontainer").classList.add("hidden");
+		document.getElementById("addmediacontainer").classList.add("hidden");
 		document.getElementById("webcamcontainer").classList.remove("hidden");
 		const video = document.getElementById('webcamvideo');
 
@@ -14740,7 +14794,7 @@ Current version indicated by LITEVER below.
 		const sy = (videoHeight - sideLength) / 2;
 		context.drawImage(video, sx, sy, sideLength, sideLength, 0, 0, 512, 512);
 		const dataURL = canvas.toDataURL('image/png');
-		self_upload_img(dataURL);  // Call your upload function
+		self_upload_file_dispatch(dataURL);  // Call your upload function
 		hide_popups();
 	}
 
@@ -14754,19 +14808,19 @@ Current version indicated by LITEVER below.
 				const reader = new FileReader();
 				reader.onload = function(img) {
 					let origImg = img.target.result;
-					self_upload_img(origImg);
+					self_upload_file_dispatch(origImg);
 				}
 				reader.readAsDataURL(file);
 			}
 			finput.value = "";
 		};
-		document.getElementById("addimgcontainer").classList.add("hidden");
+		document.getElementById("addmediacontainer").classList.add("hidden");
 	}
 
-	function add_img_btn_menu()
+	function add_media_btn_menu()
 	{
 		update_genimg_button_visiblility();
-		document.getElementById("addimgcontainer").classList.remove("hidden");
+		document.getElementById("addmediacontainer").classList.remove("hidden");
 	}
 
 	function toggle_websearch()
@@ -23362,7 +23416,7 @@ Current version indicated by LITEVER below.
 				<button type="button" class="btn btn-primary mainnav" id="btn_actundo" onpointerdown="btn_back_longpress_start()" onpointerleave="btn_back_longpress_end()" onpointerup="btn_back_longpress_end()" onclick="btn_back()">Back</button>
 				<button type="button" class="btn btn-primary mainnav" id="btn_actredo" onpointerdown="btn_redo_longpress_start()" onpointerleave="btn_redo_longpress_end()" onpointerup="btn_redo_longpress_end()" onclick="btn_redo()">Redo</button>
 				<button type="button" class="btn btn-primary mainnav" id="btn_actretry" onclick="btn_retry()">Retry</button>
-				<button type="button" class="btn btn-primary bg_green mainnav" id="btn_genimg" onclick="add_img_btn_menu()">Add Img</button>
+				<button type="button" class="btn btn-primary bg_green mainnav" id="btn_addmedia" onclick="add_media_btn_menu()">Add File</button>
 				<button type="button" class="btn btn-primary mainnav slim btnicon-websearch hidden" id="btn_togglesearch" onclick="toggle_websearch()">&nbsp;</button>
 			</div>
 			<div class="borderbox flex flex-push-right">
@@ -23411,7 +23465,7 @@ Current version indicated by LITEVER below.
 						<button type="button" class="btn btn-primary mainnav" id="btn_actundo2" onpointerdown="btn_back_longpress_start()" onpointerleave="btn_back_longpress_end()" onpointerup="btn_back_longpress_end()" onclick="btn_back()">Back</button>
 						<button type="button" class="btn btn-primary mainnav" id="btn_actredo2" onpointerdown="btn_redo_longpress_start()" onpointerleave="btn_redo_longpress_end()" onpointerup="btn_redo_longpress_end()" onclick="btn_redo()">Redo</button>
 						<button type="button" class="btn btn-primary mainnav" id="btn_actretry2" onclick="btn_retry()">Retry</button>
-						<button type="button" class="btn btn-primary bg_green mainnav" id="btn_genimg2" onclick="add_img_btn_menu()">Add Img</button>
+						<button type="button" class="btn btn-primary bg_green mainnav" id="btn_addmedia2" onclick="add_media_btn_menu()">Add File</button>
 						<button type="button" class="btn btn-primary mainnav slim btnicon-websearch hidden" id="btn_togglesearch2" onclick="toggle_websearch()">&nbsp;</button>
 						<button type="button" class="btn btn-primary mainnav" id="btn_editmode" onclick="btn_editmode()">Edit</button>
 					</div>
@@ -23455,7 +23509,7 @@ Current version indicated by LITEVER below.
 					</div>
 					<div class="corpomainbtm">
 						<div class="corpo_chat_outer">
-							<button title="Image" onclick="add_img_btn_menu()" id="corpo_chat_img_btn" class="corpo_chat_img_btn mainnav" type="button"></button>
+							<button title="Image" onclick="add_media_btn_menu()" id="corpo_chat_img_btn" class="corpo_chat_img_btn mainnav" type="button"></button>
 							<div class="corpo_chat_inner" id="corpo_cht_inp_lengthtester" style="white-space: nowrap; visibility: hidden; height: 0px; position:absolute; width: auto;"></div>
 							<textarea title="User Input" class="corpo_chat_inner mainnav" id="corpo_cht_inp" type="text" name="crpchtinp"  role="presentation" autocomplete="noppynop" spellcheck="true" rows="1" wrap="on" placeholder="Message KoboldAI" value="" oninput="update_submit_button();chat_resize_input();" onpaste="return img_paste_event(event)" onkeypress="return chat_handle_typing(event)"></textarea>
 							<button title="Submit" onclick="submit_generation_button(true)" id="corpo_chat_send_btn" class="corpo_chat_send_btn mainnav" type="button"></button>
@@ -25720,11 +25774,11 @@ Current version indicated by LITEVER below.
 		</div>
 	</div>
 
-	<div class="popupcontainer flex hidden" id="addimgcontainer">
+	<div class="popupcontainer flex hidden" id="addmediacontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup flexsizevsmall">
+		<div class="nspopup flexsizevsmall moderate">
 			<div class="popuptitlebar">
-				<div class="popuptitletext">Add New Image</div>
+				<div class="popuptitletext">Add Audio or Image</div>
 			</div>
 			<div class="menutext">
 				<button type="button" class="btn btn-primary bg_green" id="btn_inner_genimg_auto" onclick="add_img_btn_auto()">Generate Image (Automatic)</button>
@@ -25733,7 +25787,7 @@ Current version indicated by LITEVER below.
 				<button type="button" class="btn btn-primary bg_green" id="btn_inner_genimg_custom" onclick="add_img_btn_custom()">Generate Image (Custom Prompt)</button>
 			</div>
 			<div class="menutext">
-				<button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_upload()">Upload Image File</button>
+				<button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_upload()">Upload a File (Image / Audio)</button>
 			</div>
 			<div class="menutext">
 				<button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_webcam()">Capture From Camera</button>
@@ -25742,13 +25796,13 @@ Current version indicated by LITEVER below.
 				<button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_paste()">Drag Drop / Paste from Clipboard</button>
 			</div>
 			<div class="menutext">
-				<button type="button" class="btn btn-primary" onclick="hide_popups();display_settings();display_settings_tab(2);">Customize Image Settings</button>
+				<button type="button" class="btn btn-primary" onclick="hide_popups();display_settings();display_settings_tab(2);">Customize Media Settings</button>
 			</div>
 			<div class="menutext hidden" id="btn_open_stableui">
 				<button type="button" class="btn btn-primary bg_purple" onclick="go_to_stableui()">Go To StableUI</button>
 			</div>
 			<br>
-			<input type="file" id="addimgfileinput" style="display:none" accept="image/*">
+			<input type="file" id="addimgfileinput" style="display:none" accept="image/*,audio/*">
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
 			</div>
@@ -25759,9 +25813,9 @@ Current version indicated by LITEVER below.
 		<div class="popupbg flex"></div>
 		<div class="nspopup flexsizevsmall">
 			<div class="popuptitlebar">
-				<div class="popuptitletext">Paste Image From Clipboard</div>
+				<div class="popuptitletext">Paste Item From Clipboard</div>
 			</div>
-			<input type="text" id="pasteimgwin" style="width:100%; height:100px; text-align: center;" oninput="clear_paste_window()" onpaste="return img_paste_event(event)" value="" placeholder="[Drag/Paste Image Here]">
+			<input type="text" id="pasteimgwin" style="width:100%; height:100px; text-align: center;" oninput="clear_paste_window()" onpaste="return img_paste_event(event)" value="" placeholder="[Drag/Paste Content Here]">
 			<br>
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
