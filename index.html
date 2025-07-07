@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 258;
+	const LITEVER = 259;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -22137,11 +22137,8 @@ Current version indicated by LITEVER below.
 	}
 
 	function initializeInstructUIFunctionality() {
-
-		// Initialize foregroundColorPickers and backgroundColorPickers.
+		// Initialize color pickers
 		document.querySelectorAll('.enhancedcolorPicker, .enhancedStandardColorPicker').forEach(element => {
-			// Create a fully transparent colorPicker for each element and initialize it as child of the textblock element.
-			// ..this happens because we want the colorPicker to open right below the element.
 			let useBackground = !element.classList.contains('enhancedcolorPicker');
 			let colorPicker = document.createElement('input');
 			colorPicker.type = 'color';
@@ -22153,16 +22150,14 @@ Current version indicated by LITEVER below.
 			colorPicker.value = element.style[`${useBackground ? 'backgroundColor' : 'color'}`];
 			element.style.position = 'relative';
 			element.appendChild(colorPicker);
-
 			// If we're on Safari browser and in iOS, we need some adjustments for the colorpickers to work.
-			// ..this happens because the clicks need to be directly done on the colorPicker for iOS in Safari.
+			// this happens because the clicks need to be directly done on the colorPicker for iOS in Safari.
 			if (/^((?!Chrome|Firefox).)*Safari/i.test(navigator.userAgent) && /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
 				// Create a wrapper for the existing content. This will fix the offset slightly.
 				let contentWrapper = document.createElement('div');
 				contentWrapper.style.position = 'relative';
 				contentWrapper.style.zIndex = '0';
 				element.appendChild(contentWrapper);
-
 				// Finally, make the colorPicker directly clickable, and offset it slightly towards the text block.
 				colorPicker.style.zIndex = '1';
 				colorPicker.style.margin = '-20px';
@@ -22187,6 +22182,7 @@ Current version indicated by LITEVER below.
 			element.addEventListener('mouseover', () => element.style.cursor = "pointer");
 		});
 
+		//portrait reset button
 		document.getElementById("reset-portrait").addEventListener('click', (e) => {
 			aestheticInstructUISettings.you_portrait = null;
 			aestheticInstructUISettings.AI_portrait = "default";
@@ -22197,6 +22193,7 @@ Current version indicated by LITEVER below.
 			refreshAestheticPreview(true);
 		});
 
+		//full aesthetic reset button
 		document.getElementById("reset-all-aesthetic-instruct").addEventListener('click', (e) => {
 			let ns = new AestheticInstructUISettings();
 			aestheticInstructUISettings = deepCopyAestheticSettings(ns);
@@ -22209,7 +22206,7 @@ Current version indicated by LITEVER below.
 	function openAestheticUISettingsMenu() {
 		tempAestheticInstructUISettings = deepCopyAestheticSettings(aestheticInstructUISettings);
 		document.getElementById("aestheticsettingscontainer").classList.remove("hidden");
-		updateTextPreview();
+		updateAestheticTextPreview();
 	}
 
 	function hideAestheticUISettingsMenu(confirm) {
@@ -22230,7 +22227,7 @@ Current version indicated by LITEVER below.
 	function refreshAestheticPreview(updateFromUI = true) {
 		if (updateFromUI) { updateDataFromUI(); }
 		updateUIFromData();
-		updateTextPreview();
+		updateAestheticTextPreview();
 		character_creator_updateimg();
 	}
 
@@ -22345,6 +22342,21 @@ Current version indicated by LITEVER below.
 				childInput.value = newColor;
 			}
 		}
+	}
+
+	function updateAestheticTextPreview() {
+		let preview = `The shadows dance across the walls under the flickering candlelight of the quiet tavern.\n\nIt is well past dinnertime, and a cool breeze fills the room, which is nearly silent except for the hushed conversations from the few remaining patrons.\n{{[OUTPUT]}}\n*A small Kobold wearing a tattered brown cloak scurries up to you*\n\n"Excuse me, adventurer, I am Kobo the Kobold," he coughs softly and continues, "could you spare me a little coin? I haven't eaten for so long..." *kobo looks downcast with pleading eyes*\n{{[INPUT]}}\n*retrieves a small copper coin from a leather pouch, and places it on the table*\n\n"Hmm, that depends. Do you know to calculate the factorial of a number?", you chuckle.\n{{[OUTPUT]}}\nThe pathetic Kobold looks taken aback by your strange request, but then grudgingly agrees. *sighs heavily* "I guess..." *takes a few steps backwards, and starts scratching into the grimy floor with a stick*\n\n"Kobo just needs some food..." The kobold takes a deep breath and starts writing.\n\n\`\`\`\ndef factorial(n):\n  if n == 0:\n    return 1\n  else:\n    return n * factorial(n-1)\n\`\`\`\n*Kobo looks at you again* "Is that... acceptable?"\n{{[INPUT]}}\n*patting the sad kobold on his head, as he gratefully accepts the coin*\n\n"Aww there you go! Try not to spend it all it one place."\n\nYou watch as Kobo scampers off into the distance. Tomorrow comes.`;
+		if(localsettings.opmode==3)
+		{
+			preview = replaceAll(preview,'\n{{[OUTPUT]}}\n', `\n${localsettings.chatopponent.split("||$||")[0]}: `);
+			preview = replaceAll(preview,'\n{{[INPUT]}}\n', `\n${localsettings.chatname}: `);
+		}
+		else if(localsettings.opmode==1 || localsettings.opmode==2)
+		{
+			preview = replaceAll(preview,'{{[OUTPUT]}}', "");
+			preview = replaceAll(preview,'{{[INPUT]}}', "");
+		}
+		document.getElementById('aesthetic_text_preview').innerHTML = render_aesthetic_ui(preview,true);
 	}
 
 	function render_aesthetic_ui(input, isPreview) //class suffix string used to prevent defined styles from leaking into global scope
@@ -22542,25 +22554,8 @@ Current version indicated by LITEVER below.
 		}
 
 		return portraitsStyling + newbodystr.replaceAll(/(\r\n|\r|\n)/g,'<br>'); // Finally, convert newlines to HTML format and return the stylized string.
-
 	}
-
-	function updateTextPreview() {
-		let preview = `The shadows dance across the walls under the flickering candlelight of the quiet tavern.\n\nIt is well past dinnertime, and a cool breeze fills the room, which is nearly silent except for the hushed conversations from the few remaining patrons.\n{{[OUTPUT]}}\n*A small Kobold wearing a tattered brown cloak scurries up to you*\n\n"Excuse me, adventurer, I am Kobo the Kobold," he coughs softly and continues, "could you spare me a little coin? I haven't eaten for so long..." *kobo looks downcast with pleading eyes*\n{{[INPUT]}}\n*retrieves a small copper coin from a leather pouch, and places it on the table*\n\n"Hmm, that depends. Do you know to calculate the factorial of a number?", you chuckle.\n{{[OUTPUT]}}\nThe pathetic Kobold looks taken aback by your strange request, but then grudgingly agrees. *sighs heavily* "I guess..." *takes a few steps backwards, and starts scratching into the grimy floor with a stick*\n\n"Kobo just needs some food..." The kobold takes a deep breath and starts writing.\n\n\`\`\`\ndef factorial(n):\n  if n == 0:\n    return 1\n  else:\n    return n * factorial(n-1)\n\`\`\`\n*Kobo looks at you again* "Is that... acceptable?"\n{{[INPUT]}}\n*patting the sad kobold on his head, as he gratefully accepts the coin*\n\n"Aww there you go! Try not to spend it all it one place."\n\nYou watch as Kobo scampers off into the distance. Tomorrow comes.`;
-
-		if(localsettings.opmode==3)
-		{
-			preview = replaceAll(preview,'\n{{[OUTPUT]}}\n', `\n${localsettings.chatopponent.split("||$||")[0]}: `);
-			preview = replaceAll(preview,'\n{{[INPUT]}}\n', `\n${localsettings.chatname}: `);
-		}
-		else if(localsettings.opmode==1 || localsettings.opmode==2)
-		{
-			preview = replaceAll(preview,'{{[OUTPUT]}}', "");
-			preview = replaceAll(preview,'{{[INPUT]}}', "");
-		}
-
-		document.getElementById('aesthetic_text_preview').innerHTML = render_aesthetic_ui(preview,true);
-	}
+	// end of aesthetic ui
 
 	function PerformWebsearch(webSearchQuery, onDone)
 	{
