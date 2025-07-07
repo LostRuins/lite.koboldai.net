@@ -3072,7 +3072,7 @@ Current version indicated by LITEVER below.
 
 	const pollinations_img_endpoint = "https://image.pollinations.ai/prompt";
 	const pollinations_text_endpoint = "https://text.pollinations.ai/openai";
-	const dummy_pollinations_key = "kobo";
+	const dummy_api_key = "kobo";
 
 	//for optionally uploading content to share on dpaste
 	const dpaste_submit_endpoint = "https://dpaste.org/api/";
@@ -10412,11 +10412,11 @@ Current version indicated by LITEVER below.
 		desired_oai_ep = transform_oai_ep(desired_oai_ep);
 
 		let oaiheaders = {};
-		if(desired_oai_key!="" && !desired_oai_ep.toLowerCase().includes("pollinations.ai")){
+		if(desired_oai_key!="" && desired_oai_key!=dummy_api_key){
 			oaiheaders["Authorization"] = "Bearer " + desired_oai_key;
 		};
 		if (desired_oai_ep.toLowerCase().includes("api.mistral.ai")) {
-			if(desired_oai_key=="")
+			if(desired_oai_key=="" || desired_oai_key==dummy_api_key)
 			{
 				msgbox("MistralAI API requires an API key to fetch model list!");
 				return;
@@ -10589,7 +10589,7 @@ Current version indicated by LITEVER below.
 				document.getElementById("oaidesc").classList.remove("hidden");
 				document.getElementById("custom_oai_model").classList.remove("hidden");
 				document.getElementById("custom_oai_endpoint").classList.remove("hidden");
-				document.getElementById("custom_oai_key").value = localsettings.saved_oai_key;
+				document.getElementById("custom_oai_key").value = (localsettings.saved_oai_key==dummy_api_key?"":localsettings.saved_oai_key);
 				if (localflag) {
 					document.getElementById("custom_oai_endpoint").value = localprotocol + localmodehost + ":" + localmodeport + "/v1";
 				} else {
@@ -10601,14 +10601,14 @@ Current version indicated by LITEVER below.
 			{
 				document.getElementById("custom_mistralai_model").classList.remove("hidden");
 				document.getElementById("mistralaidesc").classList.remove("hidden");
-				document.getElementById("custom_oai_key").value = localsettings.saved_mistralai_key;
+				document.getElementById("custom_oai_key").value = (localsettings.saved_mistralai_key==dummy_api_key?"":localsettings.saved_mistralai_key);
 				document.getElementById("custom_oai_endpoint").value = default_mistralai_base;
 			}
 			else if(epchoice==8)
 			{
 				document.getElementById("custom_featherless_model").classList.remove("hidden");
 				document.getElementById("featherlessdesc").classList.remove("hidden");
-				document.getElementById("custom_oai_key").value = localsettings.saved_featherless_key;
+				document.getElementById("custom_oai_key").value = (localsettings.saved_featherless_key==dummy_api_key?"":localsettings.saved_featherless_key);
 				document.getElementById("custom_oai_endpoint").value = default_featherless_base;
 				try_fetch_oai_models_auto();
 			}
@@ -10616,14 +10616,14 @@ Current version indicated by LITEVER below.
 			{
 				document.getElementById("custom_grok_model").classList.remove("hidden");
 				document.getElementById("grokdesc").classList.remove("hidden");
-				document.getElementById("custom_oai_key").value = localsettings.saved_grok_key;
+				document.getElementById("custom_oai_key").value = (localsettings.saved_grok_key==dummy_api_key?"":localsettings.saved_grok_key);
 				document.getElementById("custom_oai_endpoint").value = default_grok_base;
 			}
 			else if(epchoice==10)
 			{
 				document.getElementById("custom_pollinations_model").classList.remove("hidden");
 				document.getElementById("pollinationsdesc").classList.remove("hidden");
-				document.getElementById("custom_oai_key").value = dummy_pollinations_key;
+				document.getElementById("custom_oai_key").value = dummy_api_key;
 				document.getElementById("custom_oai_endpoint").value = pollinations_text_endpoint;
 				document.getElementById("custom_oai_key").classList.add("hidden");
 			}
@@ -10633,7 +10633,7 @@ Current version indicated by LITEVER below.
 				document.getElementById("custom_openrouter_model").classList.remove("hidden");
 				document.getElementById("openrouterproviderbox").classList.remove("hidden");
 				document.getElementById("custom_oai_endpoint").value = default_openrouter_base;
-				document.getElementById("custom_oai_key").value = localsettings.saved_openrouter_key;
+				document.getElementById("custom_oai_key").value =(localsettings.saved_openrouter_key==dummy_api_key?"":localsettings.saved_openrouter_key);
 				if(!openrouter_fetch_attempted)
 				{
 					openrouter_fetch_attempted = true;
@@ -11106,6 +11106,11 @@ Current version indicated by LITEVER below.
 
 			desired_oai_ep = transform_oai_ep(desired_oai_ep);
 
+			if(desired_oai_key=="" && epchoice==2 && !desired_oai_ep.includes(default_oai_base)) //allow no keys for custom oai api
+			{
+				desired_oai_key = dummy_api_key;
+			}
+
 			if(desired_oai_key!="" && desired_oai_ep!="")
 			{
 				dismiss_endpoint_container();
@@ -11138,7 +11143,7 @@ Current version indicated by LITEVER below.
 				}
 				else if(epchoice==10)
 				{
-					localsettings.saved_pollinations_key = dummy_pollinations_key; //placeholder key, not actually used
+					localsettings.saved_pollinations_key = dummy_api_key; //placeholder key, not actually used
 				}
 				else
 				{
@@ -11173,6 +11178,10 @@ Current version indicated by LITEVER below.
 				}
 				document.getElementById("connectstatus").innerHTML = "OpenAI Endpoint";
 				render_gametext(true);
+			}
+			else
+			{
+				document.getElementById("connectstatus").innerHTML = "Key Needed";
 			}
 		}
 		else if(epchoice==4) //claude endpoint
@@ -16661,7 +16670,7 @@ Current version indicated by LITEVER below.
 					'Content-Type': 'application/json'
 				};
 
-				if (!targetep.toLowerCase().includes("pollinations.ai")) {
+				if (custom_oai_key!="" && custom_oai_key!=dummy_api_key) {
                     oaiheaders['Authorization'] = 'Bearer ' + custom_oai_key;
                 }
 
