@@ -22057,8 +22057,15 @@ Current version indicated by LITEVER below.
 
 	class AestheticInstructUISettings {
 		constructor() {
-			this.background_margin = [5, 5, 5, 0];
-			this.background_padding = [15, 15, 10, 5];
+			this.aui_margin_left = 5;
+			this.aui_margin_right = 5;
+			this.aui_margin_top = 5;
+			this.aui_margin_bottom = 0;
+			this.aui_padding_left = 15;
+			this.aui_padding_right = 15;
+			this.aui_padding_top = 10;
+			this.aui_padding_bottom = 5;
+
 			this.background_minHeight = 80;
 			this.centerHorizontally = false;
 
@@ -22091,12 +22098,10 @@ Current version indicated by LITEVER below.
 			this.code_block_foreground = 'rgb(210, 50, 50)';
 		}
 
-		padding() { return `${this.background_padding[2]}px ${this.background_padding[1]}px ${this.background_padding[3]}px ${this.background_padding[0]}px`; }
-		margin() { return `${this.background_margin[2]}px ${this.background_margin[1]}px ${this.background_margin[3]}px ${this.background_margin[0]}px`; }
+		padding() { return `${this.aui_padding_top}px ${this.aui_padding_right}px ${this.aui_padding_bottom}px ${this.aui_padding_left}px`;}
+		margin() { return `${this.aui_margin_top}px ${this.aui_margin_right}px ${this.aui_margin_bottom}px ${this.aui_margin_left}px`; }
 
 	}
-
-	const sideMapping = { 'left': 0, 'right': 1, 'top': 2, 'bottom': 3 };
 
 	let aestheticInstructUISettings = new AestheticInstructUISettings();
 	let tempAestheticInstructUISettings = null; // These exist to act as backup when customizing, to revert when pressing the 'Cancel' button.
@@ -22112,7 +22117,6 @@ Current version indicated by LITEVER below.
 				reader.onload = function(img) {
 					compressImage(img.target.result, loadCompressedImage, true, AVATAR_PX);
 					function loadCompressedImage(compressedImageURI, aspectratio) {
-
 						if(isSelfPortrait)
 						{
 							aestheticInstructUISettings.you_portrait = compressedImageURI;
@@ -22171,31 +22175,16 @@ Current version indicated by LITEVER below.
 			// Initialize the functionalities of the colorPicker
 			colorPicker.addEventListener('change', function() {
 				element.style[`${useBackground ? 'backgroundColor' : 'color'}`] = this.value;
-				refreshAestheticPreview();
 			});
 			element.addEventListener('mouseover', () => element.style.cursor = "pointer");
 		});
 
-		// Initialize functionality for the margin & padding input fields.
-		document.querySelectorAll('.instruct-settings-input').forEach(element => {
-			const input = element.querySelector('input');
-			const type = element.getAttribute('data-type');
-			const side = element.getAttribute('data-side');
-
-			input.addEventListener('input', function() {
-				let clippedvalue = parseInt(this.value, 10);
-				clippedvalue = cleannum(clippedvalue, 0, 300);
-				if (type === 'margin') { aestheticInstructUISettings.background_margin[sideMapping[side]] = parseInt(clippedvalue, 10); }
-				else if (type === 'padding') { aestheticInstructUISettings.background_padding[sideMapping[side]] = parseInt(clippedvalue, 10); }
-			});
-		});
-
 		// Initialize functionality for the portrait pickers.
 		document.querySelectorAll('#you-portrait, #AI-portrait').forEach(element => {
-		element.addEventListener('click', (e) => {
-			selectAvatarImage(element.id=="you-portrait");
-		});
-		element.addEventListener('mouseover', () => element.style.cursor = "pointer");
+			element.addEventListener('click', (e) => {
+				selectAvatarImage(element.id=="you-portrait");
+			});
+			element.addEventListener('mouseover', () => element.style.cursor = "pointer");
 		});
 
 		document.getElementById("reset-portrait").addEventListener('click', (e) => {
@@ -22209,7 +22198,6 @@ Current version indicated by LITEVER below.
 		});
 
 		document.getElementById("reset-all-aesthetic-instruct").addEventListener('click', (e) => {
-
 			let ns = new AestheticInstructUISettings();
 			aestheticInstructUISettings = deepCopyAestheticSettings(ns);
 			refreshAestheticPreview(false);
@@ -22222,12 +22210,11 @@ Current version indicated by LITEVER below.
 		tempAestheticInstructUISettings = deepCopyAestheticSettings(aestheticInstructUISettings);
 		document.getElementById("aestheticsettingscontainer").classList.remove("hidden");
 		updateTextPreview();
-
 	}
+
 	function hideAestheticUISettingsMenu(confirm) {
 		if (!confirm) { aestheticInstructUISettings = deepCopyAestheticSettings(tempAestheticInstructUISettings); updateUIFromData(); }
 		tempAestheticInstructUISettings = null;
-
 		document.getElementById("aestheticsettingscontainer").classList.add("hidden");
 		render_gametext();
 	}
@@ -22272,6 +22259,15 @@ Current version indicated by LITEVER below.
 		aestheticInstructUISettings.background_minHeight = document.getElementById('instruct-min-backgroundHeight').value;
 		aestheticInstructUISettings.centerHorizontally = document.getElementById('instructModeCenterHorizontally').checked;
 
+		aestheticInstructUISettings.aui_margin_left = cleannum(parseInt(document.getElementById('aui_margin_left').value, 10), 0, 300);
+		aestheticInstructUISettings.aui_margin_right = cleannum(parseInt(document.getElementById('aui_margin_right').value, 10), 0, 300);
+		aestheticInstructUISettings.aui_margin_top = cleannum(parseInt(document.getElementById('aui_margin_top').value, 10), 0, 300);
+		aestheticInstructUISettings.aui_margin_bottom = cleannum(parseInt(document.getElementById('aui_margin_bottom').value, 10), 0, 300);
+		aestheticInstructUISettings.aui_padding_left = cleannum(parseInt(document.getElementById('aui_padding_left').value, 10), 0, 300);
+		aestheticInstructUISettings.aui_padding_right = cleannum(parseInt(document.getElementById('aui_padding_right').value, 10), 0, 300);
+		aestheticInstructUISettings.aui_padding_top = cleannum(parseInt(document.getElementById('aui_padding_top').value, 10), 0, 300);
+		aestheticInstructUISettings.aui_padding_bottom = cleannum(parseInt(document.getElementById('aui_padding_bottom').value, 10), 0, 300);
+
 		//basic sanitization
 		aestheticInstructUISettings.font_size = cleannum(aestheticInstructUISettings.font_size, 5, 50);
 		aestheticInstructUISettings.portrait_width_AI = cleannum(aestheticInstructUISettings.portrait_width_AI, 10, 250);
@@ -22286,6 +22282,7 @@ Current version indicated by LITEVER below.
 			return computedStyle.color;
 		}
 	}
+
 	function updateUIFromData() {
 		// Parse color settings and apply to the related parts in the UI.
 		setElementColor(`you-text-colorselector`, aestheticInstructUISettings.text_tcolor_you, false);
@@ -22314,40 +22311,39 @@ Current version indicated by LITEVER below.
 		document.getElementById('instruct-min-backgroundHeight').value = aestheticInstructUISettings.background_minHeight;
 		document.getElementById('instructModeCenterHorizontally').checked = aestheticInstructUISettings.centerHorizontally;
 
-		// Show or hide customization UI elements based on whether they should be visible in the UI or not.
-		showOrHide('.rectPortraitMode', document.getElementById('instructBorderStyle').value != 'Circle');
+		if(document.getElementById('instructBorderStyle').value == 'Circle')
+		{
+			document.querySelectorAll('.rectPortraitMode').forEach((x) => x.classList.add('hidden'));
+		}
+		else
+		{
+			document.querySelectorAll('.rectPortraitMode').forEach((x) => x.classList.remove('hidden'));
+		}
 
-		document.querySelectorAll('.instruct-settings-input').forEach(element => {
-			const input = element.querySelector('input');
-			const type = element.getAttribute('data-type');
-			const side = element.getAttribute('data-side');
-
-			if (type === 'margin') { input.value = aestheticInstructUISettings.background_margin[sideMapping[side]]; }
-			else if (type === 'padding') { input.value = aestheticInstructUISettings.background_padding[sideMapping[side]]; }
-		});
-
+		document.getElementById('aui_margin_left').value = aestheticInstructUISettings.aui_margin_left;
+		document.getElementById('aui_margin_right').value = aestheticInstructUISettings.aui_margin_right;
+		document.getElementById('aui_margin_top').value = aestheticInstructUISettings.aui_margin_top;
+		document.getElementById('aui_margin_bottom').value = aestheticInstructUISettings.aui_margin_bottom;
+		document.getElementById('aui_padding_left').value = aestheticInstructUISettings.aui_padding_left;
+		document.getElementById('aui_padding_right').value = aestheticInstructUISettings.aui_padding_right;
+		document.getElementById('aui_padding_top').value = aestheticInstructUISettings.aui_padding_top;
+		document.getElementById('aui_padding_bottom').value = aestheticInstructUISettings.aui_padding_bottom;
 
 		function setElementColor(id, newColor, isBackground) {
 			let element = document.getElementById(id);
 			if (!element) { console.warn(`Element with ID: ${id} not found.`); return; }
-
 			if (isBackground) {
 				element.style.backgroundColor = newColor;
 			}
 			else {
 				element.style.color = newColor;
 			}
-
 			var childInput = element.querySelector('.colorpickerchild');
 			if (childInput && newColor.includes("rgb")) {
 				childInput.value = rgb_to_hex(newColor);
 			} else {
 				childInput.value = newColor;
 			}
-		}
-		function showOrHide(classID, value) {
-			if (value) { document.querySelectorAll(classID).forEach((x) => x.classList.remove('hidden')); }
-			else { document.querySelectorAll(classID).forEach((x) => x.classList.add('hidden')); }
 		}
 	}
 
@@ -22390,7 +22386,7 @@ Current version indicated by LITEVER below.
 		{
 			if(aestheticInstructUISettings.match_background)
 			{
-				document.getElementById('enhancedchatinterface_inner').style.backgroundColor = aestheticInstructUISettings.bubbleColor_sys;
+				document.getElementById('enhancedchatinterface_inner').style.backgroundColor = aestheticInstructUISettings.bubbleColor_AI;
 			}else
 			{
 				document.getElementById('enhancedchatinterface_inner').style.backgroundColor = null;
@@ -22400,8 +22396,8 @@ Current version indicated by LITEVER below.
 		let classSuffixStr = isPreview ? "prv" : "";
 		let portraitsStyling = // Also, implement portraits as css classes. Now chat entries can reuse them instead of recreating them.
 		`<style>
-			.you-portrait-image`+classSuffixStr+` {margin: 10px 6px; background:url(`+ as.you_portrait +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
-			.AI-portrait-image`+classSuffixStr+` {margin: 10px 6px; background:url(`+ (as.AI_portrait!="default"?as.AI_portrait:niko_square) +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
+			.you-portrait-image${classSuffixStr} {margin: 10px 6px; background:url(${as.you_portrait}); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
+			.AI-portrait-image${classSuffixStr} {margin: 10px 6px; background:url(${(as.AI_portrait!="default"?as.AI_portrait:niko_square)}); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
 			code
 			{
 				color: ${as.code_block_foreground};
@@ -24855,7 +24851,7 @@ Current version indicated by LITEVER below.
 
 									<div class="ui-settings-inline">
 										<div style="margin-right:20px;">Min Height: </div>
-										<div class="instruct-settings-input"><input id ="instruct-min-backgroundHeight" type="number"/> px</div>
+										<div class="instruct-settings-input"><input id="instruct-min-backgroundHeight" type="number"/> px</div>
 										<div class="ui-settings-inline">
 											<div style="padding-top: 4px; font-size: 10px; margin-left: 10px;">Horizontally-centered text:</div>
 											<input id="instructModeCenterHorizontally" type="checkbox" style="height: 10px; margin-top: 6px;">
@@ -24863,17 +24859,17 @@ Current version indicated by LITEVER below.
 									</div>
 									<div class="ui-settings-inline">
 										<div style="margin-right:20px;">Margin (px): </div>
-										<div class="instruct-settings-input" data-type="margin" data-side="left"  >L: <input type="number"/></div>
-										<div class="instruct-settings-input" data-type="margin" data-side="right" >R: <input type="number"/></div>
-										<div class="instruct-settings-input" data-type="margin" data-side="top"   >T: <input type="number"/></div>
-										<div class="instruct-settings-input" data-type="margin" data-side="bottom">B: <input type="number"/></div>
+										<div class="instruct-settings-input">L: <input id="aui_margin_left"   type="number"/></div>
+										<div class="instruct-settings-input">R: <input id="aui_margin_right"  type="number"/></div>
+										<div class="instruct-settings-input">T: <input id="aui_margin_top"    type="number"/></div>
+										<div class="instruct-settings-input">B: <input id="aui_margin_bottom" type="number"/></div>
 									</div>
 									<div class="ui-settings-inline">
 										<div style="margin-right:13px">Padding (px): </div>
-										<div class="instruct-settings-input" data-type="padding" data-side="left"  >L: <input type="number"/></div>
-										<div class="instruct-settings-input" data-type="padding" data-side="right" >R: <input type="number"/></div>
-										<div class="instruct-settings-input" data-type="padding" data-side="top"   >T: <input type="number"/></div>
-										<div class="instruct-settings-input" data-type="padding" data-side="bottom">B: <input type="number"/></div>
+										<div class="instruct-settings-input">L: <input id="aui_padding_left"   type="number"/></div>
+										<div class="instruct-settings-input">R: <input id="aui_padding_right"  type="number"/></div>
+										<div class="instruct-settings-input">T: <input id="aui_padding_top"    type="number"/></div>
+										<div class="instruct-settings-input">B: <input id="aui_padding_bottom" type="number"/></div>
 									</div>
 								</div>
 							</div>
