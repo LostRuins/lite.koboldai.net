@@ -621,6 +621,13 @@ Current version indicated by LITEVER below.
 		padding-top: 2px;
 		text-shadow: 1px 1px 1px #000000;
 	}
+	.unstarted_block
+	{
+		vertical-align: bottom;
+		color: #ffffff;
+		font-size: 12pt;
+		font-family: "Helvetica";
+	}
 
 	/* Horizontal action bar */
 	#actionmenuitems button,#actionmenuitems2 button {
@@ -2447,6 +2454,9 @@ Current version indicated by LITEVER below.
 		font-size: 12px;
 		z-index: 9999;
 		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+	}
+	.bolded {
+		font-weight: bold;
 	}
 	</style>
 
@@ -19723,7 +19733,7 @@ Current version indicated by LITEVER below.
 				`<br>You are using the models <span class="color_green">${selmodelstr}</span>${(selected_workers.length == 0 ? `` : ` (Pinned to ${selected_workers.length} worker IDs)`)}.`+
 				`${whorun}.`+
 				(multiplayer_active?(!multiplayer_pinged?`<br><br><span class="color_orange">[ Trying to join Multiplayer... ]</span>`:`<br><br><span class="color_green">[ Multiplayer is <b>Active</b>! This session is shared with other server participants.]<br>[ You can leave via exit button in top right corner. ]</span>`):(is_using_kcpp_with_multiplayer()?`<br><br>[ <a href="#" tabindex="${mainmenu_is_untab?`-1`:`0`}" class="color_blueurl mainnav" onclick="join_multiplayer()"><span class="color_green">Multiplayer Available</span> - Click Here To Join</a> ]`:``))+
-				`<br><br><span class="color_orange" style="font-weight: bold;">${nowmode} Selected</span> - Enter a prompt below to begin!`+
+				`<br><br><span class="color_orange bolded">${nowmode} Selected</span> - Enter a prompt below to begin!`+
 				`<br>Or, <a href="#" tabindex="${mainmenu_is_untab?`-1`:`0`}" class="color_blueurl mainnav" onclick="document.getElementById('loadfileinput').click()">load a <b>JSON File</b> or a <b>Character Card</b> here.</a>`+
 				`<br>Or, <a href="#" tabindex="${mainmenu_is_untab?`-1`:`0`}" class="color_blueurl mainnav" onclick="display_scenarios()">select a <b>Quick Start Scenario</b> here.</a>`+
 				`<br>${(welcome!=""?`<br><em>${escape_html(welcome)}</em>`:``)}`;
@@ -20064,21 +20074,22 @@ Current version indicated by LITEVER below.
 			let textToRender = "";
 			let prepToGen = (gametext_arr.length == 0 && synchro_pending_stream == "" && pending_response_id != "");
 			if (gametext_arr.length == 0 && (prepToGen || pending_response_id == "")) {
-				textToRender = document.getElementById("gametext").innerHTML;
+				let intro = document.getElementById("gametext").innerHTML;
+				document.getElementById("chat_msg_body").innerHTML = `<span class='unstarted_block'>${intro}</span>`;
 			} else {
 				textToRender = concat_gametext(false, "", "", "", true);
+				textToRender = apply_display_only_regex(textToRender);
+				textToRender = replace_placeholders(textToRender,true);
+				if(localsettings.opmode==3 && localsettings.gui_type_chat==1)
+				{
+					document.getElementById("chat_msg_body").innerHTML = render_messenger_ui(textToRender);
+				}
+				else
+				{
+					document.getElementById("chat_msg_body").innerHTML = render_aesthetic_ui(textToRender,false);
+				}
 			}
-			textToRender = apply_display_only_regex(textToRender);
-			textToRender = replace_placeholders(textToRender,true);
 
-			if(localsettings.opmode==3 && localsettings.gui_type_chat==1)
-			{
-				render_messenger_ui(textToRender);
-			}
-			else
-			{
-				document.getElementById("chat_msg_body").innerHTML = render_aesthetic_ui(textToRender,false);
-			}
 			if ((localsettings.opmode == 3 && localsettings.chatopponent != "")||localsettings.opmode == 4||localsettings.opmode==2) {
 				document.getElementById("cht_inp_bg").classList.add("shorter");
 				if(localsettings.opmode==2)
@@ -21005,12 +21016,6 @@ Current version indicated by LITEVER below.
 
 	function render_messenger_ui(input)
 	{
-		var chatbody = document.getElementById("chat_msg_body");
-		if(!chatbody)
-		{
-			return;
-		}
-
 		let newbodystr = "";
 		let chatunits = repack_chat_history(input);
 
@@ -21048,7 +21053,7 @@ Current version indicated by LITEVER below.
 			newbodystr += `<div class="incoming_msg"><div class="chat_received_msg"><div class="chat_received_withd_msg"><p><span class="color_yellow pending_text">` + escape_html(pending_context_preinjection) + format_streaming_text(escape_html(synchro_pending_stream)) + `</span></p></div></div></div>`;
 		}
 
-		chatbody.innerHTML = newbodystr;
+		return newbodystr;
 	}
 
 	function chat_handle_typing(event)
