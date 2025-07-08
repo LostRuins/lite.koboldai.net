@@ -6212,6 +6212,26 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	function probe_oai_endpoint(fullurl,onDone) //used to test if a suspected openai endpoint is working
+	{
+		fetch((fullurl), {
+			method: 'GET',
+		})
+		.then((response) => response.json())
+		.then((data) => {
+			if(data.data && data.data.length > 0)
+			{
+				onDone(data.data); //probe failed
+			}
+			else
+			{
+				onDone(null); //probe failed
+			}
+		}).catch(error => {
+			onDone(null); //probe failed
+		});
+	}
+
 	//read any parameters passed in from the URL, and load content if found
 	function read_url_params_data()
 	{
@@ -10849,6 +10869,8 @@ Current version indicated by LITEVER below.
 				custom_kobold_endpoint = desiredkoboldendpoint;
 				custom_kobold_key = desiredkoboldkey;
 
+				const backup_oai_test = desiredkoboldendpoint + "/v1" + oai_models_endpoint; //last resort later
+
 				let fetchedurl = apply_proxy_url(desiredkoboldendpoint + kobold_custom_mdl_endpoint);
 
 				fetch(fetchedurl,{
@@ -11140,18 +11162,32 @@ Current version indicated by LITEVER below.
 					}
 					else //finally, we give up
 					{
-						msgbox("Failed to connect to Custom KoboldAI Endpoint!<br><br>Please check if KoboldAI is running at the url: " + desiredkoboldendpoint + "<br><br>You can also <a href='#' class='color_blueurl' onclick='hide_popups();display_endpoint_container();'>try a different URL or API type</a>.","Error Encountered",true);
-						selected_models = [];
-						selected_workers = [];
-						custom_kobold_endpoint = "";
-						if(localflag)
+						const connectfailed = function()
 						{
-							document.getElementById("connectstatus").innerHTML = "Offline Mode";
-						}else{
-							document.getElementById("connectstatus").innerHTML = "Error";
+							msgbox("Failed to connect to Custom KoboldAI Endpoint!<br><br>Please check if KoboldAI is running at the url: " + desiredkoboldendpoint + "<br><br>You can also <a href='#' class='color_blueurl' onclick='hide_popups();display_endpoint_container();'>try a different URL or API type</a>.","Error Encountered",true);
+							selected_models = [];
+							selected_workers = [];
+							custom_kobold_endpoint = "";
+							if(localflag)
+							{
+								document.getElementById("connectstatus").innerHTML = "Offline Mode";
+							}else{
+								document.getElementById("connectstatus").innerHTML = "Error";
+							}
+							render_gametext(false,false);
 						}
 
-						render_gametext();
+						//we probe the openai endpoint as well without any key
+						probe_oai_endpoint(backup_oai_test,(proberesult) => {
+							if (!proberesult) {
+								connectfailed();
+							} else { //probe worked
+								hide_popups();
+								document.getElementById("customapidropdown").value = "2"; //openai
+								display_endpoint_container();
+							}
+						});
+
 					}
 
 				});
@@ -14627,9 +14663,11 @@ Current version indicated by LITEVER below.
 		{
 			self_upload_audio(data);
 		}
-		else
+		else if(data.startsWith("data:image"))
 		{
 			self_upload_img(data);
+		}else{
+			msgbox("Unsupported File Format!\nOnly Image and Audio files are supported!","Unsupported File Format");
 		}
 	}
 
@@ -17826,10 +17864,11 @@ Current version indicated by LITEVER below.
 		{
 			return render_audio_html(data);
 		}
-		else
+		else if(data.startsWith("data:image"))
 		{
 			return render_image_html(data, pend_txt, siclass)
 		}
+		return "";
 	}
 
 	function render_audio_html(data)
@@ -25915,7 +25954,7 @@ Current version indicated by LITEVER below.
 				<button type="button" class="btn btn-primary bg_purple" onclick="go_to_stableui()">Go To StableUI</button>
 			</div>
 			<br>
-			<input type="file" id="addimgfileinput" style="display:none" accept="image/*,audio/*">
+			<input type="file" id="addimgfileinput" style="display:none" accept="image/*,audio/mpeg,audio/wav,audio/ogg,audio/aac,audio/flac,audio/opus,audio/mp4">
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
 			</div>
