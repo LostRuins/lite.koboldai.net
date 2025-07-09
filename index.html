@@ -6221,7 +6221,9 @@ Current version indicated by LITEVER below.
 		.then((data) => {
 			if(data.data && data.data.length > 0)
 			{
-				onDone(data.data); //probe failed
+				let dropdown = get_custom_ep_model_dropdown("2");
+				update_oai_model_list(data,dropdown);
+				onDone(data.data); //probe success
 			}
 			else
 			{
@@ -10488,6 +10490,36 @@ Current version indicated by LITEVER below.
 			});
 		});
 	}
+	function update_oai_model_list(data, dropdown)
+	{
+		let isOpenrouter = (document.getElementById("customapidropdown").value==3);
+		var lastOption = dropdown.lastElementChild;
+		for (var i = dropdown.options.length - 1; i >= 0; i--) {
+			var option = dropdown.options[i];
+			dropdown.remove(option);
+		}
+		let selidx = 0;
+		let sortedarr = [];
+		for(var i = 0; i < data.data.length; i++) {
+			var opt = data.data[i];
+			sortedarr.push(opt.id);
+		}
+		sortedarr.sort();
+		for(var i=0;i<sortedarr.length;++i)
+		{
+			var el = document.createElement("option");
+			el.textContent = sortedarr[i];
+			el.value = sortedarr[i];
+			if(isOpenrouter && sortedarr[i]=="mistralai/mistral-7b-instruct")
+			{
+				selidx = i;
+			}
+			dropdown.appendChild(el);
+		}
+		dropdown.appendChild(lastOption);
+		dropdown.selectedIndex = selidx;
+		oai_model_change(true);
+	}
 	function oai_fetch_models()
 	{
 		let desired_oai_key = document.getElementById("custom_oai_key").value.trim();
@@ -10506,7 +10538,6 @@ Current version indicated by LITEVER below.
 			}
 		}
 
-		let isOpenrouter = (document.getElementById("customapidropdown").value==3);
 		let dropdown = get_custom_ep_model_dropdown();
 		fetch((desired_oai_ep + oai_models_endpoint), {
 			method: 'GET',
@@ -10526,32 +10557,7 @@ Current version indicated by LITEVER below.
 
 			if (!data.error && data.data && data.data.length > 0)
 			{
-				var lastOption = dropdown.lastElementChild;
-				for (var i = dropdown.options.length - 1; i >= 0; i--) {
-					var option = dropdown.options[i];
-					dropdown.remove(option);
-				}
-				let selidx = 0;
-				let sortedarr = [];
-				for(var i = 0; i < data.data.length; i++) {
-					var opt = data.data[i];
-					sortedarr.push(opt.id);
-				}
-				sortedarr.sort();
-				for(var i=0;i<sortedarr.length;++i)
-				{
-					var el = document.createElement("option");
-					el.textContent = sortedarr[i];
-					el.value = sortedarr[i];
-					if(isOpenrouter && sortedarr[i]=="mistralai/mistral-7b-instruct")
-					{
-						selidx = i;
-					}
-					dropdown.appendChild(el);
-				}
-				dropdown.appendChild(lastOption);
-				dropdown.selectedIndex = selidx;
-				oai_model_change(true);
+				update_oai_model_list(data,dropdown);
 			}
 			else
 			{
@@ -22551,7 +22557,7 @@ Current version indicated by LITEVER below.
 	}
 
 	function updateAestheticTextPreview() {
-		let preview = `The shadows dance across the walls under the flickering candlelight of the quiet tavern.\n\nIt is well past dinnertime, and a cool breeze fills the room, which is nearly silent except for the hushed conversations from the few remaining patrons.\n{{[OUTPUT]}}\n*A small Kobold wearing a tattered brown cloak scurries up to you*\n\n"Excuse me, adventurer, I am Kobo the Kobold," he coughs softly and continues, "could you spare me a little coin? I haven't eaten for so long..." *kobo looks downcast with pleading eyes*\n{{[INPUT]}}\n*retrieves a small copper coin from a leather pouch, and places it on the table*\n\n"Hmm, that depends. Do you know to calculate the factorial of a number?", you chuckle.\n{{[OUTPUT]}}\nThe pathetic Kobold looks taken aback by your strange request, but then grudgingly agrees. *sighs heavily* "I guess..." *takes a few steps backwards, and starts scratching into the grimy floor with a stick*\n\n"Kobo just needs some food..." The kobold takes a deep breath and starts writing.\n\n\`\`\`\ndef factorial(n):\n  if n == 0:\n    return 1\n  else:\n    return n * factorial(n-1)\n\`\`\`\n*Kobo looks at you again* "Is that... acceptable?"\n{{[INPUT]}}\n*patting the sad kobold on his head, as he gratefully accepts the coin*\n\n"Aww there you go! Try not to spend it all it one place."\n\nYou watch as Kobo scampers off into the distance. Tomorrow comes.`;
+		let preview = `The shadows dance across the walls under the flickering candlelight of the quiet tavern.\n\nIt is well past dinnertime, and a cool breeze fills the room, which is nearly silent except for the hushed conversations from the few remaining patrons.\n{{[OUTPUT]}}\n*A small Kobold wearing a tattered brown cloak scurries up to you*\n\n"Excuse me, adventurer, I am Kobo the Kobold," he coughs softly and continues, "could you spare me a little coin? I haven't eaten for so long..." *kobo looks downcast with pleading eyes*\n{{[INPUT]}}\n*retrieves a small copper coin from a leather pouch, and places it on the table*\n\n"Hmm, that depends. Do you know to calculate the factorial of a number?", you chuckle.\n{{[OUTPUT]}}\nThe pathetic Kobold looks taken aback by your strange request, but then grudgingly agrees. *sighs heavily* "I guess..." *takes a few steps backwards, and starts scratching into the grimy floor with a stick*\n\n"Kobo just needs some food..." The kobold takes a deep breath and starts writing.\n\n\`\`\`\ndef factorial(n):\n  if n == 0:\n    return 1\n  else:\n    return n * factorial(n-1)\n\`\`\`\n*Kobo looks at you again* "Is that... acceptable?"\n{{[INPUT]}}\n*patting the sad kobold on his head, as he gratefully accepts the coin*\n\n"Aww there you go! Try not to spend it all it one place."\n\nYou watch as Kobo scampers off into the distance.`;
 		if(localsettings.opmode==3)
 		{
 			preview = replaceAll(preview,'\n{{[OUTPUT]}}\n', `\n${localsettings.chatopponent.split("||$||")[0]}: `);
