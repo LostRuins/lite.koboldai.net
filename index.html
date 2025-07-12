@@ -1261,28 +1261,28 @@ Current version indicated by LITEVER below.
 	.zoomedimg
 	{
 		border-radius: 6%;
-		width:462px;
-		height:462px;
+		width:420px;
+		height:420px;
 	}
 	.zoomedimg.portrait
 	{
-		width:308px;
-		height:462px;
+		width:280px;
+		height:420px;
 	}
 	.zoomedimg.portrait_long
 	{
-		width:231px;
-		height:462px;
+		width:210px;
+		height:420px;
 	}
 	.zoomedimg.landscape
 	{
-		width:462px;
-		height:308px;
+		width:420px;
+		height:280px;
 	}
 	.zoomedimg.landscape_long
 	{
-		width:462px;
-		height:231px;
+		width:420px;
+		height:210px;
 	}
 	@media (max-width: 620px) {
 		.zoomedimg {
@@ -3670,14 +3670,17 @@ Current version indicated by LITEVER below.
 		//truncate to first 3 bytes
 		return hsh.substring(0, hashBytes*2);
 	};
-	function b64_to_persistent_blob(data)
+	function b64_to_persistent_blob(data, refhash="") //refhash will be calculated if not provided
 	{
 		if(!data || !data.startsWith("data:"))
 		{
 			return null;
 		}
-		let audiohash = cyrb_hash(data);
-		let fetchedblob = data_hash_to_blob_lookup[audiohash];
+		if(refhash=="")
+		{
+			refhash = cyrb_hash(data);
+		}
+		let fetchedblob = data_hash_to_blob_lookup[refhash];
 		if(fetchedblob)
 		{
 			return fetchedblob;
@@ -3695,7 +3698,7 @@ Current version indicated by LITEVER below.
 		// Create Blob and URL
 		const audioBlob = new Blob([bytes], {type: dtype});
 		const audioUrl = URL.createObjectURL(audioBlob);
-		data_hash_to_blob_lookup[audiohash] = audioUrl;
+		data_hash_to_blob_lookup[refhash] = audioUrl;
 		return audioUrl;
 	}
 	function basic_lcg(seed) { // simple RNG for reproducible dice rolls
@@ -4002,10 +4005,11 @@ Current version indicated by LITEVER below.
 				e.preventDefault();
 				e.stopPropagation();
 				const file = files[0];
+				const fname = files[0].name;
 				const reader = new FileReader();
 				reader.onload = function(img) {
 					let origImg = img.target.result;
-					self_upload_file_dispatch(origImg);
+					self_upload_file_dispatch(origImg,fname);
 				}
 				reader.readAsDataURL(file);
 			}
@@ -14663,21 +14667,21 @@ Current version indicated by LITEVER below.
 		document.getElementById("addmediacontainer").classList.add("hidden");
 	}
 
-	function self_upload_file_dispatch(data)
+	function self_upload_file_dispatch(data,filename)
 	{
 		if(data.startsWith("data:audio"))
 		{
-			self_upload_audio(data);
+			self_upload_audio(data,filename);
 		}
 		else if(data.startsWith("data:image"))
 		{
-			self_upload_img(data);
+			self_upload_img(data,filename);
 		}else{
 			msgbox("Unsupported File Format!\nOnly Image and Audio files are supported!","Unsupported File Format");
 		}
 	}
 
-	function self_upload_img(origImg)
+	function self_upload_img(origImg,filename)
 	{
 		let imgid = "selfuploadimg"+(Math.floor(10000 + Math.random() * 90000)).toString();
 		let nimgtag = "[<|p|" + imgid + "|p|>]";
@@ -14719,7 +14723,7 @@ Current version indicated by LITEVER below.
 		}, false, imgres,0.35,true);
 	}
 
-	function self_upload_audio(origAudio)
+	function self_upload_audio(origAudio,filename)
 	{
 		let imgid = "selfuploadaudio"+(Math.floor(10000 + Math.random() * 90000)).toString();
 		let nimgtag = "[<|p|" + imgid + "|p|>]";
@@ -14737,10 +14741,12 @@ Current version indicated by LITEVER below.
 		image_db[imgid] = { done: false, queue: "Processing", result: "", prompt:"", poll_category:0 };
 		image_db[imgid].aspect = 0;
 		image_db[imgid].imsource = 1; //0=generated,1=uploaded
-		image_db[imgid].imrefid = "";
-		convertAudioToCompressedBase64(origAudio,(newAudio)=>{
+		image_db[imgid].imrefid = filename;
+		image_db[imgid].len = 0;
+		convertAudioToCompressedBase64(origAudio,(newAudio,duration)=>{
 			image_db[imgid].done = true;
 			image_db[imgid].result = newAudio;
+			image_db[imgid].len = duration;
 		});
 	}
 
@@ -14760,7 +14766,7 @@ Current version indicated by LITEVER below.
 				var reader = new FileReader();
 				reader.onload = function(event){
 					let origImg = event.target.result;
-					self_upload_file_dispatch(origImg);
+					self_upload_file_dispatch(origImg,"");
 				};
 				reader.readAsDataURL(blob);
 				founditem = true;
@@ -14789,10 +14795,11 @@ Current version indicated by LITEVER below.
 				console.log(files);
 				if (files.length > 0 && files[0] != null && files[0].name && files[0].name != "") {
 					const file = files[0];
+					const fname = files[0].name;
 					const reader = new FileReader();
 					reader.onload = function(img) {
 						let origImg = img.target.result;
-						self_upload_file_dispatch(origImg);
+						self_upload_file_dispatch(origImg, fname);
 					}
 					reader.readAsDataURL(file);
 					document.getElementById("pasteimgcontainer").classList.add("hidden");
@@ -14875,7 +14882,7 @@ Current version indicated by LITEVER below.
 		const sy = (videoHeight - sideLength) / 2;
 		context.drawImage(video, sx, sy, sideLength, sideLength, 0, 0, 512, 512);
 		const dataURL = canvas.toDataURL('image/png');
-		self_upload_file_dispatch(dataURL);  // Call your upload function
+		self_upload_file_dispatch(dataURL,"");  // Call your upload function
 		hide_popups();
 	}
 
@@ -14886,10 +14893,11 @@ Current version indicated by LITEVER below.
 		finput.onchange = (event) => {
 			if (event.target.files.length > 0 && event.target.files[0]) {
 				const file = event.target.files[0];
+				const fname = file.name;
 				const reader = new FileReader();
 				reader.onload = function(img) {
 					let origImg = img.target.result;
-					self_upload_file_dispatch(origImg);
+					self_upload_file_dispatch(origImg,fname);
 				}
 				reader.readAsDataURL(file);
 			}
@@ -17719,7 +17727,7 @@ Current version indicated by LITEVER below.
 		let savedmeta = completed_imgs_meta[imghash];
 		if(!savedmeta && imghash!="")
 		{
-			savedmeta = completed_imgs_meta[imghash] = {prompt:"", desc:"", visionmode:0, aspect:0};
+			savedmeta = completed_imgs_meta[imghash] = {prompt:"", desc:"", visionmode:0, aspect:0, ref:"", len:0};
 		}
 
 		if(savedmeta)
@@ -17812,6 +17820,7 @@ Current version indicated by LITEVER below.
 	}
 	function click_image(target,imghash)
 	{
+		clear_zoomed_img_and_audio();
 		if(target)
 		{
 			if(localsettings.invert_colors)
@@ -17822,16 +17831,50 @@ Current version indicated by LITEVER below.
 			}
 			document.getElementById("zoomedimgcontainer").classList.remove("hidden");
 			document.getElementById("zoomedimg").src = target.src;
-
+			document.getElementById("zoomedimgdiv").classList.remove("hidden");
+			document.getElementById("zoomedaudiodiv").classList.add("hidden");
 			update_clicked_image(imghash);
-
 		}
 	}
-	function delete_curr_image()
+	function click_audio(target,audiohash,audioblob)
+	{
+		clear_zoomed_img_and_audio();
+		if(target)
+		{
+			if(localsettings.invert_colors)
+			{
+				document.getElementById("zoomedimg").classList.add("invert_colors");
+			}else{
+				document.getElementById("zoomedimg").classList.remove("invert_colors");
+			}
+			document.getElementById("zoomedimgcontainer").classList.remove("hidden");
+			document.getElementById("zoomedimgdiv").classList.add("hidden");
+			document.getElementById("zoomedaudiodiv").classList.remove("hidden");
+			document.getElementById("zoomedimgdesc").innerHTML = "";
+			let src = `<div><audio controls title="AudioPlayer"><source src="${audioblob}" id="zoomedaudio" type="audio/mp3"></audio></div>`;
+			document.getElementById("zoomedaudiodiv").innerHTML = src;
+		}
+	}
+	function clear_zoomed_img_and_audio()
+	{
+		document.getElementById("zoomedimg").src = "";
+		document.getElementById("zoomedaudiodiv").innerHTML = "";
+	}
+	function delete_curr_media()
 	{
 		let removesrc = document.getElementById("zoomedimg").src;
+		let zoomedaudio = document.getElementById("zoomedaudio");
+		let targettoremove = "";
 		if (removesrc && removesrc != "") {
-			var matchingStr = ("[<|d|" + removesrc + "|d|>]")
+			targettoremove = removesrc;
+		}
+		else if(zoomedaudio && zoomedaudio.src && zoomedaudio.src !="")
+		{
+			targettoremove = zoomedaudio.src;
+		}
+		if(targettoremove)
+		{
+			var matchingStr = ("[<|d|" + targettoremove + "|d|>]")
 			for (let i = 0; i < gametext_arr.length; ++i) {
 				if (gametext_arr[i].includes(matchingStr)) {
 					gametext_arr[i] = gametext_arr[i].replace(matchingStr, "");
@@ -17883,9 +17926,17 @@ Current version indicated by LITEVER below.
 
 	function render_audio_html(data)
 	{
-		let audioblob = b64_to_persistent_blob(data);
-		const reinvertcolor = localsettings.invert_colors?"invert_colors":"";
-		const str = `<div style="display:flex" class="${reinvertcolor}" contenteditable="false"><audio style="display:flex" controls title="Audio Player"><source src="${audioblob}" type="audio/mp3"></audio></div>`;
+		let audiohash = cyrb_hash(data).trim();
+		let audioblob = b64_to_persistent_blob(data,audiohash);
+		let filename = "";
+		let len = 0;
+		if (completed_imgs_meta[audiohash] != null) {
+			filename = completed_imgs_meta[audiohash].ref;
+			len = completed_imgs_meta[audiohash].len;
+		}
+		let fndisp = filename!=""?`(${filename}) `:"";
+		fndisp = len?(`: ${Math.floor(len)}s ${fndisp}`):fndisp;
+		const str = `<span><br><button type="button" title="Attached Audio" class="btn btn-primary" style="font-size:12px; padding:8px 8px; border-radius: 16px" onclick="return click_audio(this,\'${audiohash}\',\'${audioblob}\');">Attached Audio ${fndisp}🔊</button><br></span>`;
 		return str;
 	}
 
@@ -18472,7 +18523,7 @@ Current version indicated by LITEVER below.
 							gametext_arr[i] = gametext_arr[i].replace(matchstr, newstr);
 							let metaid = cyrb_hash(img.result);
 							//default to llava if supported, and image is self uploaded
-							completed_imgs_meta[metaid] = {prompt:image_db[key].prompt, desc:"", visionmode:((image_db[key].imsource==1 && is_using_kcpp_with_llava())?3:0), aspect:image_db[key].aspect};
+							completed_imgs_meta[metaid] = {prompt:image_db[key].prompt, desc:"", visionmode:((image_db[key].imsource==1 && is_using_kcpp_with_llava())?3:0), aspect:image_db[key].aspect, ref:image_db[key].imrefid, len:image_db[key].len};
 							delete image_db[key];
 						}
 					}
@@ -18686,13 +18737,13 @@ Current version indicated by LITEVER below.
 	}
 
 	// AUDIO MANIPULATION FUNCTIONS
-	//convert any audio to a webm blob (high compression), returns a promise
+	//convert any audio to a webm blob (high compression)
 	function convertAudioToCompressedBase64(inputBase64, onDone) {
 		// Step 1: Convert base64 string to Blob
 		const matches = inputBase64.match(/^data:(audio\/[a-zA-Z0-9-]+);base64,(.+)$/);
 		if (!matches) {
 			console.log("Convert Audio: Invalid base64 input");
-			onDone(null);
+			onDone(null,null);
 		}
 
 		const mimeType = matches[1];
@@ -18712,6 +18763,7 @@ Current version indicated by LITEVER below.
 			audioContext.decodeAudioData(arrayBuffer, function (buffer) {
 				const samplefreq = buffer.sampleRate;
 				const samples = buffer.getChannelData(0); // mono
+				const durationInSeconds = buffer.duration;
 				const mp3encoder = new lamejs.Mp3Encoder(1, samplefreq, 40); // mono, 16kHz, 40kbps
 				const sampleBlockSize = 1152; //can be anything but make it a multiple of 576 to make encoders life easier
 				let mp3Data = [];
@@ -18737,12 +18789,12 @@ Current version indicated by LITEVER below.
 				const fileReader = new FileReader();
 				fileReader.onloadend = function () {
 					const mp3Base64 = fileReader.result;
-					onDone(mp3Base64);
+					onDone(mp3Base64,durationInSeconds);
 				};
 				fileReader.readAsDataURL(mp3Blob);
 			}, function (err) {
 				console.log("Audio decode failed.");
-				onDone(null);
+				onDone(null,null);
 			});
 		};
 		reader.readAsArrayBuffer(inputBlob);
@@ -25798,11 +25850,14 @@ Current version indicated by LITEVER below.
 		<div class="popupbg flex"></div>
 		<div class="nspopup flexsize highest">
 			<div class="popuptitlebar">
-				<div class="popuptitletext">Image Information</div>
+				<div class="popuptitletext">Media Information</div>
 			</div>
 
-			<div class="zoomedimgdiv">
+			<div id="zoomedimgdiv" class="zoomedimgdiv">
 				<img class="zoomedimg" id="zoomedimg" src="">
+			</div>
+			<div id="zoomedaudiodiv" class="zoomedimgdiv">
+
 			</div>
 
 			<div class="menutext zoomedimgdesc" id="zoomedimgdesc" style="word-wrap: break-word;">
@@ -25810,8 +25865,8 @@ Current version indicated by LITEVER below.
 			</div>
 			<br>
 			<div class="popupfooter">
-				<button type="button" class="bg_red btn btn-primary" style="width: 124px;" onclick="delete_curr_image();hide_popups();">Delete Image</button>
-				<button type="button" class="btn btn-primary" onclick="hide_popups()">Close</button>
+				<button type="button" class="bg_red btn btn-primary" style="width: 124px;" onclick="delete_curr_media();hide_popups();">Delete Media</button>
+				<button type="button" class="btn btn-primary" onclick="clear_zoomed_img_and_audio();hide_popups()">Close</button>
 			</div>
 		</div>
 	</div>
