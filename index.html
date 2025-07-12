@@ -16361,11 +16361,11 @@ Current version indicated by LITEVER below.
 			}
 			if(is_using_kcpp_with_llava() && insertAIVisionImages.length>0)
 			{
-				submit_payload.params.images = insertAIVisionImages;
+				submit_payload.params.images = insertAIVisionImages.map(str => str.includes("base64,")?str.split("base64,")[1]:str);
 			}
 			if(is_using_kcpp_with_llava() && insertAIAudioSounds.length>0)
 			{
-				submit_payload.params.audio = insertAIAudioSounds;
+				submit_payload.params.audio = insertAIAudioSounds.map(str => str.includes("base64,")?str.split("base64,")[1]:str);
 			}
 
 			if(localsettings.sampler_seed>=1)
@@ -16743,7 +16743,7 @@ Current version indicated by LITEVER below.
 
 				if (document.getElementById("useoaichatcompl").checked) {
 					let mainoaibody = submit_payload.prompt; //can be string or array
-					if(insertAIVisionImages.length>0)
+					if(insertAIVisionImages.length>0 || insertAIAudioSounds.length>0)
 					{
 						mainoaibody = [
 							{
@@ -16756,7 +16756,26 @@ Current version indicated by LITEVER below.
 							let oaiimg = {
 								"type": "image_url",
 								"image_url": {
-									"url": ("data:image/jpeg;base64,"+insertAIVisionImages[i])
+									"url": insertAIVisionImages[i]
+								}
+							};
+							mainoaibody.push(oaiimg);
+						}
+						for(let i=0;i<insertAIAudioSounds.length;++i)
+						{
+							let curr = insertAIAudioSounds[i];
+							let format = "wav";
+							if(curr.includes("base64,"))
+							{
+								let parts = curr.split("base64,");
+								curr = parts[1];
+								format = (parts[0].includes("mp3")||parts[0].includes("mpeg"))?"mp3":"wav";
+							}
+							let oaiimg = {
+								"type": "input_audio",
+								"input_audio": {
+									"data": curr,
+									"format": format
 								}
 							};
 							mainoaibody.push(oaiimg);
@@ -17063,12 +17082,30 @@ Current version indicated by LITEVER below.
 
 				let geminiparts = [];
 
-				if (insertAIVisionImages.length > 0) {
+				if (insertAIVisionImages.length > 0 || insertAIAudioSounds.length > 0) {
 					for (let i = 0; i < insertAIVisionImages.length; ++i) {
+						let imgd = insertAIVisionImages[i];
 						let oaiimg = {
 							"inline_data": {
 								"mime_type": "image/jpeg",
-								"data": insertAIVisionImages[i]
+								"data": (imgd.includes("base64,")?imgd.split("base64,")[1]:imgd)
+							}
+						};
+						geminiparts.push(oaiimg);
+					}
+					for (let i = 0; i < insertAIAudioSounds.length; ++i) {
+						let imgd = insertAIAudioSounds[i];
+						let format = "audio/wav"
+						if(imgd.includes(";base64,"))
+						{
+							let parts = imgd.split(";base64,");
+							imgd = parts[1];
+							format = parts[0].split(":")[1];
+						}
+						let oaiimg = {
+							"inline_data": {
+								"mime_type": format,
+								"data": imgd
 							}
 						};
 						geminiparts.push(oaiimg);
@@ -19782,12 +19819,12 @@ Current version indicated by LITEVER below.
 							let placeholder = "";
 							let parts = inner.split(',');
 							if (parts.length === 2 && parts[0].startsWith('data:image')) {
-								insertAIVisionImages.push(parts[1]);
+								insertAIVisionImages.push(inner);
 								placeholder = "\n(Attached Image)\n";
 							}
 							else if(parts.length === 2 && parts[0].startsWith('data:audio'))
 							{
-								insertAIAudioSounds.push(parts[1]);
+								insertAIAudioSounds.push(inner);
 								placeholder = "\n(Attached Audio)\n";
 							}
 							return placeholder;
@@ -22763,7 +22800,7 @@ Current version indicated by LITEVER below.
 		`<style>
 			.you-portrait-image${classSuffixStr} {margin: 10px 6px; background:url(${as.you_portrait}); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
 			.AI-portrait-image${classSuffixStr} {margin: 10px 6px; background:url(${(as.AI_portrait!="default"?as.AI_portrait:niko_square)}); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
-			code
+			#chat_msg_body code, #aesthetic_text_preview code
 			{
 				color: ${as.code_block_foreground};
 				background-color: ${as.code_block_background};
@@ -25575,6 +25612,7 @@ Current version indicated by LITEVER below.
 					<option value="gpt-4-turbo">gpt-4-turbo</option>
 					<option value="gpt-4o">gpt-4o</option>
 					<option value="gpt-4o-mini">gpt-4o-mini</option>
+					<option value="gpt-4o-mini-audio-preview">gpt-4o-mini-audio-preview</option>
 					<option value="gpt-4-32k">gpt-4-32k</option>
 					<option value="gpt-4.1">gpt-4.1</option>
 					<option value="gpt-4.1-mini">gpt-4.1-mini</option>
