@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 260;
+	const LITEVER = 261;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -9794,6 +9794,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("addmediacontainer").classList.contains("hidden") &&
 			document.getElementById("pasteimgcontainer").classList.contains("hidden") &&
 			document.getElementById("webcamcontainer").classList.contains("hidden") &&
+			document.getElementById("miccontainer").classList.contains("hidden") &&
 			document.getElementById("choosesharecontainer").classList.contains("hidden") &&
 			document.getElementById("advancedloadfile").classList.contains("hidden") &&
 			document.getElementById("welcomecontainer").classList.contains("hidden") &&
@@ -9833,6 +9834,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("addmediacontainer").classList.add("hidden");
 		document.getElementById("pasteimgcontainer").classList.add("hidden");
 		document.getElementById("webcamcontainer").classList.add("hidden");
+		document.getElementById("miccontainer").classList.add("hidden");
 		document.getElementById("choosesharecontainer").classList.add("hidden");
 		document.getElementById("advancedloadfile").classList.add("hidden");
 		document.getElementById("welcomecontainer").classList.add("hidden");
@@ -14894,6 +14896,71 @@ Current version indicated by LITEVER below.
 		const dataURL = canvas.toDataURL('image/png');
 		self_upload_file_dispatch(dataURL,"");  // Call your upload function
 		hide_popups();
+	}
+
+	var captureMicRecording = false;
+	var captureMicChunks = [];
+	var captureMicRecorder = null;
+	function add_img_btn_mic()
+	{
+		document.getElementById("addmediacontainer").classList.add("hidden");
+		document.getElementById("miccontainer").classList.remove("hidden");
+		document.getElementById("micrecbtn").classList.remove("bg_red");
+		document.getElementById("micrecbtn").innerText = "🎙️ Start Recording";
+		captureMicRecording = false;
+		captureMicChunks = [];
+	}
+	function capture_mic_abort()
+	{
+		document.getElementById("miccontainer").classList.add("hidden");
+		if(captureMicRecorder)
+		{
+			captureMicChunks = [];
+			captureMicRecorder.stop();
+			captureMicChunks = [];
+		}
+		captureMicRecording = false;
+	}
+	function capture_mic_btn()
+	{
+		if (!captureMicRecording) {
+			navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) { // Request microphone access
+				document.getElementById("micrecbtn").classList.add("bg_red");
+				document.getElementById("micrecbtn").innerText = "🛑 Stop Recording";
+				captureMicRecorder = new MediaRecorder(stream);
+				captureMicChunks = [];
+
+				captureMicRecorder.ondataavailable = function (e) {
+					captureMicChunks.push(e.data);
+				};
+
+				captureMicRecorder.onstop = function () {
+					var blob = new Blob(captureMicChunks, { type: 'audio/webm' });
+					var reader = new FileReader();
+					reader.onloadend = function () {
+						var completeRecording = reader.result;
+						self_upload_audio(completeRecording,"recording");
+					};
+					reader.readAsDataURL(blob);
+					stream.getTracks().forEach(function (track) {
+						track.stop();
+					});
+				};
+
+				captureMicRecorder.start();
+				captureMicRecording = true;
+			}).catch(function (err) {
+				console.error('Error accessing microphone:', err);
+			});
+		} else {
+			if(captureMicRecorder)
+			{
+				captureMicRecorder.stop();
+			}
+			document.getElementById("micrecbtn").innerText = "Saving...";
+			document.getElementById("miccontainer").classList.add("hidden");
+			captureMicRecording = false;
+		}
 	}
 
 	function add_img_btn_upload()
@@ -26136,7 +26203,7 @@ Current version indicated by LITEVER below.
 				<button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_upload()">Upload a File (Image / Audio)</button>
 			</div>
 			<div class="menutext">
-				<button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_webcam()">Capture From Camera</button>
+				Capture From <button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_webcam()">Camera</button> <button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_mic()">Microphone</button>
 			</div>
 			<div class="menutext">
 				<button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_paste()">Drag Drop / Paste from Clipboard</button>
@@ -26180,6 +26247,21 @@ Current version indicated by LITEVER below.
 			<div class="popupfooter">
 				<button id="webcambutton" type="button" class="btn btn-primary" onclick="capture_webcam_btn()">Capture</button>
 				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="miccontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup flexsizevsmall">
+			<div class="popuptitlebar">
+				<div class="popuptitletext">Capture Audio From Microphone</div>
+			</div>
+			<div style="display: flex; height: 100px; padding: 20px;">
+				<button id="micrecbtn" type="button" class="btn btn-primary" style="width:100%" onclick="capture_mic_btn()"></button>
+			</div>
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="capture_mic_abort();hide_popups()">Cancel</button>
 			</div>
 		</div>
 	</div>
