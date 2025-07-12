@@ -14901,6 +14901,7 @@ Current version indicated by LITEVER below.
 	var captureMicRecording = false;
 	var captureMicChunks = [];
 	var captureMicRecorder = null;
+	var captureMicAborted = false;
 	function add_img_btn_mic()
 	{
 		document.getElementById("addmediacontainer").classList.add("hidden");
@@ -14908,6 +14909,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("micrecbtn").classList.remove("bg_red");
 		document.getElementById("micrecbtn").innerText = "🎙️ Start Recording";
 		captureMicRecording = false;
+		captureMicAborted = false;
 		captureMicChunks = [];
 	}
 	function capture_mic_abort()
@@ -14915,9 +14917,9 @@ Current version indicated by LITEVER below.
 		document.getElementById("miccontainer").classList.add("hidden");
 		if(captureMicRecorder)
 		{
+			captureMicAborted = true;
 			captureMicChunks = [];
 			captureMicRecorder.stop();
-			captureMicChunks = [];
 		}
 		captureMicRecording = false;
 	}
@@ -14927,24 +14929,31 @@ Current version indicated by LITEVER below.
 			navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) { // Request microphone access
 				document.getElementById("micrecbtn").classList.add("bg_red");
 				document.getElementById("micrecbtn").innerText = "🛑 Stop Recording";
+				captureMicAborted = false;
 				captureMicRecorder = new MediaRecorder(stream);
 				captureMicChunks = [];
 
 				captureMicRecorder.ondataavailable = function (e) {
-					captureMicChunks.push(e.data);
+					if(!captureMicAborted)
+					{
+						captureMicChunks.push(e.data);
+					}
 				};
 
 				captureMicRecorder.onstop = function () {
-					var blob = new Blob(captureMicChunks, { type: 'audio/webm' });
-					var reader = new FileReader();
-					reader.onloadend = function () {
-						var completeRecording = reader.result;
-						self_upload_audio(completeRecording,"recording");
-					};
-					reader.readAsDataURL(blob);
-					stream.getTracks().forEach(function (track) {
-						track.stop();
-					});
+					if(captureMicChunks.length>0)
+					{
+						var blob = new Blob(captureMicChunks, { type: 'audio/webm' });
+						var reader = new FileReader();
+						reader.onloadend = function () {
+							var completeRecording = reader.result;
+							self_upload_audio(completeRecording,"recording");
+						};
+						reader.readAsDataURL(blob);
+						stream.getTracks().forEach(function (track) {
+							track.stop();
+						});
+					}
 				};
 
 				captureMicRecorder.start();
