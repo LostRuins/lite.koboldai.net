@@ -3398,6 +3398,7 @@ Current version indicated by LITEVER below.
 		raw_instruct_tags: false, //experimental flag
 		show_endpoint_selector: false,
 		no_warn_unsaved: false,
+		no_compress_audio: false,
 
 		//section migrated from story itself
 		extrastopseq: "",
@@ -12606,6 +12607,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("raw_instruct_tags").checked = localsettings.raw_instruct_tags;
 		document.getElementById("show_endpoint_selector").checked = localsettings.show_endpoint_selector;
 		document.getElementById("no_warn_unsaved").checked = localsettings.no_warn_unsaved;
+		document.getElementById("no_compress_audio").checked = localsettings.no_compress_audio;
 		document.getElementById("render_streaming_markdown").checked = localsettings.render_streaming_markdown;
 		document.getElementById("min_p").value = localsettings.min_p;
 		document.getElementById("dynatemp_range").value = localsettings.dynatemp_range;
@@ -13135,6 +13137,7 @@ Current version indicated by LITEVER below.
 		localsettings.raw_instruct_tags = (document.getElementById("raw_instruct_tags").checked ? true : false);
 		localsettings.show_endpoint_selector = (document.getElementById("show_endpoint_selector").checked ? true : false);
 		localsettings.no_warn_unsaved = (document.getElementById("no_warn_unsaved").checked ? true : false);
+		localsettings.no_compress_audio = (document.getElementById("no_compress_audio").checked ? true : false);
 		localsettings.render_streaming_markdown = (document.getElementById("render_streaming_markdown").checked ? true : false);
 		if(document.getElementById("opmode").value==1)
 		{
@@ -14743,11 +14746,18 @@ Current version indicated by LITEVER below.
 		image_db[imgid].imsource = 1; //0=generated,1=uploaded
 		image_db[imgid].imrefid = filename;
 		image_db[imgid].len = 0;
-		convertAudioToCompressedBase64(origAudio,(newAudio,duration)=>{
+		if(localsettings.no_compress_audio)
+		{
 			image_db[imgid].done = true;
-			image_db[imgid].result = newAudio;
-			image_db[imgid].len = duration;
-		});
+			image_db[imgid].result = origAudio;
+		} else {
+			convertAudioToCompressedBase64(origAudio,(newAudio,duration)=>{
+				image_db[imgid].done = true;
+				image_db[imgid].result = newAudio;
+				image_db[imgid].len = duration;
+			});
+		}
+
 	}
 
 	function clear_paste_window()
@@ -25134,6 +25144,11 @@ Current version indicated by LITEVER below.
 							<div class="justifyleft settingsmall">DoNotWarnUnsaved <span class="helpicon">?<span
 								class="helptext">Do not show any warnings for closing or overwriting unsaved work (caution!)</span></span></div>
 							<input title="Do Not Warn Unsaved" type="checkbox" id="no_warn_unsaved" style="margin:0px 0px 0px 0px;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">DoNotCompressAudio <span class="helpicon">?<span
+								class="helptext">Do not compress embedded audio files. Might crash on big files! (caution!)</span></span></div>
+							<input title="Do Not Recompress Audio" type="checkbox" id="no_compress_audio" style="margin:0px 0px 0px 0px;">
 						</div>
 					</div>
 
