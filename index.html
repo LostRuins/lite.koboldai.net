@@ -3408,6 +3408,7 @@ Current version indicated by LITEVER below.
 
 		//section migrated from story itself
 		extrastopseq: "",
+		includedefaultstops: true,
 		tokenbans: "",
 		logitbiasdict: {},
 		regexreplace_data: [],
@@ -7489,6 +7490,7 @@ Current version indicated by LITEVER below.
 		new_save_storyobj.wisearchdepth = wi_searchdepth;
 		new_save_storyobj.wiinsertlocation = wi_insertlocation;
 		new_save_storyobj.personal_notes = personal_notes;
+		new_save_storyobj.newlineaftermemory = newlineaftermemory;
 		new_save_storyobj.documentdb_provider = documentdb_provider;
 		new_save_storyobj.documentdb_searchhistory = documentdb_searchhistory;
 		new_save_storyobj.documentdb_numresults = documentdb_numresults;
@@ -7709,6 +7711,7 @@ Current version indicated by LITEVER below.
 			let old_current_memory = current_memory;
 			let old_current_wi = current_wi;
 			let old_notes = personal_notes;
+			let old_newlineaftermemory = newlineaftermemory;
 
 			let old_extrastopseq = localsettings.extrastopseq;
 			let old_regexreplace_data = localsettings.regexreplace_data;
@@ -7783,6 +7786,9 @@ Current version indicated by LITEVER below.
 				}
 				if (storyobj.personal_notes) {
 					personal_notes = storyobj.personal_notes;
+				}
+				if (storyobj.newlineaftermemory===true || storyobj.newlineaftermemory===false) {
+					newlineaftermemory = storyobj.newlineaftermemory;
 				}
 				if(storyobj.documentdb_provider)
 				{
@@ -7910,6 +7916,7 @@ Current version indicated by LITEVER below.
 					current_anotetemplate = old_current_anotetemplate;
 					current_memory = old_current_memory;
 					personal_notes = old_notes;
+					newlineaftermemory = old_newlineaftermemory;
 				}
 				if(!loadworldinfo)
 				{
@@ -12801,6 +12808,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("websearch_enabled").checked = localsettings.websearch_enabled;
 		document.getElementById("websearch_multipass").checked = localsettings.websearch_multipass;
 		document.getElementById("websearch_retain").checked = localsettings.websearch_retain;
+		document.getElementById("includedefaultstops").checked = localsettings.includedefaultstops;
 		document.getElementById("websearch_template").value = (localsettings.websearch_template==""?default_websearch_template:localsettings.websearch_template);
 		if(is_using_kcpp_with_websearch())
 		{
@@ -13281,6 +13289,7 @@ Current version indicated by LITEVER below.
 		localsettings.websearch_enabled = document.getElementById("websearch_enabled").checked?true:false;
 		localsettings.websearch_multipass = document.getElementById("websearch_multipass").checked?true:false;
 		localsettings.websearch_retain = document.getElementById("websearch_retain").checked?true:false;
+		localsettings.includedefaultstops = document.getElementById("includedefaultstops").checked?true:false;
 		localsettings.websearch_template = (document.getElementById("websearch_template").value==default_websearch_template?"":document.getElementById("websearch_template").value);
 		if(document.getElementById("thinking_pattern").value !="" && validate_regex(document.getElementById("thinking_pattern").value))
 		{
@@ -14258,6 +14267,7 @@ Current version indicated by LITEVER below.
 			documentdb_searchrange = 300;
 			documentdb_chunksize = 800;
 			documentdb_data = "";
+			newlineaftermemory = true;
 		}
 		if(localsettings.inject_randomness_seed>0)
 		{
@@ -16605,6 +16615,10 @@ Current version indicated by LITEVER below.
 					}
 				}
 			}
+		}
+		if(!localsettings.includedefaultstops)
+		{
+			seqs = [];
 		}
 		if (localsettings.extrastopseq != "") {
 			let rep = replaceAll(localsettings.extrastopseq, "\\n", "\n");
@@ -25032,7 +25046,14 @@ Current version indicated by LITEVER below.
 				<div id="settingsmenutokens" class="settingsmenu hidden" onchange="setting_tweaked()">
 					<div class="settingitem wide" style="font-size:12px">
 					<div class="justifyleft settinglabel">Extra Stopping Sequences <span class="helpicon">?<span
-						class="helptext">Triggers the text generator to stop generating early if this sequence appears, in addition to default stop sequences. If you want multiple sequences, separate them with the following delimiter: ||$||</span></span></div>
+						class="helptext">Triggers the text generator to stop generating early if this sequence appears, in addition to default stop sequences. If you want multiple sequences, separate them with the following delimiter: ||$||</span></span>
+						<span class="justifyright flex-push-right" >
+							<div class="settinglabel" style="padding-top: 4px;">
+								<div class="justifyleft settingsmall" title="Include default stop sequences. Leave enabled if unsure.">Include Default Stops </div>
+							<input type="checkbox" title="Include default stop sequences." id="includedefaultstops" style="margin:0px 0 0;" checked>
+							</div>
+						</span>
+					</div>
 						<div class="color_red hidden" id="noextrastopseq">Stop Sequences may be unavailable.</div>
 						<div style="display: flex; column-gap: 4px; margin-bottom: 4px;">
 						<input title="Extra Stopping Sequences" class="form-control menuinput_inline" type="text" placeholder="None" value="" id="extrastopseq">
