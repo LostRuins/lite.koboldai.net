@@ -2135,6 +2135,11 @@ Current version indicated by LITEVER below.
 		margin-bottom:6px;
 		margin-left:12px;
 	}
+	.corpoeditbtn
+	{
+		padding: 5px 7px 5px 7px;
+		margin: 2px;
+	}
 
 	/* Colors */
 	.hlchunk
@@ -13861,6 +13866,22 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	function memory_add_instruction()
+	{
+		inputBox("Add another instruction for the AI to remember.","Add Instruction to Memory","","Enter a Prompt",()=>{
+			let userinput = getInputBoxValue();
+			if(userinput.trim()!="")
+			{
+				let str = get_instructendplaceholder() + userinput.trim();
+				if (localsettings.separate_end_tags) {
+					str += get_instructendplaceholder_end();
+				}
+				document.getElementById("memorytext").value += str;
+			}
+		},false);
+
+	}
+
 	let temp_automem_store = "";
 	function autogenerate_summary_memory()
 	{
@@ -21183,16 +21204,16 @@ Current version indicated by LITEVER below.
 			let curr = chatunits[i];
 			curr = repack_postprocess_turn(curr, countmap);
 
-			let resendbtn = ((curr.myturn && i<chatunits.length-1)?`<button type="button" class="btn btn-primary" style="margin:2px;float:right;" onclick="corpo_edit_chunk_resend(${i})">Resend</button>`:``);
+			let resendbtn = ((curr.myturn && i<chatunits.length-1)?`<button type="button" class="btn btn-primary corpoeditbtn" style="float:right;" onclick="corpo_edit_chunk_resend(${i})">Resend</button>`:``);
 			let bodypart = (corpo_editing_turn == i ?
 				`<div class="corpo_edit_outer">
 				<div class="corpo_edit_inner" id="corpo_edit_inp_lengthtester" style="white-space: nowrap; visibility: hidden; height: 0px; position:absolute; width: auto;"></div>
 				<textarea class="corpo_edit_inner" id="corpo_edit_inp" type="text" name="crpeditinp"  role="presentation" autocomplete="noppynop" spellcheck="true" rows="1" wrap="on" placeholder="Edit Message" value="" oninput="corpoedit_resize_input();"/>${stash_image_placeholders(curr.msg, false)}</textarea>
 				</div>
-				<button type="button" class="btn btn-primary" style="margin:2px;float:right;" onclick="corpo_edit_chunk_start(-1)">Cancel</button>
+				<button type="button" class="btn btn-primary corpoeditbtn" style="float:right;" onclick="corpo_edit_chunk_start(-1)">Cancel</button>
 				${resendbtn}
-				<button type="button" class="btn btn-primary" style="margin:2px;float:right;" onclick="corpo_edit_chunk_save()">Save</button>
-				<button type="button" class="btn btn-primary bg_red" style="margin:2px;float:left;" onclick="corpo_edit_chunk_delete()">Delete</button>`:
+				<button type="button" class="btn btn-primary corpoeditbtn" style="float:right;" onclick="corpo_edit_chunk_save()">Save</button>
+				<button type="button" class="btn btn-primary corpoeditbtn bg_red" style="float:left;" onclick="corpo_edit_chunk_delete()">Delete</button>`:
 				`<div class="corpostyleitemcontent">${curr.msg}</div>`);
 			let historical_btns = "";
 			if(!curr.myturn && i==chatunits.length-1 && !incomplete_resp)
@@ -23951,7 +23972,9 @@ Current version indicated by LITEVER below.
 			<div class="context_tab_container" id="memory_tab_container">
 				<div class="settinglabel">
 					<span class="justifyleft">Memory<span class="helpicon">?<span
-						class="helptext">Put the information you want the AI to always remember. It will be inserted into the top of every request sent to the AI.</span></span></span>
+						class="helptext">Put the information you want the AI to always remember. It will be inserted into the top of every request sent to the AI. Placeholder tags can be used.</span></span>
+						<button type="button" class="btn btn-primary" style="font-size:10px;padding:2px 5px;margin-left:4px;margin:2px;" onclick="memory_add_instruction()">Add Instruction</button>
+					</span>
 					<span class="justifyright flex-push-right" >
 						<div class="settinglabel" style="padding-top: 4px;">
 							<div class="justifyleft settingsmall" title="Add newline after injecting memory text">Newline After Memory </div>
