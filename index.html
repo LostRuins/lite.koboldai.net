@@ -3220,6 +3220,7 @@ Current version indicated by LITEVER below.
 	var koboldcpp_version = ""; //detect if we are using koboldcpp
 	var koboldcpp_version_obj = {};
 	var koboldcpp_has_vision = false;
+	var koboldcpp_has_audio = false;
 	var koboldcpp_has_multiplayer = false;
 	var koboldcpp_has_websearch = false;
 	var koboldcpp_has_savedatafile = false;
@@ -6655,6 +6656,7 @@ Current version indicated by LITEVER below.
 		image_db[imgid].aspect = (req_payload.params.width>=req_payload.params.height*2?5:(req_payload.params.height>=req_payload.params.width*2?4:(req_payload.params.width>req_payload.params.height?2:(req_payload.params.width<req_payload.params.height?1:0))));
 		image_db[imgid].imsource = 0; //0=generated,1=uploaded
 		image_db[imgid].imrefid = "";
+		image_db[imgid].type = 0; //0=image, 1=audio
 
 		uploadBase64ImgToComfy(req_payload["source_image"],comfyimg2imgname).then(() => {
 		fetch(gen_endpoint, {
@@ -6855,6 +6857,7 @@ Current version indicated by LITEVER below.
 		image_db[imgid].aspect = (req_payload.params.width>=req_payload.params.height*2?5:(req_payload.params.height>=req_payload.params.width*2?4:(req_payload.params.width>req_payload.params.height?2:(req_payload.params.width<req_payload.params.height?1:0))));
 		image_db[imgid].imsource = 0; //0=generated,1=uploaded
 		image_db[imgid].imrefid = "";
+		image_db[imgid].type = 0; //0=image, 1=audio
 
 		fetch(gen_endpoint, {
 			method: 'GET',
@@ -7068,9 +7071,13 @@ Current version indicated by LITEVER below.
 	{
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.49") >= 0);
 	}
-	function is_using_kcpp_with_llava()
+	function is_using_kcpp_with_vision()
 	{
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.61") >= 0 && koboldcpp_has_vision);
+	}
+	function is_using_kcpp_with_audio()
+	{
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.61") >= 0 && koboldcpp_has_audio);
 	}
 	function is_using_kcpp_with_whisper()
 	{
@@ -11004,6 +11011,7 @@ Current version indicated by LITEVER below.
 									console.log("KoboldCpp Detected: " + koboldcpp_version);
 									document.getElementById("connectstatus").innerHTML = (`<span style='cursor: pointer;' onclick='fetch_koboldcpp_perf()'>KoboldCpp ${koboldcpp_version}</a>`);
 									koboldcpp_has_vision = (data.vision?true:false);
+									koboldcpp_has_audio = (data.audio?true:false);
 									koboldcpp_has_whisper = (data.transcribe?true:false);
 									koboldcpp_has_multiplayer = (data.multiplayer?true:false);
 									koboldcpp_has_websearch = (data.websearch?true:false);
@@ -14695,6 +14703,14 @@ Current version indicated by LITEVER below.
 
 	function self_upload_file_dispatch(data,filename)
 	{
+		const maxSize = 20 * 1024 * 1024; // approx 20MB limit
+		const dlen = (data.length*0.75);
+		const mbs = Math.ceil(dlen/1024/1024);
+		if (dlen > maxSize) {
+			msgbox(`Selected file exceeds 20MB size limit!\nSelected file was ${mbs}MB. Please try a smaller file.`, "File Too Large");
+			return;
+		}
+
 		if(data.startsWith("data:audio"))
 		{
 			self_upload_audio(data,filename);
@@ -14726,6 +14742,7 @@ Current version indicated by LITEVER below.
 		image_db[imgid].aspect = 0;
 		image_db[imgid].imsource = 1; //0=generated,1=uploaded
 		image_db[imgid].imrefid = "";
+		image_db[imgid].type = 0; //0=image, 1=audio
 		let imgres = localsettings.img_allowhd?VHD_RES_PX:NO_HD_RES_PX;
 		compressImage(origImg, (newDataUri, outAspect) => {
 			image_db[imgid].done = true;
@@ -14769,6 +14786,7 @@ Current version indicated by LITEVER below.
 		image_db[imgid].imsource = 1; //0=generated,1=uploaded
 		image_db[imgid].imrefid = filename;
 		image_db[imgid].len = 0;
+		image_db[imgid].type = 1; //0=image, 1=audio
 		if(localsettings.no_compress_audio)
 		{
 			image_db[imgid].done = true;
@@ -16456,11 +16474,11 @@ Current version indicated by LITEVER below.
 				submit_payload.params.memory = truncated_memory;
 				submit_payload.params.trim_stop = true;
 			}
-			if(is_using_kcpp_with_llava() && insertAIVisionImages.length>0)
+			if(is_using_kcpp_with_vision() && insertAIVisionImages.length>0)
 			{
 				submit_payload.params.images = insertAIVisionImages.map(str => str.includes("base64,")?str.split("base64,")[1]:str);
 			}
-			if(is_using_kcpp_with_llava() && insertAIAudioSounds.length>0)
+			if(is_using_kcpp_with_audio() && insertAIAudioSounds.length>0)
 			{
 				submit_payload.params.audio = insertAIAudioSounds.map(str => str.includes("base64,")?str.split("base64,")[1]:str);
 			}
@@ -17640,6 +17658,7 @@ Current version indicated by LITEVER below.
 			image_db[imgid].aspect = (iwidth>=iheight*2?5:(iheight>=iwidth*2?4:(iwidth>iheight?2:(iwidth<iheight?1:0))));
 			image_db[imgid].imsource = 0; //0=generated,1=uploaded
 			image_db[imgid].imrefid = ""; //this will store the real horde ID to poll
+			image_db[imgid].type = 0; //0=image, 1=audio
 			fetch(stablehorde_submit_endpoint, {
 				method: 'POST', // or 'PUT'
 				headers: {
@@ -17691,6 +17710,7 @@ Current version indicated by LITEVER below.
 			image_db[imgid].aspect = (iwidth>=iheight*2?5:(iheight>=iwidth*2?4:(iwidth>iheight?2:(iwidth<iheight?1:0))));
 			image_db[imgid].imsource = 0; //0=generated,1=uploaded
 			image_db[imgid].imrefid = "";
+			image_db[imgid].type = 0; //0=image, 1=audio
 			generate_a1111_image(genimg_payload,(outputimg)=>{
 				if(outputimg)
 				{
@@ -17735,6 +17755,7 @@ Current version indicated by LITEVER below.
 				image_db[imgid].aspect = 0;
 				image_db[imgid].imsource = 0; //0=generated,1=uploaded
 				image_db[imgid].imrefid = "";
+				image_db[imgid].type = 0; //0=image, 1=audio
 				generate_dalle_image(genimg_payload,(outputimg,outputerr)=>{
 					if(outputimg)
 					{
@@ -17920,19 +17941,19 @@ Current version indicated by LITEVER below.
 		let savedmeta = completed_imgs_meta[imghash];
 		if(!savedmeta && imghash!="")
 		{
-			savedmeta = completed_imgs_meta[imghash] = {prompt:"", desc:"", visionmode:0, aspect:0, ref:"", len:0};
+			savedmeta = completed_imgs_meta[imghash] = {prompt:"", desc:"", visionmode:0, aspect:0, ref:"", len:0, type:0};
 		}
 		if(!savedmeta.visionmode)
 		{
 			savedmeta.visionmode = 0;
 		}
-		let hasllava = is_using_kcpp_with_llava();
+		let canvisionaudio = ((is_using_kcpp_with_vision() && savedmeta.type==0) ||  (is_using_kcpp_with_audio() && savedmeta.type==1));
 		let visionstatus = "";
 		if(savedmeta.visionmode==3)
 		{
 			if(custom_kobold_endpoint!="") //on a kobo endpoint
 			{
-				visionstatus = ((!savedmeta.visionmode || savedmeta.visionmode==0)?`<span class="color_red">Inactive</span>`:(hasllava?`<span class="color_green">Active</span>`:`<span class="color_yellow">Unsupported</span>`));
+				visionstatus = ((!savedmeta.visionmode || savedmeta.visionmode==0)?`<span class="color_red">Inactive</span>`:(canvisionaudio?`<span class="color_green">Active</span>`:`<span class="color_yellow">Unsupported</span>`));
 			}
 			else
 			{
@@ -18733,7 +18754,8 @@ Current version indicated by LITEVER below.
 							gametext_arr[i] = gametext_arr[i].replace(matchstr, newstr);
 							let metaid = cyrb_hash(img.result);
 							//default to llava if supported, and image is self uploaded
-							completed_imgs_meta[metaid] = {prompt:image_db[key].prompt, desc:"", visionmode:((image_db[key].imsource==1 && is_using_kcpp_with_llava())?3:0), aspect:image_db[key].aspect, ref:image_db[key].imrefid, len:image_db[key].len};
+							let desiredvismode = ((image_db[key].imsource==1 && ((is_using_kcpp_with_vision() && image_db[key].type==0) || (is_using_kcpp_with_audio() && image_db[key].type==1)))?3:0);
+							completed_imgs_meta[metaid] = {prompt:image_db[key].prompt, desc:"", visionmode:desiredvismode, aspect:image_db[key].aspect, ref:image_db[key].imrefid, len:image_db[key].len, type:image_db[key].type};
 							delete image_db[key];
 						}
 					}
