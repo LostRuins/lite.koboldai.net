@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 261;
+	const LITEVER = 262;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3401,10 +3401,12 @@ Current version indicated by LITEVER below.
 		entersubmit: true, //enter sends the prompt
 		darkmode: true,
 		render_streaming_markdown: true,
-		raw_instruct_tags: false, //experimental flag
+
+		raw_instruct_tags: false, //experimental flags
 		show_endpoint_selector: false,
 		no_warn_unsaved: false,
 		no_compress_audio: false,
+		autoguess_third_party:false,
 
 		//section migrated from story itself
 		extrastopseq: "",
@@ -4399,7 +4401,10 @@ Current version indicated by LITEVER below.
 		let instag = localsettings.instruct_starttag;
 		if(instag=="{{[INPUT]}}" && !(custom_kobold_endpoint != "" && is_using_kcpp_with_autotags()))
 		{
-			instag = "\n### Instruction:\n"; //backend not compatible with auto
+			if(!localsettings.autoguess_third_party)
+			{
+				instag = "\n### Instruction:\n"; //backend not compatible with auto
+			}
 		}
 		if(doTrim){
 			return replaceAll(instag, "\\n", "\n").trim();
@@ -4412,7 +4417,10 @@ Current version indicated by LITEVER below.
 		let instag = localsettings.instruct_endtag;
 		if(instag=="{{[OUTPUT]}}" && !(custom_kobold_endpoint != "" && is_using_kcpp_with_autotags()))
 		{
-			instag = "\n### Response:\n"; //backend not compatible with auto
+			if(!localsettings.autoguess_third_party)
+			{
+				instag = "\n### Response:\n"; //backend not compatible with auto
+			}
 		}
 		if(doTrim){
 			return replaceAll(instag, "\\n", "\n").trim();
@@ -12630,6 +12638,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("show_endpoint_selector").checked = localsettings.show_endpoint_selector;
 		document.getElementById("no_warn_unsaved").checked = localsettings.no_warn_unsaved;
 		document.getElementById("no_compress_audio").checked = localsettings.no_compress_audio;
+		document.getElementById("autoguess_third_party").checked = localsettings.autoguess_third_party;
 		document.getElementById("render_streaming_markdown").checked = localsettings.render_streaming_markdown;
 		document.getElementById("min_p").value = localsettings.min_p;
 		document.getElementById("dynatemp_range").value = localsettings.dynatemp_range;
@@ -13161,6 +13170,7 @@ Current version indicated by LITEVER below.
 		localsettings.show_endpoint_selector = (document.getElementById("show_endpoint_selector").checked ? true : false);
 		localsettings.no_warn_unsaved = (document.getElementById("no_warn_unsaved").checked ? true : false);
 		localsettings.no_compress_audio = (document.getElementById("no_compress_audio").checked ? true : false);
+		localsettings.autoguess_third_party = (document.getElementById("autoguess_third_party").checked ? true : false);
 		localsettings.render_streaming_markdown = (document.getElementById("render_streaming_markdown").checked ? true : false);
 		if(document.getElementById("opmode").value==1)
 		{
@@ -18470,12 +18480,15 @@ Current version indicated by LITEVER below.
 					gentxt = gentxt.substring(curtag.length);
 				}
 
-				let found = gentxt.indexOf(curtag);
-				let splitresponse = [];
-				if (found != -1) //if found, truncate to it
+				if(localsettings.includedefaultstops)
 				{
-					splitresponse = gentxt.split(curtag);
-					gentxt = splitresponse[0];
+					let found = gentxt.indexOf(curtag);
+					let splitresponse = [];
+					if (found != -1) //if found, truncate to it
+					{
+						splitresponse = gentxt.split(curtag);
+						gentxt = splitresponse[0];
+					}
 				}
 			}
 
@@ -25328,6 +25341,11 @@ Current version indicated by LITEVER below.
 							<div class="justifyleft settingsmall">DoNotCompressAudio <span class="helpicon">?<span
 								class="helptext">Do not compress embedded audio files. Might crash on big files! (caution!)</span></span></div>
 							<input title="Do Not Recompress Audio" type="checkbox" id="no_compress_audio" style="margin:0px 0px 0px 0px;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">AutoguessTagsForThirdParty <span class="helpicon">?<span
+								class="helptext">Sends raw KoboldCppAutomatic AutoGuess tags to third party APIs. (e.g. Horde) Be warned, you better hope they handle them well internally...</span></span></div>
+							<input title="Send Autoguess Tags For Third Party APIs" type="checkbox" id="autoguess_third_party" style="margin:0px 0px 0px 0px;">
 						</div>
 					</div>
 
