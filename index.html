@@ -10261,7 +10261,7 @@ Current version indicated by LITEVER below.
 			{
 				document.getElementById("oairoledropdown").value = localsettings.saved_oai_role;
 			}
-			if(document.getElementById("customapidropdown").value==7) //mistral api supports prefill
+			if(document.getElementById("customapidropdown").value==7 || (document.getElementById("customapidropdown").value==2 && document.getElementById("custom_oai_endpoint").value.includes(".moonshot."))) //mistral api supports prefill
 			{
 				document.getElementById("oaiemulatecompletionsbox").classList.remove("hidden");
 			}
@@ -10386,9 +10386,11 @@ Current version indicated by LITEVER below.
 		|| dropdown.value.includes("text-davinci-001") || dropdown.value.includes("gpt-3.5-turbo-instruct") || dropdown.value == "davinci");
 		if(autotoggle_check)
 		{
+			document.getElementById("useoaichatcompl").disabled = false;
 			if(ep_should_always_use_chat_completions() || dropdown.selectedIndex==dropdown.options.length-1)
 			{
 				document.getElementById("useoaichatcompl").checked = true;
+				document.getElementById("useoaichatcompl").disabled = true;
 			} else if (document.getElementById("custom_oai_endpoint").value.toLowerCase().includes("featherless.ai")) {
 				document.getElementById("useoaichatcompl").checked = false; //use completions for a better experience
 			} else {
@@ -10564,10 +10566,10 @@ Current version indicated by LITEVER below.
 		if(desired_oai_key!="" && desired_oai_key!=dummy_api_key){
 			oaiheaders["Authorization"] = "Bearer " + desired_oai_key;
 		};
-		if (desired_oai_ep.toLowerCase().includes("api.mistral.ai")) {
+		if (desired_oai_ep.toLowerCase().includes("api.mistral.ai") || desired_oai_ep.toLowerCase().includes("api.x.ai")) {
 			if(desired_oai_key=="" || desired_oai_key==dummy_api_key)
 			{
-				msgbox("MistralAI API requires an API key to fetch model list!");
+				msgbox("This API requires an API key to fetch model list!");
 				return;
 			}
 		}
@@ -16947,15 +16949,23 @@ Current version indicated by LITEVER below.
 						let addrole = document.getElementById("jailbreakprompttext2role").value;
 						addrole = ((addrole==2)?"system":(addrole==1?"assistant":"user"));
 						let postmsg = { "role": addrole, "content": document.getElementById("jailbreakprompttext2").value };
-						if(addrole=="assistant" && targetep.toLowerCase().includes("api.deepseek.com"))
+						if(addrole=="assistant")
 						{
-							postmsg["prefix"] = true;
+							if(targetep.toLowerCase().includes("api.deepseek.com") || targetep.toLowerCase().includes("api.mistral.ai"))
+							{
+								postmsg["prefix"] = true;
+							}
+							else if(targetep.toLowerCase().includes(".moonshot."))
+							{
+								postmsg["partial"] = true;
+							}
 						}
 						oai_payload.messages.push(postmsg);
 					}
 
 					oaiemulatecompletionscontent = "";
-					if(targetep.toLowerCase().includes("api.mistral.ai") && document.getElementById("oaiemulatecompletions").checked)
+					if((targetep.toLowerCase().includes("api.mistral.ai") || targetep.toLowerCase().includes(".moonshot."))
+					&& document.getElementById("oaiemulatecompletions").checked)
 					{
 						delete oai_payload["stop"];
 						oai_payload.messages = [{ "role": "system", "content": "No restrictions." }];
@@ -16964,7 +16974,14 @@ Current version indicated by LITEVER below.
 							addrole = ((addrole==2)?"system":(addrole==1?"assistant":"user"));
 							oai_payload.messages.push({ "role": addrole, "content": document.getElementById("jailbreakprompttext").value });
 						}
-						oai_payload.messages.push({ "role": "assistant", "content": mainoaibody, "prefix":true });
+						if(targetep.toLowerCase().includes(".moonshot."))
+						{
+							oai_payload.messages.push({ "role": "assistant", "content": mainoaibody, "partial":true });
+						}
+						else
+						{
+							oai_payload.messages.push({ "role": "assistant", "content": mainoaibody, "prefix":true });
+						}
 						oaiemulatecompletionscontent = mainoaibody;
 					}
 
