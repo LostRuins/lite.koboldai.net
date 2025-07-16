@@ -3146,7 +3146,7 @@ Current version indicated by LITEVER below.
 	var selected_models = []; //this stores ALL selected models properties as array of objects
 	var worker_data = [];
 	var selected_workers = [];
-	//gametext_arr stores images inline, with the special format [<|p|id|p|>] or [<|d|id|d|>], which is either an ID for loaded image data, or an ID for pending requests
+	//gametext_arr stores images inline, with the special format [<|p|id|p|>] or [<|h|hash|h|>], which is either a hash for loaded media data, or an ID for pending requests
 	var gametext_arr = []; //array of texts currently displayed
 	var redo_arr = []; //array of texts that are in the redo stack
 	var retry_prev_text = []; //when we retry, save the last 3 versions in case they want to undo
@@ -3181,7 +3181,6 @@ Current version indicated by LITEVER below.
 	var image_db = {}; //stores a dictionary of pending images
 	var interrogation_db = {};
 	var completed_imgs_meta = {}; //stores temp info on completed images like alt text
-	var img_hash_to_b64_lookup = {}; //used to revert imghash to b64. temporary storage
 	var data_hash_to_blob_lookup = {}; //used for temporary blob storage, such as with embedded audio
 	//key is ID, body is {done:false,queue:10,result:""}
 	var stablemodels = [{"name": "stable_diffusion","count": 1}]; //stored as {name,count}
@@ -7454,7 +7453,7 @@ Current version indicated by LITEVER below.
 		let export_arr_no_img = [];
 		let export_hashes = {};
 		for (let i = 0; i < gametext_arr.length; ++i) {
-			export_arr_no_img.push(gametext_arr[i].replace(/\[<\|p\|.+?\|p\|>\]/g, "").replace(/\[<\|d\|.+?\|d\|>\]/g, ""));
+			export_arr_no_img.push(gametext_arr[i].replace(/\[<\|p\|.+?\|p\|>\]/g, "").replace(/\[<\|h\|.+?\|h\|>\]/g, ""));
 		}
 		if(!save_images)
 		{
@@ -7464,12 +7463,11 @@ Current version indicated by LITEVER below.
 		{
 			//bake used image metas into savefile
 			for (let i = 0; i < gametext_arr.length; ++i) {
-				let matches = gametext_arr[i].match(/\[<\|d\|.+?\|d\|>\]/g);
-				for(let m in matches)
-				{
-					let inner = matches[m].substring(5, matches[m].length - 5);
-					let imghash = cyrb_hash(inner);
-					if (completed_imgs_meta[imghash] != null) {
+				let matches = gametext_arr[i].matchAll(/\[<\|h\|(.+?)\|h\|>\]/g);
+				for (const match of matches) {
+					let imghash = match[1];
+					if (completed_imgs_meta[imghash] != null)
+					{
 						export_hashes[imghash] = completed_imgs_meta[imghash];
 					}
 				}
@@ -8028,7 +8026,16 @@ Current version indicated by LITEVER below.
 				{
 					for (var key in storyobj.completed_imgs_meta)
 					{
+						let oldb64 = "";
+						if(completed_imgs_meta[key] && completed_imgs_meta[key].data)
+						{
+							oldb64 = completed_imgs_meta[key].data;
+						}
 						completed_imgs_meta[key] = storyobj.completed_imgs_meta[key];
+						if(completed_imgs_meta[key] && !completed_imgs_meta[key].data && oldb64)
+						{
+							completed_imgs_meta[key].data = oldb64;
+						}
 						if(completed_imgs_meta[key] && completed_imgs_meta[key].visionmode==4)
 						{
 							completed_imgs_meta[key].visionmode = 3; //todo: temporary backwards compat, to be removed.
@@ -17982,7 +17989,7 @@ Current version indicated by LITEVER below.
 		let savedmeta = completed_imgs_meta[imghash];
 		if(!savedmeta && imghash!="")
 		{
-			savedmeta = completed_imgs_meta[imghash] = {prompt:"", desc:"", visionmode:0, aspect:0, ref:"", len:0, type:0};
+			savedmeta = completed_imgs_meta[imghash] = {prompt:"", desc:"", visionmode:0, aspect:0, ref:"", len:0, type:0, data:""};
 		}
 		if(!savedmeta.visionmode)
 		{
@@ -18146,7 +18153,8 @@ Current version indicated by LITEVER below.
 		}
 		if(targettoremove)
 		{
-			var matchingStr = ("[<|d|" + targettoremove + "|d|>]")
+			let hash = cyrb_hash(targettoremove);
+			let matchingStr = ("[<|h|" + hash + "|h|>]");
 			for (let i = 0; i < gametext_arr.length; ++i) {
 				if (gametext_arr[i].includes(matchingStr)) {
 					gametext_arr[i] = gametext_arr[i].replace(matchingStr, "");
@@ -18167,15 +18175,12 @@ Current version indicated by LITEVER below.
 		{
 			siclass = "storyimgsidehorizontal"; //horizontal stack
 		}
-		text = text.replace(/\[<\|p\|.+?\|p\|>\]/g, function (m) {
-			// m here means the whole matched string
-			let inner = m.substring(5, m.length - 5);
+		text = text.replace(/\[<\|p\|(.+?)\|p\|>\]/g, function (_match, inner) {
 			inner = render_media_html("", inner, siclass);
 			return inner;
 		});
-		text = text.replace(/\[<\|d\|.+?\|d\|>\]/g, function (m) {
-			// m here means the whole matched string
-			let inner = m.substring(5, m.length - 5);
+
+		text = text.replace(/\[<\|h\|(.+?)\|h\|>\]/g, function (_match, inner) {
 			inner = render_media_html(inner, "", siclass);
 			return inner;
 		});
@@ -18183,22 +18188,31 @@ Current version indicated by LITEVER below.
 		return text;
 	}
 
-	function render_media_html(data, pend_txt = "", siclass="storyimgfloat")
+	function render_media_html(hash, pend_txt = "", siclass="storyimgfloat")
 	{
+		//if it's a meta reference, retrieve actual data
+		let data = "";
+		if(hash!="")
+		{
+			if(completed_imgs_meta[hash] != null && completed_imgs_meta[hash].data)
+			{
+				data = completed_imgs_meta[hash].data;
+			}
+		}
 		if(data.startsWith("data:audio"))
 		{
-			return render_audio_html(data);
+			return render_audio_html(hash, data);
 		}
 		else //also handles ALL pending items
 		{
-			return render_image_html(data, pend_txt, siclass);
+			return render_image_html(hash, data, pend_txt, siclass);
 		}
 		return "";
 	}
 
-	function render_audio_html(data)
+	function render_audio_html(hash, data)
 	{
-		let audiohash = cyrb_hash(data).trim();
+		let audiohash = hash.trim();
 		let audioblob = b64_to_persistent_blob(data,audiohash);
 		let filename = "";
 		let len = 0;
@@ -18212,7 +18226,7 @@ Current version indicated by LITEVER below.
 		return str;
 	}
 
-	function render_image_html(data, pend_txt = "", siclass="storyimgfloat") {
+	function render_image_html(hash, data, pend_txt = "", siclass="storyimgfloat") {
 		var dim = PREVIEW_RES_PX; //image preview. adventure mode has smaller pictures
 		dimW = dim;
 		dimH = dim;
@@ -18230,7 +18244,7 @@ Current version indicated by LITEVER below.
 
 			return `<div class="${siclass}${reinvertcolor}" contenteditable="false"><img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wAARCAEAAQADASIAAhEBAxEB/8QAGQABAQEBAQEAAAAAAAAAAAAAAAEDAgQF/8QAIBABAAIBBQEBAQEAAAAAAAAAAAECEgMRMVKRIWFBof/EABQBAQAAAAAAAAAAAAAAAAAAAAD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwD7AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABETPENNPT3je3jUHm22HpmInljqUx+xwDgAAAAAAAAAAAAAAAAAAAAAAAAABaxvaIRaztaJB6AAEmN4mFSZ2iZB5wAAAAAAAAAAAAAAAAAAAAAAAAAAAaaeptG1vWrzETMcSD0zMRyx1L5fI4cb7gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA7rpzNd/HAAAAAAAAAAAAAAAAAAAAAAAAAAAAADTT09/s8Gnp7/Z4agONSmX2OXYDzDbUpl9jliAAAAAAAAAAAAAAAAAAAsVmd9o4KVm0/jeIiI2gHnGupp/2vjIAABpp6e/2TT09/s8NQAAAAHGpTL7HLsB5htqUy+xyxAAAAAAAAAAAAAAAWlZtP4UrNp/G8RFY2gCIiI2hQAZ6mn/a+NAHmaaenv8AZ4dzp1m2/wDjoAAAAAAAABxqUy+xy7AeYbalMvscsQAAAAAAAAAAFpWbT+FKzafxvEREbQBEREbQoAAAAAAAAAAAAAAAAAONSmX2OXYDzDbUpl9jliAAAAAAAtKzafxaVm0/jaIiI2gCIiI2hQAAAAAAAAAAAAAAAAAAAAAcalMvscuwHmG2pTL7HLEAAAAFi0xxMwZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6kzvyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/Z" width=${dim} height=${dim} style="border-radius: 6%;" title="${alttxt}" alt="${pend_txt}"><div class=\"imgloader\"></div><div class=\"imagelabel\">${waittime}</div></div>`;
 		} else {
-			let imghash = cyrb_hash(data).trim();
+			let imghash = hash.trim();
 			if (completed_imgs_meta[imghash] != null) {
 				alttxt = completed_imgs_meta[imghash].prompt?escape_html(completed_imgs_meta[imghash].prompt):"";
 				if(completed_imgs_meta[imghash].aspect==1) //portrait
@@ -18585,7 +18599,7 @@ Current version indicated by LITEVER below.
 			{
 				const pat = /<t2i>(.*?)<\/t2i>/g;
 				gentxtspeak = gentxtspeak.replace(pat, "");
-				const pat2 = /{{\[IMG_.{1,8}_REF\]}}/g;
+				const pat2 = /{{\[DAT_.{1,8}_REF\]}}/g;
 				gentxtspeak = gentxtspeak.replace(pat2, "");
 			}
 
@@ -18793,13 +18807,13 @@ Current version indicated by LITEVER below.
 						hasChangedImage = true; //set here to update timers
 						if (img.done == true && img.result != "") {
 							needToSave = true;
-							let newstr = "[<|d|" + img.result + "|d|>]";
+							let metaid = cyrb_hash(img.result);
+							let newstr = `[<|h|${metaid}|h|>]`;
 							console.log("Replacing with Image: " + matchstr);
 							gametext_arr[i] = gametext_arr[i].replace(matchstr, newstr);
-							let metaid = cyrb_hash(img.result);
 							//default to llava if supported, and image is self uploaded
 							let desiredvismode = ((image_db[key].imsource==1 && ((is_using_kcpp_with_vision() && image_db[key].type==0) || (is_using_kcpp_with_audio() && image_db[key].type==1)))?3:0);
-							completed_imgs_meta[metaid] = {prompt:image_db[key].prompt, desc:"", visionmode:desiredvismode, aspect:image_db[key].aspect, ref:image_db[key].imrefid, len:image_db[key].len, type:image_db[key].type};
+							completed_imgs_meta[metaid] = {prompt:image_db[key].prompt, desc:"", visionmode:desiredvismode, aspect:image_db[key].aspect, ref:image_db[key].imrefid, len:image_db[key].len, type:image_db[key].type, data:img.result};
 							delete image_db[key];
 						}
 					}
@@ -19766,29 +19780,25 @@ Current version indicated by LITEVER below.
 			}
 			return `<span class=\"color_pink\">`+m+`</span>`;
 		});
-		text = text.replace(/\[<\|d\|.+?\|d\|>\]/g, function (m) {
-			let inner = m.substring(5, m.length - 5);
-			let imghash = cyrb_hash(inner);
-			img_hash_to_b64_lookup[imghash] = m;
-			let hashtag = `{{[IMG_${imghash}_REF]}}`;
-			if(!addspan)
-			{
+		text = text.replace(/\[<\|h\|(.+?)\|h\|>\]/g, function (_match, inner) {
+			let hashtag = `{{[DAT_${inner}_REF]}}`;
+			if (!addspan) {
 				return hashtag;
 			}
-			return `<span class=\"color_pink\">${hashtag}</span>`;
+			return `<span class="color_pink">${hashtag}</span>`;
 		});
 		return text;
 	}
 
 	function unstash_image_placeholders(text)
 	{
-		return text.replace(/{{\[IMG_.{1,8}_REF\]}}/g, function (m) {
+		return text.replace(/{{\[DAT_.{1,8}_REF\]}}/g, function (m) {
 			let imghash = m.substring(7, m.length - 7);
 			if(!imghash)
 			{
 				return m;
 			}
-			let unstash = img_hash_to_b64_lookup[imghash];
+			let unstash = `[<|h|${imghash}|h|>]`;
 			if(!unstash)
 			{
 				return m;
@@ -19812,18 +19822,7 @@ Current version indicated by LITEVER below.
 				retry_preserve_last = false;
 				redo_prev_text = [];
 
-				//stash images
-				gametext_elem.querySelectorAll('div.storyimgcenter,div.storyimgsidevertical,div.storyimgsidehorizontal,div.storyimgfloat').forEach(
-					(el) => {
-						let chimg = el.getElementsByTagName("img")[0];
-						if(el && chimg)
-						{
-							el.replaceWith((chimg.alt == null || chimg.alt == "") ? ("[<|d|" + chimg.src + "|d|>]") : ("[<|p|" + chimg.alt + "|p|>]"))
-						}
-					}
-				);
-
-				//replace b64 image placeholders
+				//replace b64 image placeholders back to the actual stored format
 				gametext_elem.innerHTML = unstash_image_placeholders(gametext_elem.innerHTML);
 
 				let editedChunks = []; //use to count chunk lengths before merging
@@ -19832,7 +19831,6 @@ Current version indicated by LITEVER below.
 						editedChunks.push(el.innerText);
 					}
 				);
-
 
 				//strip chunks (optimize for firefox by not constantly modifying dom)
 				let htmlstr = gametext_elem.innerHTML;
@@ -19846,11 +19844,6 @@ Current version indicated by LITEVER below.
 				//rather than dump it all into one history, let's split it into paragraphs
 				let fullmergedstory = gametext_elem.innerText;
 
-				//if it ends with a single newline, remove it to avoid ghost newlines
-				if (fullmergedstory.endsWith("\n") && !fullmergedstory.endsWith("\n\n")) {
-					fullmergedstory = fullmergedstory.slice(0, -1);
-				}
-
 				let newestChunk = "";
 				if(editedChunks.length>1) //split by chunk lengths in reverse order, we only want the newest
 				{
@@ -19860,6 +19853,19 @@ Current version indicated by LITEVER below.
 					{
 						newestChunk = fullmergedstory.slice(-cl);
 						fullmergedstory = fullmergedstory.slice(0,-cl);
+					}
+				}
+
+				//if it ends with a single newline, remove it to avoid ghost newlines
+				if (newestChunk) {
+					if (newestChunk.endsWith("\n") && !newestChunk.endsWith("\n\n")) {
+						newestChunk = newestChunk.slice(0, -1);
+					}
+				}
+				else
+				{
+					if (fullmergedstory.endsWith("\n") && !fullmergedstory.endsWith("\n\n")) {
+						fullmergedstory = fullmergedstory.slice(0, -1);
 					}
 				}
 
@@ -19923,7 +19929,7 @@ Current version indicated by LITEVER below.
 			fulltxt = fulltxt.replace(/\[&lt;\|p\|.+?\|p\|&gt;\]/g, function (m) {
 				return unescape_html(m);
 			});
-			fulltxt = fulltxt.replace(/\[&lt;\|d\|.+?\|d\|&gt;\]/g, function (m) {
+			fulltxt = fulltxt.replace(/\[&lt;\|h\|.+?\|h\|&gt;\]/g, function (m) {
 				return unescape_html(m) ;
 			});
 			fulltxt = fulltxt.replace(/\[&lt;\|.+?\|&gt;\]/g, function (m) {
@@ -19967,12 +19973,11 @@ Current version indicated by LITEVER below.
 			{
 				insertAIVisionImages = []; //a bit hacky
 				insertAIAudioSounds = [];
-				fulltxt = fulltxt.replace(/\[<\|d\|.+?\|d\|>\]/g, function (m) {
-					// m here means the whole matched string
-					let inner = m.substring(5, m.length - 5);
-					let imghash = cyrb_hash(inner);
+				fulltxt = fulltxt.replace(/\[<\|h\|(.+?)\|h\|>\]/g, function (_match, inner) {
+					let imghash = inner;
 					let foundmeta = completed_imgs_meta[imghash];
 					if (foundmeta != null) {
+						let data = foundmeta.data;
 						if(foundmeta.desc && (foundmeta.visionmode==1||foundmeta.visionmode==2))
 						{
 							return "\n(Attached Image: " + foundmeta.desc + ")\n";
@@ -19980,14 +19985,14 @@ Current version indicated by LITEVER below.
 						else if(foundmeta.visionmode==3)
 						{
 							let placeholder = "";
-							let parts = inner.split(',');
+							let parts = data.split(',');
 							if (parts.length === 2 && parts[0].startsWith('data:image')) {
-								insertAIVisionImages.push(inner);
+								insertAIVisionImages.push(data);
 								placeholder = "\n(Attached Image)\n";
 							}
 							else if(parts.length === 2 && parts[0].startsWith('data:audio'))
 							{
-								insertAIAudioSounds.push(inner);
+								insertAIAudioSounds.push(data);
 								placeholder = "\n(Attached Audio)\n";
 							}
 							return placeholder;
@@ -19997,7 +20002,7 @@ Current version indicated by LITEVER below.
 				});
 			}
 			fulltxt = fulltxt.replace(/\[<\|p\|.+?\|p\|>\]/g, stripimg_replace_str);
-			fulltxt = fulltxt.replace(/\[<\|d\|.+?\|d\|>\]/g, stripimg_replace_str);
+			fulltxt = fulltxt.replace(/\[<\|h\|.+?\|h\|>\]/g, stripimg_replace_str);
 
 			//always filter comments - new format
 			fulltxt = fulltxt.replace(/\[<\|[\s\S]+?\|>\]/g, ""); //remove normal comments too
@@ -20009,11 +20014,12 @@ Current version indicated by LITEVER below.
 	function migrate_old_images_in_gametext()
 	{
 		let oldctx = concat_gametext(false, "", "", "", false);
+		let mustMigrate = false;
 		//if we have no new images
 		if (!(/\[<\|p\|.+?\|p\|>\]/.test(oldctx)) && !(/\[<\|d\|.+?\|d\|>\]/.test(oldctx))) {
 			//but we also have old images
 			if ((/<\|p\|.+?\|p\|>/.test(oldctx)) || (/<\|d\|.+?\|d\|>/.test(oldctx))) {
-
+				mustMigrate = true;
 				console.log("Migrating old images from saved story");
 				for (let i = 0; i < gametext_arr.length; ++i) {
 					gametext_arr[i] = gametext_arr[i].replace(/<\|p\|.+?\|p\|>/g, function (m) {
@@ -20023,6 +20029,23 @@ Current version indicated by LITEVER below.
 						return "[" + m + "]";
 					});
 				}
+			}
+		}
+
+		//now, migrate all unhashed inline images into their final placeholder form
+		if(mustMigrate || (/\[<\|d\|.+?\|d\|>\]/.test(oldctx)))
+		{
+			console.log("Migrating old images 2 from saved story");
+			for (let i = 0; i < gametext_arr.length; ++i) {
+				gametext_arr[i] = gametext_arr[i].replace(/\[<\|d\|(.+?)\|d\|>\]/g, function (match, p1) {
+					let imghash = cyrb_hash(p1);
+					if(!completed_imgs_meta[imghash])
+					{
+						completed_imgs_meta[imghash] = {prompt:"", desc:"", visionmode:0, aspect:0, ref:"", len:0, type:0, data: ""};
+					}
+					completed_imgs_meta[imghash].data = p1;
+					return `[<|h|${imghash}|h|>]`;
+				});
 			}
 		}
 	}
@@ -21434,10 +21457,10 @@ Current version indicated by LITEVER below.
 		}
 
 		//a quick fix that adds a newline if there's none before opponent chat and a picture
-		var othernamesregexreplace = new RegExp("\\|[d|p]\\|>(?!" + localsettings.chatname + ").+?\\: ", "gi");
+		var othernamesregexreplace = new RegExp("\\|[h|p]\\|>](?!" + localsettings.chatname + ").+?\\: ", "gi");
 
 		input = input.replace(othernamesregexreplace, function (m) {
-			let rep = m.substring(0,4) + "\n" + m.substring(4);
+			let rep = m.substring(0,5) + "\n" + m.substring(5);
 			return rep;
 		});
 
