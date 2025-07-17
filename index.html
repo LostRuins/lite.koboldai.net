@@ -3458,7 +3458,8 @@ Current version indicated by LITEVER below.
 		sampler_order: [6, 0, 1, 3, 4, 2, 5],
 	};
 
-	var defaultsettings = JSON.parse(JSON.stringify(localsettings));
+	const defaultsettings = JSON.parse(JSON.stringify(localsettings));
+	const default_imgs_meta = {prompt:"", desc:"", visionmode:0, aspect:0, ref:"", len:0, type:0, data: ""};
 
 	//a list of presets users can choose from
 	const samplerpresets = [
@@ -7463,11 +7464,11 @@ Current version indicated by LITEVER below.
 		{
 			//bake used image metas into savefile
 			for (let i = 0; i < gametext_arr.length; ++i) {
-				let matches = gametext_arr[i].matchAll(/\[<\|h\|(.+?)\|h\|>\]/g);
-				for (const match of matches) {
+				let regex = /\[<\|h\|(.+?)\|h\|>\]/g;
+				let match;
+				while ((match = regex.exec(gametext_arr[i])) !== null) {
 					let imghash = match[1];
-					if (completed_imgs_meta[imghash] != null)
-					{
+					if (completed_imgs_meta[imghash] != null) {
 						export_hashes[imghash] = completed_imgs_meta[imghash];
 					}
 				}
@@ -8031,7 +8032,8 @@ Current version indicated by LITEVER below.
 						{
 							oldb64 = completed_imgs_meta[key].data;
 						}
-						completed_imgs_meta[key] = storyobj.completed_imgs_meta[key];
+						completed_imgs_meta[key] = JSON.parse(JSON.stringify(default_imgs_meta));
+						import_props_into_object(completed_imgs_meta[key],storyobj.completed_imgs_meta[key]);
 						if(completed_imgs_meta[key] && !completed_imgs_meta[key].data && oldb64)
 						{
 							completed_imgs_meta[key].data = oldb64;
@@ -17989,7 +17991,7 @@ Current version indicated by LITEVER below.
 		let savedmeta = completed_imgs_meta[imghash];
 		if(!savedmeta && imghash!="")
 		{
-			savedmeta = completed_imgs_meta[imghash] = {prompt:"", desc:"", visionmode:0, aspect:0, ref:"", len:0, type:0, data:""};
+			savedmeta = completed_imgs_meta[imghash] = JSON.parse(JSON.stringify(default_imgs_meta));
 		}
 		if(!savedmeta.visionmode)
 		{
@@ -18813,7 +18815,14 @@ Current version indicated by LITEVER below.
 							gametext_arr[i] = gametext_arr[i].replace(matchstr, newstr);
 							//default to llava if supported, and image is self uploaded
 							let desiredvismode = ((image_db[key].imsource==1 && ((is_using_kcpp_with_vision() && image_db[key].type==0) || (is_using_kcpp_with_audio() && image_db[key].type==1)))?3:0);
-							completed_imgs_meta[metaid] = {prompt:image_db[key].prompt, desc:"", visionmode:desiredvismode, aspect:image_db[key].aspect, ref:image_db[key].imrefid, len:image_db[key].len, type:image_db[key].type, data:img.result};
+							completed_imgs_meta[metaid] = JSON.parse(JSON.stringify(default_imgs_meta));
+							completed_imgs_meta[metaid].prompt = image_db[key].prompt;
+							completed_imgs_meta[metaid].visionmode = desiredvismode;
+							completed_imgs_meta[metaid].aspect = image_db[key].aspect;
+							completed_imgs_meta[metaid].ref = image_db[key].imrefid;
+							completed_imgs_meta[metaid].len = image_db[key].len;
+							completed_imgs_meta[metaid].type = image_db[key].type;
+							completed_imgs_meta[metaid].data = img.result;
 							delete image_db[key];
 						}
 					}
@@ -20054,7 +20063,7 @@ Current version indicated by LITEVER below.
 					let imghash = cyrb_hash(p1);
 					if(!completed_imgs_meta[imghash])
 					{
-						completed_imgs_meta[imghash] = {prompt:"", desc:"", visionmode:0, aspect:0, ref:"", len:0, type:0, data: ""};
+						completed_imgs_meta[imghash] = JSON.parse(JSON.stringify(default_imgs_meta));
 					}
 					completed_imgs_meta[imghash].data = p1;
 					return `[<|h|${imghash}|h|>]`;
