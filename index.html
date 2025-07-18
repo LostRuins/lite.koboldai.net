@@ -23092,7 +23092,16 @@ Current version indicated by LITEVER below.
 		let pendstream = "";
 		if (synchro_pending_stream != "" && !isPreview) {
 			pendstream = escape_html(pending_context_preinjection) + format_streaming_text(escape_html(synchro_pending_stream));
-			chatunits.push({"msg":`<span class='pending_text'>${pendstream}</span>`,"myturn":false,"unlabelled_name":true,  "unlabelled_img":false});
+			let allow_cont_prev_turn = (localsettings.opmode==4 || (localsettings.opmode==3 && localsettings.allow_continue_chat));
+			if(chatunits.length>0 && chatunits[chatunits.length-1].myturn==false && chatunits[chatunits.length-1].msg && allow_cont_prev_turn)
+			{
+				//inject into previous turn, only for instruct OR continuechat
+				chatunits[chatunits.length-1].msg += `<span class='pending_text'>${pendstream}</span>`;
+			}
+			else
+			{
+				chatunits.push({"msg":`<span class='pending_text'>${pendstream}</span>`,"myturn":false,"unlabelled_name":true, "unlabelled_img":false});
+			}
 		}
 		for(var i=0;i<chatunits.length;++i)
 		{
