@@ -19103,13 +19103,14 @@ Current version indicated by LITEVER below.
 				for (let i = 0; i < samples.length; i += sampleBlockSize) {
 					let sampleChunk = samples.subarray(i, i + sampleBlockSize);
 
-					// Convert Float32 [-1, 1] to Int16 [-32768, 32767]
-					let int16Buffer = new Int16Array(sampleChunk.length);
+					let buff = new Float32Array(sampleChunk.length);
 					for (let j = 0; j < sampleChunk.length; j++) {
-						let s = Math.max(-1, Math.min(1, sampleChunk[j]));
-						int16Buffer[j] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+						let s = sampleChunk[j];
+						s = s*32767.0;
+						s = Math.max(-32767.0, Math.min(32767.0, s));
+						buff[j] = s;
 					}
-					const mp3buf = mp3encoder.encodeBuffer(int16Buffer);
+					const mp3buf = mp3encoder.encodeBuffer(buff);
 					if (mp3buf.length > 0) {
 						mp3Data.push(new Uint8Array(mp3buf));
 					}
@@ -21354,7 +21355,15 @@ Current version indicated by LITEVER below.
 		for(var i=0;i<chatunits.length;++i)
 		{
 			let curr = chatunits[i];
-			curr = repack_postprocess_turn(curr, countmap);
+			if(corpo_editing_turn != i)
+			{
+				curr = repack_postprocess_turn(curr, countmap); //change whole object
+			}
+			else
+			{
+				let reshaped = repack_postprocess_turn(JSON.parse(JSON.stringify(curr)), countmap);
+				curr.name = reshaped.name; //only change name
+			}
 
 			let resendbtn = ((curr.myturn && i<chatunits.length-1)?`<button type="button" class="btn btn-primary corpoeditbtn" style="float:right;" onclick="corpo_edit_chunk_resend(${i})">Resend</button>`:``);
 			let bodypart = (corpo_editing_turn == i ?
