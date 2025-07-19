@@ -19093,7 +19093,8 @@ Current version indicated by LITEVER below.
 		reader.onloadend = function () {
 			const arrayBuffer = reader.result;
 			const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-			audioContext.decodeAudioData(arrayBuffer, function (buffer) {
+			audioContext.decodeAudioData(arrayBuffer, function (obuf) {
+				resampleAudioBuffer(obuf,22050,(buffer)=>{
 				const samplefreq = buffer.sampleRate;
 				const numberOfChannels = buffer.numberOfChannels;
 				const length = buffer.length;
@@ -19107,18 +19108,6 @@ Current version indicated by LITEVER below.
 				}
 				for (let i = 0; i < length; i++) {
 					samples[i] /= numberOfChannels;
-				}
-				//handle extremely soft audio
-				let max = 0;
-				for (let i = 0; i < length; i++) {
-					const abs = Math.abs(samples[i]);
-					if (abs > max) max = abs;
-				}
-				if (max > 0 && max < 0.2) {
-					for (let i = 0; i < length; i++) {
-						samples[i] /= max;
-						samples[i] *= 0.2; //all super soft audio is bumped up to this
-					}
 				}
 
 				const durationInSeconds = buffer.duration;
@@ -19151,6 +19140,7 @@ Current version indicated by LITEVER below.
 					onDone(mp3Base64,durationInSeconds);
 				};
 				fileReader.readAsDataURL(mp3Blob);
+			});
 			}, function (err) {
 				console.log("Audio decode failed.");
 				onDone(null,null);
