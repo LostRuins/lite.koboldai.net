@@ -3459,6 +3459,8 @@ Current version indicated by LITEVER below.
 	};
 
 	const defaultsettings = JSON.parse(JSON.stringify(localsettings));
+	//visionmode 0=disabled, 1=hordeinterrogate, 2=localinterrogate, 3=multimodal
+	//type 0=img, 1=audio
 	const default_imgs_meta = {prompt:"", desc:"", visionmode:0, aspect:0, ref:"", len:0, type:0, data: ""};
 
 	//a list of presets users can choose from
@@ -17916,11 +17918,18 @@ Current version indicated by LITEVER below.
 		}
 
 	}
-	function zoomed_transcribe_btn(audiohash,onDone)
+	function zoomed_transcribe_btn(audiohash)
+	{
+		transcribe_audio_file(audiohash,(txt)=>{
+			msgbox(txt,"Transcribed Audio");
+		});
+	}
+	function transcribe_audio_file(audiohash,onDone)
 	{
 		let fetchedblob = data_hash_to_blob_lookup[audiohash];
 		if(!fetchedblob)
 		{
+			onDone(null);
 			return;
 		}
 		fetch(fetchedblob.blob)
@@ -17950,10 +17959,14 @@ Current version indicated by LITEVER below.
 						console.log(resp);
 						if(resp && resp.text && resp.text!="")
 						{
-							msgbox(resp.text,"Transcribed Audio");
+							onDone(resp.text);
+						}else
+						{
+							onDone(null);
 						}
 					}).catch((error) => {
 						console.log("Transcribe Error: " + error);
+						onDone(null);
 					});
 				}
 				reader.readAsDataURL(wavblob);
@@ -17968,14 +17981,34 @@ Current version indicated by LITEVER below.
 		if(savedmeta)
 		{
 			savedmeta.visionmode = document.getElementById("aivisionmode").value;
-			if(!savedmeta.desc && (savedmeta.visionmode==1 || savedmeta.visionmode==2))
+			if(savedmeta.type==1) //audio
 			{
-				//request a new interrogation
-				var alreadysent = Object.values(interrogation_db).some(item => item.imghash === imghash);
-				if(!alreadysent && document.getElementById("zoomedimg"))
+				if(!savedmeta.desc && savedmeta.visionmode==2)
 				{
-					let b64 = document.getElementById("zoomedimg").src;
-					interrogate_new_image(b64,imghash,(savedmeta.visionmode==1));
+					var alreadysent = Object.values(interrogation_db).some(item => item.imghash === imghash);
+					if(!alreadysent && document.getElementById("zoomedaudio"))
+					{
+						transcribe_audio_file(imghash,(txt)=>{
+							if(txt)
+							{
+								savedmeta.desc = txt;
+								update_clicked_image(imghash);
+							}
+						});
+					}
+				}
+			}
+			else //images
+			{
+				if(!savedmeta.desc && (savedmeta.visionmode==1 || savedmeta.visionmode==2))
+				{
+					//request a new interrogation
+					var alreadysent = Object.values(interrogation_db).some(item => item.imghash === imghash);
+					if(!alreadysent && document.getElementById("zoomedimg"))
+					{
+						let b64 = document.getElementById("zoomedimg").src;
+						interrogate_new_image(b64,imghash,(savedmeta.visionmode==1));
+					}
 				}
 			}
 			update_clicked_image(imghash);
@@ -18066,6 +18099,7 @@ Current version indicated by LITEVER below.
 			}
 			let togglebtn = `<select class="form-control" id="aivisionmode" style="display:inline;height:24px;width: 140px; padding: 2px; margin: 3px; font-size:12px;" onchange="toggle_ai_vision(\'`+imghash+`\')">
 								<option value="0">Disabled</option>
+								<option value="2">Transcribe (Local)</option>
 								<option value="3">Multimodal Audio</option>
 							</select>`;
 			document.getElementById("zoomedimgdesc").innerHTML = `
@@ -20000,7 +20034,12 @@ Current version indicated by LITEVER below.
 						let data = foundmeta.data;
 						if(foundmeta.desc && (foundmeta.visionmode==1||foundmeta.visionmode==2))
 						{
-							return "\n(Attached Image: " + foundmeta.desc + ")\n";
+							if(foundmeta.type==1)//audio
+							{
+								return "\n(Attached Audio: " + foundmeta.desc + ")\n";
+							}else{
+								return "\n(Attached Image: " + foundmeta.desc + ")\n";
+							}
 						}
 						else if(foundmeta.visionmode==3)
 						{
