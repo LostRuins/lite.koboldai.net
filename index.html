@@ -20351,6 +20351,7 @@ Current version indicated by LITEVER below.
 				fulltxt = replace_placeholders(fulltxt,true);
 			}
 
+			let alreadyShowedStreaming = false; //sometimes, streaming is injected inline to preserve indentation
 
 			if(localsettings.opmode==4 && !inEditMode)
 			{
@@ -20380,6 +20381,36 @@ Current version indicated by LITEVER below.
 				{
 					let curr = instruct_turns[i];
 					let currmsg = curr.msg;
+
+					//in some special cases, add streaming text inline
+					let allow_cont_prev_turn = (localsettings.opmode==4 || (localsettings.opmode==3 && localsettings.allow_continue_chat));
+					if(i>0 && (i==instruct_turns.length-1) && curr.myturn==false && currmsg && allow_cont_prev_turn)
+					{
+						//inject into previous turn, only for instruct OR continuechat
+						currmsg += `<span class="color_yellow pending_text">${escape_html(pending_context_preinjection) + format_streaming_text(escape_html(synchro_pending_stream))}</span>`;
+						alreadyShowedStreaming = true;
+					}
+
+					//apply stylization to time tags
+					if(localsettings.inject_timestamps && localsettings.instruct_has_markdown)
+					{
+						currmsg = currmsg.replace(/(\[\d{1,2}\/\d{1,2}\/\d{4}, \d{1,2}:\d{2} [AP]M\])/g, "$1\n");
+					}
+					if(localsettings.inject_chatnames_instruct && localsettings.instruct_has_markdown)
+					{
+						let m_name = localsettings.chatname + ": ";
+						currmsg = replaceAll(currmsg, m_name, `<b>` + escape_html(m_name) + `</b>`);
+						let m_opps = localsettings.chatopponent.split("||$||");
+						for(let i=0;i<m_opps.length;++i)
+						{
+							if(m_opps[i] && m_opps[i].trim()!="")
+							{
+								let m_opp = m_opps[i] + ": ";
+								currmsg = replaceAll(currmsg, m_opp, `<b>` + escape_html(m_opp) + `</b>`);
+							}
+						}
+					}
+
 					if(localsettings.instruct_has_markdown && (localsettings.render_streaming_markdown||synchro_pending_stream==""||(i+1)<instruct_turns.length))
 					{
 						//if a list has a starttag on the same line, add a newline before it
@@ -20406,26 +20437,7 @@ Current version indicated by LITEVER below.
 					}
 				}
 
-				//apply stylization to time tags
-				if(localsettings.inject_timestamps && localsettings.instruct_has_markdown)
-				{
-					fulltxt = fulltxt.replace(/(\[\d{1,2}\/\d{1,2}\/\d{4}, \d{1,2}:\d{2} [AP]M\])/g, "$1\n");
-				}
-				if(localsettings.inject_chatnames_instruct && localsettings.instruct_has_markdown)
-				{
-					let m_name = localsettings.chatname + ": ";
-					fulltxt = replaceAll(fulltxt, m_name, `<b>` + escape_html(m_name) + `</b>`);
-					let m_opps = localsettings.chatopponent.split("||$||");
-					for(let i=0;i<m_opps.length;++i)
-					{
-						if(m_opps[i] && m_opps[i].trim()!="")
-						{
-							let m_opp = m_opps[i] + ": ";
-							fulltxt = replaceAll(fulltxt, m_opp, `<b>` + escape_html(m_opp) + `</b>`);
-						}
-					}
-				}
-			}else{
+			} else {
 				fulltxt = replaceAll(fulltxt, get_instruct_starttag(true), `%SclStg%`+escape_html(get_instruct_starttag(true))+`%SpnEtg%`);
 				fulltxt = replaceAll(fulltxt, get_instruct_endtag(true), `%SclStg%`+escape_html(get_instruct_endtag(true))+`%SpnEtg%`);
 				if (localsettings.separate_end_tags) {
@@ -20463,7 +20475,7 @@ Current version indicated by LITEVER below.
 			{
 				if(!document.getElementById("allowediting").checked && !fulltxt.startsWith("\n"))
 				{
-					fulltxt = "\n"+fulltxt;
+					fulltxt = "\n" + fulltxt;
 				}
 
 				//for chat mode, highlight our name in blue and opponent in red
@@ -20483,7 +20495,6 @@ Current version indicated by LITEVER below.
 					return `<span class="`+colormap[onametrim]+`">` + oname + `</span>`;
 				});
 				fulltxt = replaceAll(fulltxt,m_name, `<span class="color_blue">` + escape_html(m_name) + `</span>`);
-
 			}
 
 			//for adventure mode, highlight our actions in green
@@ -20493,8 +20504,8 @@ Current version indicated by LITEVER below.
 				});
 			}
 
-			//streaming display
-			if(synchro_pending_stream!="" && waiting_for_tool_call==0)
+			//streaming display for all other cases
+			if(!alreadyShowedStreaming && synchro_pending_stream!="" && waiting_for_tool_call==0)
 			{
 				fulltxt += `<span class="color_yellow pending_text">${escape_html(pending_context_preinjection) + format_streaming_text(escape_html(synchro_pending_stream))}</span>`;
 			}
