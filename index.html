@@ -18158,7 +18158,10 @@ Current version indicated by LITEVER below.
 			}
 		},false);
 	}
-	function click_image(target,imghash)
+
+	var currmediahash = "";
+	var currmediaidx = 0;
+	function click_image(target,imghash,duplicate_idx)
 	{
 		clear_zoomed_img_and_audio();
 		if(target)
@@ -18169,10 +18172,12 @@ Current version indicated by LITEVER below.
 			document.getElementById("zoomedimgdiv").innerHTML = src;
 			document.getElementById("zoomedimgdiv").classList.remove("hidden");
 			document.getElementById("zoomedaudiodiv").classList.add("hidden");
+			currmediahash = imghash;
+			currmediaidx = duplicate_idx;
 			update_clicked_image(imghash);
 		}
 	}
-	function click_audio(target,audiohash,audioblob)
+	function click_audio(target,audiohash,audioblob,duplicate_idx)
 	{
 		clear_zoomed_img_and_audio();
 		if(target)
@@ -18182,73 +18187,82 @@ Current version indicated by LITEVER below.
 			document.getElementById("zoomedaudiodiv").classList.remove("hidden");
 			let src = `<div><audio controls title="AudioPlayer"><source src="${audioblob}" id="zoomedaudio" type="audio/mp3"></audio></div>`;
 			document.getElementById("zoomedaudiodiv").innerHTML = src;
+			currmediahash = audiohash;
+			currmediaidx = duplicate_idx;
 			update_clicked_image(audiohash);
 		}
 	}
 	function clear_zoomed_img_and_audio()
 	{
+		currmediahash = "";
+		currmediaidx = 0;
 		document.getElementById("zoomedimgdiv").innerHTML = "";
 		document.getElementById("zoomedaudiodiv").innerHTML = "";
 	}
 	function delete_curr_media()
 	{
-		let zoomedimg = document.getElementById("zoomedimg");
-		let zoomedaudio = document.getElementById("zoomedaudio");
-		let targettoremove = "";
-		if (zoomedimg && zoomedimg.src && zoomedimg.src !="") {
-			targettoremove = zoomedimg.src;
-		}
-		else if(zoomedaudio && zoomedaudio.src && zoomedaudio.src !="")
-		{
-			let blobid = zoomedaudio.src;
-			for(v in data_hash_to_blob_lookup)
-			{
-				let itm = data_hash_to_blob_lookup[v];
-				if(itm.id==blobid)
-				{
-					targettoremove = itm.original;
-					break;
-				}
-			}
-		}
+		let targettoremove = currmediahash;
+		let duplicateidx = currmediaidx; //0 for first instance, increments afterwards
+
 		if(targettoremove)
 		{
-			let hash = cyrb_hash(targettoremove);
+			let hash = targettoremove;
 			let matchingStr = ("[<|h|" + hash + "|h|>]");
+			let matchIndex = 0;
 			for (let i = 0; i < gametext_arr.length; ++i) {
 				if (gametext_arr[i].includes(matchingStr)) {
-					gametext_arr[i] = gametext_arr[i].replace(matchingStr, "");
-					if (gametext_arr[i] == "") {
-						gametext_arr.splice(i, 1);
+					let index = -1;
+					let foundtarget = false;
+					let str = gametext_arr[i];
+					while ((index = str.indexOf(matchingStr, index + 1)) !== -1) {
+						if (matchIndex === duplicateidx) {
+							str = str.slice(0, index) + str.slice(index + matchingStr.length);
+							foundtarget = true;
+							break;
+						}
+						matchIndex++;
 					}
-					break;
+					if(foundtarget)
+					{
+						if (str == "") {
+							gametext_arr.splice(i, 1);
+						} else {
+							gametext_arr[i] = str;
+						}
+						break;
+					}
 				}
 			}
 			render_gametext();
 		}
+		currmediahash = "";
+		currmediaidx = 0;
 	}
 
 	function render_all_media_html(text, float=true, center=false)
 	{
 		let siclass = (float?"storyimgfloat":(center?"storyimgcenter":"storyimgsidevertical"));
+		let duplicate_idx = {};
 		if(localsettings.img_stacking && !float) //allow horizontal stacking
 		{
 			siclass = "storyimgsidehorizontal"; //horizontal stack
 		}
 		text = text.replace(/\[<\|p\|(.+?)\|p\|>\]/g, function (_match, inner) {
-			inner = render_media_html("", inner, siclass);
+			inner = render_media_html("", inner, siclass, 0);
 			return inner;
 		});
 
 		text = text.replace(/\[<\|h\|(.+?)\|h\|>\]/g, function (_match, inner) {
-			inner = render_media_html(inner, "", siclass);
-			return inner;
+			duplicate_idx[inner] = (!duplicate_idx[inner]?0:duplicate_idx[inner]);
+			let swapped = render_media_html(inner, "", siclass, duplicate_idx[inner]);
+			duplicate_idx[inner] += 1;
+			return swapped;
 		});
 		text = text.replace(/\[<\|[\s\S]+?\|>\]/g, ""); //remove normal comments too
 		return text;
 	}
 
-	function render_media_html(hash, pend_txt = "", siclass="storyimgfloat")
+	function render_media_html(hash, pend_txt = "", siclass="storyimgfloat", duplicate_idx = 0)
 	{
 		//if it's a meta reference, retrieve actual data
 		let data = "";
@@ -18261,16 +18275,16 @@ Current version indicated by LITEVER below.
 		}
 		if(data.startsWith("data:audio"))
 		{
-			return render_audio_html(hash, data);
+			return render_audio_html(hash, data, duplicate_idx);
 		}
 		else //also handles ALL pending items
 		{
-			return render_image_html(hash, data, pend_txt, siclass);
+			return render_image_html(hash, data, pend_txt, siclass, duplicate_idx);
 		}
 		return "";
 	}
 
-	function render_audio_html(hash, data)
+	function render_audio_html(hash, data, duplicate_idx=0)
 	{
 		let audiohash = hash.trim();
 		let audioblob = b64_to_persistent_blob(data,audiohash);
@@ -18282,11 +18296,11 @@ Current version indicated by LITEVER below.
 		}
 		let fndisp = filename!=""?`(${filename.substring(0,50)}) `:"";
 		fndisp = len?(`: ${Math.floor(len)}s ${fndisp}`):fndisp;
-		const str = `<span><br><button type="button" title="Attached Audio" class="btn btn-primary" style="font-size:12px; padding:8px 8px; border-radius: 16px" onclick="return click_audio(this,\'${audiohash}\',\'${audioblob}\');">Attached Audio ${fndisp}🔊</button><br></span>`;
+		const str = `<span><br><button type="button" title="Attached Audio" class="btn btn-primary" style="font-size:12px; padding:8px 8px; border-radius: 16px" onclick="return click_audio(this,\'${audiohash}\',\'${audioblob}\',${duplicate_idx});">Attached Audio ${fndisp}🔊</button><br></span>`;
 		return str;
 	}
 
-	function render_image_html(hash, data, pend_txt = "", siclass="storyimgfloat") {
+	function render_image_html(hash, data, pend_txt = "", siclass="storyimgfloat", duplicate_idx=0) {
 		var dim = PREVIEW_RES_PX; //image preview. adventure mode has smaller pictures
 		dimW = dim;
 		dimH = dim;
@@ -18328,7 +18342,7 @@ Current version indicated by LITEVER below.
 					dimH *= 0.75;
 				}
 			}
-			return `<div class="${siclass}${reinvertcolor}"><img src="${data}" width=${dimW} height=${dimH} title="${alttxt}" style="border-radius: 6%; cursor: pointer;" onclick="return click_image(this,\'${imghash}\');"></div>`;
+			return `<div class="${siclass}${reinvertcolor}"><img src="${data}" width=${dimW} height=${dimH} title="${alttxt}" style="border-radius: 6%; cursor: pointer;" onclick="return click_image(this,\'${imghash}\',${duplicate_idx});"></div>`;
 		}
 	}
 
