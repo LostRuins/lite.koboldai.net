@@ -533,6 +533,19 @@ Current version indicated by LITEVER below.
 		background-color: #6a6a6a;
 	}
 
+	.btnicon-agent, .btnicon-agent:active, .btnicon-agent:hover, .btnicon-agent:focus, .btnicon-agent:active:focus
+	{
+		background-size: 80% 80%;
+		background-position: center;
+		background-repeat: no-repeat;
+		background-image: var(--img_favicon_normal);
+		background-color: #15a0ad;
+	}
+	.btnicon-agent.inactive, .btnicon-agent.inactive:active, .btnicon-agent.inactive:hover, .btnicon-agent.inactive:focus, .btnicon-agent.inactive:active:focus
+	{
+		background-color: #6a6a6a;
+	}
+
 	/* Help tooltips */
 	.helpicon {
 		display: inline-block;
@@ -3462,6 +3475,21 @@ Current version indicated by LITEVER below.
 		sampler_order: [6, 0, 1, 3, 4, 2, 5],
 	};
 
+	/**
+	 * Agent logic
+	 */
+	let allTagsValid = () => {
+		let placeholders = !!instructstartplaceholder && !!instructstartplaceholder_end && !!instructsysplaceholder && !!instructsysplaceholder_end && !!instructendplaceholder && !!instructendplaceholder_end
+		let tags = !!localsettings.instruct_starttag && !!localsettings.instruct_endtag && !!localsettings.instruct_systag
+		&& !!localsettings.instruct_starttag_end && !!localsettings.instruct_endtag_end && !!localsettings.instruct_systag_end
+		&& !!get_instruct_systag(false) && !!get_instruct_systag(true)
+		return placeholders && tags
+	}
+
+	let isAgentModeEnabledAndSetCorrectly = () => {
+		return localsettings.opmode == 4 && !!localsettings?.agentBehaviour && allTagsValid()
+	}
+
 	const defaultsettings = JSON.parse(JSON.stringify(localsettings));
 	//visionmode 0=disabled, 1=hordeinterrogate, 2=localinterrogate, 3=multimodal
 	//type 0=img, 1=audio
@@ -4358,6 +4386,7 @@ Current version indicated by LITEVER below.
 	//toggle genimg btn
 	update_genimg_button_visiblility();
 	update_websearch_button_visibility();
+	updateAgentButtonVisibility();
 
 	//invert colors
 	toggle_invert_colors();
@@ -8190,9 +8219,13 @@ Current version indicated by LITEVER below.
 			const regex = new RegExp(`(\\[DOCUMENT BREAK\\]\\[${documentName}\\])(.*?)(\\[DOCUMENT BREAK\\]|$)`, "s");
 			curr_doc_db = curr_doc_db.replace(regex, `$1${documentContent.trim()}$3`);
 		} else {
-			curr_doc_db += `[DOCUMENT BREAK][${documentName}]${documentContent.trim()}`;
+			curr_doc_db += `[DOCUMENT BREAK][${documentName}]${documentContent.trim()}[DOCUMENT BREAK]`;
 		}
 		document.getElementById("documentdb_data").value = curr_doc_db;
+		if (document.getElementById("memorycontainer").classList.contains("hidden"))
+		{
+			documentdb_data = document.getElementById("documentdb_data").value;
+		}
 	}
 
 	function importLorebookAsTextDB(lorebook)
@@ -11068,6 +11101,7 @@ Current version indicated by LITEVER below.
 									koboldcpp_has_txt2img = (data.txt2img?true:false);
 									let no_txt_model = (mdlname=="inactive");
 									update_websearch_button_visibility();
+									updateAgentButtonVisibility();
 
 									//also check against kcpp's max true context length
 									fetch(apply_proxy_url(desiredkoboldendpoint + koboldcpp_truemaxctxlen_endpoint),
@@ -13146,6 +13180,25 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	function updateAgentButtonVisibility() {
+		if (localsettings.agentBehaviour) {
+			document.getElementById("btn_toggleAgent").classList.remove("inactive");
+			document.getElementById("btn_toggleAgentAesthetic").classList.remove("inactive");
+		}
+		else {
+			document.getElementById("btn_toggleAgent").classList.add("inactive");
+			document.getElementById("btn_toggleAgentAesthetic").classList.add("inactive");
+		}
+		if(localsettings.opmode == "4") {
+			document.getElementById("btn_toggleAgent").classList.remove("hidden");
+			document.getElementById("btn_toggleAgentAesthetic").classList.remove("hidden");
+		}
+		else {
+			document.getElementById("btn_toggleAgent").classList.add("hidden");
+			document.getElementById("btn_toggleAgentAesthetic").classList.add("hidden");
+		}
+	}
+
 	function confirm_chat_and_instruct_tags()
 	{
 		localsettings.chatname = document.getElementById("chatname").value;
@@ -13383,6 +13436,7 @@ Current version indicated by LITEVER below.
 		localsettings.img_allownsfw = (document.getElementById("img_allownsfw").checked ? true : false);
 		update_genimg_button_visiblility();
 		update_websearch_button_visibility();
+		updateAgentButtonVisibility();
 
 		localsettings.img_cfgscale = parseFloat(document.getElementById("img_cfgscale").value);
 		localsettings.img_img2imgstr = parseFloat(document.getElementById("img_img2imgstr").value);
@@ -15321,12 +15375,14 @@ Current version indicated by LITEVER below.
 		setTimeout(function(){a.click()},20);
 	}
 
+	var ttsIsBeingGenerated = false
 	function tts_speak(text, speech_synth_override=null, do_download=false)
 	{
 		if(!text || text=="" || text.trim()=="")
 		{
 			return;
 		}
+		ttsIsBeingGenerated = true
 		let ssval = localsettings.speech_synth;
 		let ssrate = localsettings.tts_speed;
 		let vcjson = localsettings.kcpp_tts_json;
@@ -15416,6 +15472,7 @@ Current version indicated by LITEVER below.
 					{
 						tts_download(audiofile_ref);
 					}
+					ttsIsBeingGenerated = false
 					const playSound = audioContext.createBufferSource();
 					playSound.buffer = decodedData;
 					playSound.connect(audioContext.destination);
@@ -15431,6 +15488,7 @@ Current version indicated by LITEVER below.
 					};
 				}).catch((error) => {
 					console.log("XTTS Speak Error: " + error);
+					ttsIsBeingGenerated = false
 				});
 			}
 			else if(is_pollinations_tts)
@@ -15458,6 +15516,7 @@ Current version indicated by LITEVER below.
 					{
 						tts_download(audiofile_ref);
 					}
+					ttsIsBeingGenerated = false
 					const playSound = audioContext.createBufferSource();
 					playSound.buffer = decodedData;
 					playSound.connect(audioContext.destination);
@@ -15473,6 +15532,7 @@ Current version indicated by LITEVER below.
 					};
 				}).catch((error) => {
 					console.log("Pollinations Speak Error: " + error);
+					ttsIsBeingGenerated = false
 				});
 			}
 			else if(xtts_is_connected)
@@ -15501,6 +15561,7 @@ Current version indicated by LITEVER below.
 						{
 							tts_download(audiofile_ref);
 						}
+						ttsIsBeingGenerated = false
 						const playSound = audioContext.createBufferSource();
 						playSound.buffer = decodedData;
 						playSound.connect(audioContext.destination);
@@ -15518,6 +15579,7 @@ Current version indicated by LITEVER below.
 						xtts_is_playing = false;
 						update_submit_button(false);
 						console.log("XTTS Speak Error: " + error);
+						ttsIsBeingGenerated = false
 					});
 				}
 				else
@@ -15560,6 +15622,7 @@ Current version indicated by LITEVER below.
 							return audioContext.decodeAudioData(data);
 						})
 						.then(decodedData => {
+							ttsIsBeingGenerated = false
 							if(do_download)
 							{
 								tts_download(audiofile_ref);
@@ -15570,6 +15633,7 @@ Current version indicated by LITEVER below.
 							console.log("AllTalk v2 Speak Error:", data);
 							xtts_is_playing = false;
 							update_submit_button(false);
+							ttsIsBeingGenerated = false
 						});
 
 					} else {
@@ -15611,6 +15675,7 @@ Current version indicated by LITEVER below.
 											return audioContext.decodeAudioData(data);
 										})
 										.then(decodedData => {
+											ttsIsBeingGenerated = false
 											if(do_download)
 											{
 												tts_download(audiofile_ref);
@@ -15621,17 +15686,20 @@ Current version indicated by LITEVER below.
 											console.log("AllTalk v2 Speak Error:", data);
 											xtts_is_playing = false;
 											update_submit_button(false);
+											ttsIsBeingGenerated = false
 										});
 									} else {
 										console.log("AllTalk Generation Error:", data);
 										xtts_is_playing = false;
 										update_submit_button(false);
+										ttsIsBeingGenerated = false
 									}
 								})
 								.catch((error) => {
 									console.log("AllTalk Request Error:", error);
 									xtts_is_playing = false;
 									update_submit_button(false);
+									ttsIsBeingGenerated = false
 								});
 							}
 							else //alltalk v1 audio
@@ -15641,6 +15709,7 @@ Current version indicated by LITEVER below.
 									return audioContext.decodeAudioData(data);
 								})
 								.then(decodedData => {
+									ttsIsBeingGenerated = false
 									if(do_download)
 									{
 										tts_download(audiofile_ref);
@@ -15650,12 +15719,14 @@ Current version indicated by LITEVER below.
 									console.log("AllTalk v1 Speak Error: " + error);
 									xtts_is_playing = false;
 									update_submit_button(false);
+									ttsIsBeingGenerated = false
 								});
 							}
 						}).catch((error) => {
 							console.log("AllTalk Non-Stream Req Error: " + error);
 							xtts_is_playing = false;
 							update_submit_button(false);
+							ttsIsBeingGenerated = false
 						});
 					}
 				}
@@ -15670,6 +15741,7 @@ Current version indicated by LITEVER below.
 				window.speechSynthesis.speak(utterance);
 				utterance.onend = function(event) {
 					update_submit_button(false);
+					ttsIsBeingGenerated = false
 				};
 			}
 		}
@@ -16040,6 +16112,7 @@ Current version indicated by LITEVER below.
 				truncated_context = injected + truncated_context;
 			}
 
+			let finalCo = ""
 			//for chatmode, inject hidden context if AN and memory are empty, and if there's no story in context before the chat
 			if (localsettings.opmode == 3) {
 				let co = localsettings.chatopponent;
@@ -16130,6 +16203,11 @@ Current version indicated by LITEVER below.
 					pending_context_preinjection = "\n";
 				}
 
+				if (co != "")
+				{
+					finalCo = co
+				}
+
 				if(localsettings.allow_continue_chat && newgen.trim() == "" && co!="")
 				{
 					let me = get_my_multiplayer_chatname();
@@ -16173,6 +16251,10 @@ Current version indicated by LITEVER below.
 							coarr = coarr.filter(x=>(!groupchat_removals.includes(x)));
 							coarr = coarr.map(x=>x.trim());
 							let co = coarr[Math.floor(Math.random()*coarr.length)];
+							if (co != "")
+							{
+								finalCo = co
+							}
 							pending_context_preinjection += co + ":";
 							if(localsettings.inject_jailbreak_instruct || (localsettings.think_injected!=0 && localsettings.start_thinking_tag!=""))
 							{
@@ -16325,6 +16407,12 @@ Current version indicated by LITEVER below.
 								shoulduse = (t1 && !t3);
 							}
 						}
+					}
+
+					// If accessing WI for a character's memory, switch based on the current chat opponent
+					if (!!shoulduse && !!finalCo && (!!wi.comment && !!wi.wigroup) && (wi.comment.endsWith("_imported_memory") && wi.wigroup === wi.comment.replace("_imported_memory", "")))
+					{
+						shoulduse = wi.wigroup == finalCo
 					}
 
 					if (shoulduse) {
@@ -17588,7 +17676,43 @@ Current version indicated by LITEVER below.
 		return inputtext;
 	}
 
-	function generate_new_image(sentence, base64img="", autoappend=true) //base64img is for img2img, autoappend automatically adds it to gametext arr
+	let higherQualityForSaving = 0.9
+	function getImageSizing(sizing = undefined)
+	{
+		if (!!sizing && sizing.length == 2)
+		{
+			return {
+				iheight: sizing[0], iwidth: sizing[1]
+			}
+		}
+		let iwidth = 512;
+		let iheight = 512;
+		let aspectRatio = localsettings.img_aspect
+		if (aspectRatio == 1) {
+			iheight = 768;
+		}
+		else if (aspectRatio == 2) {
+			iwidth = 768;
+		}
+		else if (aspectRatio == 3) {
+			iwidth = 768;
+			iheight = 768;
+		}
+		else if (aspectRatio == 4) {
+			iheight = 1024;
+		}
+		else if (aspectRatio == 5) {
+			iwidth = 1024;
+		}
+		else if (aspectRatio == 6) {
+			iwidth = 1024;
+			iheight = 1024;
+		}
+
+		return {iwidth, iheight}
+	}
+
+	function generate_new_image(sentence, base64img="", autoappend=true, sizing = undefined) //base64img is for img2img, autoappend automatically adds it to gametext arr, sizing is for dimension overrides
 	{
 		if(base64img!="")
 		{
@@ -17651,34 +17775,7 @@ Current version indicated by LITEVER below.
 			negprompt = "";
 		}
 
-		let iwidth = 512;
-		let iheight = 512;
-		if(localsettings.img_aspect==1)
-		{
-			iheight = 768;
-		}
-		else if(localsettings.img_aspect==2)
-		{
-			iwidth = 768;
-		}
-		else if(localsettings.img_aspect==3)
-		{
-			iwidth = 768;
-			iheight = 768;
-		}
-		else if(localsettings.img_aspect==4)
-		{
-			iheight = 1024;
-		}
-		else if(localsettings.img_aspect==5)
-		{
-			iwidth = 1024;
-		}
-		else if(localsettings.img_aspect==6)
-		{
-			iwidth = 1024;
-			iheight = 1024;
-		}
+		let { iwidth, iheight } = getImageSizing(sizing)
 
 		let genimg_payload = {
 			"prompt": (sentence + negprompt),
@@ -17792,11 +17889,21 @@ Current version indicated by LITEVER below.
 				{
 					//console.log(outputimg);
 					let origImg = "data:image/jpeg;base64," + outputimg;
-					let imgres = localsettings.img_allowhd?(localsettings.img_aspect==0?NO_HD_RES_PX:HD_RES_PX):NO_HD_RES_PX;
+					let imgres = NO_HD_RES_PX
+					let useHigherQuality = false
+					if (!!sizing && sizing.length === 2)
+					{
+						imgres = Math.max(sizing[0], sizing[1])
+						useHigherQuality = true
+					}
+					else
+					{
+						imgres = localsettings.img_allowhd ? (localsettings.img_aspect == 0 ? NO_HD_RES_PX : HD_RES_PX) : NO_HD_RES_PX;
+					}
 					compressImage(origImg, (newDataUri) => {
 						image_db[imgid].done = true;
 						image_db[imgid].result = newDataUri;
-					}, false, imgres);
+					}, false, imgres, useHigherQuality ? higherQualityForSaving : undefined);
 				}else{
 					image_db[imgid].queue = "Failed";
 					msgbox("Image Generation Failed!\n\nPlease make sure KoboldCpp / Forge / A1111 is running and properly configured!\nIn your local install of Automatic1111 WebUi, modify webui-user.bat and add these flags to enable API access:\n\nset COMMANDLINE_ARGS= --api --listen --cors-allow-origins=*\n");
@@ -17837,11 +17944,21 @@ Current version indicated by LITEVER below.
 					{
 						//console.log(outputimg);
 						let origImg = "data:image/jpeg;base64," + outputimg;
-						let imgres = localsettings.img_allowhd?HD_RES_PX:NO_HD_RES_PX;
+						let imgres = NO_HD_RES_PX
+						let useHigherQuality = false
+						if (!!sizing && sizing.length === 2)
+						{
+							imgres = Math.max(sizing[0], sizing[1])
+							useHigherQuality = true
+						}
+						else
+						{
+							imgres = localsettings.img_allowhd?HD_RES_PX:NO_HD_RES_PX;
+						}
 						compressImage(origImg, (newDataUri) => {
 							image_db[imgid].done = true;
 							image_db[imgid].result = newDataUri;
-						}, true, imgres);
+						}, true, imgres, useHigherQuality ? higherQualityForSaving : undefined);
 					}else{
 						image_db[imgid].queue = "Failed";
 						msgbox(`Image Generation Failed!\n\n${outputerr?(outputerr+"\n\n"):""}Please make sure your OpenAI key is set correctly and you are allowed to use DALL-E.\n`);
@@ -20402,6 +20519,13 @@ Current version indicated by LITEVER below.
 				fulltxt = replaceAll(fulltxt, get_instruct_endtag(false), `%SpcEtg%`);
 				fulltxt = replaceAll(fulltxt, get_instruct_starttag(true), `%SpcStg%`);
 				fulltxt = replaceAll(fulltxt, get_instruct_endtag(true), `%SpcEtg%`);
+				if (isAgentModeEnabledAndSetCorrectly())
+				{
+					fulltxt = replaceAll(fulltxt, "\n\n"+get_instruct_systag(true)+"\n\n", `%SpcSyg%`);
+					fulltxt = replaceAll(fulltxt, "\n"+get_instruct_systag(true)+"\n", `%SpcSyg%`);
+					fulltxt = replaceAll(fulltxt, get_instruct_systag(false), `%SpcSyg%`);
+					fulltxt = replaceAll(fulltxt, get_instruct_systag(true), `%SpcSyg%`);
+				}
 				if (localsettings.separate_end_tags) {
 					if (get_instruct_endtag_end(true)) {
 						fulltxt = replaceAll(fulltxt, get_instruct_endtag_end(false), ``);
@@ -20411,9 +20535,12 @@ Current version indicated by LITEVER below.
 						fulltxt = replaceAll(fulltxt, get_instruct_starttag_end(false), ``);
 						fulltxt = replaceAll(fulltxt, get_instruct_starttag_end(true), ``);
 					}
+					if (get_instruct_systag_end(true)) {
+						fulltxt = replaceAll(fulltxt, get_instruct_systag_end(true), ``);
+					}
 				}
 
-				let instruct_turns = repack_instruct_turns(fulltxt, `%SpcStg%`,`%SpcEtg%`, true);
+				let instruct_turns = repack_instruct_turns(fulltxt, `%SpcStg%`, `%SpcEtg%`, `%SpcSyg%`, true);
 				fulltxt = "";
 				for(let i=0;i<instruct_turns.length;++i)
 				{
@@ -20461,16 +20588,32 @@ Current version indicated by LITEVER below.
 						currmsg = simpleMarkdown(currmsg,localsettings.instruct_has_latex);
 					}
 
-					if(curr.myturn)
-					{
-						fulltxt += `<hr style="margin-top: 12px; margin-bottom: 12px;"><span class="color_cyan"><img src="${human_square}" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>${currmsg}</span>`;
+					if (curr?.source !== undefined) {
+						switch (curr?.source) {
+							case "human":
+								fulltxt += `<hr style="margin-top: 12px; margin-bottom: 12px;"><span class="color_cyan"><img src="${human_square}" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>${currmsg}</span>`;
+								break
+							case "ai":
+								fulltxt += `<hr style="margin-top: 12px; margin-bottom: 12px;"><span class="color_cyan"><img src="${niko_square}" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>${currmsg}</span>`
+								break
+							case "system":
+							default:
+								fulltxt += `<hr style="margin-top: 12px; margin-bottom: 12px;"><span class="color_cyan"><img src="${favivon_normal}" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>${currmsg}</span>`
+								break
+						}
 					}
-					else
-					{
-						if (i == 0) {
-							fulltxt += `${currmsg}`;
-						} else {
-							fulltxt += `<hr style="margin-top: 12px; margin-bottom: 12px;"><img src="${niko_square}" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>${currmsg}</span>`;
+					else {
+						if(curr.myturn)
+						{
+							fulltxt += `<hr style="margin-top: 12px; margin-bottom: 12px;"><span class="color_cyan"><img src="${human_square}" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>${currmsg}</span>`;
+						}
+						else
+						{
+							if (i == 0) {
+								fulltxt += `${currmsg}`;
+							} else {
+								fulltxt += `<hr style="margin-top: 12px; margin-bottom: 12px;"><img src="${niko_square}" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>${currmsg}</span>`;
+							}
 						}
 					}
 				}
@@ -20841,6 +20984,7 @@ Current version indicated by LITEVER below.
 
 		update_genimg_button_visiblility();
 		update_websearch_button_visibility();
+		updateAgentButtonVisibility();
 
 		idle_timer = 0;
 		document.getElementById("token-budget").innerText = last_token_budget;
@@ -21017,7 +21161,12 @@ Current version indicated by LITEVER below.
 			}
 		}
 		currchatunit.msg = processed_msg;
-		currchatunit.name = namepart;
+		currchatunit.name = namepart;		
+		currchatunit.source = currchatunit?.source;
+		if (currchatunit?.source === "system")
+		{
+			currchatunit.name = "System"
+		}
 		return currchatunit;
 	}
 
@@ -21040,8 +21189,9 @@ Current version indicated by LITEVER below.
 
 		let st = get_instruct_starttag(false);
 		let et = get_instruct_endtag(false);
+		let sys = get_instruct_systag(false);
 
-		let turns = repack_instruct_turns(input,st,et,false);
+		let turns = repack_instruct_turns(input, st, et, sys, false);
 		return turns;
 	}
 
@@ -23079,9 +23229,25 @@ Current version indicated by LITEVER below.
 		document.getElementById('aesthetic_text_preview').innerHTML = render_aesthetic_ui(preview,true);
 	}
 
+	// Source images for characters in aethetic mode, allowing for group chats / system role
+	// source, name, imageData
+	let sourceImagesForCharacters = [
+		{
+			source: "system",
+			name: "System",
+			imageData: "url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAAXNSR0IB2cksfwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAEtQTFRFAAAA+XJ0l09PsVdXcTw842hqw2hmTi4vMCQlb2eUgWtl+tGpBAMDEw4NPCkoFw8PJBgXt5WBVkxW4Nvf7Lia3Z+MpJnAZ05HnJOTYIS/NAAAABl0Uk5TAv////v//vT9//3/Nna08qf+///////a/hkcROQAAAGUSURBVHiclZLRcoQgDEULBAKoIKjI/39pL4i7nbUPbcYZwJyES5Kvr3/YvIx1nn9zL4G4EwuTXX7xs4QFGEklOT6SBENERguhsWHFD2AVRhL8IEgawY8b5L4fYtg+TSl8+NMEu4G2P34Q67r6I+37dLyBfU/4PY/sInG2MR8vIHG01h9mHfq1hUUQtwYcLEcp+ltmwqutdy5HMwAfc8ExKtVSLEZZW13Jxb4Azq7UHFnFrtGItLliS1UDYOfctm3JhEtlEH5zzpZNDsC63AB1VysY3gqC3C2ytsNW6Q3IjCt91Qr9QK8MiFL4nUEpEyNLYmodxYo3RquVHWUmbbRu0QCbKWwNfil5zYeENrRRqtZrGEQYqdtW8FWHLl4bgZDLFLZdbS/UzP2AEGTufkt3xWSvwzJeh4GxHWD5qlgXOZ/n2ULuC/od4Pk8x9xhCekD0Bqd/DmXgbpEumRgrMPn1K6ecs4pJc/V0nE+x35KtfTJTJufpvPTD2DyNZ3e4wP3zDCHevg+yYvf09PfkHuK7/Vv9g2CjBTdqv3bFgAAAABJRU5ErkJggg==)"
+		}
+	];
+	
+	function getImageForSource(source, name)
+	{
+		let images = sourceImagesForCharacters.filter(imageMeta => imageMeta?.source === source && imageMeta?.name === name);
+		return images.length > 0 ? images[0]?.imageData : undefined;
+	}
+
 	function render_aesthetic_ui(input, isPreview) //class suffix string used to prevent defined styles from leaking into global scope
 	{
-		const avatarImage = function(for_ai) { //todo: this is still bad code, but will keep it for now
+		const avatarImage = function(for_ai, source = undefined, name = undefined) { //todo: this is still bad code, but will keep it for now
 			if((for_ai && !as.AI_portrait) || (!for_ai && !as.you_portrait) || as.border_style == 'None')
 			{
 				return ''; //for no portrait
@@ -23090,16 +23256,24 @@ Current version indicated by LITEVER below.
 			let radius = (as.border_style == 'Circle' ? '1000rem' : (as.border_style == 'Rounded' ? '1.6rem' : '0.1rem'));
 			let width, height;
 			let imgclassname = "";
-			if (!for_ai) {
+			let imageToUse = source !== undefined ? getImageForSource(source, name) : undefined;
+			if (imageToUse !== undefined)
+			{
+				width = as.portrait_width_AI;
+				height = (as.border_style == 'Circle' ? as.portrait_width_AI : as.portrait_width_AI / as.portrait_ratio_AI);
+			}
+			else if (!for_ai) 
+			{
 				width = as.portrait_width_you;
 				height = (as.border_style == 'Circle' ? as.portrait_width_you : as.portrait_width_you / as.portrait_ratio_you);
 				imgclassname = "you-portrait-image";
-			} else {
+			}
+			else {
 				width = as.portrait_width_AI;
 				height = (as.border_style == 'Circle' ? as.portrait_width_AI : as.portrait_width_AI / as.portrait_ratio_AI);
 				imgclassname = "AI-portrait-image";
 			}
-			return `<div class='${imgclassname}${classSuffixStr}${reinvertcolor}' style='width:${width}px; height:${height}px; border-radius: ${radius}'></div>`;
+			return `<div class='${imgclassname}${classSuffixStr}${reinvertcolor}' style='width:${width}px; height:${height}px; border-radius: ${radius}; ${!!imageToUse ? `background:${imageToUse}; margin: 10px 6px; background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;` : ""}'></div>`;
 		}
 
 		if(localsettings.separate_end_tags) {
@@ -23271,12 +23445,12 @@ Current version indicated by LITEVER below.
 			newbodystr += `<div style='display:flex; align-items:stretch; flex-direction: row;'>`;
 			if(curr.myturn)
 			{
-				newbodystr += `${(showavatar?avatarImage(false):"")}
+				newbodystr += `${(showavatar?avatarImage(false, curr?.source, curr?.name):"")}
 				<div class='aui_myturn_block'`;
 			}
 			else
 			{
-				newbodystr += `${(showavatar?avatarImage(true):"")}
+				newbodystr += `${(showavatar?avatarImage(true, curr?.source, curr?.name):"")}
 				<div class='aui_aiturn_block'`;
 			}
 			newbodystr += ` style='flex: 1; display:flex; padding: ${as.padding()}; margin: ${as.margin()}; min-height:${as.background_minHeight}px;`
@@ -24149,6 +24323,7 @@ Current version indicated by LITEVER below.
 				<button type="button" class="btn btn-primary mainnav" id="btn_actretry" onclick="btn_retry()">Retry</button>
 				<button type="button" class="btn btn-primary bg_green mainnav" id="btn_addmedia" onclick="add_media_btn_menu()">Add File</button>
 				<button type="button" class="btn btn-primary mainnav slim btnicon-websearch hidden" id="btn_togglesearch" onclick="toggle_websearch()">&nbsp;</button>
+				<button type="button" class="btn btn-primary mainnav btnicon-agent slim inactive" id="btn_toggleAgent" onclick="toggleAgent()" tabindex="0">&nbsp;</button>
 			</div>
 			<div class="borderbox flex flex-push-right">
 				<input type="checkbox" id="entersubmit" class="mainnav" onclick="toggle_entersends()" checked>
@@ -24198,6 +24373,8 @@ Current version indicated by LITEVER below.
 						<button type="button" class="btn btn-primary mainnav" id="btn_actretry2" onclick="btn_retry()">Retry</button>
 						<button type="button" class="btn btn-primary bg_green mainnav" id="btn_addmedia2" onclick="add_media_btn_menu()">Add File</button>
 						<button type="button" class="btn btn-primary mainnav slim btnicon-websearch hidden" id="btn_togglesearch2" onclick="toggle_websearch()">&nbsp;</button>
+						<button type="button" class="btn btn-primary mainnav btnicon-agent slim inactive" id="btn_toggleAgentAesthetic"
+							onclick="toggleAgent()" tabindex="0">&nbsp;</button>
 						<button type="button" class="btn btn-primary mainnav" id="btn_editmode" onclick="btn_editmode()">Edit</button>
 					</div>
 				</div>
@@ -26748,5 +26925,2187 @@ else
 {
 	console.log("service workers API not available");
 }
+</script>
+<script>
+	let createInstructPrompt = (prompt) => {
+		return `${instructstartplaceholder}${prompt}${instructstartplaceholder_end}`
+	}
+
+	let createSysPrompt = (prompt) => {
+		return `${instructsysplaceholder}${prompt}${instructsysplaceholder_end}`
+	}
+
+	let createAIPrompt = (prompt) => {
+		return `${instructendplaceholder}${prompt}${instructendplaceholder_end}`
+	}
+
+	let currentChainOfThought = []
+	let addThought = (wrapperHandler, prompt, onlyDisplay = false, onlyAdd = false) => {
+		thought = wrapperHandler(prompt)
+		if (!onlyDisplay) {
+			currentChainOfThought.push(thought)
+		}
+		if (!onlyAdd) {
+			gametext_arr.push(thought.replace(/\\\\/g, ""))
+			render_gametext()
+		}
+	}
+
+	let waitingFori2iSelection = false, i2i64 = undefined, originalClickImage = click_image;
+	click_image = (target,imghash) => {
+		if (target && waitingFori2iSelection)
+		{
+			i2i64 = target.src;
+			waitingFori2iSelection = false
+		}
+		else
+		{
+			originalClickImage(target,imghash)
+		}
+	}
+
+	let preparePromptForImageGen = (prompt) => {
+		return prompt.replaceAll(/\.+/g, ",").replaceAll(/_+/g, " ").replaceAll(/\n+/g, " ")
+	}
+
+	let overwriteWIFromAgent = (uniqueIdentifier, selectionKeys, content) => {
+		let baseWI = {
+			"key": selectionKeys.join(","),
+			"keysecondary": "",
+			"keyanti": "",
+			"content": content,
+			"comment": uniqueIdentifier,
+			"folder": null,
+			"selective": false,
+			"constant": false,
+			"probability": "100",
+			"wigroup": "Agent",
+			"widisabled": false
+		}
+		current_wi = current_wi.filter(wi => wi?.comment !== uniqueIdentifier)
+		current_wi.push(baseWI)
+	}
+
+	let getTableNamesFromTextDB = () => {
+		matcher = new RegExp("\\[DOCUMENT BREAK\\]\\[Table:\([^\\]]*?\)\\].*?\\[DOCUMENT BREAK\\]", "gmis")
+		return [...documentdb_data.matchAll(matcher)].map(a => a[1])
+	}
+
+	let getRandomElemFromArray = (arr) => {
+		return arr[Math.floor(Math.random() * arr.length)]
+	}
+
+	let mostRecentChatOpponent = ""
+	let resetChatOpponentToRandom = () => {
+		mostRecentChatOpponent = getRandomElemFromArray(localsettings.chatopponent.split("||$||"))
+		return mostRecentChatOpponent
+	}
+
+	let getChatOpponentForAgent = () => {
+		return localsettings.inject_chatnames_instruct ? mostRecentChatOpponent : ""
+	}	
+
+	let objToText = (obj, depth = 0) => {
+		// Hard recursion limit
+		if (depth > 1000)
+		{
+			return ""		
+		}
+		let baseIndent = "", output = ""
+		for (let i = 0; i < depth; i++) {
+			baseIndent += "\t"
+		}
+		switch (typeof obj) {
+			case "array":
+			case "object":
+				if (Array.isArray(obj))
+				{
+					output += `${baseIndent}Array:\n${obj.map(elem => `${objToText(elem, depth + 2)}`).join("\n\n")}`
+				}
+				else
+				{
+					let keys = Object.keys(obj)
+					output += keys.map(key => {
+						return `${baseIndent}${key}:\n${objToText(obj[key], depth + 1)}`
+					}).join("\n")
+				}
+				break
+			default:
+				output += `${baseIndent}${JSON.stringify(obj)}`
+				break
+		}
+		return output
+	}
+
+	let wordCountEnabled = false
+	let getCommands = () => {
+	return [
+			{
+			"name": "ask_user",
+			"description": "Ask the user for input. Optionally, suggested responses can be provided to the user as well.",
+			"args": {
+				"whoToSendMessageAs": {
+					description: "<whose perspective is the response written from>",
+					pattern: (localsettings.inject_chatnames_instruct ? `^${getChatOpponentForAgent()}$` : undefined),
+					type: "string",
+					skip: !localsettings.inject_chatnames_instruct
+				},
+				"message": "<message that prompts the user for input>",
+				"suggestionsToPickFrom": {
+				description: "<suggestions written from the user's perspective which they can pick from for their next action>",
+				type: "array",
+				}
+			},
+			"enabled": false,
+			"outputVisibleToUser": true,
+			"executor": (action) => {
+				clearSuggestions()
+				let suggestions = action?.args?.suggestionsToPickFrom
+				if (!!suggestions && Array.isArray(suggestions)) {
+					try {
+						setSuggestions(suggestions.map(String))
+					}
+					catch {
+						// Do not care about an error here, it's a nice to have if the suggestions show
+					}
+				}
+				let prompt = localsettings.inject_chatnames_instruct ? `Request for user input by ${action?.args?.whoToSendMessageAs}: ${action?.args?.message}` : `Request for user input: ${action?.args?.message}`
+				addThought(createSysPrompt, prompt)
+				return currentOrderOfActionsOverall.length === 0
+			}
+			},
+			{
+			"name": "send_message",
+			"description": "Sends text to the user. When asking for user input include suggestions for them to respond with.",
+			"args": {
+				"whoToSendMessageAs": {
+					description: "<whose perspective is the response written from>",
+					pattern: (localsettings.inject_chatnames_instruct ? `^${getChatOpponentForAgent()}$` : undefined),
+					type: "string",
+					skip: !localsettings.inject_chatnames_instruct
+				},
+				"messages": {
+					description: "<text to send>",
+					type: "array",
+					items: {
+						type: "string",
+					},
+					minItems: 1,
+					maxItems: 5
+				},
+				"suggestionsToPickFrom": {
+				description: "<suggestions written from the user's perspective which they can pick from for their next action>",
+				type: "array",
+				}
+			},
+			"enabled": true,
+			"outputVisibleToUser": true,
+			"executor": (action) => {
+				if (!!action?.args?.messages)
+				{
+					clearSuggestions()
+					action?.args?.messages.forEach(message => {
+						addThought(createAIPrompt, localsettings.inject_chatnames_instruct ? `${action?.args?.whoToSendMessageAs}: ${message}` : message)
+					})
+
+					let suggestions = action?.args?.suggestionsToPickFrom
+					if (!!suggestions && Array.isArray(suggestions)) {
+						try {
+							let actualSuggestions = suggestions.map(String).filter(text => text.trim().length > 0)
+							if (actualSuggestions.length > 0)
+							{
+								setSuggestions(actualSuggestions)
+								return !!localsettings?.agentStopOnRequestForInput
+							}
+						}
+						catch {
+							// Do not care about an error here, it's a nice to have if the suggestions show
+						}
+					}
+				}
+			}
+			},
+			{
+			"name": "stop_thinking",
+			"description": "Ends the current chain of thought. Can only be used after a \"send_message\" action.",
+			"args": null,
+			"enabled": false,
+				"executor": (action) => {
+					addThought(createSysPrompt, `Stop thinking action confirmed`)
+					return true
+				}
+			},
+			{
+			"name": "web_search",
+			"description": "search the web for keyword",
+			"args": {
+				"query": "<query to research>"
+			},
+			"enabled": localsettings.websearch_enabled,
+				"executor": async (action) => {
+					await(new Promise((resolve, reject) => { PerformWebsearch(`${action?.args?.query}`, resolve) }));
+					let webResp = objToText(lastSearchResults);
+					addThought(createSysPrompt, `Web search results: \n${webResp, 1}`)
+				}
+			},
+			{
+			"name": "roll_dice",
+			"description": "Rolls a number of dice with the same amount of sides.",
+			"args": {
+				"numDice": {
+				description: "<number of dice>",
+				type: "integer"
+				},
+				"numSides": {
+				description: "<number of sides on the dice>",
+				type: "integer"
+				}
+			},
+			"enabled": true,
+			"outputVisibleToUser": true,
+			"executor": (action) => {
+				let numDice = action?.args?.numDice
+				let numSides = action?.args?.numSides
+				if (!!numDice && !!numSides) {
+					let results = []
+					for (let roll = 0; roll < numDice; roll++) {
+						results.push(Math.ceil(Math.random() * numSides))
+					}
+					addThought(createSysPrompt, `Rolled ${numDice} dice with ${numSides} sides: ${results.join(", ")}`)
+				}
+				else {
+					addThought(createSysPrompt, `Could not roll dice as the format was incorrect`)
+				}
+			}
+			},
+			{
+			"name": "get_random_terms_from_table",
+			"description": "Gets random terms from a user defined table",
+			"args": {
+				"numOfTerms": {
+				description: "<number of terms to get>",
+				type: "integer"
+				},
+				"tableToUse": {
+				description: "<number of table to get terms from>",
+				type: "string",
+				enum: getTableNamesFromTextDB()
+				}
+			},
+			"outputVisibleToUser": true,
+			"enabled": getTableNamesFromTextDB().length > 0,
+				"executor": (action) => {
+					let numOfTerms = action?.args?.numOfTerms
+					let tableToUse = action?.args?.tableToUse
+					if (!!numOfTerms && !!tableToUse) {
+						let results = []
+						let tableElems = getDocumentFromTextDB(`Table:${tableToUse}`).split("\n").map(c => c.trim()).filter(c => c.length > 0)
+						for (let roll = 0; roll < numOfTerms; roll++) {
+							results.push(getRandomElemFromArray(tableElems))
+						}
+						addThought(createSysPrompt, `Got ${numOfTerms} terms from ${tableToUse}: ${results.join(", ")}`)
+					}
+					else {
+						addThought(createSysPrompt, `Could not get terms as the format was incorrect`)
+					}
+				}
+			},
+			{
+			"name": "add_to_history",
+			"description": "Adds a block of text to history. It should include any necessary keywords for searching.",
+			"args": {
+				"text": "<text to add>",
+				"keywords": {
+					description: "<keywords to help with searching>",
+					type: "array",
+					itemType: "string",
+					minItems: 1,
+				}
+			},
+			"enabled": documentdb_provider != "0",
+				"executor": (action) => {
+					let textToAdd = action?.args?.text
+					let keywords = action?.args?.keywords
+					if (!!textToAdd) {
+						keywords = !!keywords && Array.isArray(keywords) ? `Keywords: ${keywords.join(", ")}\n\n` : ""
+						documentdb_data = `${documentdb_data}[DOCUMENT BREAK]${keywords}${textToAdd}[DOCUMENT BREAK]`
+						addThought(createSysPrompt, `Text has been added to history`)
+					}
+					else {
+						addThought(createSysPrompt, `Text was empty - nothing added to history`)
+					}
+				}
+			},
+			{
+				"name": "overwrite_world_information",
+				"description": "Overwrites an entry describing an entity. The information is stored under a unique identifier. This information is included when certain keywords are mentioned. This does not show the information to the user.",
+				"args": {
+					"uniqueIdentifier": "<unique identifier (such as a characters name, location etc)>",
+					"keywords": {
+						description: "<keywords to help with searching - at least one must be provided>",
+						type: "array",
+						itemType: "string",
+						minItems: 1,
+					},
+					"text": "<descriptive text which by itself provides all needed information to define the entity>"
+				},
+				"enabled": true,
+				"executor": (action) => {
+					let uniqueIdentifier = action?.args?.uniqueIdentifier
+					let keywords = action?.args?.keywords
+					let textToAdd = action?.args?.text
+					if (!!uniqueIdentifier && !!textToAdd) {
+						uniqueIdentifier = uniqueIdentifier.toLowerCase()
+						keywords = !!keywords && Array.isArray(keywords) ? keywords : [uniqueIdentifier]
+						overwriteWIFromAgent(uniqueIdentifier, keywords, textToAdd)
+						addThought(createSysPrompt, `Text has been added to world info: ${uniqueIdentifier}`)
+					}
+					else {
+						addThought(createSysPrompt, `Text was empty - nothing added to world info`)
+					}
+				}
+			},
+			{
+			"name": "overwrite_setting_overview",
+			"description": "Overwrites the existing setting overview with a new set of instructions. Only use this when explicitly requested by the user.",
+			"args": {
+				"text": "<new overview about the setting>"
+			},
+			"enabled": true,
+				"executor": (action) => {
+					let systemPrompt = action?.args?.text
+					if (!!systemPrompt) {
+						current_memory = `{{[SYSTEM]}}${systemPrompt}{{[SYSTEM_END]}}`
+						addThought(createSysPrompt, `Setting overview has been overwritten`)
+					}
+					else {
+						addThought(createSysPrompt, `No setting overview provided, nothing has been overwritten`)
+					}
+				}
+			},
+			{
+			"name": "overwrite_current_state",
+			"description": "Overwrites the existing stored state with new text. The current stored state is sent with every action.",
+			"args": {
+				"text": {
+					description: "<new state>",
+					format: getDocumentFromTextDB('StateFormat')
+				}
+			},
+			"enabled": true,
+				"executor": (action) => {
+					let newState = action?.args?.text
+					if (typeof newState === "object")
+					{
+						newState = JSON.stringify(newState)
+					}
+					if (!!newState) {
+						replaceDocumentFromTextDB('State', newState)
+						addThought(createSysPrompt, `Current state has been overwritten`)
+					}
+					else {
+						addThought(createSysPrompt, `No state provided, nothing has been overwritten`)
+					}
+				}
+			},
+			{
+			"name": "overwrite_current_state_response",
+				"description": "The current state can be overwritten by the overwrite_current_state command. Providing a JSON object to this function will enforce a particular response format when overriding the state.",
+				"args": {
+					"json": "<format which should be used when overwriting the current state>"
+				},
+				"enabled": true,
+				"executor": (action) => {
+					let newStateFormat = action?.args?.json
+					try
+					{
+						let newStateFormatAsJson = JSON.parse(newStateFormat)
+						if (!!newStateFormatAsJson) {
+							replaceDocumentFromTextDB('StateFormat', JSON.stringify(newStateFormatAsJson))
+							addThought(createSysPrompt, `Current state format has been overwritten`)
+						}
+						else {
+							addThought(createSysPrompt, `No valid state format provided, nothing has been overwritten`)
+						}
+					}
+					catch (e)
+					{
+						addThought(createSysPrompt, `No valid state format provided, nothing has been overwritten`)
+						// Surpress error
+					}
+				}
+			},
+			{
+			"name": "search_history",
+			"description": "Searches history for a series of keywords.",
+			"args": {
+				"searchString": "<string to search for>"
+			},
+			"enabled": documentdb_provider != "0",
+				"executor": async (action) => {
+					let searchHistoryString = action?.args?.searchString
+					if (!!searchHistoryString) {
+						let contentToSearch = documentdb_data
+						if (!!documentdb_searchhistory)
+						{
+							contentToSearch += `\n\n[DOCUMENT BREAK][Chatlog history]${concat_gametext(true)}[DOCUMENT BREAK]`
+						}
+						let ltmSnippets = await DatabaseMinisearch(contentToSearch, searchHistoryString, "");
+						if (ltmSnippets.length === 0) {
+							addThought(createSysPrompt, `History search performed: Nothing found`)
+						}
+						else {
+							let ltmContent = "History search performed:";
+							for (let i = 0; i < ltmSnippets.length; ++i) {
+								ltmContent += getInfoSnippet(ltmSnippets[i]);
+							}
+							addThought(createSysPrompt, ltmContent)
+						}
+					}
+					else {
+						addThought(createSysPrompt, `Search string was empty, no search performed`)
+					}
+				}
+			},
+			{
+			"name": "wordcount",
+			"description": "Enables or disables a word count for each 'ask_user', 'thought' or 'send_message'.",
+			"args": {
+				"state": {
+				description: "<true or false>",
+				type: "boolean"
+				}
+			},
+			"enabled": true,
+				"executor": (action) => {
+					let wordCountState = action?.args?.state
+					wordCountEnabled = !!wordCountState
+					addThought(createSysPrompt, `Word count is ${wordCountEnabled ? "enabled" : "disabled"}`)
+				}
+			},
+			{
+			"name": "describe_image",
+			"description": "Describes a user provided image. It does not provide the original prompt used to generate the image.",
+			"args": {
+				"question": "<question to ask about image>"
+			},
+			"enabled": is_using_kcpp_with_vision(), // Only enabled if local endpoint exists / is in use
+			"executor": async (action) => {
+				let analysisPrompt = "Describe the image in detail. Transcribe and include any text from the image in the description."
+				if (!!action?.args?.question) {
+					analysisPrompt += `Specifically please focus on:\n\n${action?.args?.question}`
+				}
+				if (!!analysisPrompt) {
+					waitingFori2iSelection = true
+					addThought(createSysPrompt, `Please click an image as a source for image analysis`, true)
+
+					let waitForI2ILoop = () => {
+						return new Promise((resolve, reject) => {
+							let intervalId = setInterval(() => {
+								if (waitingFori2iSelection === false || endCurrent) {
+									clearInterval(intervalId)
+									resolve()
+								}
+							}, 1000)
+						})
+					}
+					await waitForI2ILoop()
+					if (!!i2i64) {
+						let parts = i2i64.split(',');
+						if (parts.length === 2 && parts[0].startsWith('data:image')) {
+							i2i64 = parts[1];
+						}
+						let analysisResult = await generateAndGetTextFromPrompt(`${createInstructPrompt(analysisPrompt)}${instructendplaceholder}${!!localsettings?.inject_jailbreak_instruct ? localsettings.custom_jailbreak_text : ""}`, undefined, [i2i64])
+						addThought(createSysPrompt, `Image analysed: ${analysisResult}`)
+					}
+					else {
+						addThought(createSysPrompt, `User did not select an image - no image analysed`)
+					}
+					i2i64 = undefined;
+					waitingFori2iSelection = false;
+				}
+			}
+			},
+			{
+			"name": "generate_image",
+			"description": "Generates a new image from scratch or edits an existing image. Be specific in the prompt about physical characteristics and settings as names of people may not be known.",
+			"args": {
+				"edit_existing_image": {
+					description: "<edits an existing image when set to true (img2img)>",
+					type: "boolean"
+				},
+				"prompt": "<prompt to generate image with - when editing only mention the changed parts of the image>",
+				"aspect": {
+					type: "string",
+					description: "<aspect ratio - must be \"landscape\", \"portrait\" or \"square\">"
+				}
+			},
+			"outputVisibleToUser": true,
+			"enabled": localsettings.generate_images_mode == 2, // Only enabled if local endpoint exists / is in use
+				"executor": async (action) => {
+					let prompt = action?.args?.prompt
+					let aspect = action?.args?.aspect
+					if (!!prompt) {
+						if (!!action?.args?.edit_existing_image)
+						{
+							waitingFori2iSelection = true
+							addThought(createSysPrompt, `Please click an image as a source for img2img generation`, true)
+
+							let waitForI2ILoop = () => {
+								return new Promise((resolve, reject) => {
+									let intervalId = setInterval(() => {
+										if (waitingFori2iSelection === false || endCurrent) {
+											clearInterval(intervalId)
+											resolve()
+										}
+									}, 1000)
+								})
+							}
+							await waitForI2ILoop()
+							if (!!i2i64) {
+								generate_new_image(preparePromptForImageGen(prompt), i2i64, true, calcImageSizing(aspect))
+								addThought(createSysPrompt, `Image generated`)
+							}
+							else {
+								addThought(createSysPrompt, `User did not select an image - no image generated`)
+							}
+							i2i64 = undefined;
+							waitingFori2iSelection = false;	
+						}
+						else
+						{
+							generate_new_image(preparePromptForImageGen(prompt), undefined, true, calcImageSizing(aspect))
+							addThought(createSysPrompt, `Image generated`)
+						}
+					}
+					else {
+						addThought(createSysPrompt, `No prompt provided, image not generated`)
+					}
+				}
+			},
+			{
+			"name": "generate_image_based_on_another_image",
+			"description": "Generates an image using AI based on a prompt and an input image. Will prompt the user to select an image. Be specific in the prompt about physical characteristics and settings as names of people may not be known.",
+			"args": {
+				"prompt": "<prompt to generate image with>",
+				"aspect": {
+					type: "string",
+					description: "<aspect ratio - must be \"landscape\", \"portrait\" or \"square\">"
+				}
+			},
+			"enabled": false, // localsettings.generate_images_mode == 2, // Only enabled if local endpoint exists / is in use
+				"executor": async (action) => {
+					let i2iPrompt = action?.args?.prompt
+					if (!!i2iPrompt) {
+						waitingFori2iSelection = true
+						addThought(createSysPrompt, `Please click an image as a source for img2img generation`, true)
+
+						let waitForI2ILoop = () => {
+							return new Promise((resolve, reject) => {
+								let intervalId = setInterval(() => {
+									if (waitingFori2iSelection === false || endCurrent) {
+										clearInterval(intervalId)
+										resolve()
+									}
+								}, 1000)
+							})
+						}
+						await waitForI2ILoop()
+						if (!!i2i64) {
+							let aspectI2I = action?.args?.aspect
+							generate_new_image(preparePromptForImageGen(i2iPrompt), i2i64, true, calcImageSizing(aspectI2I))
+							addThought(createSysPrompt, `Image generated`)
+						}
+						else {
+							addThought(createSysPrompt, `User did not select an image - no image generated`)
+						}
+						i2i64 = undefined;
+						waitingFori2iSelection = false;
+					}
+					else {
+						addThought(createSysPrompt, `No prompt provided, image not generated`)
+					}
+				}
+			},
+			{
+			"name": "speak",
+			"description": "Say something to the user using text to speech.",
+			"args": {
+				"textToSay": "<text to say>"
+			},
+			"outputVisibleToUser": true,
+			"enabled": localsettings.speech_synth == KCPP_TTS_ID, // Only enabled if local endpoint exists / is in use
+				"executor": (action) => {
+					let textToSay = action?.args?.textToSay
+					if (!!textToSay) {
+						tts_speak(textToSay)
+						addThought(createSysPrompt, `Text has been spoken`)
+					}
+					else {
+						addThought(createSysPrompt, `No text provided, nothing has been said`)
+					}
+				}
+			}
+		]
+	}
+
+	let getEnabledCommands = (overrides = []) => {
+		let enabledCommands = getCommands().filter(command => !!command?.enabled || overrides.includes(command.name))
+		let forbiddenAgentCommands = getDocumentFromTextDB('Forbidden agent commands')
+		if (forbiddenAgentCommands !== null)
+		{
+			let commandsToExclude = forbiddenAgentCommands.split("|")
+			enabledCommands = enabledCommands.filter(command => !commandsToExclude.includes(command.name))
+		}
+		return enabledCommands
+	}
+
+	let getReasoningCommand = (overrides = []) => {
+		return [
+			{
+				"name": "plan_actions",
+				"description": "Defines a list of actions to respond to a user instruction.",
+				"args": {
+					"whoToRespondAs": {
+						description: "<whose perspective is the response going to be written from>",
+						enum: (localsettings.inject_chatnames_instruct ? localsettings.chatopponent.split("||$||") : undefined),
+						type: "string",
+						skip: !localsettings.inject_chatnames_instruct
+					},
+					"responsePlanOverview": {
+						type: "string",
+						description: "<short overview of what the user asked for, planned actions and why the order makes sense - this must be specific to the last user instruction>"
+					},
+					"orderOfActions": {
+						type: "array",
+						description: "<array of actions needed to complete the instruction and their objectives>",
+						format: {
+							type: "array",
+							items: {
+								type: "object",
+								properties: {
+									action: {
+										type: "string",
+										enum: getEnabledCommands(overrides).map(c => c.name)
+									},
+									objective: {
+										type: "string"
+									}
+								},
+								required: ["action", "objective"]
+							},
+							minItems: 1,
+							maxItems: Number(localsettings.agentCOTMax)
+						}
+					}
+				},
+				"enabled": true,
+				"executor": (action) => {
+					currentOrderOfActionsOverall = action?.args?.orderOfActions.map(act => act.action)
+					currentOrderOfActionDescriptionsOverall = action?.args?.orderOfActions.map(act => act.objective)
+					if (localsettings.inject_chatnames_instruct)
+					{
+						if (!!action?.args?.whoToRespondAs)
+						{
+							mostRecentChatOpponent = action?.args?.whoToRespondAs
+						}
+						else
+						{
+							mostRecentChatOpponent = resetChatOpponentToRandom()
+						}
+					}
+					return false
+				}
+			}
+		]
+	}
+	
+	let toJsonSchema = (obj, currentRef = {}) => {
+		switch (typeof obj) {
+			case "string":
+				currentRef.type = "string"
+				break
+			case "number":
+			case "bigint":
+				currentRef.type = "number"
+				break
+			case "boolean":
+				currentRef.type = "boolean"
+				break
+			case "object":
+				if (Array.isArray(obj))
+				{
+					currentRef.type = "array"
+				}
+				else
+				{
+					currentRef.type = "object"
+					currentRef.properties = {}
+					currentRef.required = []
+					for (key in obj) {
+						currentRef.properties[key] = {}
+						currentRef.required.push(key)
+						toJsonSchema(obj[key], currentRef.properties[key])
+					}
+				}
+				break
+			case "function":
+			case "undefined":
+			case "symbol":
+				break
+		}
+
+		return currentRef
+	}
+
+	let getCommandsSchema = (commands = getEnabledCommands()) => {
+		let baseCommandStructure = {
+			"command": {
+				"name": "string",
+				"args": {}
+			}
+		}
+
+		let commandsSchema = commands.map(command => {
+			let elem = toJsonSchema(baseCommandStructure)
+			let args = elem.properties.command.properties.args;
+			
+			elem.properties.command.properties.name["pattern"] = `^${command.name}$`
+			for (arg in command.args) {
+				if (!command.args[arg]?.skip)
+				{
+					if (typeof command.args[arg] === "object" && !!command.args[arg]?.format)
+					{
+						let formatToUse = typeof command.args[arg]?.format === "string" ? toJsonSchema(JSON.parse(command.args[arg]?.format)) : command.args[arg]?.format
+						args.properties[arg] = formatToUse
+					}
+					else if (typeof command.args[arg] === "object" && !!command.args[arg]?.type) {
+						args.properties[arg] = {
+							type: command.args[arg].type
+						}
+
+						let propsToEdit = args.properties[arg]
+						if (command.args[arg].type === "array")
+						{
+							args.properties[arg].items = {
+								"type": "string"
+							}
+							propsToEdit = args.properties[arg].items
+							
+							if (!!command.args[arg]?.itemType)
+							{
+								propsToEdit.type = command.args[arg]?.itemType
+							}
+							if (!!command.args[arg]?.uniqueItems)
+							{
+								args.properties[arg].pattern = command.args[arg]?.uniqueItems
+							}
+						}
+						
+						if (!!command.args[arg]?.enum)
+						{
+							propsToEdit.enum = command.args[arg]?.enum
+						}
+						if (!!command.args[arg]?.pattern)
+						{
+							propsToEdit.pattern = command.args[arg]?.pattern
+						}
+					} else {
+						args.properties[arg] = {
+							type: "string"
+						}
+					}
+				}
+				
+				args.required.push(arg)
+			}
+			return elem
+		})
+
+		return {
+			"anyOf": commandsSchema
+		}
+	}
+
+	let getCommandsGNBF = async (commands = getEnabledCommands()) => {
+		let opt = {
+			method: 'POST', // or 'PUT'
+			headers: get_kobold_header(),
+			body: JSON.stringify({ schema: getCommandsSchema(commands) }),
+		}
+
+		return fetch(`${custom_kobold_endpoint}/api/extra/json_to_grammar`, opt)
+			.then((response) => response.json())
+			.then(resp => {
+				if (!!resp && !!resp?.success)
+				{
+					return resp.result
+				}
+				else
+				{
+					// Generic JSON response if it fails
+					return "root   ::= object\nvalue  ::= object | array | string | number | (\"true\" | \"false\" | \"null\") ws\n\nobject ::=\n  \"{\" ws (\n            string \":\" ws value\n    (\",\" ws string \":\" ws value)*\n  )? \"}\" ws\n\narray  ::=\n  \"[\" ws (\n            value\n    (\",\" ws value)*\n  )? \"]\" ws\n\nstring ::=\n  \"\\\"\" (\n    [^\"\\\\\\x7F\\x00-\\x1F] |\n    \"\\\\\" ([\"\\\\bfnrt] | \"u\" [0-9a-fA-F]{4}) # escapes\n  )* \"\\\"\" ws\n\nnumber ::= (\"-\"? ([0-9] | [1-9] [0-9]{0,15})) (\".\" [0-9]+)? ([eE] [-+]? [0-9] [1-9]{0,15})? ws\n\n# Optional space: by convention, applied in this grammar after literal chars when allowed\nws ::= | \" \" | \"\\n\" [ \\t]{0,20}"
+				}
+			})
+	}
+</script>
+<script>
+	// https://github.com/Wladastic/mini_autogpt is the original repo for these prompts - They have been modified with some attempted improvements.  It is MIT licensed.
+let getCommandsAsText = (commands = getEnabledCommands()) => {
+	return commands.map(command => {
+		let baseCommand = `Command: ${command.name} (command output is ${!!command?.outputVisibleToUser ? "visible" : "invisible"} to the user)\nDescription: ${command.description}`
+		if (!!command.args)
+		{
+			let args = Object.keys(command.args).map(key => {
+				let value = command.args[key];
+				return typeof value === "object" ? `\t${key}: ${value.description}` : `\t${key}: ${value}`
+			}).join("\n")
+			baseCommand += `\nArguments:\n${args}`
+		}
+		else 
+		{
+			baseCommand += "\nArguments: None\n"
+		}
+		return baseCommand
+	}).join("\n\n").trim();
+}
+
+let checkFinalThoughtsPrompt = `Action: {"command":{"name":"thought","args":{"message":"I must make sure that I respond to the user with \"send_message\""}}}`
+</script>
+<script>
+	// Reloading utils
+	class ReloadUtils
+	{
+		async waitForCompletion() {
+			return new Promise((resolve) => setInterval(() => {
+				let imagesComplete = Object.keys(image_db).filter(i => image_db[i].queue === "Generating").length === 0
+				let audioComplete = !ttsIsBeingGenerated
+				if (imagesComplete && audioComplete)
+				{
+					resolve()	
+				}
+			}, 1000))
+		}
+
+		async sleepAsync(time) {
+			return new Promise((resolve) => setTimeout(resolve, time))
+		}
+
+		async updateFromCustomEndpoint() {
+			localsettings.saved_a1111_url = custom_kobold_endpoint
+
+			let connectA1111 = async (silent = false) => {
+				console.log("Attempt A1111 Connection...");
+				//establish initial connection to a1111 api
+				let modelsdata = await fetch(localsettings.saved_a1111_url + a1111_models_endpoint)
+					.then(x => x.json())
+					.catch((error) => {
+					a1111_is_connected = false;
+					return
+					});
+
+				console.log("Reading Settings...");
+				await fetch(localsettings.saved_a1111_url + a1111_options_endpoint)
+					.then(y => y.json())
+					.then(optionsdata => {
+					console.log(optionsdata);
+					if (optionsdata.samples_format == null || modelsdata.length == 0) {
+
+					} else {
+						let a1111_current_loaded_model = optionsdata.sd_model_checkpoint;
+						console.log("Current model loaded: " + a1111_current_loaded_model);
+
+						//repopulate our model list
+						let dropdown = document.getElementById("generate_images_local_model");
+						let selectionhtml = ``;
+						for (var i = 0; i < modelsdata.length; ++i) {
+						selectionhtml += `<option value="` + modelsdata[i].title + `" ` + (a1111_current_loaded_model == modelsdata[i].title ? "selected" : "") + `>` + modelsdata[i].title + `</option>`;
+						}
+						dropdown.innerHTML = selectionhtml;
+						a1111_is_connected = true;
+					}
+					}).catch((error) => {
+					a1111_is_connected = false;
+					});
+			}
+
+			await (fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_version_endpoint), {
+				method: 'GET',
+				headers: get_kobold_header(),
+			})
+			.then(x => x.json())
+			.then(data => {
+				if (data && data != "" && data.version && data.version != "") {
+				koboldcpp_version_obj = data;
+				koboldcpp_version = data.version;
+				console.log("KoboldCpp Detected: " + koboldcpp_version);
+				document.getElementById("connectstatus").innerHTML = (`<span style='cursor: pointer;' onclick='fetch_koboldcpp_perf()'>KoboldCpp ${koboldcpp_version}</a>`);
+				koboldcpp_has_vision = (data.vision ? true : false);
+				koboldcpp_has_whisper = (data.transcribe ? true : false);
+				koboldcpp_has_multiplayer = (data.multiplayer ? true : false);
+				koboldcpp_has_websearch = (data.websearch ? true : false);
+				koboldcpp_has_tts = (data.tts ? true : false);
+				koboldcpp_admin_type = (data.admin ? data.admin : 0);
+				koboldcpp_has_savedatafile = (data.savedata ? true : false);
+				koboldcpp_has_guidance = (data.guidance ? true : false);
+				koboldcpp_has_embeddings = (data.embeddings ? true : false)
+				}
+			}))
+
+			//check if image gen is supported
+			await (fetch(apply_proxy_url(custom_kobold_endpoint + a1111_models_endpoint))
+			.then(response => response.json())
+			.then(async values6 => {
+				console.log(values6);
+				if (values6 && values6.length > 0 && values6[0].model_name != "inactive" && values6[0].filename != null) {
+				let firstitem = values6[0];
+				//local image gen is available
+				localsettings.generate_images_mode = 2;
+				localsettings.saved_a1111_url = custom_kobold_endpoint;
+				await connectA1111();
+				render_gametext(true);
+				}
+			}).catch(error => {
+				console.log("Failed to get local image models: " + error);
+			}));
+		}
+
+		async getCurrentConfigAndModel() {
+			let originalConfig = await (await fetch(`${custom_kobold_endpoint}/api/admin/current_config`, {
+				method: 'GET',
+				headers: get_kobold_header(),
+			})).text()
+
+			let originalModel = await (await fetch(`${custom_kobold_endpoint}/api/admin/current_model`, {
+				method: 'GET',
+				headers: get_kobold_header(),
+			})).text()
+
+			return {config: originalConfig, model: originalModel}
+		}
+
+		async waitForReload() {
+			return new Promise((resolve, reject) => {
+				setTimeout(async () => {
+					let startTime = Date.now(),
+						intervalId = setInterval(async () => {
+							if (await fetch(custom_kobold_endpoint + "/api/admin/health").then(c => c.text()).catch(e => {
+								/*Ignore error*/
+							}) === "true") {
+								clearInterval(intervalId);
+								resolve(Date.now() - startTime);
+							}
+						}, 1000);
+				}, 3000)
+			})
+		}
+
+		async triggerReload(filename, modelName = "") {
+			let resp = await fetch(custom_kobold_endpoint + koboldcpp_admin_reload_endpoint, {
+				method: 'POST',
+				headers: get_kobold_header(),
+				body: JSON.stringify({
+					"filename": filename,
+					"modelName": modelName
+				})
+			})
+			let json = await resp.json()
+			return !!json && !!json?.success
+		}
+
+		async reloadAndWait(filename, modelName = "") {
+			try {
+				await this.waitForCompletion()
+				let reloadSuccess = await this.triggerReload(filename, modelName)
+				if (reloadSuccess) {
+					console.log("KoboldCpp is now restarting");
+					let reloadTime = await this.waitForReload()
+					await reloadUtils.updateFromCustomEndpoint()
+					console.log("Restart complete");
+				} else {
+					msgbox("The request to reload KoboldCpp with a new configuration failed!\n\nPlease check if the feature is enabled, the admin directory is set, and selected config and password are correct.", "KoboldCpp Reload Failed");
+				}
+
+			} catch (error) {
+				console.log("Error: " + error);
+				msgbox(error, "Error");
+			};
+		}
+	}
+
+	window.reloadUtils = new ReloadUtils()
+</script>
+<style>
+	.stopThinking {
+		position: absolute;
+		color: red;
+		background: #333;
+		border-radius: 10px;
+		padding: 5px;
+	}
+</style>
+<script>
+	let createGeneratePayload = (prompt) => {
+		return {
+			"genkey": `KCPPAgent${Math.floor(Math.random() * 1000)}`,
+			"max_context_length": localsettings.max_context_length,
+			"max_length": localsettings.max_length,
+			"min_p": localsettings.min_p,
+			"presence_penalty": localsettings.presence_penalty,
+			"prompt": replace_placeholders(prompt, false, true),
+			"render_special": false,
+			"rep_pen": localsettings.rep_pen,
+			"rep_pen_range": localsettings.rep_pen_range,
+			"rep_pen_slope": localsettings.rep_pen_slope,
+			"sampler_order": localsettings.sampler_order,
+			"stop_sequence": get_stop_sequences(),
+			"temperature": localsettings.temperature,
+			"top_p": localsettings.top_p,
+			"trim_stop": true
+		}
+	}
+	
+	let generateFromPrompt = (prompt, grammar = "", images = [], bannedTokens = []) => {
+		let payload = createGeneratePayload(prompt)
+		if (!!grammar)
+		{
+			payload.grammar = grammar
+			payload["grammar_retain_state"] = false
+			payload["banned_tokens"] = ["{}"].concat(bannedTokens).concat(localsettings.tokenbans.split("||$||"))
+		}
+		concat_gametext(true, "", "", "", false, true)
+		let llavaImages = insertAIVisionImages.concat(images)
+		if(is_using_kcpp_with_vision() && llavaImages.length > 0)
+		{
+			payload.images = llavaImages;
+		}
+		let reqOpt = {
+			method: 'POST', // or 'PUT'
+			headers: get_kobold_header(),
+			body: JSON.stringify(payload),
+		};
+		if(globalabortcontroller)
+		{
+			reqOpt.signal = globalabortcontroller.signal;
+		}
+		let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_endpoint);
+		return fetch(sub_endpt, reqOpt)
+			.then((response) => response.json())
+	}
+
+	let generateAndGetTextFromPrompt = async (prompt, grammar = "", images = [], bannedTokens = []) => {
+		let resp = await generateFromPrompt(prompt, grammar, images, bannedTokens)
+		let isRespValid = !!resp?.results && Array.isArray(resp.results) && resp.results.length > 0
+		if (isRespValid)
+		{
+			return resp.results[0].text
+		}
+		return null
+	}
+
+	let generateResponseToInstruction = async (prompt) => {
+		let formattedPrompt = createInstructPrompt(prompt)
+		return await generateAndGetTextFromPrompt(formattedPrompt)
+	}
+
+	let split = (input, ...delimiters) => {
+		let output = [], currentString = input, i = 0
+
+		while (currentString.length > 0 && i < 100000)
+		{
+			i++
+			let splitPositions = delimiters.map(delimiter => currentString.indexOf(delimiter)).filter(pos => pos > -1).sort()
+			if (splitPositions.length > 0)
+			{
+				let newDel = delimiters.map(delimiter => {let pos = (currentString.substring(delimiter.length, currentString.length)).indexOf(delimiter); return pos > 0 ? pos + delimiter.length : -1})
+				combinedPos = splitPositions.concat(newDel).filter(pos => pos > 0).sort((a, b) => a > b ? 1 : -1)
+				let splitPos;
+				if (combinedPos.length === 0) {
+					splitPos = currentString.length
+				}
+				else {
+					splitPos = combinedPos[0]
+				}
+				output.push(currentString.substring(0, splitPos))
+				currentString = currentString.substring(splitPos)
+			}
+			else
+			{
+				output.push(currentString)
+				break
+			}
+		}
+		return output.filter(text => text.length > 0)
+	}
+
+	let listOfExclusions = ["Action taken:", "Action taken (words =", "History search performed:", "Chain of thought complete", "Stop thinking action confirmed",
+				 "Web search results:", "Text has been added to history", "Formula evaluation result:", "Formula evaluation could not be completed as no formula was provided", 
+				 "Text has been added to history", "Text was empty - nothing added to history", "Search string was empty, no search performed", "Word count is", "Image analysed:", 
+				 "Image generated", "No prompt provided, image not generated", "Text has been spoken", "No text provided, nothing has been said", "Setting overview has been overwritten", 
+				 "No setting overview provided, nothing has been overwritten", "Current state has been overwritten", "No state provided, nothing has been overwritten", "Current order of actions has been cleared",
+				  "Current order of actions has been overwritten", "No order of actions provided, nothing has been overwritten", "Error - Empty response instead of action. Ensure all responses are valid JSON.",
+				"Current state format has been overwritten", "No valid state format provided, nothing has been overwritten", `Text has been added to world info:`, `Text was empty - nothing added to world info`, `Chain of thought had an exception`]
+
+	let hideAgentModeCotForAestheticMode = (container = document) => {
+		[...container.querySelectorAll("end_of_context_koboldlite_internal > div")]
+			.filter(elem => listOfExclusions.find(excludedStart => elem.innerText.trim().indexOf(excludedStart) === 0))
+			.forEach(elem => elem.style.display = "none")
+	}
+
+	let originalRenderAestheticUI = render_aesthetic_ui
+
+	render_aesthetic_ui = (input, isPreview) => {
+		let aestheticHTML = document.createElement("div")
+		aestheticHTML.innerHTML = originalRenderAestheticUI(input, isPreview)
+		if (isAgentModeEnabledAndSetCorrectly() && !!localsettings?.agentHideCOT)
+		{
+			hideAgentModeCotForAestheticMode(aestheticHTML)
+		}
+		return aestheticHTML.innerHTML
+	}
+
+	var loadingNewGame = true
+	let originalRepackInstructTurns = repack_instruct_turns, cotOverrideRepack = false;
+
+	repack_instruct_turns = (input, usertag, aitag, systag, allow_blank, filterOutActions = (localsettings?.agentHideCOT)) => {
+		if (isAgentModeEnabledAndSetCorrectly())
+		{
+			let turns = split(input, usertag, aitag, systag)
+			let combined_chunks = turns.map(elem => {
+				let out = {}
+				if (elem.indexOf(usertag) !== -1)
+				{
+					out.source = "human"
+					out.myturn = true
+				}
+				else if (elem.indexOf(aitag) !== -1)
+				{
+					out.source = "ai"
+					out.myturn = false
+				}
+				else if (elem.indexOf(systag) !== -1)
+				{
+					out.source = "system"
+					out.myturn = false
+				}
+				else
+				{
+					out.source = ""
+				}
+				out.message = elem.replace(usertag, "").replace(aitag, "").replace(systag, "")
+				return out
+			})
+
+			if (loadingNewGame)
+			{
+				loadingNewGame = false
+				let suggestionsRegex = new RegExp(`suggestionsToPickFrom: (\\[.*?\\])`, "gm")
+				
+				let decodeEntities = (function() {
+					// this prevents any overhead from creating the object each time
+					let element = document.createElement('div');
+
+					function decodeHTMLEntities (str) {
+						if(str && typeof str === 'string') {
+						// strip script/html tags
+						str = str.replace(/<script[^>]*>([\S\s]*?)<\/script>/gmi, '');
+						str = str.replace(/<\/?\w(?:[^"'>]|"[^"]*"|'[^']*')*>/gmi, '');
+						element.innerHTML = str;
+						str = element.textContent;
+						element.textContent = '';
+						}
+
+						return str;
+					}
+
+					return decodeHTMLEntities;
+				})();
+
+				for (let i = combined_chunks.length - 1; i >= 0 && i >= combined_chunks.length - 4; i--) {
+					let elem = combined_chunks[i]
+					try {
+						let cleanedText = decodeEntities(elem.message)
+
+						// Hacky way to pick up multiple suggestions (up to 15)
+						let matcher = /suggestionsToPickFrom:[\t\n]*Array:([\t\n]+"(.*?)")([\t\n]+"(.*?)")?([\t\n]+"(.*?)")?([\t\n]+"(.*?)")?([\t\n]+"(.*?)")?([\t\n]+"(.*?)")?([\t\n]+"(.*?)")?([\t\n]+"(.*?)")?([\t\n]+"(.*?)")?([\t\n]+"(.*?)")?([\t\n]+"(.*?)")?([\t\n]+"(.*?)")?([\t\n]+"(.*?)")?([\t\n]+"(.*?)")?([\t\n]+"(.*?)")?/gms
+
+						let suggestions = []
+						cleanedText.matchAll(matcher).forEach(match => {
+							// Every even pos after 2 will be a suggestion from the matches if returned
+							for (let i = 2; i < match.length; i++) {
+								if (i % 2 === 0 && match[i] !== undefined && match[i] !== null) {
+									suggestions.push(match[i].trim())
+								}
+							}
+						})
+						if (suggestions.length > 0)
+						{
+							setSuggestions(suggestions)
+							break
+						}
+					}
+					catch (e) {
+						// Suppress errors
+					}
+				}
+			}
+
+			if (filterOutActions)
+			{
+				combined_chunks = combined_chunks
+					.filter(elem => !listOfExclusions.find(excludedStart => elem.message.trim().indexOf(excludedStart) === 0))
+					.map(elem => {
+						if (elem.message.indexOf("Request for user input:") === 0)
+						{
+							elem.message = elem.message.replace("Request for user input:", "").trim()
+						}
+						return elem
+					})
+			}
+			
+			return combined_chunks.map(elem => {
+				if (allow_blank || elem.message.trim() != "") {
+					return {
+						msg: elem.message,
+						source: elem.source,
+						myturn: elem.myturn
+					}
+				}
+				return null
+			}).filter(elem => elem !== null)
+		}
+		else
+		{
+			return originalRepackInstructTurns(input, usertag, aitag, allow_blank)
+		}
+	};
+
+	let getLastActions = (amountOfActions = 10) => {
+		let exclusions = ["Chain of thought repetition detected - ending", "Chain of thought complete", "plan_actions"] 
+		return repack_instruct_turns(concat_gametext(true), `{{[INPUT]}}`, `{{[OUTPUT]}}`, `{{[SYSTEM]}}`, true, false).map(msg => {
+			msg.msg = msg.msg.replaceAll("{{[SYSTEM_END]}}", "").replaceAll("{{[INPUT_END]}}", "").replaceAll("{{[OUTPUT_END]}}", "").trim(); 
+			return msg 
+		}).filter(msg => !/^\n*$/.test(msg.msg) && !!msg.msg && !exclusions.find(exclusion => msg.msg.indexOf(exclusion) !== -1)).splice(-amountOfActions)
+	}
+
+	let getDocumentFromTextDB = (documentName) => {
+		regex = `\(\\[DOCUMENT BREAK\\]\\[${documentName}\\]\)\(.*?\)\(\\[DOCUMENT BREAK\\]\)`
+		let match = documentdb_data.match(new RegExp(regex, "s"))
+		return !!match ? match[2].trim() : null
+	}
+
+	let calcImageSizing = (aspect) => {
+		let { iwidth, iheight } = getImageSizing()
+		let sizing = [iheight, iwidth];
+		switch (aspect) {
+			case "landscape":
+				if (iwidth == iheight) {
+					iwidth -= 256
+				}
+				sizing = [Math.min(iwidth, iheight), Math.max(iwidth, iheight)]
+				break
+			case "portrait":
+				if (iwidth == iheight) {
+					iwidth -= 256
+				}
+				sizing = [Math.max(iwidth, iheight), Math.min(iwidth, iheight)]
+				break
+			default:
+				if (iwidth != iheight && Math.max(iwidth, iheight) == 1024) {
+					iheight = 768
+					iwidth = 768
+				}
+				sizing = [Math.min(iwidth, iheight), Math.min(iwidth, iheight)]
+				break
+		}
+		return sizing
+	}
+
+	let getInitialAgentPrompt = (commands = getEnabledCommands(), max_mem_len) => {
+		prompt = ""
+		if (!!current_memory)
+		{
+			prompt += createSysPrompt(`Setting overview:\n\n${substring_to_boundary(current_memory, max_mem_len)}`)
+		}
+		return prompt
+	}
+
+	let getFinalAgentPrompt = (commands, currentOrderOfActions, objectiveForCurrentAction, initialPrompt) => {
+		let state = getDocumentFromTextDB('State')
+		let prompt = []
+
+		let sysPrompt;
+		if (!!localsettings.instruct_sysprompt)
+		{
+			sysPrompt = localsettings.instruct_sysprompt
+		}
+		else
+		{
+			sysPrompt = `You are a decision making action AI that evaluates thoughts and takes concise, purposeful actions which lead to a response to the user. Ensure you always send at least one response which is visible to the user.`
+			if (current_memory.length > 0)
+			{
+				sysPrompt += " Ensure responses are in line with the setting overview. Only override the setting overview when the user explicitly instructs you to do so."
+			}
+			sysPrompt += " Providing suggestions will force you to stop taking actions. Only include suggestions when you have nothing else to do or require user input."
+		}
+		if (state != null)
+		{
+			prompt.push(`Current state: ${state}`)
+		}
+		let currentAgentWIs = current_wi.filter(wi => !!wi?.wigroup && wi.wigroup === "Agent").map(wi => wi?.comment)
+		if (currentAgentWIs.length > 0)
+		{
+			prompt.push(`Current unique identifiers for world info: ${currentAgentWIs.join(", ")}`)
+		}
+		prompt.push(`System prompt for all responses: ${sysPrompt}`)		
+		if (!!initialPrompt)
+		{
+			prompt.push(`Most recent input from user: ${initialPrompt}`)
+		}
+		if (!!objectiveForCurrentAction)
+		{
+			prompt.push(`Objective for current action: ${objectiveForCurrentAction}`)
+		}
+		let basePrompt = prompt.join("\n\n")
+		return createSysPrompt(`### Available commands:\n\n${getCommandsAsText(!!commands.find(c => c.name === "plan_actions") ? getEnabledCommands() : commands)}`) + (basePrompt.length > 0 ? createSysPrompt(basePrompt) : "")
+	}
+
+	/**
+	 * Mostly a copy and paste of the main function - tweaked the format returned along with adding a clean cut off for WI
+	 */
+	let getWorldInfoForAgent = (wimatch_context, maxWILength) => {
+		//if world info exists, we inject it right after the memory
+		//for each matching key
+		if (wi_searchdepth > 0) {
+			let cutoff = wimatch_context.length - wi_searchdepth;
+			cutoff = cutoff < 0 ? 0 : cutoff;
+			wimatch_context = wimatch_context.substring(cutoff);
+		}
+		if (!localsettings.case_sensitive_wi) {
+			wimatch_context = wimatch_context.toLowerCase();
+		}
+
+		let wistr = "";
+		if (current_wi.length > 0) {
+			for (var x = 0; x < current_wi.length; ++x) {
+				let wi = current_wi[x];
+
+				let shoulduse = false;
+
+				//see if this is a valid wi entry
+				if (wi.content == null || wi.content == "") {
+					continue;
+				}
+
+				if (wi.widisabled) {
+					continue;
+				}
+
+				if (wi.constant) {
+					shoulduse = true;
+				} else {
+					//see if this is a valid wi entry
+					if (wi.key == null || wi.key == "") {
+					continue;
+					}
+
+					//selective, but bad secondary key. treat as only 1 key
+					let invalidseckey = (wi.selective && (wi.keysecondary == "" || wi.keysecondary == null));
+					let invalidantikey = (wi.selective && (wi.keyanti == "" || wi.keyanti == null));
+
+					let wiks = wi.key.split(",");
+
+					if (!wi.selective || (invalidseckey && invalidantikey)) {
+					if (localsettings.case_sensitive_wi) {
+						shoulduse = wiks.some(k => wimatch_context.includes(k.trim()));
+					} else {
+						shoulduse = wiks.some(k => wimatch_context.includes(k.trim().toLowerCase()));
+					}
+					} else {
+					let wikanti = [];
+					let wiks2 = [];
+					if (!invalidantikey) {
+						wikanti = wi.keyanti.split(",");
+					}
+					if (!invalidseckey) {
+						wiks2 = wi.keysecondary.split(",");
+					}
+					let t1 = false,
+						t2 = false,
+						t3 = false;
+					if (localsettings.case_sensitive_wi) {
+						t1 = wiks.some(k => wimatch_context.includes(k.trim()));
+						t2 = wiks2.some(k => wimatch_context.includes(k.trim()));
+						t3 = wikanti.some(k => wimatch_context.includes(k.trim()));
+					} else {
+						t1 = wiks.some(k => wimatch_context.includes(k.trim().toLowerCase()));
+						t2 = wiks2.some(k => wimatch_context.includes(k.trim().toLowerCase()));
+						t3 = wikanti.some(k => wimatch_context.includes(k.trim().toLowerCase()));
+					}
+					if (!invalidantikey && !invalidseckey) //all keys valid
+					{
+						shoulduse = (t1 && t2 && !t3);
+					} else if (invalidantikey) {
+						shoulduse = (t1 && t2);
+					} else {
+						shoulduse = (t1 && !t3);
+					}
+					}
+				}
+
+				// If accessing WI for a character's memory, switch based on the current chat opponent
+				if (!!shoulduse && !!getChatOpponentForAgent() && (!!wi.comment && !!wi.wigroup) && (wi.comment.endsWith("_imported_memory") && wi.wigroup === wi.comment.replace("_imported_memory", "")))
+				{
+					shoulduse = wi.wigroup == getChatOpponentForAgent()
+				}
+
+				if (shoulduse) {
+					//check if randomness less than 100%
+					if (wi.probability && wi.probability < 100) {
+					let roll = Math.floor(Math.random() * 100) + 1;
+					if (roll < wi.probability) {
+						let tags = (wi.key || "").split(",").concat((wi.keysecondary || "").split(",")).filter(elem => elem.trim() !== "").map(elem => elem.toLowerCase()).filter((elem, pos, arr) => pos === arr.indexOf(elem))
+						let wiString = `[Additional information (tags: ${tags.join(", ")}):\n${wi.content}]\n`
+						if (maxWILength < wistr.lengt + wiString.length)
+						{
+							return wistr
+						}
+						wistr += wiString;
+					}
+					} else {
+						//always insert
+						let tags = (wi.key || "").split(",").concat((wi.keysecondary || "").split(",")).filter(elem => elem.trim() !== "").map(elem => elem.toLowerCase()).filter((elem, pos, arr) => pos === arr.indexOf(elem))
+						let wiString = `[Additional information (tags: ${tags.join(", ")}):\n${wi.content}]\n`
+						if (maxWILength < wistr.lengt + wiString.length)
+						{
+							return wistr
+						}
+						wistr += wiString;
+					}
+				}
+			}
+		}
+		return wistr
+	}
+	let actionToText = (action) => {
+		let actionAsText = `Name: ${action.name}\n`
+		if (!!action.args)
+		{
+			let args = Object.keys(action.args).map(key => {
+				let value = action.args[key];
+				let val = value
+				if (typeof value === "object")
+				{
+					try
+					{
+						val = `\n${objToText(value, 2)}`
+					}
+					catch (e)
+					{
+						val = JSON.stringify(value)
+					}
+				}
+				return `\t${key}: ${val}`
+			}).join("\n")
+			actionAsText += `\nArguments:\n${args}\n`
+		}
+		else 
+		{
+			actionAsText += "\nArguments: None\n"
+		}
+		return actionAsText
+	}
+
+	let currentOrderOfActionsOverall = [], currentOrderOfActionDescriptionsOverall = []
+	let recentActions = [], maxActionsInHistory = 1000, currentAgentCycle = null, endCurrent = false
+
+	let runAgentCycle = async (initialPrompt = undefined) => {
+		
+		clearSuggestions()
+		endCurrent = false
+		currentChainOfThought = []
+		recentActions = []
+		currentOrderOfActionsOverall = []
+		currentOrderOfActionDescriptionsOverall = []
+		
+		let lastActions = getLastActions(maxActionsInHistory)
+		lastActions.forEach(action => {
+			switch(action.source)
+			{
+				case "system":
+					addThought(createSysPrompt, action.msg, false, true);
+					break;
+				case "ai":
+					addThought(createAIPrompt, action.msg, false, true);
+					break;
+				case "human":
+					addThought(createInstructPrompt, action.msg, false, true);
+					break;
+			}
+		})
+
+		let textDBResults = ""
+		if (!!initialPrompt)
+		{
+			initialPrompt = (localsettings.inject_chatnames_instruct ? `${localsettings.chatname}: ${initialPrompt}` : initialPrompt)
+			addThought(createInstructPrompt, initialPrompt)
+		}
+		else if (!!lastActions && lastActions.length > 0)
+		{
+			let humanActions = lastActions.reverse().filter(elem => elem.source === "human")
+			let prevInput = (humanActions.length > 0 ? humanActions[0].msg.replace(new RegExp(`^${localsettings.chatname}:\\s*`), "") : "");
+			if (!!prevInput)
+			{
+				initialPrompt = prevInput
+			}
+		}
+		if (!!initialPrompt && documentdb_provider != "0")
+		{
+			let contentToSearch = documentdb_data
+			if (!!documentdb_searchhistory)
+			{
+				contentToSearch += `\n\n[DOCUMENT BREAK][Chatlog history]${concat_gametext(true)}[DOCUMENT BREAK]`
+			}
+			let ltmSnippets = await DatabaseMinisearch(contentToSearch, initialPrompt, "");
+			for (let i = 0; i < ltmSnippets.length; ++i) {
+				textDBResults += getInfoSnippet(ltmSnippets[i]);
+			}
+		}
+		
+		let hasAttemptedToCompleteOnce = false
+		let lastThoughtWasBlank = false
+
+		Array(...document.getElementsByClassName("stopThinking")).forEach(elem => elem.classList.remove("hidden"))
+
+		currentOrderOfActionsOverall = getDocumentFromTextDB('Order of actions')
+		currentOrderOfActionsOverall = !!currentOrderOfActionsOverall ? currentOrderOfActionsOverall.split(",").filter(act => !!act) : []
+		currentOrderOfActionDescriptions = []
+
+		// Get current config and model overrides
+		let configOverrides = getDocumentFromTextDB("Agent config overrides")
+		configOverrides = !!configOverrides ? configOverrides.split("|").map(joined => joined.split("::")).filter(arr => arr.length === 2 || arr.length === 3).reduce((obj, elem) => {
+			obj[elem[0]] = {
+				config: elem[1],
+				model: (elem.length > 2 ? elem[2] : "")
+			}
+			return obj
+		}, {}) : {}
+		let manualOverridesForEnabledCommands = Object.keys(configOverrides)
+
+		let originalConfiguration = await reloadUtils.getCurrentConfigAndModel()
+		let previousConfig = JSON.parse(JSON.stringify(originalConfiguration))
+
+		for (let i = 0; i < Number(localsettings.agentCOTMax) + 1 && (currentOrderOfActionsOverall.length === 0 || i < currentOrderOfActionsOverall.length + 1) && endCurrent === false; i++)
+		{
+			let nextAction = []
+			let validCommands = getEnabledCommands(manualOverridesForEnabledCommands).map(command => command.name).filter(name => i != 0 || name != "stop_thinking")
+			if (i == 0)
+			{
+				nextAction = getReasoningCommand(manualOverridesForEnabledCommands)
+			}
+			else
+			{
+				// Ensure valid commands does not include stop thinking right away to ensure an action of some type is taken
+				nextAction = JSON.parse(JSON.stringify(currentOrderOfActionsOverall)).splice(i - 1).filter(acts => acts.split("|").find(act => validCommands.includes(act)))
+				nextAction = nextAction.length > 0 ? getCommands().filter(act => nextAction[0].split("|").includes(act.name)) : getEnabledCommands(manualOverridesForEnabledCommands).filter(command => validCommands.includes(command.name))
+
+				// Find any actions which have occured more than the max repeats in settings and remove them from the options
+				if (currentOrderOfActionsOverall.length === 0)
+				{
+					let actionsOverMaxRepeats = recentActions.map(elem => elem?.command?.name).reduce((o, c) => {
+						let elem = o.find(e => e.name == c)
+						if (elem === undefined) {
+							o.push({name: c, repeats: 1})
+						} else {
+							elem.repeats++
+						}
+						return o
+					}, []).filter(o => o.repeats >= localsettings.agentCOTRepeatsMax).map(o => o.name)
+					nextAction = nextAction.filter(act => !actionsOverMaxRepeats.includes(act.name))
+				}
+			}
+
+
+			// Find actions which are identical and have run twice - then remove them from the possible options to run again - applies when plans are not used
+			if (currentOrderOfActionsOverall.length === 0)
+			{
+				let duplicateActions = recentActions.filter((elem, pos, arr) => arr.findIndex((elem2) => JSON.stringify(elem) === JSON.stringify(elem2)) !== pos).map(elem => elem?.command?.name)
+				nextAction = nextAction.filter(act => !duplicateActions.includes(act.name))
+			}
+
+			// If no actions present, end cycle
+			if (nextAction.length === 0)
+			{
+				isCompleted = true
+				hasAttemptedToCompleteOnce = true
+				continue
+			}
+			let jsonGrammar = await getCommandsGNBF(nextAction)
+
+			currentChainOfThought = currentChainOfThought.splice(-maxActionsInHistory)
+			recentActions = recentActions.splice(-maxActionsInHistory)
+			
+			// All content			
+			let truncated_context = concat_gametext(true, "", "", "", false, true); //no need to truncate if memory is empty
+			truncated_context = truncated_context.replace(/\xA0/g, ' '); //replace non breaking space nbsp
+
+			// Context quantities
+			let maxctxlen = localsettings.max_context_length;
+			let maxgenamt = localsettings.max_length;
+			let max_allowed_characters = getMaxAllowedCharacters(truncated_context, maxctxlen, maxgenamt);
+			let max_mem_len = Math.floor(max_allowed_characters * 0.8);
+			let max_anote_len = Math.floor(max_allowed_characters * 0.6);
+			let max_wi_len = Math.floor(max_allowed_characters * 0.5);
+
+			let history = getInitialAgentPrompt(nextAction, max_mem_len)
+			let wiToInclude = createSysPrompt(substring_to_boundary(getWorldInfoForAgent(truncated_context, max_wi_len) + "\n\n" + textDBResults, max_wi_len))
+			let anToInclude = !!current_anote ? createSysPrompt(substring_to_boundary(current_anotetemplate.replace("<|>", current_anote), max_anote_len)) : ""
+
+			let promptOverview = currentOrderOfActionDescriptionsOverall.length > 0 ? currentOrderOfActionDescriptionsOverall[i - 1] : null
+			if (i === 0)
+			{
+				let planningPrompt = "The last action from the user is the instruction. If you need to ask the user for a response, the action ask_user must be used and be put as the final action in the order. When handling images always use actions to get information when needed especially for descriptions. Produces a list of actions to respond to this instruction."
+				if (localsettings.inject_chatnames_instruct) {
+					planningPrompt += ` You must respond as ${localsettings.chatopponent.split("||$||").join(" or ")} when using the send_message or ask_user actions. Choose the person based on the user's instruction.`
+				}
+				promptOverview = planningPrompt
+			}
+			
+			let finalAgentPrompt = getFinalAgentPrompt(nextAction, currentOrderOfActionsOverall, promptOverview, initialPrompt)
+
+			let cotAsText = "", maxLengthOfCot = max_allowed_characters - history.length - wiToInclude.length - anToInclude.length - finalAgentPrompt.length
+			for (let j = currentChainOfThought.length - 1; j >= 0; j--) {
+				if (cotAsText.length + currentChainOfThought[j].length > maxLengthOfCot) {
+					break
+				}
+				cotAsText = currentChainOfThought[j] + cotAsText
+			}
+
+			if (wi_insertlocation === "0") // WI after memory
+			{
+				history += wiToInclude
+				history += cotAsText
+			}
+			else
+			{
+				history += cotAsText
+				history += wiToInclude
+			}
+			history += anToInclude
+			history += finalAgentPrompt
+			// Add the start tag for the AI to guide it to respond as the AI
+			history += instructendplaceholder
+			// Add jailbreak if present
+			if (!!localsettings?.inject_jailbreak_instruct)
+			{
+				history += localsettings.custom_jailbreak_text
+			}
+			let resp = await generateAndGetTextFromPrompt(replace_placeholders(history), jsonGrammar, [], recentActions.map(JSON.stringify))
+			
+			try
+			{
+				if (resp.trim() == "")
+				{
+					// addThought(createSysPrompt, "Error - Empty response instead of action. Ensure all responses are valid JSON.", lastThoughtWasBlank)
+					isCompleted = true
+					hasAttemptedToCompleteOnce = true
+					continue
+				}
+				lastThoughtWasBlank = false
+				let json;
+				if (resp.indexOf("stop_thinking") !== -1)
+				{
+					isCompleted = true
+					hasAttemptedToCompleteOnce = true
+					continue
+				}
+				else
+				{
+					json = JSON.parse(resp)
+				}
+				if (!!json?.command && !!json.command?.name && (json.command.name === "plan_actions" || validCommands.includes(json.command.name)))
+				{
+					// If message has been sent before, skip processing it again and let the agent try again
+					if (recentActions.find((elem) => JSON.stringify(elem) === JSON.stringify(json)) !== undefined)
+					{
+						recentActions.push(json)
+						continue
+					}
+
+					let action = json
+					recentActions.push(json)
+
+					let actionSummary = []
+					if (wordCountEnabled && !!action?.command?.args?.messages)
+					{
+						let wordCount = action?.command?.args?.messages.flatMap(str => str.split(/\s/g).filter(s => s.length > 0)).length
+						actionSummary.push(`Action taken (words = ${wordCount}):`)
+					}
+					else
+					{
+						actionSummary.push(`Action taken:`)
+					}
+
+					if (i > 0)
+					{
+						actionSummary.push(`Aim: ${promptOverview}`)
+					}
+					actionSummary.push(`\`\`\`\n${actionToText(action?.command).trim()}\n\`\`\`\n\n`)
+					addThought(createAIPrompt, actionSummary.join("\n\n"))
+					
+					let isCompleted = false;
+					let command = [...getReasoningCommand(), ...getCommands()].find(command => command.name === action.command.name)
+					if (!!command && command?.executor !== undefined) {
+						if (configOverrides[action.command.name])
+						{
+							let overrides = configOverrides[action.command.name]
+							if (previousConfig.config !== overrides.config || previousConfig.model !== overrides.model)
+							{
+								await reloadUtils.reloadAndWait(overrides.config, overrides.model)
+								console.log("Completed reload");
+								previousConfig.config = overrides.config
+								previousConfig.model = overrides.model
+							}
+						}
+
+						let res = await command.executor(action.command)
+						if (res === true) {
+							isCompleted = true
+							hasAttemptedToCompleteOnce = true
+						}
+
+						if (previousConfig.config !== originalConfiguration.config || previousConfig.model !== originalConfiguration.model) {
+							await reloadUtils.reloadAndWait(originalConfiguration.config, originalConfiguration.model)
+							previousConfig.config = originalConfiguration.config
+							previousConfig.model = originalConfiguration.model
+							console.log("Completed reload");
+						}
+					}
+					
+					if (isCompleted)
+					{
+						if (!hasAttemptedToCompleteOnce)
+						{
+							addThought(createAIPrompt, checkFinalThoughtsPrompt)
+							hasAttemptedToCompleteOnce = true
+						}
+						else
+						{
+							addThought(createSysPrompt, "Chain of thought complete", true)
+							break
+						}
+					}
+				}
+				else
+				{
+					if (Object.keys(json).length === 0 || json?.command?.name === "None" || json?.command?.name === "null")
+					{
+						if (!hasAttemptedToCompleteOnce)
+						{
+							addThought(createAIPrompt, checkFinalThoughtsPrompt)
+							hasAttemptedToCompleteOnce = true
+						}
+						else
+						{
+							addThought(createSysPrompt, "Chain of thought complete", true)
+							break
+						}
+					}
+					else
+					{
+						addThought(createSysPrompt, `Invalid command requested: ${JSON.stringify(json)}`)
+						// break
+					}
+				}
+			}
+			catch (e)
+			{
+				addThought(createSysPrompt, `Chain of thought had an exception: ${e}`)
+				console.error(`Agent response which errored: ${resp}`)
+				
+				if (resp === null || resp.indexOf("evaluate_formula") === -1)
+				{
+					break	
+				}
+			}
+		}
+
+		if (previousConfig.config !== originalConfiguration.config || previousConfig.model !== originalConfiguration.model)
+		{
+			await reloadUtils.reloadAndWait(originalConfiguration.config, originalConfiguration.model)
+			console.log("Completed reload");
+		}
+		
+		// Render any suggestions generated in the agent logic
+		renderSuggestions()
+		currentAgentCycle = null
+		Array(...document.getElementsByClassName("stopThinking")).forEach(elem => elem.classList.add("hidden"))
+		submit_multiplayer(true)
+	}
+
+	let originalDisplaySettings = display_settings, originalConfirmSettings = confirm_settings, originalPrepareSubmitGeneration = prepare_submit_generation, originalRestartNewGame = restart_new_game;
+
+	display_settings = () => {
+		originalDisplaySettings()
+		document.getElementById("agentBehaviour").checked = localsettings.agentBehaviour;
+		document.getElementById("agentHideCOT").checked = localsettings.agentHideCOT;
+		document.getElementById("agentStopOnRequestForInput").checked = localsettings.agentStopOnRequestForInput;
+		document.getElementById("agentCOTMax").value = localsettings.agentCOTMax;
+		document.getElementById("agentCOTMaxnumeric").value = localsettings.agentCOTMax;
+		document.getElementById("agentCOTRepeatsMax").value = localsettings.agentCOTRepeatsMax;
+		document.getElementById("agentCOTRepeatsMaxnumeric").value = localsettings.agentCOTRepeatsMax;
+		document.getElementById("disableSaveCompressionLocally").checked = localsettings.disableSaveCompressionLocally;
+		document.getElementById("enableRunningMemory").checked = localsettings.enableRunningMemory;
+		document.getElementById("enableAutosaveToServer").checked = localsettings.enableAutosaveToServer;
+		document.getElementById("worldTreePrune").checked = localsettings.worldTreePrune;
+		document.getElementById("worldTreeDepth").value = localsettings.worldTreeDepth;
+		document.getElementById("worldTreeShowAll").checked = localsettings.worldTreeShowAll;
+	}
+
+	confirm_settings = () => {
+		localsettings.agentBehaviour = (document.getElementById("agentBehaviour").checked ? true : false);
+		localsettings.agentHideCOT = (document.getElementById("agentHideCOT").checked ? true : false);
+		localsettings.agentStopOnRequestForInput = (document.getElementById("agentStopOnRequestForInput").checked ? true : false);
+		localsettings.agentCOTMax = document.getElementById("agentCOTMax").value;
+		localsettings.agentCOTRepeatsMax = document.getElementById("agentCOTRepeatsMax").value;
+		localsettings.disableSaveCompressionLocally = (document.getElementById("disableSaveCompressionLocally").checked ? true : false);
+		localsettings.enableRunningMemory = (document.getElementById("enableRunningMemory").checked ? true : false);
+		localsettings.enableAutosaveToServer = (document.getElementById("enableAutosaveToServer").checked ? true : false);
+		localsettings.worldTreePrune = (document.getElementById("worldTreePrune").checked ? true : false);
+		localsettings.worldTreeDepth = document.getElementById("worldTreeDepth").value;
+		localsettings.worldTreeShowAll = (document.getElementById("worldTreeShowAll").checked ? true : false);
+		originalConfirmSettings()
+	}
+
+	prepare_submit_generation = async () => {
+		if (isAgentModeEnabledAndSetCorrectly())
+		{
+			let inputText = document.getElementById("input_text").value;
+			document.getElementById("input_text").value = "";
+			// Hack to ensure that images are always saved as new turns		
+			localsettings.img_newturn = true
+			if (currentAgentCycle !== null)
+			{
+				endCurrent = true
+				await currentAgentCycle
+			}
+			currentAgentCycle = runAgentCycle(inputText)
+		}
+		else
+		{
+			originalPrepareSubmitGeneration()
+		}
+	}
+
+	restart_new_game = () => {
+		loadingNewGame = true
+		currentChainOfThought = []
+		recentActions = []
+		clearSuggestions()
+		originalRestartNewGame()
+	}
+
+	let toggleAgent = () => {
+		populate_regex_replacers()
+
+		display_settings()
+		document.getElementById("agentBehaviour").checked = !document.getElementById("agentBehaviour").checked
+		if (!document.getElementById("agentBehaviour").checked)
+		{
+			stopAgentThinking()
+		}
+		else
+		{
+			document.getElementById("separate_end_tags").checked = true
+			toggle_separate_end_tags()
+		}
+		confirm_settings()
+		updateAgentButtonVisibility();
+		render_gametext();
+	}
+
+	let stopAgentThinking = () => {
+		
+		endCurrent = true
+		Array(...document.getElementsByClassName("stopThinking")).forEach(elem => elem.classList.add("hidden"))
+		currentAgentCycle = null
+		submit_multiplayer(true)
+		trigger_abort_controller()
+	}
+
+	let createStopThinkingButton = () => {
+		
+		["input_text", "cht_inp", "corpo_cht_inp"].forEach(id => {
+			let elem = document.createElement("span");
+			elem.classList.add("stopThinking");
+			document.getElementById(id).parentElement.appendChild(elem)
+			elem.innerText = "Stop agent thinking"
+			elem.classList.add("hidden")
+			if (id === "input_text")
+			{
+				elem.style.right = "20px";
+				elem.style.bottom = "10px";
+			}
+			else if (id === "cht_inp")
+			{
+				elem.style.right = "100px";
+				elem.style.bottom = "0px";
+			}
+			else if (id === "corpo_cht_inp")
+			{
+				elem.style.right = "50px";
+				elem.style.bottom = "0px";
+			}
+			elem.onclick = stopAgentThinking
+		})
+	}
+
+	let removeChoiceContainer = () => {
+		if (document.getElementById("choiceContainer")) {
+			document.getElementById("choiceContainer").remove()
+		}
+	}
+
+	let currentSuggestions = []
+	let setSuggestions = (suggestions) => {
+		currentSuggestions = suggestions
+	}
+
+	let clearSuggestions = () => {
+		currentSuggestions = []
+		removeChoiceContainer()
+	}
+
+	let renderSuggestions = () => {
+		removeChoiceContainer()
+		if (!!currentSuggestions && currentSuggestions.length > 0)
+		{
+			let choiceContainer = document.createElement("span");
+			choiceContainer.style.padding = "10px";
+
+			choiceContainer.id = "choiceContainer"
+			currentSuggestions.forEach(suggestion => {
+				let choice = document.createElement("button");
+				choice.classList.add("btn-primary")
+				choice.innerText = suggestion;
+				choice.onclick = () => {
+					if (localsettings.gui_type_instruct == "3")
+					{
+						document.getElementById("corpo_cht_inp").value = suggestion;
+					}
+					else if (localsettings.gui_type_instruct == "2")
+					{
+						document.getElementById("cht_inp").value = suggestion;
+					}
+					else
+					{
+						document.getElementById("input_text").value = suggestion;
+					}
+
+					// clearSuggestions();
+					// document.getElementById("btnsend").onclick();
+				}
+				choiceContainer.appendChild(choice)
+			})
+
+			let cancelChoice = document.createElement("button");
+			cancelChoice.classList.add("btn-primary")
+			cancelChoice.innerText = "Clear suggestions";
+			cancelChoice.onclick = () => {
+				clearSuggestions()
+			}
+			choiceContainer.appendChild(cancelChoice)
+
+			let container, input, sendButton;
+			switch (parseInt(localsettings.gui_type_instruct))
+			{
+				case 2:
+					container = document.getElementById("chat_msg_body");
+					input = document.getElementById("cht_inp");
+					sendButton = document.getElementById("chat_msg_send_btn");
+					break;
+				case 3:
+					container = document.getElementById("corpo_body");
+					input = document.getElementById("corpo_cht_inp");
+					sendButton = document.getElementById("corpo_chat_send_btn");
+					break;
+				default:
+					container = document.getElementById("gametext");
+					input = document.getElementById("input_text");
+					sendButton = document.getElementById("btnsend");
+					break
+			}			
+			container.appendChild(choiceContainer);
+		}
+	}
+
+	let originalRenderGametext = render_gametext;
+
+	render_gametext = (save = true) => {
+		originalRenderGametext(save)
+		if (isAgentModeEnabledAndSetCorrectly())
+		{
+			renderSuggestions()
+		}
+		else
+		{
+			removeChoiceContainer()
+		}
+	}
+
+	
+	let originalMergeEditField = merge_edit_field;
+
+	merge_edit_field = () => {
+		
+		removeChoiceContainer()
+		originalMergeEditField()
+		renderSuggestions()
+	}
+
+	let originalBtnBack = btn_back, originalBtnRedo = btn_redo, originalBtnRetry = btn_retry;
+
+	btn_back = () => {
+		clearSuggestions()
+		originalBtnBack()
+	}
+
+	btn_redo = () => {
+		clearSuggestions()
+		originalBtnRedo()
+	}
+
+	btn_retry = () => {
+		clearSuggestions()
+		originalBtnRetry()
+	}
+
+	window.addEventListener('load', () => {
+		if (localsettings?.agentBehaviour == undefined)
+		{
+			localsettings.agentBehaviour = false
+		}
+		if (localsettings?.agentHideCOT == undefined)
+		{
+			localsettings.agentHideCOT = true
+		}
+		if (localsettings?.agentStopOnRequestForInput == undefined)
+		{
+			localsettings.agentStopOnRequestForInput = true
+		}
+		if (localsettings?.agentCOTMax == undefined)
+		{
+			localsettings.agentCOTMax = 5
+		}
+		if (localsettings?.agentCOTRepeatsMax == undefined)
+		{
+			localsettings.agentCOTRepeatsMax = 1
+		}
+
+		let createSettingElemBool = (inputElemId, labelTitle, labelText) => {
+			let settingLabelElem = document.createElement("div")
+			settingLabelElem.classList.add("settinglabel")
+			let settingDiv = document.createElement("div")
+			settingDiv.classList.add("justifyleft", "settingsmall")
+			settingDiv.innerHTML = `${labelTitle} <span class="helpicon">?<span class="helptext">${labelText}</span></span>`
+			let settingInput = document.createElement("input")
+			settingInput.type = "checkbox"
+			settingInput.title = labelTitle
+			settingInput.id = inputElemId
+			settingInput.style = "margin:0px 0px 0px auto;"
+
+			settingLabelElem.append(settingDiv)
+			settingLabelElem.append(settingInput)
+			return settingLabelElem
+		}
+
+		let createSettingElemRange = (inputElemId, labelTitle, labelText, min, max, step, value) => {
+			let settingLabelElem = document.createElement("div")
+			settingLabelElem.classList.add("settinglabel")
+			let settingDiv = document.createElement("div")
+			settingDiv.classList.add("justifyleft", "settingsmall")
+			settingDiv.innerHTML = `${labelTitle} <span class="helpicon">?<span class="helptext">${labelText}</span></span>`
+			
+			let settingInputNumeric = document.createElement("input")
+			settingInputNumeric.type = "numeric"
+			settingInputNumeric.min = min
+			settingInputNumeric.max = max
+			settingInputNumeric.step = step
+			settingInputNumeric.value = value
+			settingInputNumeric.title = labelTitle
+			settingInputNumeric.id = `${inputElemId}numeric`
+			settingInputNumeric.classList.add("justifyright", "flex-push-right", "settingsmall", "widerinput")
+			settingInputNumeric.style = "margin:0px 0px 0px auto;"
+			settingLabelElem.append(settingDiv)
+			settingLabelElem.append(settingInputNumeric)
+
+			let settingInput = document.createElement("input")
+			settingInput.type = "range"
+			settingInput.min = min
+			settingInput.max = max
+			settingInput.step = step
+			settingInput.value = value
+			settingInput.title = labelTitle
+			settingInput.id = inputElemId
+			settingInput.style = "margin:0px 0px 0px auto;"
+
+			settingInputNumeric.oninput = () => {
+				settingInput.value = settingInputNumeric.value;
+			}
+
+			settingInput.oninput = () => {
+				settingInputNumeric.value = settingInput.value;
+			}
+
+			let inputDiv = document.createElement("div")
+			inputDiv.append(settingInput)
+
+			let minMaxDiv = document.createElement("div")
+			minMaxDiv.classList.add("settingminmax")
+			let minDiv = document.createElement("div")
+			minDiv.classList.add("justifyleft")
+			minDiv.innerText = min
+			let maxDiv = document.createElement("div")
+			maxDiv.classList.add("justifyright")
+			maxDiv.innerText = max
+			minMaxDiv.append(minDiv)
+			minMaxDiv.append(maxDiv)
+
+			let settingElem = document.createElement("div")
+			settingElem.style.width = "100%"
+			settingElem.classList.add("settingitem")
+			settingElem.append(settingLabelElem)
+			settingElem.append(inputDiv)
+			settingElem.append(minMaxDiv)
+			return settingElem
+		}
+		let lastSettingContainer = document.querySelector("#settingsmenuformat > .settingitem:last-child")
+
+		let settingLabelElem = createSettingElemBool("agentBehaviour", "Agent behaviour (experimental)", "Allows the AI to use multiple generations and certain tools to see if it can improve results.  This can include web search (if enabled), dice rolling, and formula evaluation.  This mode requires instruct start and end tags for all roles. Image and TTS only is enabled for local KCPP users.")
+		settingLabelElem.onclick = () => {
+			if (document.getElementById("agentBehaviour").checked == true && document.getElementById("separate_end_tags").checked != true)
+			{
+				document.getElementById("separate_end_tags").click()
+			}
+		}
+		lastSettingContainer.append(settingLabelElem)
+
+		settingLabelElem = createSettingElemBool("agentHideCOT", "Hide agent COT (experimental)", "Hides agent thinking steps (such as searches)")
+		lastSettingContainer.append(settingLabelElem)
+
+		settingLabelElem = createSettingElemRange("agentCOTMax", "Maximum agent actions", "Defines the maximum number of actions the agent can take without a user input", 1, 20, 1, 5)
+		lastSettingContainer.append(settingLabelElem)
+
+		settingLabelElem = createSettingElemBool("agentStopOnRequestForInput", "Stop on request for input from agent", "Stops the current agent processing if it asks for user input")
+		lastSettingContainer.append(settingLabelElem)
+
+		// Hidden as this is no longer is in use for now
+		settingLabelElem = createSettingElemRange("agentCOTRepeatsMax", "Maximum repeated agent actions of a type", "Defines the maximum number of actions the agent can take of the same type without a user input", 1, 20, 1, 1)
+		settingLabelElem.style.display = "none"
+		lastSettingContainer.append(settingLabelElem)
+
+		createStopThinkingButton()
+	})
+
 </script>
 </html>
