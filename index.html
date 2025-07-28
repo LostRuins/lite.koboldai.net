@@ -3321,6 +3321,7 @@ Current version indicated by LITEVER below.
 		eos_ban_mode: 0, //allow the EOS token when using locally 0=auto,1=unban,2=ban,3=bypass
 		token_count_multiplier: 100, //100 means 1x
 		opmode: 4, //what mode are we in? 1=story, 2=adventure, 3=chat, 4=instruct
+		adventure_roll_modifier: 0,
 		adventure_switch_mode: 0, //in adventure mode, determine story=0, action=1 or roll=2
 		adventure_context_mod: true, //extra injection for adventure mode
 		fix_alpaca_leak: true, //prevents leaking when Alpaca instruct format is used on crappy models
@@ -12758,6 +12759,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("idle_duration").value = localsettings.idle_duration;
 		document.getElementById("fix_alpaca_leak").checked = localsettings.fix_alpaca_leak;
 		document.getElementById("adventure_context_mod").checked = localsettings.adventure_context_mod;
+		document.getElementById("adventure_roll_modifier").value = localsettings.adventure_roll_modifier;
 		document.getElementById("chat_context_mod").checked = localsettings.chat_context_mod;
 		document.getElementById("instruct_has_markdown").checked = localsettings.instruct_has_markdown;
 		document.getElementById("instruct_has_latex").checked = localsettings.instruct_has_latex;
@@ -13231,6 +13233,7 @@ Current version indicated by LITEVER below.
 		localsettings.idle_duration = document.getElementById("idle_duration").value;
 		localsettings.fix_alpaca_leak = (document.getElementById("fix_alpaca_leak").checked ? true : false);
 		localsettings.adventure_context_mod = (document.getElementById("adventure_context_mod").checked ? true : false);
+		localsettings.adventure_roll_modifier = document.getElementById("adventure_roll_modifier").value;
 		localsettings.chat_context_mod = (document.getElementById("chat_context_mod").checked ? true : false);
 		localsettings.instruct_has_markdown = (document.getElementById("instruct_has_markdown").checked ? true : false);
 		localsettings.instruct_has_latex = (document.getElementById("instruct_has_latex").checked ? true : false);
@@ -15920,8 +15923,12 @@ Current version indicated by LITEVER below.
 				if(localsettings.adventure_switch_mode==2)
 				{
 					let roll = Math.floor(Math.random() * 20) + 1;
+					let modif = parseInt(localsettings.adventure_roll_modifier?localsettings.adventure_roll_modifier:0);
+					let modifstr = (modif>0?`+${modif}`:(modif<0?`${modif}`:""));
+					roll += modif;
+					roll = cleannum(roll,1,20);
 					let outcome = (roll==20?"Perfect":(roll>16?"Excellent":(roll>12?"Good":(roll>8?"Fair":(roll>4?"Poor":"Terrible")))));
-					diceaddon = ` (Rolled 1d20=${roll}/20, Outcome: ${outcome})`;
+					diceaddon = ` (Rolled 1d20${modifstr}=${roll}/20, Outcome: ${outcome})`;
 				}
 				newgen = "\n\n\> " + newgen + diceaddon + "\n\n";
 			}
@@ -24672,6 +24679,11 @@ Current version indicated by LITEVER below.
 							<div class="justifyleft settingsmall">Separate End Tags <span class="helpicon">?<span
 								class="helptext">Allows using separate Instruction and Response End Tags, instead of combing them with the start tag. Don't change this halfway through a story!</span></span></div>
 							<input type="checkbox" title="Separate End Tags" id="separate_end_tags" style="margin:0px 0px 0px auto;" onchange="toggle_separate_end_tags()">
+						</div>
+						<div id="idlesection" class="settinglabel">
+							<div class="justifyleft settingsmall" title="Adventure Roll Modifier">Adventure Roll Modifer&nbsp;<span class="helpicon">?<span
+								class="helptext">Adds an integer modifier to adventure mode dice rolls.</span></span></div>
+							<input class="settinglabel miniinput" title="Adventure Roll Modifer" type="text" inputmode="decimal" value="0" id="adventure_roll_modifier" style="height:16px; width:30px; margin:0px 4px 0px auto;">
 						</div>
 					</div>
 				</div>
