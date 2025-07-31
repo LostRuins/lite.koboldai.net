@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 265;
+	const LITEVER = 266;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3431,7 +3431,7 @@ Current version indicated by LITEVER below.
 		second_ep_model:"gpt2",
 		second_ep_url:"",
 
-		max_context_length: (localflag?4096:2048),
+		max_context_length: (localflag?4096:3072),
 		max_length: (localflag?512:256),
 		auto_ctxlen: true,
 		auto_genamt: true,
@@ -11027,11 +11027,6 @@ Current version indicated by LITEVER below.
 									document.getElementById("max_context_length_slide").max = ep_maxctx;
 									document.getElementById("max_context_length_slide_label").innerText = ep_maxctx;
 								}
-								if(ep_maxctx && ep_maxctx>4096 && document.getElementById("max_length_slide").max<1024)
-								{
-									document.getElementById("max_length_slide").max = 1024;
-									document.getElementById("max_length_slide_label").innerText = 1024;
-								}
 
 							}).catch(error => {
 								console.log("Failed to get KAI max ctx: " + error);
@@ -11085,17 +11080,17 @@ Current version indicated by LITEVER below.
 											document.getElementById("max_context_length_slide").max = ep_maxctx;
 											document.getElementById("max_context_length_slide_label").innerText = ep_maxctx;
 										}
-										if(ep_maxctx && ep_maxctx>=4096 && document.getElementById("max_length_slide").max<1024)
-										{
-											document.getElementById("max_length_slide").max = 1024;
-											document.getElementById("max_length_slide_label").innerText = 1024;
-										}
-										if(ep_maxctx && ep_maxctx>=16384 && document.getElementById("max_length_slide").max<2048)
+										if(ep_maxctx && ep_maxctx>=8192 && document.getElementById("max_length_slide").max<2048)
 										{
 											document.getElementById("max_length_slide").max = 2048;
 											document.getElementById("max_length_slide_label").innerText = 2048;
 										}
-										if(localflag && localsettings.max_context_length==4096 && ep_maxctx>4096)
+										if(ep_maxctx && ep_maxctx>=16384 && document.getElementById("max_length_slide").max<4096)
+										{
+											document.getElementById("max_length_slide").max = 4096;
+											document.getElementById("max_length_slide_label").innerText = 4096;
+										}
+										if(localflag && localsettings.max_context_length==defaultsettings.max_context_length && ep_maxctx>4096)
 										{
 											localsettings.max_context_length = ep_maxctx;
 										}
@@ -24702,7 +24697,7 @@ Current version indicated by LITEVER below.
 
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Context Size <span class="helpicon">?<span class="helptext">Maximum number of context tokens submitted to the AI. Must exceed max output tokens. Can be further increased by editing the textbox. Older models stop at 2048, newer ones can do 4096 or greater.</span></span></div>
+							<div class="justifyleft settingsmall">Context Size <span class="helpicon">?<span class="helptext">Maximum number of context tokens submitted to the AI. Must exceed max output tokens. Can be further increased by editing the textbox. This value determines how much history text the AI remembers.</span></span></div>
 							<input title="Context Size" inputmode="numeric" class="justifyright flex-push-right settingsmall widerinput" id="max_context_length" oninput="
 							document.getElementById('max_context_length_slide').value = this.value;">
 						</div>
@@ -24721,15 +24716,15 @@ Current version indicated by LITEVER below.
 					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Max Output <span class="helpicon">?<span
-										class="helptext">Number of tokens the AI should generate. Higher numbers will take longer to generate.</span></span></div>
+										class="helptext">Maximum number of tokens the AI should generate. Higher numbers will take longer to generate. AI can stop before the limit.</span></span></div>
 							<input title="Max Output" inputmode="numeric" class="justifyright flex-push-right settingsmall" id="max_length" oninput="
 							document.getElementById('max_length_slide').value = this.value;">
 						</div>
-						<div><input title="Max Output Slider" type="range" min="16" max="512" step="2"	id="max_length_slide" oninput="
+						<div><input title="Max Output Slider" type="range" min="16" max="1024" step="2"	id="max_length_slide" oninput="
 							document.getElementById('max_length').value = this.value;"></div>
 						<div class="settingminmax">
 							<div class="justifyleft">16</div>
-							<div class="justifyright" id="max_length_slide_label">512</div>
+							<div class="justifyright" id="max_length_slide_label">1024</div>
 						</div>
 						<div id="auto_genamt_panel" class="settinglabel">
 							<div class="justifyleft settingsmall" title="Automatically lowers settings if incompatible with existing workers">Auto-Adjust Limits </div>
