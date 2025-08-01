@@ -10602,6 +10602,8 @@ Current version indicated by LITEVER below.
 			}
 		}
 
+		autofetch_attempt_dict[desired_oai_ep] = true;
+
 		let dropdown = get_custom_ep_model_dropdown();
 		fetch((desired_oai_ep + oai_models_endpoint), {
 			method: 'GET',
@@ -10676,22 +10678,18 @@ Current version indicated by LITEVER below.
 		}
 	}
 
-	let openrouter_fetch_attempted = false;
-	let oai_custom_fetch_attempted = false;
+	let autofetch_attempt_dict = {};
 	function try_fetch_oai_models_auto()
 	{
+		let targetep = document.getElementById("custom_oai_endpoint").value;
 		//only for apis that don't gate the model list
-		if (document.getElementById("custom_oai_endpoint").value!="" &&
-		document.getElementById("custom_oai_endpoint").value.toLowerCase().includes("featherless.ai"))
+		if (targetep!="")
 		{
-			if(!oai_custom_fetch_attempted)
+			if(!autofetch_attempt_dict[targetep])
 			{
-				oai_custom_fetch_attempted = true;
-				let dropdown = document.getElementById("custom_oai_model");
-				if(dropdown.options.length < 40)
-				{
-					oai_fetch_models(); //autofetch models
-				}
+				autofetch_attempt_dict[targetep] = true;
+				let dropdown = get_custom_ep_model_dropdown();
+				oai_fetch_models(); //autofetch models
 			}
 		}
 	}
@@ -10748,6 +10746,14 @@ Current version indicated by LITEVER below.
 				} else {
 					document.getElementById("custom_oai_endpoint").value = (localsettings.saved_oai_addr ? localsettings.saved_oai_addr : default_oai_base);
 				}
+			}
+			else if(epchoice==3) //openrouter supports autofetch
+			{
+				document.getElementById("openrouterdesc").classList.remove("hidden");
+				document.getElementById("custom_openrouter_model").classList.remove("hidden");
+				document.getElementById("openrouterproviderbox").classList.remove("hidden");
+				document.getElementById("custom_oai_endpoint").value = default_openrouter_base;
+				document.getElementById("custom_oai_key").value =(localsettings.saved_openrouter_key==dummy_api_key?"":localsettings.saved_openrouter_key);
 				try_fetch_oai_models_auto();
 			}
 			else if(epchoice==7)
@@ -10779,23 +10785,7 @@ Current version indicated by LITEVER below.
 				document.getElementById("custom_oai_key").value = dummy_api_key;
 				document.getElementById("custom_oai_endpoint").value = pollinations_text_endpoint;
 				document.getElementById("custom_oai_key").classList.add("hidden");
-			}
-			else //openrouter supports autofetch
-			{
-				document.getElementById("openrouterdesc").classList.remove("hidden");
-				document.getElementById("custom_openrouter_model").classList.remove("hidden");
-				document.getElementById("openrouterproviderbox").classList.remove("hidden");
-				document.getElementById("custom_oai_endpoint").value = default_openrouter_base;
-				document.getElementById("custom_oai_key").value =(localsettings.saved_openrouter_key==dummy_api_key?"":localsettings.saved_openrouter_key);
-				if(!openrouter_fetch_attempted)
-				{
-					openrouter_fetch_attempted = true;
-					let dropdown = document.getElementById("custom_openrouter_model");
-					if(dropdown.options.length < 10)
-					{
-						oai_fetch_models(); //autofetch openrouter models
-					}
-				}
+				try_fetch_oai_models_auto();
 			}
 			oai_model_change(ep_should_always_use_chat_completions() || force_autotoggle_chatcompl);
 			toggleoaichatcompl();
@@ -26029,7 +26019,7 @@ Current version indicated by LITEVER below.
 				<span class="color_green" style="font-weight: bold;">No Key Required.</span><br><br>
 				</span>
 
-				<input class="form-control" type="text" id="custom_oai_endpoint" placeholder="OpenAI API URL" value="" onblur="try_fetch_oai_models_auto()">
+				<input class="form-control" type="text" id="custom_oai_endpoint" placeholder="OpenAI API URL" value="" onblur="">
 				<input class="form-control" type="password" id="custom_oai_key" placeholder="API Key (Required)" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
 				Model Choice:<br>
 				<select title="OpenAI Model Selection" style="padding:4px;display:inline;width:calc(100% - 220px)" class="form-control" id="custom_oai_model" onchange="oai_model_change(true)">
