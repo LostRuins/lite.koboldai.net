@@ -20179,7 +20179,14 @@ Current version indicated by LITEVER below.
 		if(elements && elements.length>0)
 		{
 			elements.forEach(function (element) {
-				element.innerHTML = escape_html(pending_context_preinjection) + format_streaming_text(escape_html(synchro_pending_stream));
+				let temp_stream = synchro_pending_stream;
+				// let codeblockcount = (temp_stream.match(/```/g) || []).length;
+				// if(codeblockcount>0 && codeblockcount%2!=0)
+				// {
+				// 	temp_stream += "```"; //force end code block
+				// }
+				let pend = escape_html(pending_context_preinjection) + format_streaming_text(escape_html(temp_stream));
+				element.innerHTML = pend;
 			});
 		} else {
 			render_gametext(false);
@@ -20430,9 +20437,17 @@ Current version indicated by LITEVER below.
 					let allow_cont_prev_turn = (localsettings.opmode==4 || (localsettings.opmode==3 && localsettings.allow_continue_chat));
 					if(i>0 && (i==instruct_turns.length-1) && curr.myturn==false && currmsg && allow_cont_prev_turn)
 					{
-						//inject into previous turn, only for instruct OR continuechat
-						currmsg += `<span class="color_yellow pending_text">${escape_html(pending_context_preinjection) + format_streaming_text(escape_html(synchro_pending_stream))}</span>`;
-						alreadyShowedStreaming = true;
+						let codeblockcount = (currmsg.match(/```/g) || []).length; //only allow continue if not in codeblock
+						if(codeblockcount==0 || codeblockcount%2==0)
+						{
+							//inject into previous turn, only for instruct OR continuechat
+							let pend = escape_html(pending_context_preinjection) + format_streaming_text(escape_html(synchro_pending_stream));
+							if(pend)
+							{
+								currmsg += `<span class="color_yellow pending_text">${pend}</span>`;
+								alreadyShowedStreaming = true;
+							}
+						}
 					}
 
 					//apply stylization to time tags
@@ -20551,7 +20566,8 @@ Current version indicated by LITEVER below.
 			//streaming display for all other cases
 			if(!alreadyShowedStreaming && synchro_pending_stream!="" && waiting_for_tool_call==0)
 			{
-				fulltxt += `<span class="color_yellow pending_text">${escape_html(pending_context_preinjection) + format_streaming_text(escape_html(synchro_pending_stream))}</span>`;
+				let pend = escape_html(pending_context_preinjection) + format_streaming_text(escape_html(synchro_pending_stream));
+				fulltxt += `<span class="color_yellow pending_text">${pend}</span>`;
 			}
 
 			if(!inEditMode)
@@ -20958,7 +20974,7 @@ Current version indicated by LITEVER below.
 		{
 			processed_msg = replace_noninstruct_placeholders(processed_msg,true,true,countmap);
 			let codeblockcount = (processed_msg.match(/```/g) || []).length;
-			if(codeblockcount>0 && codeblockcount%2!=0 )
+			if(codeblockcount>0 && codeblockcount%2!=0)
 			{
 				processed_msg += "```"; //force end code block
 			}
@@ -23211,12 +23227,18 @@ Current version indicated by LITEVER below.
 		if (synchro_pending_stream != "" && !isPreview) {
 			pendstream = escape_html(pending_context_preinjection) + format_streaming_text(escape_html(synchro_pending_stream));
 			let allow_cont_prev_turn = (localsettings.opmode==4 || (localsettings.opmode==3 && localsettings.allow_continue_chat));
+			let appended = false;
 			if(chatunits.length>0 && chatunits[chatunits.length-1].myturn==false && chatunits[chatunits.length-1].msg && allow_cont_prev_turn)
 			{
+				let codeblockcount = (chatunits[chatunits.length-1].msg.match(/```/g) || []).length; //only allow continue if not in codeblock
 				//inject into previous turn, only for instruct OR continuechat
-				chatunits[chatunits.length-1].msg += `<span class='pending_text'>${pendstream}</span>`;
+				if(codeblockcount==0 || codeblockcount%2==0)
+				{
+					chatunits[chatunits.length-1].msg += `<span class='pending_text'>${pendstream}</span>`;
+					appended = true;
+				}
 			}
-			else
+			if(!appended)
 			{
 				chatunits.push({"msg":`<span class='pending_text'>${pendstream}</span>`,"myturn":false,"unlabelled_name":true, "unlabelled_img":false});
 			}
