@@ -3034,7 +3034,6 @@ Current version indicated by LITEVER below.
 	const kobold_custom_mdl_endpoint = "/api/v1/model";
 	const kobold_custom_version_endpoint = "/api/v1/info/version";
 	const kobold_custom_maxctxlen_endpoint = "/api/v1/config/max_context_length";
-	const kobold_custom_genamt_endpoint = "/api/v1/config/max_length";
 
 	const koboldcpp_version_endpoint = "/api/extra/version";
 	const koboldcpp_abort_endpoint = "/api/extra/abort";
@@ -10202,6 +10201,10 @@ Current version indicated by LITEVER below.
 			document.getElementById("inputboxcontainerinputarea").classList.remove("hidden");
 			document.getElementById("inputboxcontainerinputarea").value = inputVal;
 			document.getElementById("inputboxcontainerinputarea").placeholder = escape_html(inputPlaceholder);
+			if(!isPassword)
+			{
+				document.getElementById("inputboxcontainerinputarea").focus();
+			}
 		}
 		else
 		{
@@ -10213,15 +10216,19 @@ Current version indicated by LITEVER below.
 			{
 				inputboxIsPassword = true;
 			}
+			else
+			{
+				document.getElementById("inputboxcontainerinput").focus();
+			}
 		}
 		inputboxblur();
 		onInputboxOk = function(){document.getElementById("inputboxcontainer").classList.add("hidden");onDone();};
 		onInputboxCancel = null;
 		document.getElementById("inputboxcancel").classList.add("hidden");
 	}
-	function inputBoxOkCancel(text,title,inputVal,inputPlaceholder,onDone,onCancel,isHtml=false,isTextArea=false)
+	function inputBoxOkCancel(text,title,inputVal,inputPlaceholder,onDone,onCancel,isHtml=false,isTextArea=false,isPassword=false)
 	{
-		inputBox(text,title,inputVal,inputPlaceholder,onDone,isHtml,isTextArea);
+		inputBox(text,title,inputVal,inputPlaceholder,onDone,isHtml,isTextArea,isPassword);
 		document.getElementById("inputboxcancel").classList.remove("hidden");
 		onInputboxCancel = function(){document.getElementById("inputboxcontainer").classList.add("hidden");onCancel();};
 	}
@@ -12175,7 +12182,11 @@ Current version indicated by LITEVER below.
 
 	function fetch_koboldcpp_perf()
 	{
-		fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_perf_endpoint))
+		fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_perf_endpoint),
+		{
+			method: 'GET',
+			headers: get_kobold_header(),
+		})
 		.then(x => x.json())
 		.then(resp => {
 			console.log(resp);
@@ -14749,7 +14760,7 @@ Current version indicated by LITEVER below.
 
 	function add_img_btn_custom()
 	{
-		inputBox("Enter a custom prompt to generate an image with.","Generate Image Manually","","Enter a Prompt",()=>{
+		inputBoxOkCancel("Enter a custom prompt to generate an image with.","Generate Image Manually","","Enter a Prompt",()=>{
 			let userinput = getInputBoxValue();
 			if(userinput.trim()!="")
 			{
@@ -17978,9 +17989,7 @@ Current version indicated by LITEVER below.
 					};
 					fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_transcribe_endpoint), {
 						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-						},
+						headers: get_kobold_header(),
 						body: JSON.stringify(payload),
 					})
 					.then(x => x.json())
@@ -19410,9 +19419,7 @@ Current version indicated by LITEVER below.
 		};
 		fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_transcribe_endpoint), {
 			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-			},
+			headers: get_kobold_header(),
 			body: JSON.stringify(payload),
 		})
 		.then(x => x.json())
@@ -19461,9 +19468,7 @@ Current version indicated by LITEVER below.
 							};
 							fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_transcribe_endpoint), {
 								method: 'POST',
-								headers: {
-									'Content-Type': 'application/json',
-								},
+								headers: get_kobold_header(),
 								body: JSON.stringify(payload),
 							})
 							.then(x => x.json())
@@ -19493,9 +19498,7 @@ Current version indicated by LITEVER below.
 		};
 		fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_tokenize_endpoint), {
 			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-			},
+			headers: get_kobold_header(),
 			body: JSON.stringify(payload),
 		})
 		.then(x => x.json())
