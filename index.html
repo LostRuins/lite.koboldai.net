@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 272;
+	const LITEVER = 273;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3205,7 +3205,6 @@ Current version indicated by LITEVER below.
 	var bold_regex = new RegExp(/\*\*(\S[^*]+\S)\*\*/g); //the fallback regex
 	var temp_scenario = null;
 	var last_token_budget = ""; //to display token limits
-	var last_known_filename = "saved_story.json";
 	var last_used_saveslot = -1; //used for corpo mode quicksave
 	var backup_localmodeport = 5001; //sometimes we reattempt a different port, this stores a backup
 	var localmodeport = 5001;
@@ -3343,6 +3342,7 @@ Current version indicated by LITEVER below.
 		speech_synth: 0, //0 is disabled, 1000 is xtts
 		xtts_voice: "female_calm",
 		kcpp_tts_voice: "kobo",
+		oai_tts_voice: "alloy",
 		kcpp_tts_json: "",
 		beep_on: false,
 		notify_on: false,
@@ -3373,6 +3373,7 @@ Current version indicated by LITEVER below.
 		save_images: true,
 		save_remote_images: false,
 		prompt_for_savename: false,
+		last_known_filename: "saved_story.json",
 		case_sensitive_wi: false,
 		last_selected_preset: 0,
 		gui_type_story: 0, //0=standard, 1=messenger, 2=aesthetic, 3=corpo
@@ -4240,7 +4241,7 @@ Current version indicated by LITEVER below.
 			let loadedsettings = JSON.parse(loadedsettingsjson);
 			//see if persist is enabled
 			if (loadedsettings && loadedsettings.persist_session) {
-				import_compressed_story(loadedstorycompressed,true); //use the same compressed format as shared stories and import it
+				import_compressed_story(loadedstorycompressed,true,false); //use the same compressed format as shared stories and import it
 				import_props_into_object(localsettings,loadedsettings);
 				console.log("Loaded local settings and story");
 
@@ -5232,7 +5233,7 @@ Current version indicated by LITEVER below.
 		}
 		return story;
 	}
-	function import_compressed_story(cstoryjson,force_load_settngs) { //attempts to load story from compressed json, in KAI format
+	function import_compressed_story(cstoryjson,force_load_settngs,save_after_loading=true) { //attempts to load story from compressed json, in KAI format
 		console.log("Importing shared story...");
 
 		var story = decompress_story(cstoryjson);
@@ -5299,7 +5300,7 @@ Current version indicated by LITEVER below.
 				});
 			}
 
-			kai_json_load(story, force_load_settngs);
+			kai_json_load(story, force_load_settngs, false, save_after_loading);
 
 		} else {
 			msgbox("Could not import from URL or TextData. Is it valid?");
@@ -7459,19 +7460,20 @@ Current version indicated by LITEVER below.
 			{
 				save_file_obj = generate_savefile(localsettings.save_images, localsettings.export_settings, localsettings.export_settings);
 			}
-			saveFileGeneric(last_known_filename, JSON.stringify(save_file_obj), "application/json");
+			saveFileGeneric(localsettings.last_known_filename, JSON.stringify(save_file_obj), "application/json");
 		}
 
 		if(localsettings.prompt_for_savename)
 		{
-			inputBox("Enter a Filename","Save File",last_known_filename,"Input Filename", ()=>{
+			inputBox("Enter a Filename","Save File",localsettings.last_known_filename,"Input Filename", ()=>{
 				let userinput = getInputBoxValue();
 				if (userinput != null && userinput.trim()!="") {
-					last_known_filename = userinput.trim();
-					if(!last_known_filename.toLowerCase().includes(".json"))
+					let tmp = userinput.trim();
+					if(!tmp.toLowerCase().includes(".json"))
 					{
-						last_known_filename += ".json";
+						tmp += ".json";
 					}
+					localsettings.last_known_filename = tmp;
 					save_file();
 				}
 			},false);
@@ -7623,7 +7625,7 @@ Current version indicated by LITEVER below.
 					//quick sanity check. if prompt does not exist, this is not a KAI save.
 					kai_json_load(new_loaded_storyobj,false);
 					if (selectedFilename && selectedFilename != "") {
-						last_known_filename = selectedFilename;
+						localsettings.last_known_filename = selectedFilename;
 					}
 				} else {
 					//check for tavernai fields
@@ -7753,7 +7755,7 @@ Current version indicated by LITEVER below.
 		return is_kai;
 	}
 
-	function kai_json_load(storyobj, force_load_settings, ignore_multiplayer_sync)
+	function kai_json_load(storyobj, force_load_settings, ignore_multiplayer_sync=false, save_after_loading=true)
 	{
 		//either show popup or just proceed to load
 		handle_advload_popup((localsettings.show_advanced_load && !force_load_settings),()=>
@@ -8109,7 +8111,7 @@ Current version indicated by LITEVER below.
 			toggle_invert_colors();
 			toggle_sidepanel_mode();
 			update_for_sidepanel();
-			render_gametext(true);
+			render_gametext(save_after_loading);
 			if(!ignore_multiplayer_sync) //we don't want an infinite loop
 			{
 				sync_multiplayer(true);
@@ -12902,6 +12904,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("ttsselect").innerHTML = ttshtml;
 		document.getElementById("ttsselect").value = localsettings.speech_synth;
 		document.getElementById("kcpp_tts_voice").value = localsettings.kcpp_tts_voice;
+		document.getElementById("oai_tts_voice").value = localsettings.oai_tts_voice;
 		kcpp_tts_json = localsettings.kcpp_tts_json;
 		toggle_tts_mode();
 		document.getElementById("beep_on").checked = localsettings.beep_on;
@@ -13434,6 +13437,7 @@ Current version indicated by LITEVER below.
 		localsettings.speech_synth = document.getElementById("ttsselect").value;
 		localsettings.xtts_voice = document.getElementById("xtts_voices").value;
 		localsettings.kcpp_tts_voice = document.getElementById("kcpp_tts_voice").value;
+		localsettings.oai_tts_voice = document.getElementById("oai_tts_voice").value?document.getElementById("oai_tts_voice").value:defaultsettings.oai_tts_voice;
 		localsettings.kcpp_tts_json = kcpp_tts_json;
 		localsettings.beep_on = (document.getElementById("beep_on").checked?true:false);
 		localsettings.notify_on = (document.getElementById("notify_on").checked?true:false);
@@ -14384,12 +14388,12 @@ Current version indicated by LITEVER below.
 		interrogation_db = {};
 		completed_imgs_meta = {};
 		localsettings.adventure_switch_mode = 0;
+		localsettings.last_known_filename = defaultsettings.last_known_filename;
 		prev_hl_chunk = null;
 		gametext_focused = false;
 		last_token_budget = "";
 		groupchat_removals = [];
 		welcome = "";
-		last_known_filename = "saved_story.json";
 		is_impersonate_user = false;
 		voice_is_processing = false;
 		recentSearchQueries = [];
