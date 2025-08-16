@@ -6026,25 +6026,43 @@ Current version indicated by LITEVER below.
 				const matchedlw = match.match(/^[ \t]*/);
 				const leadingWhitespace = matchedlw ? matchedlw[0] : '';
 				content = unescape_html(content);
-				if(content.match(/^\${1,}$/)) //only dollar signs, just return
+				if(content.replace(/\s+/g, '').match(/^\${1,}$/)) //only dollar signs, just return
 				{
 					return match;
 				}
 				return leadingWhitespace + temml.renderToString(content); // render LaTeX content
 			});
-			input = input.replace(/(?:^|[^\\])\$(\S[^$\n]*?\S)\$(?!\d)/g, (match, p1) => {
+			input = input.replace(/(^|[^\\])\$(\S[^$\n]*?\S)\$(?!\d)/g, (match, prefix, p1) => {
 				let content = p1;
 				content = unescape_html(content);
-				if(content.match(/^\${1,}$/)) //only dollar signs, just return
+				if(content.replace(/\s+/g, '').match(/^\${1,}$/)) //only dollar signs, just return
 				{
 					return match;
 				}
-				return " "+temml.renderToString(content); // render LaTeX content
+				return prefix+temml.renderToString(content); // render LaTeX content
+			});
+			input = input.replace(/(^|[^\\])\$([A-Za-z0-9])\$(?!\d)/g, (match, prefix, p1) => { //single letter or number
+				let content = p1;
+				content = unescape_html(content);
+				if(content.replace(/\s+/g, '').match(/^\${1,}$/)) //only dollar signs, just return
+				{
+					return match;
+				}
+				return prefix+temml.renderToString(content); // render LaTeX content
+			});
+			input = input.replace(/(^|[^\\])\$ (\S[^$\n]*?) \$(?!\d)/g, (match, prefix, p1) => { //special version that handles a single space on both sides
+				let content = p1;
+				content = unescape_html(content);
+				if(content.replace(/\s+/g, '').match(/^\${1,}$/)) //only dollar signs, just return
+				{
+					return match;
+				}
+				return prefix+temml.renderToString(content); // render LaTeX content
 			});
 			input = input.replace(/(^\\begin\{math\}\n([\s\S]*?)\n\\end\{math\}$|^\\begin\{equation\}\n([\s\S]*?)\n\\end\{equation\}$)/gm, (match, p1, p2, p3) => { //match math eqns
 				let content = p2 || p3;
 				content = unescape_html(content);
-				if(content.match(/^\${1,}$/)) //only dollar signs, just return
+				if(content.replace(/\s+/g, '').match(/^\${1,}$/)) //only dollar signs, just return
 				{
 					return match;
 				}
@@ -6152,7 +6170,10 @@ Current version indicated by LITEVER below.
 			md = md.replace(/<\/code\><\/pre\>\n<pre\><code\>/g, "\n");
 			if(renderLatex)
 			{
+				//to aid the latex renderer, we temporarily add newlines between some blocks
+				md = md.replace(/<\/li><li>/gm, "</li>\n<li>");
 				md = replaceLatex(md);
+				md = md.replace(/<\/li>\n<li>/gm, "</li><li>");
 			}
 			md = md.replace(/<\/ul>\n/gm, "</ul>").replace(/<\/ol>\n/gm, "</ol>");
 			md = md.replace(/\\([`_~\*\+\-\.\^\\\<\>\(\)\[\]])/gm, "$1");
