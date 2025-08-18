@@ -3198,7 +3198,7 @@ Current version indicated by LITEVER below.
 	var synchro_polled_response = null;
 	var last_stop_reason = ""; //update stop reason if known
 	var synchro_pending_stream = ""; //used for storing incomplete streaming text
-	var gemini_was_thinking = false; //used as a switch to determine when thinking ends, to wrap output in tags
+	var streaming_was_thinking = false; //used as a switch to determine when thinking ends, to wrap output in tags
 	var waiting_for_tool_call = 0; //0=not waiting, 1=autosummary, 2=websearchsummary
 	var oaiemulatecompletionscontent = "";
 	var italics_regex = new RegExp(/\*(\S[^*]+\S)\*/g); //the fallback regex
@@ -5712,7 +5712,7 @@ Current version indicated by LITEVER below.
 	function oai_api_stream_sse(sub_endpt,submit_payload,submit_headers)
 	{
 		synchro_pending_stream = "";
-		gemini_was_thinking = false;
+		streaming_was_thinking = false;
 		let reqOpt =
 		{method: 'POST',
 		headers: submit_headers,
@@ -5778,16 +5778,16 @@ Current version indicated by LITEVER below.
 									{
 										if(event.data.candidates[0].content.parts[x].thought)
 										{
-											gemini_was_thinking = true;
+											streaming_was_thinking = true;
 										}
 										if(!event.data.candidates[0].content.parts[x].text)
 										{
 											continue;
 										}
-										if(!event.data.candidates[0].content.parts[x].thought && gemini_was_thinking)
+										if(!event.data.candidates[0].content.parts[x].thought && streaming_was_thinking)
 										{
 											synchro_pending_stream = `${localsettings.start_thinking_tag}${synchro_pending_stream}${localsettings.stop_thinking_tag}`;
-											gemini_was_thinking = false;
+											streaming_was_thinking = false;
 										}
 										synchro_pending_stream += event.data.candidates[0].content.parts[x].text;
 									}
@@ -5800,11 +5800,19 @@ Current version indicated by LITEVER below.
 								if(event.data.choices[0].text)
 								{
 									synchro_pending_stream += event.data.choices[0].text;
-								}else if(event.data.choices[0].delta && event.data.choices[0].delta.content)
+								}
+								else if(event.data.choices[0].delta && event.data.choices[0].delta.content)
 								{
+									if(streaming_was_thinking)
+									{
+										streaming_was_thinking = false;
+										synchro_pending_stream = `${localsettings.start_thinking_tag}${synchro_pending_stream}${localsettings.stop_thinking_tag}`;
+									}
 									synchro_pending_stream += event.data.choices[0].delta.content;
-								}else if(event.data.choices[0].delta && !event.data.choices[0].delta.content && event.data.choices[0].delta.reasoning_content!=null&& event.data.choices[0].delta.reasoning_content!="")
+								}
+								else if(event.data.choices[0].delta && !event.data.choices[0].delta.content && event.data.choices[0].delta.reasoning_content!=null&& event.data.choices[0].delta.reasoning_content!="")
 								{
+									streaming_was_thinking = true;
 									synchro_pending_stream += event.data.choices[0].delta.reasoning_content;
 								}
 
@@ -5867,7 +5875,7 @@ Current version indicated by LITEVER below.
 						synchro_polled_response = cleanup_story_completion(synchro_polled_response);
 					}
 					synchro_pending_stream = "";
-					gemini_was_thinking = false;
+					streaming_was_thinking = false;
 					poll_pending_response();
 					//handle gen failures
 					if(resp.status==503)
@@ -14369,7 +14377,7 @@ Current version indicated by LITEVER below.
 		synchro_polled_response = null;
 		last_stop_reason = "";
 		synchro_pending_stream = "";
-		gemini_was_thinking = false;
+		streaming_was_thinking = false;
 		waiting_for_tool_call = 0;
 		horde_poll_nearly_completed = false;
 		oaiemulatecompletionscontent = "";
@@ -14393,7 +14401,7 @@ Current version indicated by LITEVER below.
 		synchro_polled_response = null;
 		last_stop_reason = "";
 		synchro_pending_stream = "";
-		gemini_was_thinking = false;
+		streaming_was_thinking = false;
 		waiting_for_tool_call = 0;
 		oaiemulatecompletionscontent = "";
 		last_reply_was_empty = false;
@@ -16960,7 +16968,7 @@ Current version indicated by LITEVER below.
 			synchro_polled_response = null;
 			last_stop_reason = "";
 			synchro_pending_stream = "";
-			gemini_was_thinking = false;
+			streaming_was_thinking = false;
 
 			//if this is set, we don't use horde, use the custom endpoint instead
 			if (custom_kobold_endpoint != "") //handle for kai
