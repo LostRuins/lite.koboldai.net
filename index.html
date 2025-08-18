@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 273;
+	const LITEVER = 274;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3348,6 +3348,7 @@ Current version indicated by LITEVER below.
 		notify_on: false,
 		narrate_both_sides: false,
 		narrate_only_dialog: false,
+		embed_narrations: false,
 		voice_end_delay: 300,
 		voice_suppress_nonspeech: false,
 		voice_langcode: "auto",
@@ -3431,7 +3432,7 @@ Current version indicated by LITEVER below.
 		second_ep_url:"",
 
 		max_context_length: (localflag?4096:3072),
-		max_length: (localflag?512:256),
+		max_length: (localflag?640:400),
 		last_maxctx: 0,
 		auto_ctxlen: true,
 		auto_genamt: true,
@@ -12941,6 +12942,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("no_escape_html").checked = no_escape_html;
 		document.getElementById("narrate_both_sides").checked = localsettings.narrate_both_sides;
 		document.getElementById("narrate_only_dialog").checked = localsettings.narrate_only_dialog;
+		document.getElementById("embed_narrations").checked = localsettings.embed_narrations;
 		document.getElementById("tts_speed").value = localsettings.tts_speed;
 		document.getElementById("voice_end_delay").value = localsettings.voice_end_delay;
 		document.getElementById("voice_suppress_nonspeech").checked = localsettings.voice_suppress_nonspeech;
@@ -13473,6 +13475,7 @@ Current version indicated by LITEVER below.
 		no_escape_html = (document.getElementById("no_escape_html").checked?true:false);
 		localsettings.narrate_both_sides = (document.getElementById("narrate_both_sides").checked?true:false);
 		localsettings.narrate_only_dialog = (document.getElementById("narrate_only_dialog").checked?true:false);
+		localsettings.embed_narrations = (document.getElementById("embed_narrations").checked?true:false);
 		localsettings.tts_speed = document.getElementById("tts_speed").value;
 		localsettings.voice_end_delay = document.getElementById("voice_end_delay").value;
 		localsettings.voice_suppress_nonspeech = (document.getElementById("voice_suppress_nonspeech").checked?true:false);
@@ -15448,6 +15451,16 @@ Current version indicated by LITEVER below.
 		a.download = "audio.wav";
 		setTimeout(function(){a.click()},20);
 	}
+	function tts_embed_audio(arrayBufferData)
+	{
+		var file = new Blob([arrayBufferData], { type: 'audio/wav' });
+		var reader = new FileReader();
+		reader.onload = function() {
+			var base64Audio = this.result;
+			self_upload_audio(base64Audio, "tts_audio");
+		};
+		reader.readAsDataURL(file);
+	}
 
 	function tts_speak(text, speech_synth_override=null, do_download=false)
 	{
@@ -15484,6 +15497,12 @@ Current version indicated by LITEVER below.
 			{
 				text = strippedtxt;
 			}
+		}
+
+		let do_embed_tts = false;
+		if(!do_download && speech_synth_override==null) //dont use it for tests
+		{
+			do_embed_tts = localsettings.embed_narrations;
 		}
 
 		if(ssval==XTTS_ID || ssval==ALLTALK_ID || ssval==OAI_TTS_ID || ssval==KCPP_TTS_ID || ssval==POLLINATIONS_TTS_ID) //xtts api server
@@ -15544,6 +15563,10 @@ Current version indicated by LITEVER below.
 					{
 						tts_download(audiofile_ref);
 					}
+					if(do_embed_tts)
+					{
+						tts_embed_audio(audiofile_ref);
+					}
 					const playSound = audioContext.createBufferSource();
 					playSound.buffer = decodedData;
 					playSound.connect(audioContext.destination);
@@ -15585,6 +15608,10 @@ Current version indicated by LITEVER below.
 					if(do_download)
 					{
 						tts_download(audiofile_ref);
+					}
+					if(do_embed_tts)
+					{
+						tts_embed_audio(audiofile_ref);
 					}
 					const playSound = audioContext.createBufferSource();
 					playSound.buffer = decodedData;
@@ -15628,6 +15655,10 @@ Current version indicated by LITEVER below.
 						if(do_download)
 						{
 							tts_download(audiofile_ref);
+						}
+						if(do_embed_tts)
+						{
+							tts_embed_audio(audiofile_ref);
 						}
 						const playSound = audioContext.createBufferSource();
 						playSound.buffer = decodedData;
@@ -15692,6 +15723,10 @@ Current version indicated by LITEVER below.
 							{
 								tts_download(audiofile_ref);
 							}
+							if(do_embed_tts)
+							{
+								tts_embed_audio(audiofile_ref);
+							}
 							playDecodedAllTalkData(decodedData);
 						})
 						.catch((error) => {
@@ -15743,6 +15778,10 @@ Current version indicated by LITEVER below.
 											{
 												tts_download(audiofile_ref);
 											}
+											if(do_embed_tts)
+											{
+												tts_embed_audio(audiofile_ref);
+											}
 											playDecodedAllTalkData(decodedData);
 										})
 										.catch((error) => {
@@ -15772,6 +15811,10 @@ Current version indicated by LITEVER below.
 									if(do_download)
 									{
 										tts_download(audiofile_ref);
+									}
+									if(do_embed_tts)
+									{
+										tts_embed_audio(audiofile_ref);
 									}
 									playDecodedAllTalkData(decodedData);
 								}).catch((error) => {
@@ -20297,13 +20340,20 @@ Current version indicated by LITEVER below.
 
 		if(elements && elements.length>0)
 		{
+			//check if we are on an instruct boundary
+			let onboundary = false;
+			if(gametext_arr.length>0 && gametext_arr[gametext_arr.length-1].trim().endsWith("{{[OUTPUT]}}"))
+			{
+				onboundary = true;
+			}
 			elements.forEach(function (element) {
 				let temp_stream = synchro_pending_stream;
-				// let codeblockcount = (temp_stream.match(/```/g) || []).length;
-				// if(codeblockcount>0 && codeblockcount%2!=0)
-				// {
-				// 	temp_stream += "```"; //force end code block
-				// }
+				if (onboundary) {
+					let codeblockcount = (temp_stream.match(/```/g) || []).length;
+					if (codeblockcount > 0 && codeblockcount % 2 != 0) {
+						temp_stream += "```"; //force end code block
+					}
+				}
 				let pend = escape_html(pending_context_preinjection) + format_streaming_text(escape_html(temp_stream));
 				element.innerHTML = pend;
 			});
@@ -25330,6 +25380,10 @@ Current version indicated by LITEVER below.
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall"  title="If unchecked, only speak AI replies, not other text.">Narrate Only Dialog </div>
 							<input title="Narrate Only Dialog" type="checkbox" id="narrate_only_dialog" style="margin:0px 0px 0px auto;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall"  title="Try to save and embed TTS narration files into story if possible. Does not work for internal browser TTS. Not recommend due to large size.">Save Narrations </div>
+							<input title="Save Narrations" type="checkbox" id="embed_narrations" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="inlinelabel" style="font-size: 11px;">
 							<div class="justifyleft">Browser TTS Speed: </div>
