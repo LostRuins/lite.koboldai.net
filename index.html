@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 275;
+	const LITEVER = 276;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -1216,6 +1216,15 @@ Current version indicated by LITEVER below.
 		position: relative;
 		padding: 4px;
 		clear: both;
+	}
+	.mediaindicator.img
+	{
+		position: absolute;
+		top: 6px;
+		right: 6px;
+		font-size: 16px;
+		pointer-events: none;
+		color: lime;
 	}
 	.storyimgsidevertical
 	{
@@ -18066,14 +18075,19 @@ Current version indicated by LITEVER below.
 			base64img = parts[1];
 		}
 
-		if(!use_horde) //a1111
+		if(!use_horde) //a1111, unless we have a vision model loaded
 		{
 			let payload = {
 			"image": base64img,
 			"model": "clip"
 			};
 			let imgid = "A1111interrogate"+(Math.floor(10000 + Math.random() * 90000)).toString();
-			fetch(localsettings.saved_a1111_url + a1111_interrogate_endpoint, {
+			let interrogateep = localsettings.saved_a1111_url + a1111_interrogate_endpoint;
+			if(is_using_kcpp_with_vision()) //handle using connected vision endpoint instead if available
+			{
+				interrogateep = apply_proxy_url(custom_kobold_endpoint + a1111_interrogate_endpoint);
+			}
+			fetch(interrogateep, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -18136,12 +18150,7 @@ Current version indicated by LITEVER below.
 		}
 
 	}
-	function zoomed_transcribe_btn(audiohash)
-	{
-		transcribe_audio_file(audiohash,(txt)=>{
-			msgbox(txt,"Transcribed Audio");
-		});
-	}
+
 	function transcribe_audio_file(audiohash,onDone)
 	{
 		let fetchedblob = data_hash_to_blob_lookup[audiohash];
@@ -18191,11 +18200,16 @@ Current version indicated by LITEVER below.
 		});
 	}
 
+	var aivision_toggle_dirty_flag = false;
 	function toggle_ai_vision(imghash)
 	{
 		let savedmeta = completed_imgs_meta[imghash];
 		if(savedmeta)
 		{
+			if(savedmeta.visionmode!=document.getElementById("aivisionmode").value)
+			{
+				aivision_toggle_dirty_flag = true;
+			}
 			savedmeta.visionmode = document.getElementById("aivisionmode").value;
 			if(savedmeta.type==1) //audio
 			{
@@ -18263,7 +18277,18 @@ Current version indicated by LITEVER below.
 		}
 		else
 		{
-			visionstatus = ((!savedmeta.visionmode || savedmeta.visionmode==0)?`<span class="color_red">Inactive</span>`:(savedmeta.desc?`<span class="color_green">Active</span>`:`<span class="color_yellow">Analyzing</span>`));
+			let caninterrogate = true;
+			if(savedmeta.visionmode==2 && ((savedmeta.type==1 && !is_using_kcpp_with_whisper()) || (savedmeta.type==0 && !is_using_kcpp_with_vision()))) //cant transcribe without whisper
+			{
+				caninterrogate = false;
+			}
+			visionstatus = ((!savedmeta.visionmode || savedmeta.visionmode==0)?`<span class="color_red">Inactive</span>`:(savedmeta.desc?`<span class="color_green">Active</span>`:(caninterrogate?`<span class="color_yellow">Analyzing</span>`:`<span class="color_yellow">Unsupported</span>`)));
+		}
+
+
+		if(savedmeta)
+		{
+			latest_orig_prompt = (savedmeta.prompt?replaceAll(savedmeta.prompt,"\n"," ") : (savedmeta.desc?savedmeta.desc:"No Saved Description"));
 		}
 
 		if(savedmeta && document.getElementById("zoomedimg"))
@@ -18289,9 +18314,6 @@ Current version indicated by LITEVER below.
 				document.getElementById("zoomedimg").classList.add("landscape_long");
 			}
 
-			let origprompt = (savedmeta.prompt?replaceAll(savedmeta.prompt,"\n"," ") : "No Saved Description");
-			latest_orig_prompt = origprompt;
-
 			let togglebtn = `<select class="form-control" id="aivisionmode" style="display:inline;height:24px;width: 140px; padding: 2px; margin: 3px; font-size:12px;" onchange="toggle_ai_vision(\'`+imghash+`\')">
 								<option value="0">Disabled</option>
 								<option value="1">Interrogate (Horde)</option>
@@ -18301,18 +18323,13 @@ Current version indicated by LITEVER below.
 			document.getElementById("zoomedimgdesc").innerHTML = `
 			AI Vision: `+visionstatus+` <span class="helpicon">?<span class="helptext">Allows the AI to see and react to this image. Interrogate gets a simple description of the image (Horde or Local A1111 API), while Multimodal Vision provides true image understanding (KCPP/OpenAI/Gemini).</span></span>
 			`+togglebtn+`
-			<br><button type="button" class="btn btn-primary" style="width: 140px; padding: 2px; margin: 3px; font-size:12px;" onclick="show_orig_prompt()">View Original Prompt</button>
+			<br><button type="button" class="btn btn-primary" style="width: 140px; padding: 2px; margin: 3px; font-size:12px;" onclick="show_orig_prompt()">View Description</button>
 			<button type="button" class="btn btn-primary" style="width: 110px; padding: 2px; margin: 3px; font-size:12px;" onclick="add_img2img()">Create Img2Img</button>
 			`;
 			document.getElementById("aivisionmode").value = savedmeta.visionmode;
 		}
 		else if(savedmeta && document.getElementById("zoomedaudio"))
 		{
-			let transcribebtn = "";
-			if(is_using_kcpp_with_whisper())
-			{
-				transcribebtn = `<button type="button" class="btn btn-primary" style="width: 140px; padding: 2px; margin: 3px; font-size:12px;" onclick="zoomed_transcribe_btn(\'`+imghash+`\')">Transcribe Audio</button>`;
-			}
 			let togglebtn = `<select class="form-control" id="aivisionmode" style="display:inline;height:24px;width: 140px; padding: 2px; margin: 3px; font-size:12px;" onchange="toggle_ai_vision(\'`+imghash+`\')">
 								<option value="0">Disabled</option>
 								<option value="2">Transcribe (Local)</option>
@@ -18322,7 +18339,7 @@ Current version indicated by LITEVER below.
 			AI Embed Audio: `+visionstatus+` <span class="helpicon">?<span class="helptext">Allows the AI to hear and react to this audio (on supported models). Transcribe tries to replace the audio file with detected speech.</span></span>
 			${togglebtn}
 			<br>
-			${transcribebtn}
+			<button type="button" class="btn btn-primary" style="width: 140px; padding: 2px; margin: 3px; font-size:12px;" onclick="show_orig_prompt()">View Description</button>
 			`;
 			document.getElementById("aivisionmode").value = savedmeta.visionmode;
 		}
@@ -18335,7 +18352,7 @@ Current version indicated by LITEVER below.
 	var latest_orig_prompt = "";
 	function show_orig_prompt()
 	{
-		msgbox(latest_orig_prompt,"Original Prompt");
+		msgbox(latest_orig_prompt,"Prompt or Description");
 	}
 	function add_img2img()
 	{
@@ -18358,7 +18375,12 @@ Current version indicated by LITEVER below.
 		clear_zoomed_img_and_audio();
 		if(target)
 		{
-
+			let savedmeta = completed_imgs_meta[imghash];
+			if(savedmeta && (savedmeta.visionmode==1||savedmeta.visionmode==2) && !savedmeta.desc)
+			{
+				//clear orphaned interrogates
+				savedmeta.visionmode = 0;
+			}
 			document.getElementById("zoomedimgcontainer").classList.remove("hidden");
 			let src = `<img class="zoomedimg ${localsettings.invert_colors?"invert_colors":""}" id="zoomedimg" src="${target.src}">`;
 			document.getElementById("zoomedimgdiv").innerHTML = src;
@@ -18374,6 +18396,12 @@ Current version indicated by LITEVER below.
 		clear_zoomed_img_and_audio();
 		if(target)
 		{
+			let savedmeta = completed_imgs_meta[audiohash];
+			if(savedmeta && (savedmeta.visionmode==1||savedmeta.visionmode==2) && !savedmeta.desc)
+			{
+				//clear orphaned interrogates
+				savedmeta.visionmode = 0;
+			}
 			document.getElementById("zoomedimgcontainer").classList.remove("hidden");
 			document.getElementById("zoomedimgdiv").classList.add("hidden");
 			document.getElementById("zoomedaudiodiv").classList.remove("hidden");
@@ -18386,10 +18414,23 @@ Current version indicated by LITEVER below.
 	}
 	function clear_zoomed_img_and_audio()
 	{
+		if(currmediahash)
+		{
+			let savedmeta = completed_imgs_meta[currmediahash];
+			if(savedmeta && savedmeta.desc && savedmeta.visionmode=="0")
+			{
+				savedmeta.desc = ""; //clear saved interrogation
+			}
+		}
 		currmediahash = "";
 		currmediaidx = 0;
 		document.getElementById("zoomedimgdiv").innerHTML = "";
 		document.getElementById("zoomedaudiodiv").innerHTML = "";
+		if(aivision_toggle_dirty_flag)
+		{
+			aivision_toggle_dirty_flag = false;
+			render_gametext(false,false);
+		}
 	}
 	function delete_curr_media()
 	{
@@ -18482,13 +18523,19 @@ Current version indicated by LITEVER below.
 		let audioblob = b64_to_persistent_blob(data,audiohash);
 		let filename = "";
 		let len = 0;
-		if (completed_imgs_meta[audiohash] != null) {
-			filename = completed_imgs_meta[audiohash].ref;
-			len = completed_imgs_meta[audiohash].len;
+		let currmeta = completed_imgs_meta[audiohash];
+		if (currmeta != null) {
+			filename = currmeta.ref;
+			len = currmeta.len;
 		}
 		let fndisp = filename!=""?`(${filename.substring(0,50)}) `:"";
 		fndisp = len?(`: ${Math.floor(len)}s ${fndisp}`):fndisp;
-		const str = `<span><br><button type="button" title="Attached Audio" class="btn btn-primary" style="font-size:12px; padding:8px 8px; border-radius: 16px" onclick="return click_audio(this,\'${audiohash}\',\'${audioblob}\',${duplicate_idx});">Attached Audio ${fndisp}🔊</button><br></span>`;
+		let vision_indicator_hide = "hidden";
+		let canvisionaudio = (currmeta.visionmode==3 && ((is_using_kcpp_with_vision() && currmeta.type==0) ||  (is_using_kcpp_with_audio() && currmeta.type==1))) || (currmeta.desc && (currmeta.visionmode==2||currmeta.visionmode==1));
+		if (canvisionaudio) {
+			vision_indicator_hide = "";
+		}
+		const str = `<span><br><button type="button" title="Attached Audio" class="btn btn-primary" style="font-size:12px; padding:8px 8px; border-radius: 16px" onclick="return click_audio(this,\'${audiohash}\',\'${audioblob}\',${duplicate_idx});">🔊 Attached Audio ${fndisp}<span class="mediaindicator ${vision_indicator_hide}"> 🦻</span></button><br></span>`;
 		return str;
 	}
 
@@ -18511,30 +18558,38 @@ Current version indicated by LITEVER below.
 			return `<div class="${siclass}${reinvertcolor}" contenteditable="false"><img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDABsSFBcUERsXFhceHBsgKEIrKCUlKFE6PTBCYFVlZF9VXVtqeJmBanGQc1tdhbWGkJ6jq62rZ4C8ybqmx5moq6T/2wBDARweHigjKE4rK06kbl1upKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKT/wAARCAEAAQADASIAAhEBAxEB/8QAGQABAQEBAQEAAAAAAAAAAAAAAAEDAgQF/8QAIBABAAIBBQEBAQEAAAAAAAAAAAECEgMRMVKRIWFBof/EABQBAQAAAAAAAAAAAAAAAAAAAAD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwD7AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABETPENNPT3je3jUHm22HpmInljqUx+xwDgAAAAAAAAAAAAAAAAAAAAAAAAABaxvaIRaztaJB6AAEmN4mFSZ2iZB5wAAAAAAAAAAAAAAAAAAAAAAAAAAAaaeptG1vWrzETMcSD0zMRyx1L5fI4cb7gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA7rpzNd/HAAAAAAAAAAAAAAAAAAAAAAAAAAAAADTT09/s8Gnp7/Z4agONSmX2OXYDzDbUpl9jliAAAAAAAAAAAAAAAAAAAsVmd9o4KVm0/jeIiI2gHnGupp/2vjIAABpp6e/2TT09/s8NQAAAAHGpTL7HLsB5htqUy+xyxAAAAAAAAAAAAAAAWlZtP4UrNp/G8RFY2gCIiI2hQAZ6mn/a+NAHmaaenv8AZ4dzp1m2/wDjoAAAAAAAABxqUy+xy7AeYbalMvscsQAAAAAAAAAAFpWbT+FKzafxvEREbQBEREbQoAAAAAAAAAAAAAAAAAONSmX2OXYDzDbUpl9jliAAAAAAAtKzafxaVm0/jaIiI2gCIiI2hQAAAAAAAAAAAAAAAAAAAAAcalMvscuwHmG2pTL7HLEAAAAFi0xxMwZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6ZW7T6gC5W7T6kzvyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/Z" width=${dim} height=${dim} style="border-radius: 6%;" title="${alttxt}" alt="${pend_txt}"><div class=\"imgloader\"></div><div class=\"imagelabel\">${waittime}</div></div>`;
 		} else {
 			let imghash = hash.trim();
-			if (completed_imgs_meta[imghash] != null) {
-				alttxt = completed_imgs_meta[imghash].prompt?escape_html(completed_imgs_meta[imghash].prompt):"";
-				if(completed_imgs_meta[imghash].aspect==1) //portrait
+			let vision_indicator_hide = "hidden";
+			let currmeta = completed_imgs_meta[imghash];
+			if (currmeta != null) {
+				alttxt = currmeta.prompt?escape_html(currmeta.prompt):"";
+				if(currmeta.aspect==1) //portrait
 				{
 					dimH *= 1.35;
 					dimW *= 0.9;
 				}
-				else if(completed_imgs_meta[imghash].aspect==2) //landscape
+				else if(currmeta.aspect==2) //landscape
 				{
 					dimW *= 1.35;
 					dimH *= 0.9;
 				}
-				else if(completed_imgs_meta[imghash].aspect==4) //portrait_long
+				else if(currmeta.aspect==4) //portrait_long
 				{
 					dimH *= 1.5;
 					dimW *= 0.75;
 				}
-				else if(completed_imgs_meta[imghash].aspect==5) //landscape_long
+				else if(currmeta.aspect==5) //landscape_long
 				{
 					dimW *= 1.5;
 					dimH *= 0.75;
 				}
+
+				let canvisionaudio = (currmeta.visionmode==3 && ((is_using_kcpp_with_vision() && currmeta.type==0) ||  (is_using_kcpp_with_audio() && currmeta.type==1))) || (currmeta.desc && (currmeta.visionmode==2||currmeta.visionmode==1));
+				if (canvisionaudio) {
+					vision_indicator_hide = "";
+				}
+
 			}
-			return `<div class="${siclass}${reinvertcolor}"><img src="${data}" width=${dimW} height=${dimH} title="${alttxt}" style="border-radius: 6%; cursor: pointer;" onclick="return click_image(this,\'${imghash}\',${duplicate_idx});"></div>`;
+			return `<div class="${siclass}${reinvertcolor}"><img src="${data}" width=${dimW} height=${dimH} title="${alttxt}" style="border-radius: 6%; cursor: pointer;" onclick="return click_image(this,\'${imghash}\',${duplicate_idx});"><span class="mediaindicator img ${vision_indicator_hide}">👁️</span></div>`;
 		}
 	}
 
@@ -18909,7 +18964,7 @@ Current version indicated by LITEVER below.
 					.then((data) => {
 						console.log('pollimg result:', data);
 						if (!data.state || (data.state!="processing" && data.state!="done")) {
-							msgbox("Pending image interrogation could not complete.");
+							msgbox("Pending image interrogation could not complete. Maybe no interrogation workers are available.");
 							console.log("removing from interrogation: " + key);
 							delete interrogation_db[key];
 						}
