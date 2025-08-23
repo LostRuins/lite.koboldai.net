@@ -7253,6 +7253,39 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	//returns true if the current multimodal setup for some media can be used, otherwise false.
+	function determine_if_can_use_vision_audio(currmeta)
+	{
+		if(!currmeta)
+		{
+			return false;
+		}
+		if(currmeta.visionmode==3)
+		{
+			if(custom_kobold_endpoint!="") //on a kobo endpoint
+			{
+				if((is_using_kcpp_with_vision() && currmeta.type==0) || (is_using_kcpp_with_audio() && currmeta.type==1))
+				{
+					return true;
+				}
+			}
+			else
+			{
+				let isoai = (custom_oai_key!="" && document.getElementById("useoaichatcompl").checked);
+				let isgemini = (custom_gemini_key!="");
+				return (isoai||isgemini);
+			}
+		}
+		else if(currmeta.visionmode==1 || currmeta.visionmode==2)
+		{
+			if(currmeta.desc)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 
 	//shared stories
 	function share_story_button()
@@ -18260,13 +18293,14 @@ Current version indicated by LITEVER below.
 		{
 			savedmeta.visionmode = 0;
 		}
-		let canvisionaudio = ((is_using_kcpp_with_vision() && savedmeta.type==0) ||  (is_using_kcpp_with_audio() && savedmeta.type==1));
+
 		let visionstatus = "";
 		if(savedmeta.visionmode==3)
 		{
 			if(custom_kobold_endpoint!="") //on a kobo endpoint
 			{
-				visionstatus = ((!savedmeta.visionmode || savedmeta.visionmode==0)?`<span class="color_red">Inactive</span>`:(canvisionaudio?`<span class="color_green">Active</span>`:`<span class="color_yellow">Unsupported</span>`));
+				let supported = ((is_using_kcpp_with_vision() && savedmeta.type==0) ||  (is_using_kcpp_with_audio() && savedmeta.type==1));
+				visionstatus = ((!savedmeta.visionmode || savedmeta.visionmode==0)?`<span class="color_red">Inactive</span>`:(supported?`<span class="color_green">Active</span>`:`<span class="color_yellow">Unsupported</span>`));
 			}
 			else
 			{
@@ -18282,7 +18316,7 @@ Current version indicated by LITEVER below.
 			{
 				caninterrogate = false;
 			}
-			visionstatus = ((!savedmeta.visionmode || savedmeta.visionmode==0)?`<span class="color_red">Inactive</span>`:(savedmeta.desc?`<span class="color_green">Active</span>`:(caninterrogate?`<span class="color_yellow">Analyzing</span>`:`<span class="color_yellow">Unsupported</span>`)));
+			visionstatus = ((!savedmeta.visionmode || savedmeta.visionmode==0)?`<span class="color_red">Inactive</span>`:(savedmeta.desc?`<span class="color_green">Active</span>`:(caninterrogate?`<span class="color_yellow">Analyzing</span>`:`<span class="color_yellow">Unavailable</span>`)));
 		}
 
 
@@ -18531,7 +18565,7 @@ Current version indicated by LITEVER below.
 		let fndisp = filename!=""?`(${filename.substring(0,50)}) `:"";
 		fndisp = len?(`: ${Math.floor(len)}s ${fndisp}`):fndisp;
 		let vision_indicator_hide = "hidden";
-		let canvisionaudio = (currmeta.visionmode==3 && ((is_using_kcpp_with_vision() && currmeta.type==0) ||  (is_using_kcpp_with_audio() && currmeta.type==1))) || (currmeta.desc && (currmeta.visionmode==2||currmeta.visionmode==1));
+		let canvisionaudio = determine_if_can_use_vision_audio(currmeta);
 		if (canvisionaudio) {
 			vision_indicator_hide = "";
 		}
@@ -18583,7 +18617,7 @@ Current version indicated by LITEVER below.
 					dimH *= 0.75;
 				}
 
-				let canvisionaudio = (currmeta.visionmode==3 && ((is_using_kcpp_with_vision() && currmeta.type==0) ||  (is_using_kcpp_with_audio() && currmeta.type==1))) || (currmeta.desc && (currmeta.visionmode==2||currmeta.visionmode==1));
+				let canvisionaudio = determine_if_can_use_vision_audio(currmeta);
 				if (canvisionaudio) {
 					vision_indicator_hide = "";
 				}
