@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 276;
+	const LITEVER = 277;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -2373,6 +2373,24 @@ Current version indicated by LITEVER below.
 	.bg_primary:disabled:hover {
 		background-color: #8a8a8a;
 	}
+	.bg_gray {
+		background-color: #868686;
+	}
+	.bg_gray:hover {
+		background-color: #a3a3a3;
+	}
+	.bg_gray:active:focus {
+		background-color: #7b7b7b;
+	}
+	.bg_gray:focus {
+		background-color: #7b7b7b;
+	}
+	.bg_gray:disabled {
+		background-color: #7b7b7b;
+	}
+	.bg_gray:disabled:hover {
+		background-color: #7b7b7b;
+	}
 
 	.bluebtn {
 		color: #fff;
@@ -3359,7 +3377,7 @@ Current version indicated by LITEVER below.
 		kcpp_tts_json: "",
 		beep_on: false,
 		notify_on: false,
-		narrate_both_sides: false,
+		narrate_targets: 1, //0=nobody, 1=ai only, 2=both sides
 		narrate_only_dialog: false,
 		embed_narrations: false,
 		voice_end_delay: 300,
@@ -12990,7 +13008,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("beep_on").checked = localsettings.beep_on;
 		document.getElementById("notify_on").checked = localsettings.notify_on;
 		document.getElementById("no_escape_html").checked = no_escape_html;
-		document.getElementById("narrate_both_sides").checked = localsettings.narrate_both_sides;
+		document.getElementById("narrate_targets").value = localsettings.narrate_targets;
 		document.getElementById("narrate_only_dialog").checked = localsettings.narrate_only_dialog;
 		document.getElementById("embed_narrations").checked = localsettings.embed_narrations;
 		document.getElementById("tts_speed").value = localsettings.tts_speed;
@@ -13270,11 +13288,18 @@ Current version indicated by LITEVER below.
 	function update_genimg_button_visiblility()
 	{
 		if (localsettings.generate_images_mode==0) {
-			document.getElementById("btn_inner_genimg_auto").disabled = true;
-			document.getElementById("btn_inner_genimg_custom").disabled = true;
+			document.getElementById("btn_inner_genimg_auto").classList.add("bg_gray");
+			document.getElementById("btn_inner_genimg_custom").classList.add("bg_gray");
 		} else {
-			document.getElementById("btn_inner_genimg_auto").disabled = false;
-			document.getElementById("btn_inner_genimg_custom").disabled = false;
+			document.getElementById("btn_inner_genimg_auto").classList.remove("bg_gray");
+			document.getElementById("btn_inner_genimg_custom").classList.remove("bg_gray");
+		}
+
+		if(localsettings.speech_synth==0)
+		{
+			document.getElementById("btn_inner_genspeech_custom").classList.add("bg_gray");
+		} else {
+			document.getElementById("btn_inner_genspeech_custom").classList.remove("bg_gray");
 		}
 
 		if(a1111_is_connected && is_using_kcpp_with_added_memory())
@@ -13523,7 +13548,7 @@ Current version indicated by LITEVER below.
 		localsettings.beep_on = (document.getElementById("beep_on").checked?true:false);
 		localsettings.notify_on = (document.getElementById("notify_on").checked?true:false);
 		no_escape_html = (document.getElementById("no_escape_html").checked?true:false);
-		localsettings.narrate_both_sides = (document.getElementById("narrate_both_sides").checked?true:false);
+		localsettings.narrate_targets = document.getElementById("narrate_targets").value;
 		localsettings.narrate_only_dialog = (document.getElementById("narrate_only_dialog").checked?true:false);
 		localsettings.embed_narrations = (document.getElementById("embed_narrations").checked?true:false);
 		localsettings.tts_speed = document.getElementById("tts_speed").value;
@@ -14915,6 +14940,10 @@ Current version indicated by LITEVER below.
 	}
 
 	function add_img_btn_auto() {
+		if (localsettings.generate_images_mode==0) {
+			msgbox("Error: No Image Generator Selected.\nPlease select an Image Generation option in Media Settings first.","No Image Generator")
+			return;
+		}
 		let truncated_context = concat_gametext(true, "");
 		truncated_context = replace_placeholders(truncated_context);
 		var tclen = truncated_context.length;
@@ -14923,13 +14952,17 @@ Current version indicated by LITEVER below.
 		}
 		else
 		{
-			msgbox("Error: Your current story is blank.\nAdd some text, or try generating from custom prompt instead.","Story is Blank")
+			msgbox("Error: Your current story is blank.\nAdd some text, or try generating from custom prompt instead.","Story is Blank");
 		}
 		document.getElementById("addmediacontainer").classList.add("hidden");
 	}
 
 	function add_img_btn_custom()
 	{
+		if (localsettings.generate_images_mode==0) {
+			msgbox("Error: No Image Generator Selected.\nPlease select an Image Generation option in Media Settings first.","No Image Generator")
+			return;
+		}
 		inputBoxOkCancel("Enter a custom prompt to generate an image with.","Generate Image Manually","","Enter a Prompt",()=>{
 			let userinput = getInputBoxValue();
 			if(userinput.trim()!="")
@@ -15360,25 +15393,39 @@ Current version indicated by LITEVER below.
 		}
 	}
 
-	function test_tts()
+	function manual_tts(from_settings_pane)
 	{
-		let ssval = document.getElementById("ttsselect").value;
-		let speakprompt = "Enter phrase to speak.";
+		let ssval = from_settings_pane?document.getElementById("ttsselect").value:localsettings.speech_synth;
+		if(ssval==0)
+		{
+			msgbox("Error: No TTS Generator was selected!\nPlease select a Text-To-Speech option in Media Settings first.","No TTS Generator");
+			return;
+		}
+		let speakprompt = "Enter phrase to speak. Currently selected TTS will be used.";
 
 		if(ssval==XTTS_ID || ssval==ALLTALK_ID || ssval==OAI_TTS_ID || ssval==KCPP_TTS_ID || ssval==POLLINATIONS_TTS_ID)
 		{
-			speakprompt = `Enter phrase to speak.<br><div><input type="checkbox" id="downloadtts" title="Add Endpoint Version Number"><div class="box-label">Download as .wav file</div></div>`;
+			speakprompt = `Enter phrase to speak. Currently selected TTS will be used.<br>
+			<div style="display: inline-flex;">
+			<div><input type="checkbox" id="downloadtts" title="Download TTS"><div class="box-label">Download as .wav file</div></div>
+			<div><input type="checkbox" id="embedtts" title="Insert TTS into Story"><div class="box-label">Embed into story</div></div>
+			</div>`;
 		}
-		inputBox(speakprompt,"Test TTS","","Input text to speak", ()=>{
+		inputBox(speakprompt,"Manual Prompt Text-To-Speech","","Input text to speak", ()=>{
 			let userinput = getInputBoxValue();
 			let downloadtts = false;
+			let embedtts = false;
 			if(document.getElementById("downloadtts")!=null)
 			{
 				downloadtts = (document.getElementById("downloadtts").checked?true:false);
 			}
+			if(document.getElementById("embedtts")!=null)
+			{
+				embedtts = (document.getElementById("embedtts").checked?true:false);
+			}
 			userinput = userinput.trim();
 			if (userinput != null && userinput!="" && ssval > 0) {
-				tts_speak(userinput,ssval,downloadtts);
+				tts_speak(userinput,ssval,downloadtts,embedtts);
 			}
 		},true);
 	}
@@ -15526,7 +15573,7 @@ Current version indicated by LITEVER below.
 		reader.readAsDataURL(file);
 	}
 
-	function tts_speak(text, speech_synth_override=null, do_download=false)
+	function tts_speak(text, speech_synth_override=null, do_download=false, do_embed_tts=false)
 	{
 		if(!text || text=="" || text.trim()=="")
 		{
@@ -15563,11 +15610,6 @@ Current version indicated by LITEVER below.
 			}
 		}
 
-		let do_embed_tts = false;
-		if(!do_download && speech_synth_override==null) //dont use it for tests
-		{
-			do_embed_tts = localsettings.embed_narrations;
-		}
 
 		if(ssval==XTTS_ID || ssval==ALLTALK_ID || ssval==OAI_TTS_ID || ssval==KCPP_TTS_ID || ssval==POLLINATIONS_TTS_ID) //xtts api server
 		{
@@ -16131,9 +16173,9 @@ Current version indicated by LITEVER below.
 			idle_triggered_counter = 0;
 			if (localsettings.speech_synth > 0)
 			{
-				if(localsettings.narrate_both_sides)
+				if(localsettings.narrate_targets==2)
 				{
-					tts_speak(newgen);
+					tts_speak(newgen,null,false,localsettings.embed_narrations);
 				}
 			}
 
@@ -18942,7 +18984,7 @@ Current version indicated by LITEVER below.
 
 		if (localsettings.speech_synth > 0)
 		{
-			if(localsettings.narrate_both_sides && !localsettings.narrate_only_dialog)
+			if(localsettings.narrate_targets==2 && !localsettings.narrate_only_dialog)
 			{
 				gentxtspeak = gentxt;
 			}
@@ -18962,7 +19004,10 @@ Current version indicated by LITEVER below.
 				gentxtspeak = gentxtspeak.replace(pat2, "");
 			}
 
-			tts_speak(gentxtspeak);
+			if(localsettings.narrate_targets != 0)
+			{
+				tts_speak(gentxtspeak,null,false,localsettings.embed_narrations);
+			}
 		}
 
 		if(gentxt!="")
@@ -25412,7 +25457,7 @@ Current version indicated by LITEVER below.
 							<div class="justifyleft settingsmall" style="width: 100%;">Text To Speech <span class="helpicon">?<span class="helptext">Enable Text-To-Speech to have your story automatically read to you.</span></span></div>
 							<select title="Text To Speech" class="form-control" id="ttsselect" style="font-size:12px;height:20px;padding:0;margin:0px 0 0;width:calc(100% - 35px);" onchange="toggle_tts_mode()">
 							</select>
-							<button id="test_tts" type="button" class="bg_green btn btn-primary" style="height:20px; width:30px; padding:2px 3px;font-size:11px; margin-left: 2px;" onclick="test_tts()">Test</button>
+							<button id="manual_tts" type="button" class="bg_green btn btn-primary" style="height:20px; width:30px; padding:2px 3px;font-size:11px; margin-left: 2px;" onclick="manual_tts(true)">Test</button>
 							<div id="xtts_container" class="settinglabel hidden">
 								<div>
 									<table width="100%"><tr>
@@ -25487,8 +25532,12 @@ Current version indicated by LITEVER below.
 							</div>
 						</div>
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall"  title="If unchecked, only speak AI replies, not other text.">Narrate Both Sides </div>
-							<input title="Narrate Both Sides" type="checkbox" id="narrate_both_sides" style="margin:0px 0px 0px auto;">
+							<div class="justifyleft settingsmall" title="Who should narration be triggered for?">Narration Triggered For </div>
+							<select title="Select Narrated Turns" id="narrate_targets" style="padding:1px; height:auto; width: 80px; font-size: 8pt; margin:0px 0px 0px auto;" class="form-control">
+								<option value="0">Nobody</option>
+								<option value="1" selected>AI Only</option>
+								<option value="2">Both Sides</option>
+							</select>
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall"  title="If unchecked, only speak AI replies, not other text.">Narrate Only Dialog </div>
@@ -26883,16 +26932,16 @@ Current version indicated by LITEVER below.
 				<div class="popuptitletext">Add Audio or Image</div>
 			</div>
 			<div class="menutext">
-				<button type="button" class="btn btn-primary bg_green" id="btn_inner_genimg_auto" onclick="add_img_btn_auto()">Generate Image (Automatic)</button>
+				Generate Image <button type="button" class="btn btn-primary bg_green" id="btn_inner_genimg_auto" onclick="add_img_btn_auto()">Automatic</button> <button type="button" class="btn btn-primary bg_green" id="btn_inner_genimg_custom" onclick="add_img_btn_custom()">From Prompt</button>
 			</div>
 			<div class="menutext">
-				<button type="button" class="btn btn-primary bg_green" id="btn_inner_genimg_custom" onclick="add_img_btn_custom()">Generate Image (Custom Prompt)</button>
-			</div>
-			<div class="menutext">
-				<button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_upload()">Upload a File (Image / Audio)</button>
+				Generate Speech <button type="button" class="btn btn-primary bg_green" id="btn_inner_genspeech_custom" onclick="manual_tts(false)">From Prompt</button>
 			</div>
 			<div class="menutext">
 				Capture From <button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_webcam()">Camera</button> <button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_mic()">Microphone</button>
+			</div>
+			<div class="menutext">
+				<button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_upload()">Upload a File (Image / Audio)</button>
 			</div>
 			<div class="menutext">
 				<button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_paste()">Drag Drop / Paste from Clipboard</button>
