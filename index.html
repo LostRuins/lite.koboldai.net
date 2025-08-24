@@ -1898,7 +1898,6 @@ Current version indicated by LITEVER below.
 		transition: transform 0.3s ease;
 		height: calc(100vh - 68px);
 		z-index: 1;
-		box-shadow: 8px 3px 6px 2px rgb(0 0 0 / 4%);
 	}
 	body.darkmode .corpoleftpanel
 	{
@@ -6082,7 +6081,10 @@ Current version indicated by LITEVER below.
 		};
 		const replaceLatex = (input) =>{
 			//all latex patterns except inline tex
-			input = input.replace(/(^```math\n([\s\S]*?)\n```$|^ {0,6}\\\[\n([\s\S]*?)\n {0,6}\\\]$|^\$\$\n([\s\S]*?)\n\$\$$|^ {2}\$\$\n {2}([\s\S]*?)\n {2}\$\$$|\$\$([^\n]+?)\$\$|\\\(([^\n]+?)\\\)|\\\[([^\n]+?)\\\])/gm, (match, p1, p2, p3, p4, p5, p6, p7, p8) => {
+			input = input.replace(/^<blockquote>(\\\[\n[\s\S]*?\n\\\]) {0,2}<\/blockquote> {0,2}$/gm, (match, p1) => {
+				return `<blockquote>\n${p1}\n</blockquote>`; //if blockquotes detected surrounding latex, move them to their own lines first
+			});
+			input = input.replace(/(^```math\n([\s\S]*?)\n```$|^ {0,6}\\\[\n([\s\S]*?)\n {0,6}\\\] {0,2}$|^\$\$\n([\s\S]*?)\n\$\$$|^ {2}\$\$\n {2}([\s\S]*?)\n {2}\$\$$|\$\$([^\n]+?)\$\$|\\\(([^\n]+?)\\\)|\\\[([^\n]+?)\\\])/gm, (match, p1, p2, p3, p4, p5, p6, p7, p8) => {
 				let content = p2 || p3 || p4 || p5 || p6 || p7 || p8;
 				const matchedlw = match.match(/^[ \t]*/);
 				const leadingWhitespace = matchedlw ? matchedlw[0] : '';
@@ -6092,6 +6094,9 @@ Current version indicated by LITEVER below.
 					return match;
 				}
 				return leadingWhitespace + temml.renderToString(content); // render LaTeX content
+			});
+			input = input.replace(/^<blockquote>\n([\s\S]*?)\n<\/blockquote>/gm, (match, p1) => {
+				return `<blockquote>${p1}</blockquote>`; //return blockquotes to their rightful place
 			});
 			input = input.replace(/(^|[^\\])\$(\S[^$\n]*?\S)\$(?!\d)/g, (match, prefix, p1) => {
 				let content = p1;
@@ -6178,9 +6183,10 @@ Current version indicated by LITEVER below.
 				return `<code>${escapeHTML(code).replace(/`/g, "`")}</code>`;})
 			.replace(/`(.*?)`/gm, "<code>$1</code>")
 			.replace(/^\>\> (.*$)/gm, "<blockquote><blockquote>$1</blockquote></blockquote>")
+			.replace(/^&gt;&gt; (.*$)/gm, "<blockquote><blockquote>$1</blockquote></blockquote>")
 			.replace(/^\> (.*$)/gm, "<blockquote>$1</blockquote>")
+			.replace(/^&gt; (.*$)/gm, "<blockquote>$1</blockquote>")
 			.replace(/<\/blockquote\>\n<blockquote\>/g, "\n")
-			.replace(/<\/blockquote\>\n<blockquote\>/g, "\n<br>")
 			.replace(/!\[(.*?)\]\((.*?) "(.*?)"\)/gm,'<img alt="$1" src="$2" $3 />')
 			.replace(/!\[(.*?)\]\((.*?)\)/gm, '<img alt="$1" src="$2" />')
 			.replace(/\[(.*?)\]\((.*?) "new"\)/gm, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
