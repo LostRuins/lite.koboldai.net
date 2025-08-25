@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 277;
+	const LITEVER = 278;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -7270,6 +7270,10 @@ Current version indicated by LITEVER below.
 
 	function is_using_kcpp_with_embeddings() {
 		return (custom_kobold_endpoint != "" && koboldcpp_version && koboldcpp_version != "" && compare_version_str(koboldcpp_version, "1.84") >= 0 && koboldcpp_has_embeddings);
+	}
+
+	function is_using_kcpp_with_imagegen() {
+		return (custom_kobold_endpoint != "" && koboldcpp_version && koboldcpp_version != "" && compare_version_str(koboldcpp_version, "1.61") >= 0 && koboldcpp_has_txt2img);
 	}
 
 	function determine_if_ban_eos(input_was_empty) {
@@ -14965,7 +14969,18 @@ Current version indicated by LITEVER below.
 
 	function add_img_btn_auto() {
 		if (localsettings.generate_images_mode==0) {
-			msgbox("Error: No Image Generator Selected.\nPlease select an Image Generation option in Media Settings first.","No Image Generator")
+			if (is_using_kcpp_with_imagegen()) {
+				msgboxYesNo("Error: No Image Generator Selected.\nPlease select an Image Generation option in Media Settings first.\n\nKoboldCpp with Image Generation support was detected!\nEnable KoboldCpp Image Generation?", "No Image Generator",()=>{
+					localsettings.generate_images_mode = 2;
+					localsettings.saved_a1111_url = custom_kobold_endpoint;
+					connect_to_a1111(true);
+					update_genimg_button_visiblility();
+				},()=>{});
+			}
+			else
+			{
+				msgbox("Error: No Image Generator Selected.\nPlease select an Image Generation option in Media Settings first.","No Image Generator")
+			}
 			return;
 		}
 		let truncated_context = concat_gametext(true, "");
@@ -14984,7 +14999,18 @@ Current version indicated by LITEVER below.
 	function add_img_btn_custom()
 	{
 		if (localsettings.generate_images_mode==0) {
-			msgbox("Error: No Image Generator Selected.\nPlease select an Image Generation option in Media Settings first.","No Image Generator")
+			if (is_using_kcpp_with_imagegen()) {
+				msgboxYesNo("Error: No Image Generator Selected.\nPlease select an Image Generation option in Media Settings first.\n\nKoboldCpp with Image Generation support was detected!\nEnable KoboldCpp Image Generation?", "No Image Generator",()=>{
+					localsettings.generate_images_mode = 2;
+					localsettings.saved_a1111_url = custom_kobold_endpoint;
+					connect_to_a1111(true);
+					update_genimg_button_visiblility();
+				},()=>{});
+			}
+			else
+			{
+				msgbox("Error: No Image Generator Selected.\nPlease select an Image Generation option in Media Settings first.","No Image Generator")
+			}
 			return;
 		}
 		inputBoxOkCancel("Enter a custom prompt to generate an image with.","Generate Image Manually","","Enter a Prompt",()=>{
@@ -15420,9 +15446,15 @@ Current version indicated by LITEVER below.
 	function manual_tts(from_settings_pane)
 	{
 		let ssval = from_settings_pane?document.getElementById("ttsselect").value:localsettings.speech_synth;
-		if(ssval==0)
-		{
-			msgbox("Error: No TTS Generator was selected!\nPlease select a Text-To-Speech option in Media Settings first.","No TTS Generator");
+		if (ssval == 0) {
+			if (is_using_kcpp_with_tts()) {
+				msgboxYesNo("Error: No TTS Generator was selected!\nPlease select a Text-To-Speech option in Media Settings first.\n\nKoboldCpp with TTS support was detected!\nEnable KoboldCpp TTS?", "No TTS Generator",()=>{
+					localsettings.speech_synth = KCPP_TTS_ID;
+					update_genimg_button_visiblility();
+				},()=>{});
+			} else {
+				msgbox("Error: No TTS Generator was selected!\nPlease select a Text-To-Speech option in Media Settings first.", "No TTS Generator");
+			}
 			return;
 		}
 		let speakprompt = "Enter phrase to speak. Currently selected TTS will be used.";
