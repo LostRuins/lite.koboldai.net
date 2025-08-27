@@ -3554,6 +3554,15 @@ Current version indicated by LITEVER below.
 		"system_end":"<|im_end|>\\n",
 	},
 	{
+		"name":"ChatML Non-Thinking",
+		"user":"<|im_start|>user\\n",
+		"user_end":"<|im_end|>\\n",
+		"assistant":"<|im_start|>assistant\\n<think>\\n\\n</think>\\n",
+		"assistant_end":"<|im_end|>\\n",
+		"system":"<|im_start|>system\\n",
+		"system_end":"<|im_end|>\\n",
+	},
+	{
 		"name":"CommandR",
 		"user":"<|START_OF_TURN_TOKEN|><|USER_TOKEN|>",
 		"user_end":"<|END_OF_TURN_TOKEN|>",
@@ -3563,10 +3572,19 @@ Current version indicated by LITEVER below.
 		"system_end":"<|END_OF_TURN_TOKEN|>",
 	},
 	{
-		"name":"Deepseek V2.5",
+		"name":"Deepseek v2.5 & v3",
 		"user":"<｜User｜>",
 		"user_end":"<｜end▁of▁sentence｜>",
 		"assistant":"<｜Assistant｜>",
+		"assistant_end":"<｜end▁of▁sentence｜>",
+		"system":"",
+		"system_end":"",
+	},
+	{
+		"name":"Deepseek v3.1 Non-Thinking",
+		"user":"<｜User｜>",
+		"user_end":"<｜end▁of▁sentence｜>",
+		"assistant":"<｜Assistant｜></think>",
 		"assistant_end":"<｜end▁of▁sentence｜>",
 		"system":"",
 		"system_end":"",
@@ -3581,7 +3599,7 @@ Current version indicated by LITEVER below.
 		"system_end":"<end_of_turn>\\n",
 	},
 	{
-		"name":"GLM-4",
+		"name":"GLM-4 & 4.5",
 		"user":"<|user|>\\n",
 		"user_end":"",
 		"assistant":"<|assistant|>\\n",
@@ -3590,10 +3608,10 @@ Current version indicated by LITEVER below.
 		"system_end":"",
 	},
 	{
-		"name":"GLM-4 Non-Thinking",
+		"name":"GLM-4.5 Non-Thinking",
 		"user":"<|user|>\\n",
 		"user_end":"/nothink",
-		"assistant":"<|assistant|>\\n",
+		"assistant":"<|assistant|>\\n<think></think>",
 		"assistant_end":"",
 		"system":"<|system|>\\n",
 		"system_end":"",
@@ -3662,24 +3680,6 @@ Current version indicated by LITEVER below.
 		"system_end":"<|end|>\\n",
 	},
 	{
-		"name":"Vicuna",
-		"user":"\\nUSER: ",
-		"user_end":"",
-		"assistant":"\\nASSISTANT: ",
-		"assistant_end":"",
-		"system":"",
-		"system_end":"",
-	},
-	{
-		"name":"OpenAI Harmony",
-		"user":"<|start|>user<|message|>",
-		"user_end":"<|end|>",
-		"assistant":"<|start|>assistant<|channel|>final<|message|>",
-		"assistant_end":"<|end|>",
-		"system":"<|start|>developer<|message|>",
-		"system_end":"<|end|>",
-	},
-	{
 		"name":"Seed OSS",
 		"user":"<seed:bos>user\\n",
 		"user_end":"<seed:eos>",
@@ -3696,6 +3696,24 @@ Current version indicated by LITEVER below.
 		"assistant_end":"<seed:eos>",
 		"system":"<seed:bos>system\\n",
 		"system_end":"<seed:eos>",
+	},
+	{
+		"name":"Vicuna",
+		"user":"\\nUSER: ",
+		"user_end":"",
+		"assistant":"\\nASSISTANT: ",
+		"assistant_end":"",
+		"system":"",
+		"system_end":"",
+	},
+	{
+		"name":"OpenAI Harmony",
+		"user":"<|start|>user<|message|>",
+		"user_end":"<|end|>",
+		"assistant":"<|start|>assistant<|channel|>final<|message|>",
+		"assistant_end":"<|end|>",
+		"system":"<|start|>developer<|message|>",
+		"system_end":"<|end|>",
 	}
 	];
 
@@ -13558,6 +13576,7 @@ Current version indicated by LITEVER below.
 
 		localsettings.thinking_action = parseInt(document.getElementById("thinking_action").value);
 		localsettings.think_injected = parseInt(document.getElementById("think_injected").value);
+		update_think_warn();
 		localsettings.strip_thinking_mode = parseInt(document.getElementById("strip_thinking_mode").value);
 		localsettings.start_thinking_tag = document.getElementById("start_thinking_tag").value;
 		localsettings.stop_thinking_tag = document.getElementById("stop_thinking_tag").value;
@@ -22380,6 +22399,17 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	function update_think_warn()
+	{
+		if(document.getElementById("think_injected").value==2)
+		{
+			document.getElementById("preventthinkwarn").classList.remove("hidden");
+		}else
+		{
+			document.getElementById("preventthinkwarn").classList.add("hidden");
+		}
+	}
+
 	function populate_regex_replacers()
 	{
 		let regextablehtml = `
@@ -22430,6 +22460,7 @@ Current version indicated by LITEVER below.
 		}
 		document.getElementById("thinking_action").value = localsettings.thinking_action;
 		document.getElementById("think_injected").value = localsettings.think_injected;
+		update_think_warn();
 		document.getElementById("strip_thinking_mode").value = localsettings.strip_thinking_mode;
 		document.getElementById("start_thinking_tag").value = localsettings.start_thinking_tag;
 		document.getElementById("stop_thinking_tag").value = localsettings.stop_thinking_tag;
@@ -25808,14 +25839,14 @@ Current version indicated by LITEVER below.
 						<button type="button" title="Regex Replace" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="expand_tokens_section('expandthinking')">Expand Section</button>
 					</div>
 					<div id="expandthinking" class="hidden">
-						<div class="settinglabel justifyleft">This allows you to specify how to handle output from reasoning models, to hide, remove, or ignore the Chain-Of-Thought.</div>
+						<div class="settinglabel justifyleft">Specifies how to handle output from reasoning models, to hide, remove, or ignore the Chain-Of-Thought.</div>
 						<div style="padding:4px" class="settinglabel justifyleft">
-							Start Think: <input class="settinglabel miniinput" style="margin-left:4px;width:70px;" type="text" placeholder="(StartTag)" value="" id="start_thinking_tag">
+							Start Think: <input class="settinglabel miniinput" style="margin-left:4px;width:66px;" type="text" placeholder="(StartTag)" value="" id="start_thinking_tag">
 							<span style="margin-left: 4px;">Stop Think: </span>
-							<input class="settinglabel miniinput" style="margin-left:4px;width:70px;" type="text" placeholder="(StopTag)" value="" id="stop_thinking_tag">
+							<input class="settinglabel miniinput" style="margin-left:4px;width:66px;" type="text" placeholder="(StopTag)" value="" id="stop_thinking_tag">
 						</div>
 						<div style="padding:4px" class="settinglabel justifyleft">CoT Display: <span class="helpicon">?<span
-							class="helptext">Controls the visibility of thinking sections in the UI. Does not affect submitted thinking tags.</span></span><select class="form-control" style="margin-left:4px;height: 25px; font-size:12px; padding:2px;display:inline;width:120px" id="thinking_action">
+							class="helptext">Controls the visibility of thinking sections in the UI. Does not affect submitted thinking tags.</span></span><select class="form-control" style="margin-left:4px;height: 25px; font-size:12px; padding:2px;display:inline;width:90px" id="thinking_action">
 							<option value="0">Display</option>
 							<option value="1" selected>Collapse</option>
 							<option value="2">Hide</option>
@@ -25826,11 +25857,12 @@ Current version indicated by LITEVER below.
 							<option value="1" selected>Only Newest Thinking</option>
 							<option value="2">Exclude All Thinking</option>
 						</select></div>
-						<div style="padding:4px" class="settinglabel justifyleft">Insert Thinking: <select title="Force Insert Thinking Tag" class="form-control" style="margin-left:4px;height: 25px; font-size:12px; padding:2px;display:inline;width:160px" id="think_injected">
+						<div style="padding:4px" class="settinglabel justifyleft">Insert Thinking: <span class="helpicon">?<span
+							class="helptext">Controls whether thinking tags are inserted or not. Prevented Thinking can be unreliable, set Non-Thinking instruct tags instead!</span></span><select title="Force Insert Thinking Tag" class="form-control" style="margin-left:4px;height: 25px; font-size:12px; padding:2px;display:inline;width:90px" onchange="update_think_warn()" id="think_injected">
 								<option value="0" selected>Normal</option>
 								<option value="1">Forced</option>
 								<option value="2">Prevented</option>
-						</select></div>
+						</select><span id="preventthinkwarn" class="color_red hidden" style="margin-top:2px;margin-left:3px;">Prevented can be unreliable - set Non-Thinking instruct tags instead.</span></div>
 						<div style="padding:4px" class="settinglabel justifyleft">
 							<div class="justifyleft rowitem">Hide Streaming Thinking <span class="helpicon">?
 								<span class="helptext">Hides incomplete thoughts while streaming is in progress.</span>
