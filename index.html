@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 278;
+	const LITEVER = 279;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3153,11 +3153,13 @@ Current version indicated by LITEVER below.
 	const default_alltalk_base = "http://localhost:7851";
 	const default_comfy_base = "http://localhost:8188";
 
-	const XTTS_ID = 1000;
-	const ALLTALK_ID = 1001;
-	const OAI_TTS_ID = 1002;
-	const KCPP_TTS_ID = 1003;
-	const POLLINATIONS_TTS_ID = 1004;
+	const XTTS_ID = 1;
+	const ALLTALK_ID = 2;
+	const OAI_TTS_ID = 3;
+	const KCPP_TTS_ID = 4;
+	const POLLINATIONS_TTS_ID = 5;
+	const WEBBROWSER_TTS_ID = 6;
+
 	const HD_RES_PX = 768;
 	const VHD_RES_PX = 960;
 	const NO_HD_RES_PX = 512;
@@ -3369,10 +3371,11 @@ Current version indicated by LITEVER below.
 		inject_randomness_seed: 999,
 		request_logprobs: false,
 		persist_session: true,
-		speech_synth: 0, //0 is disabled, 1000 is xtts
+		tts_mode: 0, //0 is disabled
 		xtts_voice: "female_calm",
 		kcpp_tts_voice: "kobo",
 		oai_tts_voice: "alloy",
+		wb_tts_choice: 0,
 		kcpp_tts_json: "",
 		beep_on: false,
 		notify_on: false,
@@ -6365,9 +6368,9 @@ Current version indicated by LITEVER below.
 		{
 			fetch_image_models();
 		}
-		if(localsettings.speech_synth==XTTS_ID || localsettings.speech_synth==ALLTALK_ID)
+		if(localsettings.tts_mode==XTTS_ID || localsettings.tts_mode==ALLTALK_ID)
 		{
-			fetch_xtts_voices(true,localsettings.speech_synth==XTTS_ID);
+			fetch_xtts_voices(true,localsettings.tts_mode==XTTS_ID);
 		}
 		if(localsettings.generate_images_mode==2)
 		{
@@ -13029,26 +13032,24 @@ Current version indicated by LITEVER below.
 		document.getElementById("instruct_tag_format").innerHTML = inspresets;
 		edit_instruct_tag_format();
 
-		var ttshtml = "<option value=\"0\">Disabled</option>";
-		ttshtml += "<option value=\"1000\">XTTS API Server</option>";
-		ttshtml += "<option value=\"1001\">AllTalk API Server</option>";
-		ttshtml += "<option value=\"1002\">OpenAI-Compat. API Server</option>";
-		ttshtml += "<option value=\"1003\">KoboldCpp TTS API</option>";
-		ttshtml += "<option value=\"1004\">PollinationsAI TTS API</option>";
-
+		let wbvoices = "";
 		if ('speechSynthesis' in window) {
 			let voices = window.speechSynthesis.getVoices();
 			console.log("speech synth available: " + voices.length);
 			for (var i = 0; i < voices.length; ++i) {
-				ttshtml += "<option value=\"" + (i + 1) + "\">" + voices[i].name + "</option>";
+				wbvoices += `<option value="${i}">${voices[i].name}</option>`;
 			}
 		} else {
 			console.log("No speech synth available");
 		}
-		document.getElementById("ttsselect").innerHTML = ttshtml;
-		document.getElementById("ttsselect").value = localsettings.speech_synth;
+		document.getElementById("ttsselect").value = localsettings.tts_mode;
 		document.getElementById("kcpp_tts_voice").value = localsettings.kcpp_tts_voice;
 		document.getElementById("oai_tts_voice").value = localsettings.oai_tts_voice;
+		if(wbvoices)
+		{
+			document.getElementById("wb_tts_choice").innerHTML = wbvoices;
+			document.getElementById("wb_tts_choice").value = localsettings.wb_tts_choice;
+		}
 		kcpp_tts_json = localsettings.kcpp_tts_json;
 		toggle_tts_mode();
 		document.getElementById("beep_on").checked = localsettings.beep_on;
@@ -13341,7 +13342,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("btn_inner_genimg_custom").classList.remove("bg_gray");
 		}
 
-		if(localsettings.speech_synth==0)
+		if(localsettings.tts_mode==0)
 		{
 			document.getElementById("btn_inner_genspeech_custom").classList.add("bg_gray");
 		} else {
@@ -13587,10 +13588,11 @@ Current version indicated by LITEVER below.
 		}
 		localsettings.hide_think_stream = (document.getElementById("hide_think_stream").checked?true:false);
 
-		localsettings.speech_synth = document.getElementById("ttsselect").value;
+		localsettings.tts_mode = document.getElementById("ttsselect").value;
 		localsettings.xtts_voice = document.getElementById("xtts_voices").value;
 		localsettings.kcpp_tts_voice = document.getElementById("kcpp_tts_voice").value;
 		localsettings.oai_tts_voice = document.getElementById("oai_tts_voice").value?document.getElementById("oai_tts_voice").value:defaultsettings.oai_tts_voice;
+		localsettings.wb_tts_choice = document.getElementById("wb_tts_choice").value?document.getElementById("wb_tts_choice").value:0;
 		localsettings.kcpp_tts_json = kcpp_tts_json;
 		localsettings.beep_on = (document.getElementById("beep_on").checked?true:false);
 		localsettings.notify_on = (document.getElementById("notify_on").checked?true:false);
@@ -15462,13 +15464,13 @@ Current version indicated by LITEVER below.
 		}
 	}
 
-	function manual_tts(from_settings_pane)
+	function manual_tts()
 	{
-		let ssval = from_settings_pane?document.getElementById("ttsselect").value:localsettings.speech_synth;
+		let ssval = localsettings.tts_mode;
 		if (ssval == 0) {
 			if (is_using_kcpp_with_tts()) {
 				msgboxYesNo("Error: No TTS Generator was selected!\nPlease select a Text-To-Speech option in Media Settings first.\n\nKoboldCpp with TTS support was detected!\nEnable KoboldCpp TTS?", "No TTS Generator",()=>{
-					localsettings.speech_synth = KCPP_TTS_ID;
+					localsettings.tts_mode = KCPP_TTS_ID;
 					update_genimg_button_visiblility();
 				},()=>{});
 			} else {
@@ -15500,7 +15502,7 @@ Current version indicated by LITEVER below.
 			}
 			userinput = userinput.trim();
 			if (userinput != null && userinput!="" && ssval > 0) {
-				tts_speak(userinput,ssval,downloadtts,embedtts);
+				tts_speak(userinput,downloadtts,embedtts);
 			}
 		},true);
 	}
@@ -15512,8 +15514,18 @@ Current version indicated by LITEVER below.
 		document.getElementById("pollinations_tts_container").classList.add("hidden");
 		document.getElementById("alltalk_specific_controls").classList.add("hidden");
 		document.getElementById("kcpp_tts_container").classList.add("hidden");
+		document.getElementById("webbrowser_tts_container").classList.add("hidden");
+		document.getElementById("savenarrationsdiv").classList.add("hidden");
 
 		const selectedTTS = document.getElementById("ttsselect").value;
+
+		if (selectedTTS == 0) {
+			document.getElementById("narratedialogdiv").classList.add("hidden");
+			document.getElementById("narratetargetsdiv").classList.add("hidden");
+		} else {
+			document.getElementById("narratedialogdiv").classList.remove("hidden");
+			document.getElementById("narratetargetsdiv").classList.remove("hidden");
+		}
 
 		if(selectedTTS == XTTS_ID || selectedTTS == ALLTALK_ID) {
 			document.getElementById("xtts_container").classList.remove("hidden");
@@ -15524,12 +15536,15 @@ Current version indicated by LITEVER below.
 				adjust_alltalk_controls();
 			}
 			fetch_xtts_voices(true, selectedTTS == XTTS_ID);
+			document.getElementById("savenarrationsdiv").classList.remove("hidden");
 		}
 		else if(selectedTTS == OAI_TTS_ID) {
 			document.getElementById("oai_tts_container").classList.remove("hidden");
+			document.getElementById("savenarrationsdiv").classList.remove("hidden");
 		}else if(selectedTTS == POLLINATIONS_TTS_ID)
 		{
 			document.getElementById("pollinations_tts_container").classList.remove("hidden");
+			document.getElementById("savenarrationsdiv").classList.remove("hidden");
 		}
 		else if(selectedTTS == KCPP_TTS_ID) {
 			document.getElementById("kcpp_tts_container").classList.remove("hidden");
@@ -15540,6 +15555,11 @@ Current version indicated by LITEVER below.
 				document.getElementById("nokcpptts").classList.remove("hidden");
 			}
 			adjust_kcpptts_controls();
+			document.getElementById("savenarrationsdiv").classList.remove("hidden");
+		}
+		else if(selectedTTS == WEBBROWSER_TTS_ID)
+		{
+			document.getElementById("webbrowser_tts_container").classList.remove("hidden");
 		}
 	}
 
@@ -15648,21 +15668,15 @@ Current version indicated by LITEVER below.
 		reader.readAsDataURL(file);
 	}
 
-	function tts_speak(text, speech_synth_override=null, do_download=false, do_embed_tts=false)
+	function tts_speak(text, do_download=false, do_embed_tts=false)
 	{
 		if(!text || text=="" || text.trim()=="")
 		{
 			return;
 		}
-		let ssval = localsettings.speech_synth;
+		let ssval = localsettings.tts_mode;
 		let ssrate = localsettings.tts_speed;
 		let vcjson = localsettings.kcpp_tts_json;
-		if(speech_synth_override!=null)
-		{
-			ssval = speech_synth_override;
-			ssrate = document.getElementById("tts_speed").value;
-			vcjson = kcpp_tts_json;
-		}
 		if(localsettings.narrate_only_dialog)
 		{
 			// Remove text within asterisks and the asterisks, then trim
@@ -16013,11 +16027,17 @@ Current version indicated by LITEVER below.
 				}
 			}
 		}
-		else
+		else if(ssval==WEBBROWSER_TTS_ID)
 		{
+			let voicelist = window.speechSynthesis.getVoices();
+			let pickedvoice = localsettings.wb_tts_choice;
+			if(pickedvoice > voicelist.length)
+			{
+				pickedvoice = 0;
+			}
 			if ('speechSynthesis' in window) {
 				let utterance = new window.SpeechSynthesisUtterance(text);
-				utterance.voice = window.speechSynthesis.getVoices()[ssval - 1];
+				utterance.voice = voicelist[pickedvoice];
 				utterance.rate = ssrate;
 				window.speechSynthesis.speak(utterance);
 				utterance.onend = function(event) {
@@ -16246,11 +16266,11 @@ Current version indicated by LITEVER below.
 			waiting_for_tool_call = 0;
 			idle_timer = 0;
 			idle_triggered_counter = 0;
-			if (localsettings.speech_synth > 0)
+			if (localsettings.tts_mode > 0)
 			{
 				if(localsettings.narrate_targets==2)
 				{
-					tts_speak(newgen,null,false,localsettings.embed_narrations);
+					tts_speak(newgen,false,localsettings.embed_narrations);
 				}
 			}
 
@@ -19057,7 +19077,7 @@ Current version indicated by LITEVER below.
 			pending_context_postinjection = "";
 		}
 
-		if (localsettings.speech_synth > 0)
+		if (localsettings.tts_mode > 0)
 		{
 			if(localsettings.narrate_targets==2 && !localsettings.narrate_only_dialog)
 			{
@@ -19081,7 +19101,7 @@ Current version indicated by LITEVER below.
 
 			if(localsettings.narrate_targets != 0)
 			{
-				tts_speak(gentxtspeak,null,false,localsettings.embed_narrations);
+				tts_speak(gentxtspeak,false,localsettings.embed_narrations);
 			}
 		}
 
@@ -25542,9 +25562,15 @@ Current version indicated by LITEVER below.
 					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" style="width: 100%;">Text To Speech <span class="helpicon">?<span class="helptext">Enable Text-To-Speech to have your story automatically read to you.</span></span></div>
-							<select title="Text To Speech" class="form-control" id="ttsselect" style="font-size:12px;height:20px;padding:0;margin:0px 0 0;width:calc(100% - 35px);" onchange="toggle_tts_mode()">
+							<select title="Text To Speech" class="form-control" id="ttsselect" style="font-size:12px;height:20px;padding:0;margin:0px 0 0;width:calc(100%);" onchange="toggle_tts_mode()">
+								<option value="0">Disabled</option>
+								<option value="1">XTTS API Server</option>
+								<option value="2">AllTalk API Server</option>
+								<option value="3">OpenAI-Compat. API Server</option>
+								<option value="4">KoboldCpp TTS API</option>
+								<option value="5">PollinationsAI TTS API</option>
+								<option value="6">Browser Inbuilt TTS</option>
 							</select>
-							<button id="manual_tts" type="button" class="bg_green btn btn-primary" style="height:20px; width:30px; padding:2px 3px;font-size:11px; margin-left: 2px;" onclick="manual_tts(true)">Test</button>
 							<div id="xtts_container" class="settinglabel hidden">
 								<div>
 									<table width="100%"><tr>
@@ -25617,8 +25643,20 @@ Current version indicated by LITEVER below.
 								</table>
 								</div>
 							</div>
+							<div id="webbrowser_tts_container" class="settinglabel hidden">
+								<div class="inlinelabel" style="font-size: 11px;">
+									<div class="justifyleft" style="margin-top:4px">Voice: </div>
+									<select class="form-control" id="wb_tts_choice" style="width:calc(100% - 34px);font-size:12px;height:20px;padding:0;margin:2px">
+										<option value="0">Unavailable</option>
+									</select>
+								</div>
+								<div class="inlinelabel" style="font-size: 11px;">
+									<div class="justifyleft" style="margin-top:4px">Browser TTS Speed: </div>
+									<input title="Browser Narration Speed" type="text" inputmode="decimal" value="1" id="tts_speed" style="width:40px">
+								</div>
+							</div>
 						</div>
-						<div class="settinglabel">
+						<div class="settinglabel" id="narratetargetsdiv">
 							<div class="justifyleft settingsmall" title="Who should narration be triggered for?">Narration Triggered For </div>
 							<select title="Select Narrated Turns" id="narrate_targets" style="padding:1px; height:auto; width: 80px; font-size: 8pt; margin:0px 0px 0px auto;" class="form-control">
 								<option value="0">Nobody</option>
@@ -25626,17 +25664,13 @@ Current version indicated by LITEVER below.
 								<option value="2">Both Sides</option>
 							</select>
 						</div>
-						<div class="settinglabel">
+						<div class="settinglabel" id="narratedialogdiv">
 							<div class="justifyleft settingsmall"  title="If unchecked, only speak AI replies, not other text.">Narrate Only Dialog </div>
 							<input title="Narrate Only Dialog" type="checkbox" id="narrate_only_dialog" style="margin:0px 0px 0px auto;">
 						</div>
-						<div class="settinglabel">
+						<div class="settinglabel" id="savenarrationsdiv">
 							<div class="justifyleft settingsmall"  title="Try to save and embed TTS narration files into story if possible. Does not work for internal browser TTS. Not recommend due to large size.">Save Narrations </div>
 							<input title="Save Narrations" type="checkbox" id="embed_narrations" style="margin:0px 0px 0px auto;">
-						</div>
-						<div class="inlinelabel" style="font-size: 11px;">
-							<div class="justifyleft">Browser TTS Speed: </div>
-							<input title="Browser Narration Speed" type="text" inputmode="decimal" value="1" id="tts_speed" style="width:40px">
 						</div>
 
 
@@ -27023,7 +27057,7 @@ Current version indicated by LITEVER below.
 				Generate Image <button type="button" class="btn btn-primary bg_green" id="btn_inner_genimg_auto" onclick="add_img_btn_auto()">Automatic</button> <button type="button" class="btn btn-primary bg_green" id="btn_inner_genimg_custom" onclick="add_img_btn_custom()">From Prompt</button>
 			</div>
 			<div class="menutext">
-				Generate Speech <button type="button" class="btn btn-primary bg_green" id="btn_inner_genspeech_custom" onclick="manual_tts(false)">From Prompt</button>
+				Generate Speech <button type="button" class="btn btn-primary bg_green" id="btn_inner_genspeech_custom" onclick="manual_tts()">From Prompt</button>
 			</div>
 			<div class="menutext">
 				Capture From <button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_webcam()">Camera</button> <button type="button" class="btn btn-primary bg_green" onclick="add_img_btn_mic()">Microphone</button>
