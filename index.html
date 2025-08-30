@@ -3238,6 +3238,7 @@ Current version indicated by LITEVER below.
 	var custom_claude_model = "";
 	var uses_cors_proxy = false; //we start off attempting a direct connection. switch to proxy if that fails
 	var synchro_polled_response = null;
+	var synchro_polled_respimg = null; //sometimes a LLM response can also include an image.
 	var last_stop_reason = ""; //update stop reason if known
 	var synchro_pending_stream = ""; //used for storing incomplete streaming text
 	var streaming_was_thinking = false; //used as a switch to determine when thinking ends, to wrap output in tags
@@ -5704,8 +5705,13 @@ Current version indicated by LITEVER below.
 				synchro_polled_response = data.candidates[0].output;
 			}else if (custom_gemini_key != "" && data.candidates != null && data.candidates.length>0 && data.candidates[0].content && data.candidates[0].content.parts != null && data.candidates[0].content.parts.length>0) {
 				synchro_polled_response = "";
+				synchro_polled_respimg = null;
 				for(let x=0;x<data.candidates[0].content.parts.length;++x)
 				{
+					if(!synchro_polled_respimg && data.candidates[0].content.parts[x].inlineData && data.candidates[0].content.parts[x].inlineData.data)
+					{
+						synchro_polled_respimg = data.candidates[0].content.parts[x].inlineData.data;
+					}
 					if(!data.candidates[0].content.parts[x].text)
 					{
 						continue;
@@ -5869,6 +5875,10 @@ Current version indicated by LITEVER below.
 								{
 									for(let x=0;x<event.data.candidates[0].content.parts.length;++x)
 									{
+										if(!synchro_polled_respimg && event.data.candidates[0].content.parts[x].inlineData && event.data.candidates[0].content.parts[x].inlineData.data)
+										{
+											synchro_polled_respimg = event.data.candidates[0].content.parts[x].inlineData.data;
+										}
 										if(event.data.candidates[0].content.parts[x].thought)
 										{
 											streaming_was_thinking = true;
@@ -14526,6 +14536,7 @@ Current version indicated by LITEVER below.
 		pending_response_id = "";
 		poll_in_progress = false;
 		synchro_polled_response = null;
+		synchro_polled_respimg = null;
 		last_stop_reason = "";
 		synchro_pending_stream = "";
 		streaming_was_thinking = false;
@@ -14550,6 +14561,7 @@ Current version indicated by LITEVER below.
 		nextgeneratedimagemilestone = generateimagesinterval;
 		pending_response_id = "";
 		synchro_polled_response = null;
+		synchro_polled_respimg = null;
 		last_stop_reason = "";
 		synchro_pending_stream = "";
 		streaming_was_thinking = false;
@@ -16256,7 +16268,12 @@ Current version indicated by LITEVER below.
 		retry_in_progress = false;
 
 		//match the request for creating images in instruct modes
-		if(newgen!="" && localsettings.img_gen_from_instruct && localsettings.opmode == 4 && localsettings.generate_images_mode!=0 && localsettings.img_autogen_type!=2 && !newgen.includes("\n"))
+		let model_allow_imggen = localsettings.img_gen_from_instruct;
+		if(custom_gemini_key!="" && document.getElementById("custom_gemini_model").value=="gemini-2.5-flash-image-preview")
+		{
+			model_allow_imggen = false; //nano banana interferes with imggen instructions
+		}
+		if(newgen!="" && model_allow_imggen && localsettings.opmode == 4 && localsettings.generate_images_mode!=0 && localsettings.img_autogen_type!=2 && !newgen.includes("\n"))
 		{
 			let newgenlc = newgen.toLowerCase().trim();
 			if (newgenlc.startsWith("draw ") ||
@@ -17236,6 +17253,7 @@ Current version indicated by LITEVER below.
 			poll_ticks_passed = 0;
 			poll_in_progress = false;
 			synchro_polled_response = null;
+			synchro_polled_respimg = null;
 			last_stop_reason = "";
 			synchro_pending_stream = "";
 			streaming_was_thinking = false;
@@ -17751,7 +17769,7 @@ Current version indicated by LITEVER below.
 					payload["tools"] = [{"google_search": {}}];
 				}
 
-				if(mdlname.includes("gemini-2.5"))
+				if(mdlname.includes("gemini-2.5") && !mdlname.includes("image"))
 				{
 					if(!document.getElementById("usegeminithink").checked)
 					{
@@ -20181,6 +20199,15 @@ Current version indicated by LITEVER below.
 						show_abort_button(false);
 						render_gametext();
 						sync_multiplayer(false);
+					}
+					if(synchro_polled_respimg)
+					{
+						if(!synchro_polled_respimg.startsWith("data:image"))
+						{
+							synchro_polled_respimg = "data:image/png;base64," + synchro_polled_respimg;
+						}
+						self_upload_img(synchro_polled_respimg,"output_image");
+						synchro_polled_respimg = null;
 					}
 				}
 				else {
