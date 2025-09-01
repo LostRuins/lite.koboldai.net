@@ -5561,10 +5561,13 @@ Current version indicated by LITEVER below.
 			if(x.ok)
 			{
 				return x;
-			}else{
-				throw new Error('Error occurred while SSE streaming: ' + (x.statusText));
-				return null;
 			}
+			return x.text().then(errorBody => {
+				throw new Error(`Error occurred while SSE streaming: ${x.statusText} - ${errorBody}`);
+			}).catch(bodyReadError => {
+				throw new Error(`${bodyReadError}`);
+			});
+
 		})
 		.then(resp => {
 			resp.body
