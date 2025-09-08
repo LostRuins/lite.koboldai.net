@@ -10192,6 +10192,8 @@ Current version indicated by LITEVER below.
 			document.getElementById("choosesharecontainer").classList.contains("hidden") &&
 			document.getElementById("advancedloadfile").classList.contains("hidden") &&
 			document.getElementById("welcomecontainer").classList.contains("hidden") &&
+			document.getElementById("dynatempcontainer").classList.contains("hidden") &&
+			document.getElementById("secondepsamplecontainer").classList.contains("hidden") &&
 			document.getElementById("admincontainer").classList.contains("hidden")
 		);
 	}
@@ -10232,6 +10234,8 @@ Current version indicated by LITEVER below.
 		document.getElementById("choosesharecontainer").classList.add("hidden");
 		document.getElementById("advancedloadfile").classList.add("hidden");
 		document.getElementById("welcomecontainer").classList.add("hidden");
+		document.getElementById("dynatempcontainer").classList.add("hidden");
+		document.getElementById("secondepsamplecontainer").classList.add("hidden");
 		document.getElementById("admincontainer").classList.add("hidden");
 		stop_webcam();
 		mainmenu_untab(false);
@@ -10276,6 +10280,16 @@ Current version indicated by LITEVER below.
 		document.getElementById("dynatemp_outtemp").value = currtmp.toFixed(3);
 		preview_dynatemp(true);
 		document.getElementById("dynatempcontainer").classList.remove("hidden");
+	}
+
+	function confirm_2epsample()
+	{
+		document.getElementById("secondepsamplecontainer").classList.add("hidden");
+		document.getElementById("second_ep_overview").innerText = (document.getElementById("second_ep_qty").value>0 && document.getElementById("second_ep_url").value!=""?"ON":"OFF");
+	}
+	function show_2epsample()
+	{
+		document.getElementById("secondepsamplecontainer").classList.remove("hidden");
 	}
 
 	function explain_horde()
@@ -13039,6 +13053,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("smoothing_factor").value = localsettings.smoothing_factor;
 		document.getElementById("nsigma").value = localsettings.nsigma;
 		document.getElementById("dynatemp_overview").innerText = (localsettings.dynatemp_range!=0?"ON":"OFF");
+		document.getElementById("second_ep_overview").innerText = (localsettings.second_ep_qty>0 && localsettings.second_ep_url?"ON":"OFF");
 		document.getElementById("presence_penalty").value = localsettings.presence_penalty;
 		document.getElementById("sampler_seed").value = localsettings.sampler_seed;
 		document.getElementById("top_k").value =  document.getElementById("top_k_slide").value = localsettings.top_k;
@@ -13314,6 +13329,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("sampler_order").value = found.sampler_order.toString();
 			document.getElementById("presetsdesc").innerText = found.description;
 			document.getElementById("dynatemp_overview").innerText = (document.getElementById("dynatemp_range").value!=0?"ON":"OFF");
+			document.getElementById("second_ep_overview").innerText = (document.getElementById("second_ep_qty").value>0 && document.getElementById("second_ep_url").value!=""?"ON":"OFF");
 		}else{
 			document.getElementById("presetsdesc").innerText = "";
 		}
@@ -25598,16 +25614,10 @@ Current version indicated by LITEVER below.
 								<input title="Top N Sigma. 0 to deactivate. Range 0 to 5." class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="nsigma"></div>
 							</div>
 							<div class="settinglabel settingcell">
-								<div class="justifyleft settingsmall" style="width:100%">2ndEpSampleQty <span class="helpicon">?<span class="helptext">
+								<div class="justifyleft settingsmall" style="width:100%">SecondEpSampler <span class="helpicon">?<span class="helptext">
 									If enabled, sample N tokens from a second OpenAI Compatible endpoint first before a request. This can be useful for jailbreak purposes.</span></span></div>
 								<div class="justifyleft settingsmall" style="width:100%;">
-									<div style="display:flex;">
-										<div class="settingsmall" style="margin-left:2px;margin-right:2px;margin-top:4px;" title="Number of tokens to sample">Qty: </div> <input title="Token Quantity" class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="second_ep_qty">
-										<div class="settingsmall" style="margin-left:2px;margin-right:2px;margin-top:4px;" title="Model name to use">Model: </div> <input title="Model Name" class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="(Blank Model)" value="" id="second_ep_model">
-									</div>
-									<div style="display:flex; margin-top:2px">
-										<div class="settingsmall" style="margin-left:2px;margin-right:2px;margin-top:4px;" title="URL of second OpenAI Compatible Endpoint">Url: </div> <input title="Second OpenAI Compatible URL" class="settinglabel miniinput" type="text" placeholder="(Full /v1/completions URL)" value="" id="second_ep_url">
-									</div>
+									<button title="Second Endpoint Split Sampling" type="button" class="btn btn-primary" style="padding:2px 4px;font-size:9px;" onclick="show_2epsample()"><span id="second_ep_overview">OFF</span></button>
 								</div>
 							</div>
 						</div>
@@ -27210,6 +27220,34 @@ Current version indicated by LITEVER below.
 			</div>
 		</div>
 	</div>
+
+	<div class="popupcontainer flex hidden" id="secondepsamplecontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup flexsizevsmall">
+			<div class="popuptitlebar">
+				<div class="popuptitletext">Second Endpoint Sampling</div>
+			</div>
+			<div class="inlinelabel">
+				If enabled, sample N tokens from a second OpenAI Compatible endpoint first before a request. This can be useful for jailbreak purposes.<br><br>
+			</div>
+			<div class="inlinelabel">
+				<div class="justifyleft" style="padding:4px">Quantity: <span class="helpicon">?<span class="helptext">Number of tokens to sample. Set to 0 to disable.</span></span></div>
+				<input title="Token Quantity" class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="second_ep_qty">
+			</div>
+			<div class="inlinelabel">
+				<div class="justifyleft" style="padding:4px">Model: <span class="helpicon">?<span class="helptext">Model name to use in the API</span></span></div>
+				<input title="Model Name" class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="(Blank Model)" value="" id="second_ep_model">
+			</div>
+			<div class="inlinelabel">
+				<div class="justifyleft" style="padding:4px">URL: <span class="helpicon">?<span class="helptext">URL of second OpenAI Compatible Endpoint</span></span></div>
+				<input title="Second OpenAI Compatible URL" class="settinglabel miniinput" type="text" placeholder="(Full /v1/completions URL)" value="" id="second_ep_url">
+			</div>
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="confirm_2epsample()">Ok</button>
+			</div>
+		</div>
+	</div>
+
 
 	<div class="popupcontainer flex hidden" id="addmediacontainer">
 		<div class="popupbg flex"></div>
