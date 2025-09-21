@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 284;
+	const LITEVER = 285;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -4142,12 +4142,11 @@ Current version indicated by LITEVER below.
 	{
 		return !isNaN(parseFloat(n)) && isFinite(n);
 	}
+	function escapeRegExp(string) {
+		return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
+	}
 	function replaceAll(str, find, replace, caseInsensitive=false) //replace all occurances in string with string
 	{
-		function escapeRegExp(string) {
-			return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
-		}
-
 		return str.replace(new RegExp(escapeRegExp(find), (caseInsensitive?'gi':'g')), replace);
 	}
 	function rgb_to_hex(rgbColor) { //convert rgb color to hex
@@ -4939,7 +4938,9 @@ Current version indicated by LITEVER below.
 		{
 			return "";
 		}
-		return `${localsettings.start_thinking_tag}([\\s\\S]*?)${localsettings.stop_thinking_tag}`;
+		const safeStart = escapeRegExp(localsettings.start_thinking_tag);
+		const safeStop = escapeRegExp(localsettings.stop_thinking_tag);
+		return `${safeStart}([\\s\\S]*?)${safeStop}`;
 	}
 
 	function remove_all_instruct_tags(text)
@@ -15135,7 +15136,7 @@ Current version indicated by LITEVER below.
 				let matchiter = 0;
 				inputtxt = inputtxt.replace(/%ExpandBtn%(?:\n{0,2})?/g, function (m) {
 					let curr = matches[matchiter];
-					let expandedhtml = `<span><button type="button" title="Show Thoughts" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="toggle_hide_thinking(this)">Show Thoughts (${curr.length} characters)</button><span class="color_lightgreen hidden"><br>${escape_html(curr)}</span><br></span>`;
+					let expandedhtml = `<span><button type="button" title="Show Thoughts" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="toggle_hide_thinking(this)">Show Thoughts (${curr.length} characters)</button><span class="color_lightgreen hidden"><br>${escape_html(curr)}\n</span><br></span>`;
 					if(!curr || curr.trim()=="" || curr.trim()=="/nothink" || curr.trim()==`${localsettings.start_thinking_tag}${localsettings.stop_thinking_tag}`)
 					{
 						expandedhtml = `<span><button type="button" title="No Thoughts" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="">No Thoughts</button><br></span>`;
