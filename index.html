@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 285;
+	const LITEVER = 286;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -4151,6 +4151,15 @@ Current version indicated by LITEVER below.
 	{
 		return str.replace(new RegExp(escapeRegExp(find), (caseInsensitive?'gi':'g')), replace);
 	}
+	function literalReplace(str, search, replacement) {
+		// Handle edge cases
+		if (search === null || search === undefined || str === null || str === undefined || search === "") {
+			return str;
+		}
+		const index = str.indexOf(search);
+		if (index === -1) { return str; }
+		return str.slice(0, index) + replacement + str.slice(index + search.length);
+	}
 	function rgb_to_hex(rgbColor) { //convert rgb color to hex
 		rgbColor = rgbColor.split("(")[1];
 		rgbColor = rgbColor.split(")")[0];
@@ -6447,6 +6456,23 @@ Current version indicated by LITEVER below.
 			}
 			return outp + "</table>";
 		};
+		function stashLatex(text) { //this function preserves the contents of multiline latex blocks so they don't get corrupted by markdown
+			const latexBlocks = [];
+			let counter = 0;
+			text = text.replace(/(^ {0,6}\\\[\n([\s\S]*?)\n {0,6}\\\] {0,2}$|^\$\$\n([\s\S]*?)\n\$\$$|^ {2}\$\$\n {2}([\s\S]*?)\n {2}\$\$$|\$\$([^\n]+?)\$\$|\\\(([^\n]+?)\\\)|\\\[([^\n]+?)\\\])/gm, (match, p1, p2, p3, p4, p5, p6, p7) => {
+				const key = `%%LATEXBLK${counter++}%%`;
+				latexBlocks.push({ key, value: match });
+				return key;
+			});
+			return { "text":text, "latexBlocks":latexBlocks };
+		}
+		function unstashLatex(text, latexBlocks) {
+			for(let i=0;i<latexBlocks.length;++i)
+			{
+				text = literalReplace(text,latexBlocks[i].key,latexBlocks[i].value);
+			}
+			return text;
+		}
 		const replaceLatex = (input) =>{
 			//all latex patterns except inline tex
 			input = input.replace(/^<blockquote>(\\\[\n[\s\S]*?\n\\\]) {0,2}<\/blockquote> {0,2}$/gm, (match, p1) => {
@@ -6461,6 +6487,10 @@ Current version indicated by LITEVER below.
 				{
 					return match;
 				}
+				if(p6 && p6.startsWith("$")) //buggy match, do not proceed
+				{
+					return match;
+				}
 				return leadingWhitespace + temml.renderToString(content); // render LaTeX content
 			});
 			input = input.replace(/^<blockquote>\n([\s\S]*?)\n<\/blockquote>/gm, (match, p1) => {
@@ -6470,6 +6500,10 @@ Current version indicated by LITEVER below.
 				let content = p1;
 				content = unescape_html(content);
 				if(content.replace(/\s+/g, '').match(/^\${1,}$/)) //only dollar signs, just return
+				{
+					return match;
+				}
+				if(p1 && p1.startsWith("$")) //buggy match, do not proceed
 				{
 					return match;
 				}
@@ -6539,6 +6573,13 @@ Current version indicated by LITEVER below.
 				append_spcetg = true;
 			}
 
+			let stashres = null;
+			if(renderLatex)
+			{
+				stashres = stashLatex(md);
+				md = stashres.text;
+			}
+
 			md = md.replace(/^###### (.*?)\s*#*$/gm, "<h6>$1</h6>")
 			.replace(/^##### (.*?)\s*#*$/gm, "<h5>$1</h5>")
 			.replace(/^#### (.*?)\s*#*$/gm, "<h4>$1</h4>")
@@ -6606,6 +6647,10 @@ Current version indicated by LITEVER below.
 			md = md.replace(/<\/code\><\/pre\>\n<pre\><code\>/g, "\n");
 			if(renderLatex)
 			{
+				if(stashres!=null)
+				{
+					md = unstashLatex(md,stashres.latexBlocks);
+				}
 				//to aid the latex renderer, we temporarily add newlines between some blocks
 				md = md.replace(/<\/li><li>/gm, "</li>\n<li>");
 				md = replaceLatex(md);
