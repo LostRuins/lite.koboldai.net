@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 286;
+	const LITEVER = 287;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3648,6 +3648,7 @@ Current version indicated by LITEVER below.
 		saved_cohere_preamble: "", //cohere preamble
 		saved_palm_jailbreak:"", //gemini system prompt
 		saved_palm_jailbreak2:"", //gemini postfix
+		saved_openrouter_provider:"",
 		saved_oai_custommodel: "", //customized oai custom model
 		saved_oai_role: 3, //0=user,1=assistant,2=system, 3=auto
 		saved_a1111_url: default_a1111_base,
@@ -8001,7 +8002,7 @@ Current version indicated by LITEVER below.
 			savenowfn();
 		}
 	}
-	function save_file_button(save_file_obj=null) //if null, generate new savefile, otherwise use provided
+	function save_file_button(save_file_obj=null,nameprompt="") //if null, generate new savefile, otherwise use provided
 	{
 		warn_unsaved = false;
 		const save_file = function()
@@ -8010,7 +8011,12 @@ Current version indicated by LITEVER below.
 			{
 				save_file_obj = generate_savefile(localsettings.save_images, localsettings.export_settings, localsettings.export_settings);
 			}
-			saveFileGeneric(localsettings.last_known_filename, JSON.stringify(save_file_obj), "application/json");
+			let suggestname = localsettings.last_known_filename;
+			if(nameprompt!="" && !localsettings.prompt_for_savename)
+			{
+				suggestname = sanitizeAlphanumeric(sanitizeAlphanumeric(nameprompt," ").trim(),"_");
+			}
+			saveFileGeneric(suggestname, JSON.stringify(save_file_obj), "application/json");
 		}
 
 		if(localsettings.prompt_for_savename)
@@ -11389,6 +11395,7 @@ Current version indicated by LITEVER below.
 				document.getElementById("custom_openrouter_model").classList.remove("hidden");
 				document.getElementById("openrouterproviderbox").classList.remove("hidden");
 				document.getElementById("custom_oai_endpoint").value = default_openrouter_base;
+				document.getElementById("openrouterproviders").value = localsettings.saved_openrouter_provider;
 				document.getElementById("custom_oai_key").value =(localsettings.saved_openrouter_key==dummy_api_key?"":localsettings.saved_openrouter_key);
 				try_fetch_oai_models_auto();
 			}
@@ -11950,6 +11957,7 @@ Current version indicated by LITEVER below.
 				else
 				{
 					localsettings.saved_openrouter_key = custom_oai_key;
+					localsettings.saved_openrouter_provider = document.getElementById("openrouterproviders").value;
 				}
 				localsettings.saved_oai_jailbreak = document.getElementById("jailbreakprompttext").value;
 				if(localsettings.saved_oai_jailbreak=="")
@@ -12655,11 +12663,26 @@ Current version indicated by LITEVER below.
 	}
 	function download_from_slot(slot,islocal)
 	{
+		let slotlabel = "";
+		if(islocal)
+		{
+			if(cachedsaveslotlabels && slot<cachedsaveslotlabels.length)
+			{
+				slotlabel = cachedsaveslotlabels[slot];
+			}
+		}
+		else
+		{
+			if(netsaveslotlabels && slot<netsaveslotlabels.length)
+			{
+				slotlabel = netsaveslotlabels[slot];
+			}
+		}
 		let ondl = function (loadedstorycompressed) {
 			if (loadedstorycompressed) {
 				let storyobj = decompress_story(loadedstorycompressed);
 				if (storyobj) {
-					save_file_button(storyobj);
+					save_file_button(storyobj,slotlabel);
 				}
 				else {
 					msgbox("Story could not be downloaded. Try loading it first.", "Download Failed");
@@ -23784,8 +23807,8 @@ Current version indicated by LITEVER below.
 		let v = isNaN(val) ? 0 : val;
 		return clamp(v, min, max);
 	};
-	function sanitizeAlphanumeric(str) {
-		return str.replace(/[^a-zA-Z0-9]/g, '');
+	function sanitizeAlphanumeric(str,replacer="") {
+		return str.replace(/[^a-zA-Z0-9]/g, replacer);
 	}
 	const stableSort = (arr, compare) => {
 	return arr.map((item, index) => ({ item, index }))
