@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 287;
+	const LITEVER = 288;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -6099,15 +6099,24 @@ Current version indicated by LITEVER below.
 				}
 				else if (dch.message) {
 					synchro_polled_response = dch.message.content;
+					let reasoningtxt = "";
 					if(dch.message.reasoning_content!=null && dch.message.reasoning_content!="") //vllm compat
+					{
+						reasoningtxt = dch.message.reasoning_content;
+					}
+					else if(dch.message.reasoning!=null && dch.message.reasoning!="") //vllm compat
+					{
+						reasoningtxt = dch.message.reasoning;
+					}
+					if(reasoningtxt!="")
 					{
 						if(dch.message.content==null)
 						{
-							synchro_polled_response = dch.message.reasoning_content;
+							synchro_polled_response = reasoningtxt;
 						}
 						else
 						{
-							synchro_polled_response = `${localsettings.start_thinking_tag}${dch.message.reasoning_content}${localsettings.stop_thinking_tag}${dch.message.content}`;
+							synchro_polled_response = `${localsettings.start_thinking_tag}${reasoningtxt}${localsettings.stop_thinking_tag}${dch.message.content}`;
 						}
 					}
 
@@ -6253,6 +6262,11 @@ Current version indicated by LITEVER below.
 								{
 									streaming_was_thinking = true;
 									synchro_pending_stream += event.data.choices[0].delta.reasoning_content;
+								}
+								else if(event.data.choices[0].delta && !event.data.choices[0].delta.content && event.data.choices[0].delta.reasoning!=null&& event.data.choices[0].delta.reasoning!="")
+								{
+									streaming_was_thinking = true;
+									synchro_pending_stream += event.data.choices[0].delta.reasoning;
 								}
 
 								//mistral prefill interception
