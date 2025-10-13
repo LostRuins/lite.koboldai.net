@@ -6490,12 +6490,35 @@ Current version indicated by LITEVER below.
 				latexBlocks.push({ key, value: match });
 				return key;
 			});
-			return { "text":text, "latexBlocks":latexBlocks };
+			return { "text":text, "blocks":latexBlocks };
 		}
 		function unstashLatex(text, latexBlocks) {
 			for(let i=0;i<latexBlocks.length;++i)
 			{
 				text = literalReplace(text,latexBlocks[i].key,latexBlocks[i].value);
+			}
+			return text;
+		}
+		function stashCodeblocks(text)
+		{
+			const codeBlocks = [];
+			let counter = 0;
+			text = text.replace(/``(.*?)``/gm, (match, code) => {
+				const key = `%%ILCODEXBLK${counter++}%%`;
+				codeBlocks.push({ key, value: match });
+				return key;
+			});
+			text = text.replace(/`(.*?)`/gm, (match, code) => {
+				const key = `%%ILCODEXBLK${counter++}%%`;
+				codeBlocks.push({ key, value: match });
+				return key;
+			});
+			return { "text":text, "blocks":codeBlocks };
+		}
+		function unstashCodeblocks(text, codeBlocks) {
+			for(let i=0;i<codeBlocks.length;++i)
+			{
+				text = literalReplace(text,codeBlocks[i].key,codeBlocks[i].value);
 			}
 			return text;
 		}
@@ -6599,12 +6622,14 @@ Current version indicated by LITEVER below.
 				append_spcetg = true;
 			}
 
-			let stashres = null;
+			let stashLatexRes = null;
 			if(renderLatex)
 			{
-				stashres = stashLatex(md);
-				md = stashres.text;
+				stashLatexRes = stashLatex(md);
+				md = stashLatexRes.text;
 			}
+			let stashInlineCodeRes = stashCodeblocks(md);
+			md = stashInlineCodeRes.text;
 
 			md = md.replace(/^###### (.*?)\s*#*$/gm, "<h6>$1</h6>")
 			.replace(/^##### (.*?)\s*#*$/gm, "<h5>$1</h5>")
@@ -6614,9 +6639,6 @@ Current version indicated by LITEVER below.
 			.replace(/^# (.*?)\s*#*$/gm, "<h1>$1</h1>")
 			.replace(/^<h(\d)\>(.*?)\s*{(.*)}\s*<\/h\d\>$/gm,'<h$1 id="$3">$2</h$1>')
 			.replace(/^-{3,}|^\_{3,}|^\*{3,}$/gm, "<hr/>")
-			.replace(/``(.*?)``/gm, (match, code) => {
-				return `<code>${escapeHTML(code).replace(/`/g, "`")}</code>`;})
-			.replace(/`(.*?)`/gm, "<code>$1</code>")
 			.replace(/^\>\> (.*$)/gm, "<blockquote><blockquote>$1</blockquote></blockquote>")
 			.replace(/^&gt;&gt; (.*$)/gm, "<blockquote><blockquote>$1</blockquote></blockquote>")
 			.replace(/^\> (.*$)/gm, "<blockquote>$1</blockquote>")
@@ -6658,12 +6680,24 @@ Current version indicated by LITEVER below.
 			.replace(/\*([^\s*][\s\S]*?[^\\])\*/gm, "<em>$1</em>")
 			.replace(/___(\w.*?[^\\])___/gm, "<b><em>$1</em></b>")
 			.replace(/__(\w.*?[^\\])__/gm, "<u>$1</u>")
+			.replace(/(^|[\s.,;:!?<>])_([^_\s](?:[^_]*[^_\s])?)_(?=[\s.,;:!?<>]|$)/g, "$1<em>$2</em>") //single underscore italics
 			.replace(/~~(\w.*?)~~/gm, "<del>$1</del>")
 			.replace(/\^\^(\w.*?)\^\^/gm, "<ins>$1</ins>")
 			.replace(/\{\{(\w.*?)\}\}/gm, "<mark>$1</mark>")
 			.replace(/^((?:\|[^|\r\n]*[^|\r\n\s]\s*)+\| {0,2}(?:\r?\n|\r|))+/gm,
 				(matchedTable) => convertMarkdownTableToHtml(matchedTable));
 			//.replace(/  \n/g, "\n<br/>"); //this is the reddit behavior where spacespacenewline generates extra newline
+
+
+			//unstash inline code
+			if(stashInlineCodeRes!=null)
+			{
+				md = unstashCodeblocks(md,stashInlineCodeRes.blocks);
+			}
+			md = md.replace(/``(.*?)``/gm, (match, code) => {
+				return `<code>${escapeHTML(code).replace(/`/g, "`")}</code>`;})
+			.replace(/`(.*?)`/gm, "<code>$1</code>");
+
 			if(append_spcetg)
 			{
 				append_spcetg = false;
@@ -6673,9 +6707,9 @@ Current version indicated by LITEVER below.
 			md = md.replace(/<\/code\><\/pre\>\n<pre\><code\>/g, "\n");
 			if(renderLatex)
 			{
-				if(stashres!=null)
+				if(stashLatexRes!=null)
 				{
-					md = unstashLatex(md,stashres.latexBlocks);
+					md = unstashLatex(md,stashLatexRes.blocks);
 				}
 				//to aid the latex renderer, we temporarily add newlines between some blocks
 				md = md.replace(/<\/li><li>/gm, "</li>\n<li>");
