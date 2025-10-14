@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 288;
+	const LITEVER = 289;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -4351,6 +4351,58 @@ Current version indicated by LITEVER below.
 		return input;
 	}
 
+	//written by AI. splits a long string by provided delimiters in an array, returns an array
+	function splitByDelimiters(text, delimiters) {
+		const result = [];
+		const n = text.length;
+		let i = 0;
+
+		while (i < n) {
+			// Find the next delimiter occurrence at or after i
+			let nextIndex = -1;
+			let nextDelimiter = null;
+			for (const d of delimiters) {
+				const idx = text.indexOf(d, i);
+				if (idx !== -1 && (nextIndex === -1 || idx < nextIndex)) {
+					nextIndex = idx;
+					nextDelimiter = d;
+				}
+			}
+
+			if (nextIndex === -1) { // If no delimiter found at all, push the rest and finish
+				if (i < n) {
+					result.push(text.slice(i));
+				}
+				break;
+			}
+
+			// If there's text before the found delimiter, push that leading text first
+			if (nextIndex > i) {
+				result.push(text.slice(i, nextIndex));
+			}
+
+			// Now find the next delimiter after this one to mark end of this segment
+			let nextAfter = -1;
+			for (const d of delimiters) {
+				const idx = text.indexOf(d, nextIndex + nextDelimiter.length);
+				if (idx !== -1 && (nextAfter === -1 || idx < nextAfter)) {
+					nextAfter = idx;
+				}
+			}
+
+			// Take from the delimiter start up to the next delimiter (or end)
+			if (nextAfter === -1) {
+				result.push(text.slice(nextIndex));
+				break;
+			} else {
+				result.push(text.slice(nextIndex, nextAfter));
+				i = nextAfter;
+			}
+		}
+
+		return result;
+	}
+
 	function asyncRunner(generatorFn) { //allows async/await like syntax before it exists
 		return function (...args) {
 			const generator = generatorFn.apply(this, args);
@@ -4933,7 +4985,7 @@ Current version indicated by LITEVER below.
 			return replaceAll(instag, "\\n", "\n");
 		}
 	}
-	function get_instruct_latest_end(doTrim=true)
+	function get_instruct_latest_end()
 	{
 		//scan history for the newest end tag. if none, return empty
 		let truncated_context = concat_gametext(true, "");
@@ -4950,6 +5002,23 @@ Current version indicated by LITEVER below.
 		if (maxIndex === lastA) return get_instructstartplaceholder_end();
 		if (maxIndex === lastB) return get_instructendplaceholder_end();
 		return instructsysplaceholder_end;
+	}
+	function is_instruct_latest_human_turn() //returns true if current latest turn is from the user
+	{
+		//scan history for the newest end tag. if none, return empty
+		let truncated_context = concat_gametext(true, "");
+		let strA = get_instructstartplaceholder().trim();
+		let strB = get_instructendplaceholder().trim();
+		let strC = get_instructsysplaceholder().trim();
+		let lastA = strA?truncated_context.lastIndexOf(strA):-1;
+		let lastB = strB?truncated_context.lastIndexOf(strB):-1;
+		let lastC = strC?truncated_context.lastIndexOf(strC):-1;
+
+		const maxIndex = Math.max(lastA, lastB, lastC);
+
+		if (maxIndex === -1 || lastA === -1) return false;
+		if (maxIndex === lastA) return true;
+		return false;
 	}
 	function get_current_timestamp()
 	{
@@ -16723,7 +16792,7 @@ Current version indicated by LITEVER below.
 		let ist = get_instructstartplaceholder();
 		let iet = get_instructendplaceholder();
 		let iste = get_instructstartplaceholder_end();
-		let prev_et = get_instruct_latest_end(false);
+		let prev_et = get_instruct_latest_end();
 
 		if(newgen != "")
 		{
@@ -16847,6 +16916,21 @@ Current version indicated by LITEVER below.
 			if (localsettings.opmode == 4)
 			{
 				newgen = wrap_newgen_instruct_format(newgen,true);
+				let latest_human = is_instruct_latest_human_turn();
+				if(newgen=="" && latest_human) //assume the user is trying to get the AI to respond even though there's no output tag
+				{
+					//so we force one
+					let iet = get_instructendplaceholder();
+					let iste = get_instructstartplaceholder_end();
+					if(localsettings.separate_end_tags)
+					{
+						newgen = iste + iet;
+					}
+					else
+					{
+						newgen = iet;
+					}
+				}
 			}
 			if (localsettings.opmode == 3 && newgen != "") {
 				newgen = wrap_newgen_chat_format(newgen);
@@ -20994,53 +21078,110 @@ Current version indicated by LITEVER below.
 				let fullmergedstory = gametext_elem.innerText;
 
 				let newestChunk = "";
-				if(editedChunks.length>1) //split by chunk lengths in reverse order, we only want the newest
-				{
 
-					let cl = editedChunks[editedChunks.length-1].length;
-					if(cl>0)
+				//if we're in instruct mode AND there is at least 1 instruct tag in history, split by tags
+				let splitbyinsttags = false;
+				if(localsettings.opmode==4)
+				{
+					let strA = get_instructstartplaceholder();
+					let strB = get_instructendplaceholder();
+					if(fullmergedstory.includes(strA)||fullmergedstory.includes(strB))
 					{
-						newestChunk = fullmergedstory.slice(-cl);
-						fullmergedstory = fullmergedstory.slice(0,-cl);
+						splitbyinsttags = true;
 					}
 				}
 
-				//if it ends with a single newline, remove it to avoid ghost newlines
-				if (newestChunk) {
-					if (newestChunk.endsWith("\n") && !newestChunk.endsWith("\n\n")) {
-						newestChunk = newestChunk.slice(0, -1);
+				if(splitbyinsttags)
+				{
+					let ins = get_instructstartplaceholder();
+					let ine = get_instructendplaceholder();
+					let delimiters = [ins,ine];
+					let turns = splitByDelimiters(fullmergedstory,delimiters);
+					//if an input turn is followed by an output turn, the input acquires the output tag
+					for(let i=0;i<turns.length;++i)
+					{
+						let temp = "";
+						if(turns[i].startsWith(ins))
+						{
+							temp = ins;
+							turns[i] = turns[i].substring(ins.length);
+						}
+						else if(turns[i].startsWith(ine))
+						{
+							temp = ine;
+							turns[i] = turns[i].substring(ine.length);
+						}
+						let subturns = splitByDelimiters(turns[i],[ins.trim(),ine.trim()]);
+						subturns[0] = temp + subturns[0];
+    					turns.splice(i, 1); // Remove the current element, insert all subturns
+						for (let j = subturns.length - 1; j >= 0; j--) {
+							turns.splice(i, 0, subturns[j]);
+						}
+						i += subturns.length - 1; // Adjust the index to account for the new elements
+					}
+					for(let i=0;i<turns.length-1;++i)
+					{
+						if(turns[i].startsWith(ins) && turns[i+1].startsWith(ine))
+						{
+							//transfer the ine from turn i+1 and append it to the end of turn i
+							turns[i+1] = turns[i+1].substring(ine.length); // Remove ine from the start of next turn
+							turns[i] = turns[i] + ine; // Append ine to the current turn
+						}
+					}
+					for(let i=0;i<turns.length;++i)
+					{
+						gametext_arr.push(turns[i]);
 					}
 				}
 				else
 				{
-					if (fullmergedstory.endsWith("\n") && !fullmergedstory.endsWith("\n\n")) {
-						fullmergedstory = fullmergedstory.slice(0, -1);
-					}
-				}
-
-				//split by newlines for the rest
-				if(fullmergedstory.length>0)
-				{
-					let splittertoken = "\n";
-					if (fullmergedstory.includes("\n\n")) {
-						splittertoken = "\n\n";
-					}
-					let splitmergedstory = fullmergedstory.split(splittertoken);
-					for (var i = 0; i < splitmergedstory.length; ++i) {
-						if (i != 0) {
-							gametext_arr.push(splittertoken + splitmergedstory[i]);
-						} else {
-							gametext_arr.push(splitmergedstory[i]);
+					if(editedChunks.length>1) //split by chunk lengths in reverse order, we only want the newest
+					{
+						let cl = editedChunks[editedChunks.length-1].length;
+						if(cl>0)
+						{
+							newestChunk = fullmergedstory.slice(-cl);
+							fullmergedstory = fullmergedstory.slice(0,-cl);
 						}
 					}
-				}
-				if(newestChunk!="")
-				{
-					//little hack to merge a row with only a newline into the last chunk
-					if (gametext_arr.length > 0 && gametext_arr[gametext_arr.length - 1] == "\n") {
-						gametext_arr[gametext_arr.length - 1] += newestChunk;
-					} else {
-						gametext_arr.push(newestChunk);
+
+					//if it ends with a single newline, remove it to avoid ghost newlines
+					if (newestChunk) {
+						if (newestChunk.endsWith("\n") && !newestChunk.endsWith("\n\n")) {
+							newestChunk = newestChunk.slice(0, -1);
+						}
+					}
+					else
+					{
+						if (fullmergedstory.endsWith("\n") && !fullmergedstory.endsWith("\n\n")) {
+							fullmergedstory = fullmergedstory.slice(0, -1);
+						}
+					}
+
+					//split by newlines for the rest
+					if(fullmergedstory.length>0)
+					{
+						let splittertoken = "\n";
+						if (fullmergedstory.includes("\n\n")) {
+							splittertoken = "\n\n";
+						}
+						let splitmergedstory = fullmergedstory.split(splittertoken);
+						for (var i = 0; i < splitmergedstory.length; ++i) {
+							if (i != 0) {
+								gametext_arr.push(splittertoken + splitmergedstory[i]);
+							} else {
+								gametext_arr.push(splitmergedstory[i]);
+							}
+						}
+					}
+					if(newestChunk!="")
+					{
+						//little hack to merge a row with only a newline into the last chunk
+						if (gametext_arr.length > 0 && gametext_arr[gametext_arr.length - 1] == "\n") {
+							gametext_arr[gametext_arr.length - 1] += newestChunk;
+						} else {
+							gametext_arr.push(newestChunk);
+						}
 					}
 				}
 
