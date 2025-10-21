@@ -3424,7 +3424,7 @@ Current version indicated by LITEVER below.
 
 	const claude_submit_endpoint = "/complete";
 	const claude_submit_endpoint_v3 = "/messages";
-	const claude_models_endpoint = "/v1/models";
+	const claude_models_endpoint = "/models";
 
 	const default_openrouter_base = "https://openrouter.ai/api/v1";
 	const default_mistralai_base = "https://api.mistral.ai/v1";
@@ -11239,15 +11239,18 @@ Current version indicated by LITEVER below.
 	{
 		let desired_claude_key = document.getElementById("custom_claude_key").value.trim();
 		let claude_ep = document.getElementById("custom_claude_endpoint").value.trim();
-		if(claude_ep.toLowerCase().includes("api.anthropic.com"))
-		{
-			//official API has broken cors settings
-			claude_ep = apply_proxy_url(claude_ep,true);
-		}
+
 		if(desired_claude_key=="")
 		{
 			msgbox("Claude requires an API key to fetch model list!");
 			return;
+		}
+
+		if (document.getElementById("claudeaddversion").checked)
+		{
+			if (claude_ep != "" && claude_ep.length > 4 && !claude_ep.slice(-4).toLowerCase().includes("/v")) {
+				claude_ep = claude_ep + "/v1";
+			}
 		}
 
 		let dropdown = document.getElementById("custom_claude_model");
@@ -11256,6 +11259,7 @@ Current version indicated by LITEVER below.
 			headers: {
 				'Content-Type': 'application/json',
 				'anthropic-version':'2023-06-01',
+				'anthropic-dangerous-direct-browser-access':true,
 				'x-api-key': desired_claude_key,
 			},
 			referrerPolicy: 'no-referrer',
@@ -12199,11 +12203,6 @@ Current version indicated by LITEVER below.
 			if(desired_claude_key!="" && desired_claude_ep!="")
 			{
 				dismiss_endpoint_container();
-
-				if(desired_claude_ep.toLowerCase().includes("api.anthropic.com"))
-				{
-					document.getElementById("connectstatusproxied").classList.remove("hidden");
-				}
 
 				//good to go
 				custom_claude_endpoint = desired_claude_ep;
@@ -18250,11 +18249,6 @@ Current version indicated by LITEVER below.
 				|| custom_claude_model.toLowerCase().includes("claude-opus-4");
 				let actualep = (custom_claude_endpoint + (claudev3mode?claude_submit_endpoint_v3:claude_submit_endpoint));
 				let targetep = actualep;
-				if(custom_claude_endpoint.toLowerCase().includes("api.anthropic.com"))
-				{
-					//official API has broken cors settings
-					targetep = apply_proxy_url(actualep,true);
-				}
 				let claude_payload = null;
 				if(claudev3mode)
 				{
@@ -18351,6 +18345,7 @@ Current version indicated by LITEVER below.
 					'Content-Type': 'application/json',
 					'x-api-key': custom_claude_key,
 					'Authorization': 'Bearer '+custom_claude_key,
+					'anthropic-dangerous-direct-browser-access': true,
 				};
 				if(claudev3mode)
 				{
@@ -27603,7 +27598,7 @@ Current version indicated by LITEVER below.
 			</div>
 			<div id="claudecustom" class="menutext hidden">
 				Entering your Claude API key will allow you to use KoboldAI Lite with their API.<br><br>
-				KoboldAI Lite takes no responsibility for your usage of this feature. <br><span class="color_red">At this time, the official Claude API has CORS restrictions and must be accessed with a CORS proxy. Your connection WILL be proxied.</span><br>Only Temperature, Top-P and Top-K samplers are used.<br><br>
+				KoboldAI Lite takes no responsibility for your usage of this feature. <br>Only Temperature, Top-P and Top-K samplers are used.<br><br>
 				<span class="color_green" style="font-weight: bold;">Please input Claude API URL and Key.</span><br><br>
 				<input class="form-control" type="text" id="custom_claude_endpoint" placeholder="Claude API URL" value="">
 				<input class="form-control" type="password" id="custom_claude_key" placeholder="Claude API Key (Required)" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
