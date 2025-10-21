@@ -6266,6 +6266,7 @@ Current version indicated by LITEVER below.
 	{
 		synchro_pending_stream = "";
 		streaming_was_thinking = false;
+		let logprobs_content_arr = [];
 		let reqOpt =
 		{method: 'POST',
 		headers: submit_headers,
@@ -6378,6 +6379,12 @@ Current version indicated by LITEVER below.
 									synchro_pending_stream += event.data.choices[0].delta.reasoning;
 								}
 
+								//collect logprobs if detected
+								if(event.data.choices[0].logprobs && event.data.choices[0].logprobs.content && event.data.choices[0].logprobs.content.length>0)
+								{
+									logprobs_content_arr = logprobs_content_arr.concat(event.data.choices[0].logprobs.content);
+								}
+
 								//mistral prefill interception
 								if(oaiemulatecompletionscontent!="" && synchro_pending_stream!="" && synchro_pending_stream.startsWith(oaiemulatecompletionscontent))
 								{
@@ -6438,6 +6445,14 @@ Current version indicated by LITEVER below.
 					}
 					synchro_pending_stream = "";
 					streaming_was_thinking = false;
+					if (logprobs_content_arr.length>0 && last_response_obj==null) {
+						//fake a last response obj
+						let fakedresponse = {
+							"artificial_response": true,
+							"results":[{"logprobs":{"content":logprobs_content_arr}}]
+						};
+						last_response_obj = fakedresponse;
+					}
 					poll_pending_response();
 					//handle gen failures
 					if(resp.status==503)
