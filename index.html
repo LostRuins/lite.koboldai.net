@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 289;
+	const LITEVER = 290;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -4574,6 +4574,8 @@ Current version indicated by LITEVER below.
 
 	polyfills();
 
+	document.getElementById("lastreq1lp").innerHTML = document.getElementById("lastreq2lp").innerHTML =	document.getElementById("lastreq3lp").innerHTML = "";
+
 	document.getElementById("lastreq1").innerHTML =
 	document.getElementById("lastreq2").innerHTML =
 	document.getElementById("lastreq3").innerHTML =
@@ -6881,7 +6883,7 @@ Current version indicated by LITEVER below.
 			connect_custom_endpoint();
 			document.getElementById("lastreq3").innerHTML = document.getElementById("lastreq2").innerHTML = document.getElementById("lastreq1").innerHTML =
 			`<a href="#" class="color_grayurl" onclick="msgbox('Source code is available at https://github.com/LostRuins/lite.koboldai.net \\nPlease report any bugs you find there.','Information')">KoboldAI Lite</a> v${LITEVER} Embedded`;
-
+			document.getElementById("lastreq1lp").innerHTML = document.getElementById("lastreq2lp").innerHTML =	document.getElementById("lastreq3lp").innerHTML = "";
 			read_url_params_data();
 		}
 		else
@@ -15588,6 +15590,34 @@ Current version indicated by LITEVER below.
 		}
 		else if(is_using_kcpp_with_streaming())
 		{
+			//if logprobs used, request last
+			if(localsettings.request_logprobs && last_response_obj==null)
+			{
+				fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_logprobs_endpoint), {
+					method: 'POST',
+					headers: get_kobold_header(),
+					body: JSON.stringify({
+					"genkey": lastcheckgenkey
+					}),
+				})
+				.then((response) => response.json())
+				.then((data) => {
+					//makes sure a delayed response doesnt arrive late and mess up
+					if (data && data.logprobs != null && last_response_obj==null) {
+						//fake a last response obj
+						let fakedresponse = {
+							"artificial_response": true,
+							"results":[{"logprobs":data.logprobs}]
+						};
+						last_response_obj = fakedresponse;
+						update_logprobs_link();
+					}
+				})
+				.catch((error) => {
+					console.error('Error:', error);
+				});
+			}
+
 			//we can use abort functions
 			fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_abort_endpoint), {
 			method: 'POST', // or 'PUT'
@@ -19856,13 +19886,23 @@ Current version indicated by LITEVER below.
 		{
 			shownotify();
 		}
-		let kcpp_has_logprobs = (last_response_obj!=null && last_response_obj.results && last_response_obj.results.length > 0 && last_response_obj.results[0].logprobs!=null);
-		let oai_has_logprobs = (last_response_obj!=null && last_response_obj.choices && last_response_obj.choices.length > 0 && last_response_obj.choices[0].logprobs!=null);
-		let lastresp = ` <a href="#" class="color_blueurl" onclick="show_last_logprobs()">(View Logprobs)</a>`;
-		let lastreq = `<a href="#" onclick="show_last_req()">Last request</a> served by <a href="#" onclick="get_and_show_workers()">${genworker}</a> using <span class="color_darkgreen">${genmdl}</span>${(genkudos>0?` for ${genkudos} kudos`:``)} in ${get_time_taken()} seconds.${(last_response_obj!=null && (kcpp_has_logprobs || oai_has_logprobs)?lastresp:"")}`;
+
+		let genworkertxt = (genworker=="Custom Endpoint")?`<a href="#" onclick="get_and_show_workers()">${genworker}</a>`:`${genworker}`;
+		let lastreq = `<a href="#" onclick="show_last_req()">Last request</a> served by ${genworkertxt} using <span class="color_darkgreen">${genmdl}</span>${(genkudos>0?` for ${genkudos} kudos`:``)} in ${get_time_taken()} seconds.`;
 		document.getElementById("lastreq1").innerHTML = lastreq;
 		document.getElementById("lastreq2").innerHTML = lastreq;
 		document.getElementById("lastreq3").innerHTML = lastreq;
+		document.getElementById("lastreq1lp").innerHTML = document.getElementById("lastreq2lp").innerHTML =	document.getElementById("lastreq3lp").innerHTML = "";
+		update_logprobs_link();
+	}
+
+	function update_logprobs_link()
+	{
+		let lastresp = ` <a href="#" class="color_blueurl" onclick="show_last_logprobs()">(View Logprobs)</a>`;
+		let kcpp_has_logprobs = (last_response_obj!=null && last_response_obj.results && last_response_obj.results.length > 0 && last_response_obj.results[0].logprobs!=null);
+		let oai_has_logprobs = (last_response_obj!=null && last_response_obj.choices && last_response_obj.choices.length > 0 && last_response_obj.choices[0].logprobs!=null);
+		let lastresptxt = `${(last_response_obj!=null && (kcpp_has_logprobs || oai_has_logprobs)?lastresp:"")}`;
+		document.getElementById("lastreq1lp").innerHTML = document.getElementById("lastreq2lp").innerHTML =	document.getElementById("lastreq3lp").innerHTML = lastresptxt;
 	}
 
 	function poll_interrogation_db()
@@ -25471,7 +25511,7 @@ Current version indicated by LITEVER below.
 				</div>
 			</div>
 		</div>
-		<div class="lastreq color_gray" id="lastreq1"></div>
+		<div class="lastreq color_gray"><span id="lastreq1"></span><span id="lastreq1lp"></span></div>
 		</div>
 
 		<div id="enhancedchatinterface" class="chat_mesgs hidden">
@@ -25506,7 +25546,7 @@ Current version indicated by LITEVER below.
 					</div>
 				</div>
 
-				<div class="lastreq color_gray" id="lastreq2"></div>
+				<div class="lastreq color_gray"><span id="lastreq2"></span><span id="lastreq2lp"></span></div>
 			</div>
 		</div>
 
@@ -25543,7 +25583,7 @@ Current version indicated by LITEVER below.
 							<button title="Submit" onclick="submit_generation_button(true)" id="corpo_chat_send_btn" class="corpo_chat_send_btn mainnav" type="button"></button>
 							<button title="Abort" onclick="abort_generation()" id="corpo_chat_send_btn_abort" class="hidden corpo_chat_send_btn_abort mainnav" type="button"></button>
 						</div>
-						<div id="lastreq3" class="corpolastreq color_gray"></div>
+						<div class="corpolastreq color_gray"><span id="lastreq3"></span><span id="lastreq3lp"></span></div>
 					</div>
 				</div>
 			</div>
