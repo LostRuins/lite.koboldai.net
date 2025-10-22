@@ -3429,6 +3429,7 @@ Current version indicated by LITEVER below.
 	const default_openrouter_base = "https://openrouter.ai/api/v1";
 	const default_mistralai_base = "https://api.mistral.ai/v1";
 	const default_featherless_base = "https://api.featherless.ai/v1";
+	const default_nvidianim_base = "https://integrate.api.nvidia.com/v1";
 	const default_grok_base = "https://api.x.ai/v1";
 	const default_oai_base = "https://api.openai.com/v1";
 	const default_claude_base = "https://api.anthropic.com";
@@ -3644,6 +3645,7 @@ Current version indicated by LITEVER below.
 		saved_openrouter_key: "",
 		saved_mistralai_key: "",
 		saved_featherless_key: "",
+		saved_nvidianim_key: "",
 		saved_pollinations_key: "", //this is a dummy key and isnt needed
 		saved_grok_key:"",
 		saved_claude_key: "", //do not ever share this in save files!
@@ -8717,6 +8719,7 @@ Current version indicated by LITEVER below.
 					let tmp_or1 = localsettings.saved_openrouter_key;
 					let tmp_mai = localsettings.saved_mistralai_key;
 					let tmp_fai = localsettings.saved_featherless_key;
+					let tmp_nvai = localsettings.saved_nvidianim_key;
 					let tmp_pol = localsettings.saved_pollinations_key;
 					let tmp_grok = localsettings.saved_grok_key;
 					let tmp_claude1 = localsettings.saved_claude_key;
@@ -8772,6 +8775,7 @@ Current version indicated by LITEVER below.
 					localsettings.saved_openrouter_key = tmp_or1;
 					localsettings.saved_mistralai_key = tmp_mai;
 					localsettings.saved_featherless_key = tmp_fai;
+					localsettings.saved_nvidianim_key = tmp_nvai;
 					localsettings.saved_pollinations_key = tmp_pol;
 					localsettings.saved_grok_key = tmp_grok;
 					localsettings.saved_claude_key = tmp_claude1;
@@ -11189,6 +11193,8 @@ Current version indicated by LITEVER below.
 				return document.getElementById("custom_grok_model");
 			case "10":
 				return document.getElementById("custom_pollinations_model");
+			case "11":
+				return document.getElementById("custom_nvidianim_model");
 			default:
 				return document.getElementById("custom_oai_model"); //just return oai
 		}
@@ -11196,7 +11202,7 @@ Current version indicated by LITEVER below.
 	function ep_should_always_use_chat_completions()
 	{
 		let epchoice = document.getElementById("customapidropdown").value;
-		return (epchoice==7 || epchoice==10);
+		return (epchoice==7 || epchoice==10 || epchoice==11);
 	}
 
 	function select_custom_oai_model()
@@ -11419,10 +11425,12 @@ Current version indicated by LITEVER below.
 		let dropdown = get_custom_ep_model_dropdown();
 		let fetchurl = desired_oai_ep + oai_models_endpoint;
 		let epchoice = document.getElementById("customapidropdown").value;
-		if(epchoice==2 && !is_local_url(desired_oai_ep) && document.getElementById("corsproxy_oai").checked)
+
+		if((epchoice==2 && !is_local_url(desired_oai_ep) && document.getElementById("corsproxy_oai").checked) || fetchurl.toLowerCase().includes("api.nvidia.com"))
 		{
 			fetchurl = cors_proxy + "?" + fetchurl; //temp cors proxy if selected
 		}
+
 		fetch(fetchurl, {
 			method: 'GET',
 			headers: oaiheaders,
@@ -11522,6 +11530,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("custom_openrouter_model").classList.add("hidden");
 		document.getElementById("custom_mistralai_model").classList.add("hidden");
 		document.getElementById("custom_featherless_model").classList.add("hidden");
+		document.getElementById("custom_nvidianim_model").classList.add("hidden");
 		document.getElementById("custom_grok_model").classList.add("hidden");
 		document.getElementById("custom_pollinations_model").classList.add("hidden");
 		document.getElementById("hordeloadmodelcontainer").classList.add("hidden");
@@ -11541,7 +11550,7 @@ Current version indicated by LITEVER below.
 				document.getElementById("customkoboldkey").value = localsettings.saved_kai_key;
 			}
 		}
-		else if(epchoice==2 || epchoice==3 || epchoice==7 || epchoice==8 || epchoice==9 || epchoice==10)
+		else if(epchoice==2 || epchoice==3 || epchoice==7 || epchoice==8 || epchoice==9 || epchoice==10 || epchoice==11)
 		{
 			document.getElementById("oaicustom").classList.remove("hidden");
 			document.getElementById("custom_oai_endpoint").classList.add("hidden");
@@ -11549,6 +11558,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("openrouterdesc").classList.add("hidden");
 			document.getElementById("mistralaidesc").classList.add("hidden");
 			document.getElementById("featherlessdesc").classList.add("hidden");
+			document.getElementById("nvidianimdesc").classList.add("hidden");
 			document.getElementById("grokdesc").classList.add("hidden");
 			document.getElementById("oaidesc").classList.add("hidden");
 			document.getElementById("pollinationsdesc").classList.add("hidden");
@@ -11605,6 +11615,14 @@ Current version indicated by LITEVER below.
 				document.getElementById("custom_oai_key").value = dummy_api_key;
 				document.getElementById("custom_oai_endpoint").value = pollinations_text_endpoint;
 				document.getElementById("custom_oai_key").classList.add("hidden");
+				try_fetch_oai_models_auto();
+			}
+			else if(epchoice==11)
+			{
+				document.getElementById("custom_nvidianim_model").classList.remove("hidden");
+				document.getElementById("nvidianimdesc").classList.remove("hidden");
+				document.getElementById("custom_oai_key").value = (localsettings.saved_nvidianim_key==dummy_api_key?"":localsettings.saved_nvidianim_key);
+				document.getElementById("custom_oai_endpoint").value = default_nvidianim_base;
 				try_fetch_oai_models_auto();
 			}
 			oai_model_change(ep_should_always_use_chat_completions() || force_autotoggle_chatcompl);
@@ -12071,7 +12089,7 @@ Current version indicated by LITEVER below.
 				});
 			}
 		}
-		else if(epchoice==2 || epchoice==3 || epchoice==7 || epchoice==8 || epchoice==9 || epchoice==10) //connect to OAI / OpenRouter / MistralAI / Featherless / Grok Endpoint
+		else if(epchoice==2 || epchoice==3 || epchoice==7 || epchoice==8 || epchoice==9 || epchoice==10 || epchoice==11) //connect to OAI / OpenRouter / MistralAI / Featherless / Grok Endpoint / NvidiaNim
 		{
 			let desired_oai_key = document.getElementById("custom_oai_key").value.trim();
 			let desired_oai_ep = document.getElementById("custom_oai_endpoint").value.trim();
@@ -12110,7 +12128,7 @@ Current version indicated by LITEVER below.
 					localsettings.saved_oai_key = custom_oai_key;
 					localsettings.saved_oai_addr = custom_oai_endpoint;
 
-					if(!is_local_url(custom_oai_endpoint) && document.getElementById("corsproxy_oai").checked)
+					if((!is_local_url(custom_oai_endpoint) && document.getElementById("corsproxy_oai").checked) || custom_oai_endpoint.toLowerCase().includes("api.nvidia.com"))
 					{
 						uses_cors_proxy = true;
 					}
@@ -12130,6 +12148,11 @@ Current version indicated by LITEVER below.
 				else if(epchoice==10)
 				{
 					localsettings.saved_pollinations_key = dummy_api_key; //placeholder key, not actually used
+				}
+				else if(epchoice==11)
+				{
+					localsettings.saved_nvidianim_key = custom_oai_key;
+					uses_cors_proxy = true;
 				}
 				else
 				{
@@ -23157,6 +23180,9 @@ Current version indicated by LITEVER below.
 			}else if(custom_oai_endpoint.toLowerCase().includes("text.pollinations.ai"))
 			{
 				localsettings.prev_custom_endpoint_type = 10;
+			}else if(custom_oai_endpoint.toLowerCase().includes("api.nvidia.com"))
+			{
+				localsettings.prev_custom_endpoint_type = 11;
 			}
 		}
 		else if(custom_claude_key!="")
@@ -27345,6 +27371,7 @@ Current version indicated by LITEVER below.
 				<option value="8">Featherless API</option>
 				<option value="9">Grok API</option>
 				<option value="10">PollinationsAI API</option>
+				<option value="11">Nvidia NIM API</option>
 			</select>
 			</div>
 
@@ -27434,6 +27461,11 @@ Current version indicated by LITEVER below.
 				Pollinations.ai API is free to use without any key required.<br><br>
 				KoboldAI Lite takes no responsibility for your usage of this feature. This service is ad driven, ads may appear in the output.<br>Only Temperature, Top-P, Top-K and Repetition Penalty samplers are used.<br><br>
 				<span class="color_green" style="font-weight: bold;">No Key Required.</span><br><br>
+				</span>
+				<span id="nvidianimdesc" class="hidden">
+				Entering your Nvidia NIM API key will allow you to use KoboldAI Lite with their API.<br><br>
+				KoboldAI Lite takes no responsibility for your usage of this feature. Due to CORS restrictions, your connection WILL be proxied.<br>Only Temperature, Top-P, Top-K, Min-P and Repetition Penalty samplers are used.<br><br>
+				<span class="color_green" style="font-weight: bold;">Please input Nvidia NIM Key.</span><br><br>
 				</span>
 
 				<input class="form-control" type="text" id="custom_oai_endpoint" placeholder="OpenAI API URL" value="" onblur="">
@@ -27535,6 +27567,17 @@ Current version indicated by LITEVER below.
 					<option value="unity">unity</option>
 					<option value="bidara">bidara</option>
 					<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
+				</select>
+				<select title="Nvidia NIM AI Model Selection" style="padding:4px;display:inline;width:calc(100% - 220px)" class="form-control hidden" id="custom_nvidianim_model" onchange="oai_model_change(true)">
+					<option value="bytedance/seed-oss-36b-instruct">bytedance/seed-oss-36b-instruct</option>
+					<option value="deepseek-ai/deepseek-v3.1-terminus">deepseek-ai/deepseek-v3.1-terminus</option>
+					<option value="google/gemma-3-27b-it">google/gemma-3-27b-it</option>
+					<option value="meta/llama-3.3-70b-instruct">meta/llama-3.3-70b-instruct</option>
+					<option value="mistralai/mistral-large">mistralai/mistral-large</option>
+					<option value="moonshotai/kimi-k2-instruct" selected>moonshotai/kimi-k2-instruct</option>
+					<option value="nvidia/llama-3.3-nemotron-super-49b-v1">nvidia/llama-3.3-nemotron-super-49b-v1</option>
+					<option value="qwen/qwen3-235b-a22b">qwen/qwen3-235b-a22b</option>
+				<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
 				</select>
 				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaifetchlist" onclick="oai_fetch_models()">Fetch List</button>
 				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaiusecustom" onclick="select_custom_oai_model()">Use Custom</button>
