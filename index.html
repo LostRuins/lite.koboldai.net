@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 290;
+	const LITEVER = 291;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -18278,10 +18278,16 @@ Current version indicated by LITEVER below.
 					claude_payload.system = sysprompt;
 				}
 
-				if(claudethinking && (custom_claude_model.toLowerCase().includes("claude-3-7")
+				let claude_is_v4 = (custom_claude_model.toLowerCase().includes("claude-3-7")
 				|| custom_claude_model.toLowerCase().includes("claude-sonnet-4")
 				|| custom_claude_model.toLowerCase().includes("claude-haiku-4")
-				|| custom_claude_model.toLowerCase().includes("claude-opus-4")))
+				|| custom_claude_model.toLowerCase().includes("claude-opus-4"));
+
+				let claude_is_v4_5 = (custom_claude_model.toLowerCase().includes("claude-sonnet-4-5")
+				|| custom_claude_model.toLowerCase().includes("claude-haiku-4-5")
+				|| custom_claude_model.toLowerCase().includes("claude-opus-4-1"));
+
+				if(claudethinking && claude_is_v4)
 				{
 					claude_payload.thinking = {
 						"type": "enabled",
@@ -18295,6 +18301,19 @@ Current version indicated by LITEVER below.
 					//unsupported with thinking
 					claude_payload.top_k = (submit_payload.params.top_k<1?300:submit_payload.params.top_k);
 					claude_payload.top_p = submit_payload.params.top_p;
+
+					//for claude 4.5, if temperature is not 1, do not send top p
+					if(claude_is_v4_5)
+					{
+						if(claude_payload.temperature == 1)
+						{
+							delete claude_payload["temperature"];
+						}
+						else
+						{
+							delete claude_payload["top_p"];
+						}
+					}
 				}
 
 				if(localsettings.opmode==1)
