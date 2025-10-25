@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 291;
+	const LITEVER = 292;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -855,14 +855,18 @@ Current version indicated by LITEVER below.
 		border-radius: 8px;
 	}
 	#actionmenuitems button,#actionmenuitems2 button {
-		width: 78px;
+		width: 68px;
+		padding-left: 6px;
+		padding-right: 6px;
 	}
 	#actionmenuitems button.slim,#actionmenuitems2 button.slim {
 		width: 38px;
+		padding-left: 4px;
+		padding-right: 4px;
 	}
 	@media (max-width: 666px) {
 		#actionmenuitems button,#actionmenuitems2 button {
-			width: 60px;
+			width: 56px;
 			padding: 4px 4px;
 			font-size: 12px;
 		}
@@ -1345,6 +1349,31 @@ Current version indicated by LITEVER below.
 	.scenarioitem.yellow:focus {
 		background-image: var(--img_compass),linear-gradient(to right, #6b5530, #6b5530);
 	}
+
+	.branchmenu {
+      position: absolute;
+      background: var(--theme_color_main);
+      border: 1px solid var(--theme_color_border);;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+      display:none;
+      flex-direction: column;
+      min-width: 100px;
+      padding: 4px;
+    }
+	.branchmenu button {
+      padding: 2px 5px;
+	  background: var(--theme_color_main);
+	  color: var(--theme_color_text);
+	  border-color: var(--theme_color_main);
+      border: none;
+      text-align: left;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .branchmenu button:hover {
+      background: var(--theme_color_highlight);
+    }
 
 	/* Welcome splash */
 	.welcome-theme-selector {
@@ -15678,15 +15707,13 @@ Current version indicated by LITEVER below.
 			sentence = replace_placeholders(sentence)
 		}
 		generate_new_image(sentence, base64img, true);
-		document.getElementById("btn_addmedia").disabled = true;
-		document.getElementById("btn_addmedia2").disabled = true;
-		document.getElementById("btn_addmedia3").disabled = true;
+		document.getElementById("btn_inner_genimg_auto").disabled = true;
+		document.getElementById("btn_inner_genimg_custom").disabled = true;
 		//disable it for 5 sec to prevent spam
 		setTimeout(() => {
-			document.getElementById("btn_addmedia").disabled = false;
-			document.getElementById("btn_addmedia2").disabled = false;
-			document.getElementById("btn_addmedia3").disabled = false;
-		}, 5000);
+			document.getElementById("btn_inner_genimg_auto").disabled = false;
+			document.getElementById("btn_inner_genimg_custom").disabled = false;
+		}, 3000);
 	}
 
 	function do_auto_gen_image(truncated_context)
@@ -21954,19 +21981,27 @@ Current version indicated by LITEVER below.
 
 		if (selected_models.length == 0) //if no model, disable all first
 		{
-			document.getElementById("btn_actmem").disabled = true;
-			document.getElementById("btn_actundo").disabled = true;
-			document.getElementById("btn_actredo").disabled = true;
-			document.getElementById("btn_actretry").disabled = true;
-			if(perfdata==null) //allow these 2 in offline mode
+			let disablebtns = true;
+			if (perfdata == null) //allow these in offline mode
 			{
-				document.getElementById("btn_actmem").disabled = false;
+				disablebtns = false;
 			}
+			document.getElementById("btn_actmem3").disabled = document.getElementById("btn_actmem2").disabled = document.getElementById("btn_actmem").disabled = disablebtns;
+			document.getElementById("btn_actundo3").disabled = document.getElementById("btn_actundo2").disabled = document.getElementById("btn_actundo").disabled = disablebtns;
+			document.getElementById("btn_actredo3").disabled = document.getElementById("btn_actredo2").disabled = document.getElementById("btn_actredo").disabled = disablebtns;
+			document.getElementById("btn_actretry3").disabled = document.getElementById("btn_actretry2").disabled = document.getElementById("btn_actretry").disabled = true;
+			document.getElementById("btn_actbranch3").disabled = document.getElementById("btn_actbranch2").disabled = document.getElementById("btn_actbranch").disabled = disablebtns;
+			document.getElementById("btn_addmedia3").disabled = document.getElementById("btn_addmedia2").disabled = document.getElementById("btn_addmedia").disabled = disablebtns;
+			document.getElementById("btn_editmode").disabled = disablebtns;
+
 		} else {
-			document.getElementById("btn_actmem").disabled = false;
-			document.getElementById("btn_actundo").disabled = false;
-			document.getElementById("btn_actredo").disabled = false;
-			document.getElementById("btn_actretry").disabled = false;
+			document.getElementById("btn_actmem3").disabled = document.getElementById("btn_actmem2").disabled = document.getElementById("btn_actmem").disabled = false;
+			document.getElementById("btn_actundo3").disabled = document.getElementById("btn_actundo2").disabled = document.getElementById("btn_actundo").disabled = false;
+			document.getElementById("btn_actredo3").disabled = document.getElementById("btn_actredo2").disabled = document.getElementById("btn_actredo").disabled = false;
+			document.getElementById("btn_actretry3").disabled = document.getElementById("btn_actretry2").disabled = document.getElementById("btn_actretry").disabled = false;
+			document.getElementById("btn_actbranch3").disabled = document.getElementById("btn_actbranch2").disabled = document.getElementById("btn_actbranch").disabled = false;
+			document.getElementById("btn_addmedia3").disabled = document.getElementById("btn_addmedia2").disabled = document.getElementById("btn_addmedia").disabled = false;
+			document.getElementById("btn_editmode").disabled = false;
 		}
 
 		if (perfdata == null) {
@@ -22870,13 +22905,13 @@ Current version indicated by LITEVER below.
 	}
 
 	function toggle_corpo_plusmenu(toggleopen = true) {
-		function handleOutsideClick(event) {
+		function handleOutsideClickCorpoPlus(event) {
 			popupMenu.style.display = 'none';
-			document.removeEventListener('click', handleOutsideClick);
+			document.removeEventListener('click', handleOutsideClickCorpoPlus);
 		}
 
 		const popupMenu = document.getElementById('corpoplusmenu');
-		document.removeEventListener('click', handleOutsideClick);
+		document.removeEventListener('click', handleOutsideClickCorpoPlus);
 		popupMenu.style.display = (popupMenu.style.display === 'flex' ? 'none' : 'flex');
 		if (!toggleopen || popupMenu.style.display === 'none') {
 			popupMenu.style.display = 'none';
@@ -22885,10 +22920,9 @@ Current version indicated by LITEVER below.
 		// if menu is open, attach outside click handler
 		if (popupMenu.style.display === 'flex') {
 			setTimeout(() => { // delay so the current button click doesn't immediately close it
-				document.addEventListener('click', handleOutsideClick);
+				document.addEventListener('click', handleOutsideClickCorpoPlus);
 			}, 50);
 		}
-
 	}
 
 	function repack_chat_history(input) //repack history for chatmode
@@ -23798,13 +23832,18 @@ Current version indicated by LITEVER below.
 		});
 	}
 
+	function allow_redo_undo()
+	{
+		return (!document.getElementById("btnsend").disabled || (perfdata == null && pending_response_id == "")); //if offline, allow redo undo as well
+	}
+
 	var backLongPressTimer = null;
 	function btn_back_longpress_start()
 	{
 		backLongPressTimer = setTimeout(()=>{
 
 		console.log("Clear story");
-		if (!document.getElementById("btnsend").disabled && pending_response_id == "" && gametext_arr.length > 0) {
+		if (allow_redo_undo() && pending_response_id == "" && gametext_arr.length > 0) {
 			warn_unsaved = true;
 			last_reply_was_empty = false;
 			while(gametext_arr.length > 0)
@@ -23832,7 +23871,7 @@ Current version indicated by LITEVER below.
 		clearTimeout(backLongPressTimer);
 	}
 	function btn_back() {
-		if (!document.getElementById("btnsend").disabled && pending_response_id == "" && gametext_arr.length > 0) {
+		if (allow_redo_undo() && pending_response_id == "" && gametext_arr.length > 0) {
 			warn_unsaved = true;
 			last_reply_was_empty = false;
 			retry_preserve_last = false;
@@ -23857,7 +23896,7 @@ Current version indicated by LITEVER below.
 		redoLongPressTimer = setTimeout(()=>{
 
 		console.log("Redo All story");
-		if (!document.getElementById("btnsend").disabled && pending_response_id == "" && redo_arr.length > 0) {
+		if (allow_redo_undo() && pending_response_id == "" && redo_arr.length > 0) {
 			warn_unsaved = true;
 			last_reply_was_empty = false;
 			retry_preserve_last = false;
@@ -23881,7 +23920,7 @@ Current version indicated by LITEVER below.
 		clearTimeout(redoLongPressTimer);
 	}
 	function btn_redo() {
-		if (!document.getElementById("btnsend").disabled && pending_response_id == "") {
+		if (allow_redo_undo() && pending_response_id == "") {
 			warn_unsaved = true;
 			if (redo_arr.length > 0) {
 				last_reply_was_empty = false;
@@ -23929,6 +23968,33 @@ Current version indicated by LITEVER below.
 			redo_arr = [];
 			document.getElementById("input_text").value = boxtextstash;
 		}
+	}
+
+	function btn_branch(button, toggleopen = true) {
+		function handleOutsideClickBranch(event) {
+			popupMenu.style.display = 'none';
+			document.removeEventListener('click', handleOutsideClickBranch);
+		}
+
+		const rect = button.getBoundingClientRect();
+		const popupMenu = document.getElementById('branchmenu');
+
+		popupMenu.style.left = `${rect.left}px`;
+		popupMenu.style.top = `${rect.top - rect.height - 10}px`;
+
+		document.removeEventListener('click', handleOutsideClickBranch);
+		popupMenu.style.display = (popupMenu.style.display === 'flex' ? 'none' : 'flex');
+		if (!toggleopen || popupMenu.style.display === 'none') {
+			popupMenu.style.display = 'none';
+			return;
+		}
+		// if menu is open, attach outside click handler
+		if (popupMenu.style.display === 'flex') {
+			setTimeout(() => { // delay so the current button click doesn't immediately close it
+				document.addEventListener('click', handleOutsideClickBranch);
+			}, 50);
+		}
+
 	}
 
 	var groupchat_removals = []; //list of names removed from groupchat
@@ -25481,6 +25547,7 @@ Current version indicated by LITEVER below.
 				<button type="button" class="btn actbtn btn-primary mainnav" id="btn_actundo" onpointerdown="btn_back_longpress_start()" onpointerleave="btn_back_longpress_end()" onpointerup="btn_back_longpress_end()" onclick="btn_back()">Undo</button>
 				<button type="button" class="btn actbtn btn-primary mainnav" id="btn_actredo" onpointerdown="btn_redo_longpress_start()" onpointerleave="btn_redo_longpress_end()" onpointerup="btn_redo_longpress_end()" onclick="btn_redo()">Redo</button>
 				<button type="button" class="btn actbtn btn-primary mainnav" id="btn_actretry" onclick="btn_retry()">Retry</button>
+				<button type="button" class="btn actbtn btn-primary mainnav" id="btn_actbranch" onclick="btn_branch(this)">Branch</button>
 				<button type="button" class="btn actbtn btn-primary mainnav" id="btn_addmedia" onclick="add_media_btn_menu()">Add File</button>
 				<button type="button" class="btn actbtn btn-primary mainnav slim btnicon-websearch hidden" id="btn_togglesearch" onclick="toggle_websearch()">&nbsp;</button>
 			</div>
@@ -25528,6 +25595,7 @@ Current version indicated by LITEVER below.
 						<button type="button" class="btn actbtn btn-primary mainnav" id="btn_actundo2" onpointerdown="btn_back_longpress_start()" onpointerleave="btn_back_longpress_end()" onpointerup="btn_back_longpress_end()" onclick="btn_back()">Undo</button>
 						<button type="button" class="btn actbtn btn-primary mainnav" id="btn_actredo2" onpointerdown="btn_redo_longpress_start()" onpointerleave="btn_redo_longpress_end()" onpointerup="btn_redo_longpress_end()" onclick="btn_redo()">Redo</button>
 						<button type="button" class="btn actbtn btn-primary mainnav" id="btn_actretry2" onclick="btn_retry()">Retry</button>
+						<button type="button" class="btn actbtn btn-primary mainnav" id="btn_actbranch2" onclick="btn_branch(this)">Branch</button>
 						<button type="button" class="btn actbtn btn-primary mainnav" id="btn_addmedia2" onclick="add_media_btn_menu()">Add File</button>
 						<button type="button" class="btn actbtn btn-primary mainnav slim btnicon-websearch hidden" id="btn_togglesearch2" onclick="toggle_websearch()">&nbsp;</button>
 						<button type="button" class="btn actbtn btn-primary mainnav" id="btn_editmode" onclick="btn_editmode()">Edit</button>
@@ -25578,8 +25646,9 @@ Current version indicated by LITEVER below.
 								<button type="button" id="btn_actundo3" onpointerdown="btn_back_longpress_start()" onpointerleave="btn_back_longpress_end()" onpointerup="btn_back_longpress_end()" onclick="toggle_corpo_plusmenu(false);btn_back()">Undo</button>
 								<button type="button" id="btn_actredo3" onpointerdown="btn_redo_longpress_start()" onpointerleave="btn_redo_longpress_end()" onpointerup="btn_redo_longpress_end()" onclick="toggle_corpo_plusmenu(false);btn_redo()">Redo</button>
 								<button type="button" id="btn_actretry3" onclick="toggle_corpo_plusmenu(false);btn_retry()">Retry</button>
+								<button type="button" id="btn_actbranch3" onclick="btn_branch(this)">Branch</button>
 								<button type="button" id="btn_addmedia3" onclick="toggle_corpo_plusmenu(false);add_media_btn_menu()">Add File</button>
-							  </div>
+							</div>
 							<div class="corpo_chat_inner" id="corpo_cht_inp_lengthtester" style="white-space: nowrap; visibility: hidden; height: 0px; position:absolute; width: auto;"></div>
 							<textarea title="User Input" class="corpo_chat_inner mainnav" id="corpo_cht_inp" type="text" name="crpchtinp"  role="presentation" autocomplete="noppynop" spellcheck="true" rows="1" wrap="on" placeholder="Message KoboldAI" value="" oninput="update_submit_button();chat_resize_input();" onpaste="return img_paste_event(event)" onkeypress="return chat_handle_typing(event)"></textarea>
 							<button title="Submit" onclick="submit_generation_button(true)" id="corpo_chat_send_btn" class="corpo_chat_send_btn mainnav" type="button"></button>
@@ -25590,8 +25659,10 @@ Current version indicated by LITEVER below.
 				</div>
 			</div>
 		</div>
+	</div>
 
-
+	<div class="branchmenu" id="branchmenu">
+		<button type="button" id="newbranch" onclick="">New Branch</button>
 	</div>
 
 	<div class="popupcontainer flex hidden" id="memorycontainer">
