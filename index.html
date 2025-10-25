@@ -1374,6 +1374,17 @@ Current version indicated by LITEVER below.
     .branchmenu button:hover {
       background: var(--theme_color_highlight);
     }
+	.branchmenu .xbtn {
+		background: var(--theme_color_topbtn);
+		color: var(--theme_color_text);
+		font-size: 12px;
+		height: 24px;
+		font-weight: bolder;
+	}
+	.branchmenu .xbtn:hover {
+		color: var(--theme_color_text);
+		background-color: #c9302c;
+	}
 
 	/* Welcome splash */
 	.welcome-theme-selector {
@@ -3396,6 +3407,7 @@ Current version indicated by LITEVER below.
 	const poll_interval_base_img = 3800;
 	const poll_interval_idle = 1000;
 	const poll_interval_multiplayer = 1000; //every 1s
+	const max_branches = 6;
 
 	const horde_base_url = "https://aihorde.net"
 	const horde_perf_endpoint = horde_base_url + "/api/v2/status/performance";
@@ -3516,7 +3528,6 @@ Current version indicated by LITEVER below.
 	const OAI_TTS_ID = 5;
 	const POLLINATIONS_TTS_ID = 6;
 
-
 	const HD_RES_PX = 768;
 	const VHD_RES_PX = 960;
 	const NO_HD_RES_PX = 512;
@@ -3535,6 +3546,7 @@ Current version indicated by LITEVER below.
 	var selected_workers = [];
 	//gametext_arr stores images inline, with the special format [<|p|id|p|>] or [<|h|hash|h|>], which is either a hash for loaded media data, or an ID for pending requests
 	var gametext_arr = []; //array of texts currently displayed
+	var alt_gametext_branches = []; //array of arrays of alternative history branches
 	var redo_arr = []; //array of texts that are in the redo stack
 	var retry_prev_text = []; //when we retry, save the last 3 versions in case they want to undo
 	var retry_preserve_last = false; //if true, retrying does not delete any old text
@@ -8520,6 +8532,7 @@ Current version indicated by LITEVER below.
 		handle_advload_popup((localsettings.show_advanced_load && !force_load_settings),()=>
 		{
 			let old_gametext_arr = gametext_arr;
+			let old_alt_gametext_branches = alt_gametext_branches;
 			let old_current_anote = current_anote;
 			let old_current_anotetemplate = current_anotetemplate;
 			let old_current_memory = current_memory;
@@ -8719,6 +8732,7 @@ Current version indicated by LITEVER below.
 				if(!loadmainstory)
 				{
 					gametext_arr = old_gametext_arr;
+					alt_gametext_branches = old_alt_gametext_branches;
 				}
 				if(!loadmemanote)
 				{
@@ -15230,6 +15244,7 @@ Current version indicated by LITEVER below.
 		idle_timer = 0;
 		idle_triggered_counter = 0;
 		gametext_arr = [];
+		alt_gametext_branches = [];
 		redo_arr = [];
 		last_request_str = "No Requests Available";
 		last_response_obj = null;
@@ -23970,7 +23985,9 @@ Current version indicated by LITEVER below.
 		}
 	}
 
-	function btn_branch(button, toggleopen = true) {
+	function btn_branch(button, toggleopen = true)
+	{
+		refresh_branches();
 		function handleOutsideClickBranch(event) {
 			popupMenu.style.display = 'none';
 			document.removeEventListener('click', handleOutsideClickBranch);
@@ -23980,7 +23997,8 @@ Current version indicated by LITEVER below.
 		const popupMenu = document.getElementById('branchmenu');
 
 		popupMenu.style.left = `${rect.left}px`;
-		popupMenu.style.top = `${rect.top - rect.height - 10}px`;
+		popupMenu.style.top = `${rect.top - 10}px`;
+		popupMenu.style.transform = 'translateY(-100%)'; // makes it grow upward
 
 		document.removeEventListener('click', handleOutsideClickBranch);
 		popupMenu.style.display = (popupMenu.style.display === 'flex' ? 'none' : 'flex');
@@ -23994,7 +24012,83 @@ Current version indicated by LITEVER below.
 				document.addEventListener('click', handleOutsideClickBranch);
 			}, 50);
 		}
+	}
 
+	function clone_new_branch()
+	{
+		if(!allow_redo_undo())
+		{
+			return;
+		}
+		if(alt_gametext_branches.length < max_branches)
+		{
+			//the "current" branch is just a null element to avoid duplication
+			if(alt_gametext_branches.length==0)
+			{
+				alt_gametext_branches.push(null);
+			}
+			let newbranch = gametext_arr.slice();
+			alt_gametext_branches.push(newbranch);
+			switch_branch(alt_gametext_branches.length-1);
+		}
+		refresh_branches();
+	}
+	function refresh_branches()
+	{
+		let branchmenu = document.getElementById("branchmenu");
+		let branches = "";
+		if(alt_gametext_branches.length>1)
+		{
+			for(let i=0;i<alt_gametext_branches.length;++i)
+			{
+				let delbtn = `<button type="button" class="btn xbtn widelbtn" onclick="return del_branch(${i})">X</button>`
+				branches += `<div><button style="width:${alt_gametext_branches[i]==null?"100%":"calc(100% - 22px)"}" type="button" onclick="switch_branch(${i})">${alt_gametext_branches[i]==null?"&gt; ":""}Branch ${i+1}</button>${alt_gametext_branches[i]==null?"":delbtn}</div>`;
+			}
+		}
+		if(alt_gametext_branches.length < max_branches)
+		{
+			branches += `<button type="button" onclick="clone_new_branch()">🔀 New Branch</button>`;
+		}
+		branchmenu.innerHTML = branches;
+	}
+	function switch_branch(branch)
+	{
+		if(!allow_redo_undo())
+		{
+			return;
+		}
+		if(branch<0 || branch >= alt_gametext_branches.length || alt_gametext_branches[branch]==null)
+		{
+			return; //out of bounds, or already on desired branch
+		}
+		//find the empty spot in the list (current branch)
+		for(let i=0;i<alt_gametext_branches.length;++i)
+		{
+			if(alt_gametext_branches[i]==null)
+			{
+				//fill our currrent history into it
+				alt_gametext_branches[i] = gametext_arr;
+			}
+		}
+		let loadedbranch = alt_gametext_branches[branch]; //load desired branch
+		gametext_arr = loadedbranch;
+		alt_gametext_branches[branch] = null; //set it to the active branch
+		render_gametext();
+	}
+	function del_branch(branch)
+	{
+		if(!allow_redo_undo())
+		{
+			return;
+		}
+		if(branch<0 || branch >= alt_gametext_branches.length || alt_gametext_branches[branch]==null)
+		{
+			return; //out of bounds, or already on desired branch
+		}
+		msgboxYesNo(`Really Delete Branch ${branch+1}?\nRemaining branches will be shifted up.`, `Confirm Branch Delete`, () => {
+			alt_gametext_branches.splice(branch, 1);
+			refresh_branches();
+		}, null);
 	}
 
 	var groupchat_removals = []; //list of names removed from groupchat
@@ -25662,7 +25756,6 @@ Current version indicated by LITEVER below.
 	</div>
 
 	<div class="branchmenu" id="branchmenu">
-		<button type="button" id="newbranch" onclick="">New Branch</button>
 	</div>
 
 	<div class="popupcontainer flex hidden" id="memorycontainer">
