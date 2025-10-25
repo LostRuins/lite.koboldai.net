@@ -8291,6 +8291,24 @@ Current version indicated by LITEVER below.
 					}
 				}
 			}
+			//also bake images from other branches
+			for (let j = 0; j < alt_gametext_branches.length; ++j) {
+				let currbranch = alt_gametext_branches[j];
+				if(!currbranch)
+				{
+					continue;
+				}
+				for (let i = 0; i < currbranch.length; ++i) {
+					let regex = /\[<\|h\|(.+?)\|h\|>\]/g;
+					let match;
+					while ((match = regex.exec(currbranch[i])) !== null) {
+						let imghash = match[1];
+						if (completed_imgs_meta[imghash] != null) {
+							export_hashes[imghash] = completed_imgs_meta[imghash];
+						}
+					}
+				}
+			}
 			new_save_storyobj.completed_imgs_meta = export_hashes;
 		}
 
@@ -8323,6 +8341,7 @@ Current version indicated by LITEVER below.
 		new_save_storyobj.documentdb_searchrange = documentdb_searchrange;
 		new_save_storyobj.documentdb_chunksize = documentdb_chunksize;
 		new_save_storyobj.documentdb_data = documentdb_data;
+		new_save_storyobj.altbranches = alt_gametext_branches;
 
 		if (export_settings) {
 			new_save_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
@@ -8640,6 +8659,10 @@ Current version indicated by LITEVER below.
 				if(storyobj.documentdb_data)
 				{
 					documentdb_data = storyobj.documentdb_data;
+				}
+				if(storyobj.altbranches)
+				{
+					alt_gametext_branches = storyobj.altbranches;
 				}
 
 				// adapting legacy fields - these are all now moved to SETTINGS
@@ -24029,7 +24052,7 @@ Current version indicated by LITEVER below.
 			}
 			let newbranch = gametext_arr.slice();
 			alt_gametext_branches.push(newbranch);
-			switch_branch(alt_gametext_branches.length-1);
+			switch_branch(alt_gametext_branches.length-1,false);
 		}
 		refresh_branches();
 	}
@@ -24042,7 +24065,7 @@ Current version indicated by LITEVER below.
 			for(let i=0;i<alt_gametext_branches.length;++i)
 			{
 				let delbtn = `<button type="button" class="btn xbtn widelbtn" onclick="return del_branch(${i})">X</button>`
-				branches += `<div><button style="width:${alt_gametext_branches[i]==null?"100%":"calc(100% - 22px)"}" type="button" onclick="switch_branch(${i})">${alt_gametext_branches[i]==null?"&gt; ":""}Branch ${i+1}</button>${alt_gametext_branches[i]==null?"":delbtn}</div>`;
+				branches += `<div><button style="width:${alt_gametext_branches[i]==null?"100%":"calc(100% - 22px)"}" type="button" onclick="switch_branch(${i},true)">${alt_gametext_branches[i]==null?"&gt; ":""}Branch ${i+1}</button>${alt_gametext_branches[i]==null?"":delbtn}</div>`;
 			}
 		}
 		if(alt_gametext_branches.length < max_branches)
@@ -24051,7 +24074,7 @@ Current version indicated by LITEVER below.
 		}
 		branchmenu.innerHTML = branches;
 	}
-	function switch_branch(branch)
+	function switch_branch(branch,erase_undo_stack)
 	{
 		if(!allow_redo_undo())
 		{
@@ -24073,6 +24096,14 @@ Current version indicated by LITEVER below.
 		let loadedbranch = alt_gametext_branches[branch]; //load desired branch
 		gametext_arr = loadedbranch;
 		alt_gametext_branches[branch] = null; //set it to the active branch
+		if(erase_undo_stack)
+		{
+			redo_arr = [];
+			last_reply_was_empty = false;
+			retry_prev_text = [];
+			retry_preserve_last = false;
+			redo_prev_text = [];
+		}
 		render_gametext();
 	}
 	function del_branch(branch)
@@ -24088,6 +24119,7 @@ Current version indicated by LITEVER below.
 		msgboxYesNo(`Really Delete Branch ${branch+1}?\nRemaining branches will be shifted up.`, `Confirm Branch Delete`, () => {
 			alt_gametext_branches.splice(branch, 1);
 			refresh_branches();
+			render_gametext();
 		}, null);
 	}
 
