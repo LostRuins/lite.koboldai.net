@@ -2935,7 +2935,12 @@ Current version indicated by LITEVER below.
 	const get_instructsysplaceholder_end = ()=>{if(localsettings.raw_instruct_tags){return get_instruct_systag_end(false);};return instructsysplaceholder_end;}
 	function is_on_mobile()
 	{
-		return (/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || navigator.maxTouchPoints > 1 || window.innerWidth <= 768);
+		const hasTouch = 'ontouchstart' in document.documentElement || navigator.maxTouchPoints > 0;
+		const isCoarsePointer = window.matchMedia ? window.matchMedia('(pointer: coarse)').matches : hasTouch;
+		const isSmallScreen = window.matchMedia ? window.matchMedia('(max-width: 768px)').matches : window.innerWidth <= 768;
+		const isLikelyMobile = hasTouch && (isCoarsePointer || isSmallScreen);
+		const isMobileUA = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+		return isLikelyMobile || isMobileUA;
 	}
 
 	// list of all preinstalled quick start scenarios
@@ -6095,7 +6100,7 @@ Current version indicated by LITEVER below.
 					}
 					if(was_empty && synchro_pending_stream!="")
 					{
-						render_gametext(false);
+						render_gametext(false,false);
 					}
 					else
 					{
@@ -6471,7 +6476,7 @@ Current version indicated by LITEVER below.
 					}
 					if(was_empty && synchro_pending_stream!="")
 					{
-						render_gametext(false);
+						render_gametext(false,false);
 					}
 					else
 					{
@@ -20940,7 +20945,7 @@ Current version indicated by LITEVER below.
 											synchro_pending_stream = data.results[0].text;
 											if(was_empty && synchro_pending_stream!="")
 											{
-												render_gametext(false); // don't autosave while streaming
+												render_gametext(false,false); // don't autosave while streaming
 											}
 											else
 											{
@@ -20993,7 +20998,7 @@ Current version indicated by LITEVER below.
 						last_stop_reason = "";
 						synchro_pending_stream = "";
 						show_abort_button(false);
-						render_gametext();
+						render_gametext(true,false); //only scroll to bottom if autoscroll is on
 						sync_multiplayer(false);
 					}
 					if(synchro_polled_respimg)
@@ -21602,7 +21607,7 @@ Current version indicated by LITEVER below.
 			let box2 = document.getElementById("chat_msg_body");
 			let box3 = document.getElementById("corpostylemain");
 			function isScrolledToBottom(element) {
-				return element.scrollHeight - element.scrollTop - element.clientHeight <= 120;
+				return element.scrollHeight - element.scrollTop - element.clientHeight <= 100;
 			}
 			if(alwaysscroll || isScrolledToBottom(box1))
 			{
