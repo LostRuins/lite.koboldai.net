@@ -3483,6 +3483,8 @@ Current version indicated by LITEVER below.
 	const default_gemini_stream_suffix = ":streamGenerateContent?alt=sse&key=";
 	const default_cohere_base = "https://api.cohere.ai/v1/chat";
 
+	const openrouter_credits_endpoint = "/credits";
+
 	const a1111_models_endpoint = "/sdapi/v1/sd-models";
 	const a1111_options_endpoint = "/sdapi/v1/options";
 	const a1111_txt2img_endpoint = "/sdapi/v1/txt2img";
@@ -11594,6 +11596,42 @@ Current version indicated by LITEVER below.
 			}
 		}
 	}
+	function fetch_openrouter_balance()
+	{		
+		let desired_oai_key = document.getElementById("custom_oai_key").value.trim();
+		
+		let oaiheaders = {};
+		if(desired_oai_key!="" && desired_oai_key!=dummy_api_key){
+			oaiheaders["Authorization"] = "Bearer " + desired_oai_key;
+		};
+
+		let fetchurl = default_openrouter_base + openrouter_credits_endpoint;
+
+		fetch(fetchurl, {
+			method: 'GET',
+			headers: oaiheaders,
+			referrerPolicy: 'no-referrer',
+		})
+		.then((response) => response.json())
+		.then((data) => {
+			console.log(data);
+			if(data.data)
+			{
+				msgbox(`Total Credits: $${data.data.total_credits.toFixed(2)}\nCredits Used: $${data.data.total_usage.toFixed(2)}\nBalance: $${(data.data.total_credits-data.data.total_usage).toFixed(2)}`,"OpenRouter Balances")
+			}
+			else
+			{
+				msgbox("Error fetching credit balance: " + JSON.stringify(data),"Error Encountered");
+			}
+		})
+		.catch(error => {
+			console.log("Error: " + error);
+			msgbox("Error fetching credit balance: " + error,"Error Encountered",false,false,()=>{
+				hide_msgbox();
+			});
+		});
+	}
+
 	function customapi_dropdown(force_autotoggle_chatcompl = false)
 	{
 		let epchoice = document.getElementById("customapidropdown").value;
@@ -27629,7 +27667,7 @@ Current version indicated by LITEVER below.
 				</span>
 				<span id="openrouterdesc" class="hidden">
 				Entering your <a class="color_blueurl" target="_blank" href="https://openrouter.ai/settings/keys">OpenRouter API key</a> will allow you to use KoboldAI Lite with their API.<br><br>
-				KoboldAI Lite takes no responsibility for your usage of this feature. Your API key is used directly with the OpenRouter API and is not transmitted to us.<br>Only Temperature, Top-P and Repetition Penalty samplers are used.<br><br>
+				KoboldAI Lite takes no responsibility for your usage of this feature. Your API key is used directly with the OpenRouter API and is not transmitted to us.<br>Only Temperature, Top-P and Repetition Penalty samplers are used.<br><a class="color_blueurl" onclick="fetch_openrouter_balance()" href="#">Click here to see your credit balance.</a><br><br>
 				<span class="color_green" style="font-weight: bold;">Please input OpenRouter Key.</span><br><br>
 				</span>
 				<span id="mistralaidesc" class="hidden">
