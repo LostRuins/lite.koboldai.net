@@ -728,11 +728,6 @@ Current version indicated by LITEVER below.
 		gap: 2px;
 		font-size: 12px;
 	}
-	@media (max-width: 340px) {
-		.saveloadgrid {
-			font-size: 8px;
-		}
-	}
 	.btnicon-save
 	{
 		width: 16px;
@@ -3571,6 +3566,7 @@ Current version indicated by LITEVER below.
 	const PREVIEW_RES_PX = 200;
 	const AVATAR_PX = 384;
 	const SAVE_SLOTS = 12;
+	const SCENARIO_SLOTS = 6;
 	const num_regex_rows = 4;
 	const default_websearch_template = "### New Task:\nFrom above text, rephrase the search engine query \"{{QUERY}}\" as a single short phrase (for search engines) using proper nouns, references and names to avoid ambiguity.\n\n### Rephrased Search Query Created:\n";
 
@@ -12703,6 +12699,7 @@ Current version indicated by LITEVER below.
 
 	var cachedsaveslotlabels = [];
 	var netsaveslotlabels = [];
+	var cachedsavescenariolabels = [];
 	function saveloadchangeslot(updatelist=false)
 	{
 		let selectedslot = document.getElementById("saveslotselecteddropdown").value;
@@ -12710,7 +12707,7 @@ Current version indicated by LITEVER below.
 		let selectedslotlabel = null;
 		let choices = "";
 		let foundoption = false;
-		if(selectedlocation=="1") //local
+		if(selectedlocation=="1") //local save
 		{
 			for(let i=0;i<cachedsaveslotlabels.length;++i)
 			{
@@ -12737,6 +12734,22 @@ Current version indicated by LITEVER below.
 				let lbl = (i+1);
 				let tsdesc = (testslot.length>50)?testslot.substring(0,50)+"...":testslot;
 				let slotname = (testslot?`Server Slot `+(lbl)+` - `+tsdesc+``:`Server Slot `+(lbl)+` - [ Empty ]`);
+				choices += `<option value=${i}${(selectedslot==i)?" selected":""}>${slotname}</option>`;
+			}
+		} 
+		else if(selectedlocation=="3") //local scenario
+		{
+			for(let i=0;i<cachedsavescenariolabels.length;++i)
+			{
+				let testslot = cachedsavescenariolabels[i];
+				if(selectedslot==i)
+				{
+					selectedslotlabel = testslot;
+					foundoption = true;
+				}
+				let lbl = (i+1);
+				let tsdesc = (testslot.length>50)?testslot.substring(0,50)+"...":testslot;
+				let slotname = (testslot?`Local Scenario `+(lbl)+` - `+tsdesc+``:`Local Scenario `+(lbl)+` - [ Empty ]`);
 				choices += `<option value=${i}${(selectedslot==i)?" selected":""}>${slotname}</option>`;
 			}
 		}
@@ -12785,15 +12798,24 @@ Current version indicated by LITEVER below.
 		}
 
 		let slotpromises = [];
+		let scenariopromises = [];
 		for(let i=0;i<SAVE_SLOTS;++i)
 		{
 			slotpromises.push(indexeddb_load("slot_"+i+"_meta",""));
 		}
+		for(let i=0;i<SCENARIO_SLOTS;++i)
+		{
+			scenariopromises.push(indexeddb_load("scenario_"+i+"_meta",""));
+		}
 		Promise.all(slotpromises).then(slotlabels=>
 		{
-			cachedsaveslotlabels = slotlabels;
-			saveloadchangeslot(true);
-			populate_corpo_leftpanel();
+			Promise.all(scenariopromises).then(scenariolabels=>
+			{
+				cachedsaveslotlabels = slotlabels;
+				cachedsavescenariolabels = scenariolabels;
+				saveloadchangeslot(true);
+				populate_corpo_leftpanel();
+			});
 		});
 		if(is_using_kcpp_with_savedatafile())
 		{
@@ -12822,7 +12844,7 @@ Current version indicated by LITEVER below.
 				find_unused_saveslot((slot)=>{
 					if(slot!=-1)
 					{
-						save_to_slot(slot,true,false);
+						save_to_slot(slot,true,false,false);
 					}else
 					{
 						msgbox("Unable to Save - No Available New Slots.","Storage Slots Full");
@@ -12836,40 +12858,47 @@ Current version indicated by LITEVER below.
 		}
 		else
 		{
-			save_to_slot(last_used_saveslot,true,false);
+			save_to_slot(last_used_saveslot,true,false,false);
 		}
 	}
 	function quickdelete()
 	{
 		if(last_used_saveslot!=-1)
 		{
-			delete_from_slot(last_used_saveslot,true,false);
+			delete_from_slot(last_used_saveslot,true,false,false);
 		}else
 		{
 			msgbox("Nothing to delete - Select a slot first.","No Action Taken");
 		}
 	}
-	function save_to_slot(slot,islocal,showcontainer)
+	function save_to_slot(slot,islocal,isscenario,showcontainer)
 	{
 		let defaultsavename = (localsettings.opmode==1?"Untitled Story":(localsettings.opmode==2?"Untitled Adventure":(localsettings.opmode==3?"Untitled Chat":"Untitled Instruct")));
 		let savename = defaultsavename + " " + new Date().toLocaleString();
 		let slotnumshown = (parseInt(slot)+1);
 		let newcompressedstory = generate_compressed_story(true, true, true);
-		if(islocal)
+		if(islocal || isscenario)
 		{
-			indexeddb_load("slot_"+slot+"_meta","").then(testslot=>{
+			if(isscenario)
+			{
+				savename = `Custom Scenario ${slotnumshown}`;
+			}
+			let metakey = (isscenario?"scenario_"+slot+"_meta":"slot_"+slot+"_meta");
+			let datakey = (isscenario?"scenario_"+slot+"_data":"slot_"+slot+"_data");
+			let lbltype = (isscenario?"Scenario":"Browser Storage Slot");
+			indexeddb_load(metakey,"").then(testslot=>{
 				if (testslot) {
 					savename = testslot;
 				}
 				const slotwrite = function () {
 					warn_unsaved = false;
-					inputBox("Enter a label for this Browser Storage Slot data", "Enter a label", savename, defaultsavename, () => {
+					inputBox(`Enter a label for this ${lbltype} data`, "Enter a label", savename, defaultsavename, () => {
 						let userinput = getInputBoxValue();
 						if (userinput.trim() == "") {
 							userinput = defaultsavename;
 						}
-						indexeddb_save("slot_" + slot + "_data", newcompressedstory)
-						indexeddb_save("slot_" + slot + "_meta", userinput).then(()=>{
+						indexeddb_save(datakey, newcompressedstory)
+						indexeddb_save(metakey, userinput).then(()=>{
 							if(showcontainer)
 							{
 								display_saveloadcontainer();
@@ -12881,11 +12910,14 @@ Current version indicated by LITEVER below.
 							}
 						});
 					});
-					last_used_saveslot = slot;
+					if(!isscenario)
+					{
+						last_used_saveslot = slot;
+					}
 				}
 
 				if (testslot) {
-					msgboxYesNo("Overwrite existing story in Browser Storage Slot " + slotnumshown + "?", "Overwrite Browser Storage Slot " + slotnumshown, () => {
+					msgboxYesNo(`Overwrite existing data in ${lbltype} ${slotnumshown}?`, `Overwrite ${lbltype} ${slotnumshown}`, () => {
 						slotwrite();
 					}, null);
 				}
@@ -12948,17 +12980,21 @@ Current version indicated by LITEVER below.
 			}
 		}
 	}
-	function load_from_slot(slot,islocal,switch_to_corpo)
+	function load_from_slot(slot,islocal,isscenario,switch_to_corpo)
 	{
 		const proceed_load_from_slot = function() {
-			if(islocal)
+			if(islocal || isscenario)
 			{
-				indexeddb_load("slot_"+slot+"_data","").then(loadedstorycompressed=>{
+				let datakey = (isscenario?"scenario_"+slot+"_data":"slot_"+slot+"_data");
+				indexeddb_load(datakey,"").then(loadedstorycompressed=>{
 					if(loadedstorycompressed)
 					{
 						hide_popups();
 						import_compressed_story(loadedstorycompressed,false);
-						last_used_saveslot = slot;
+						if(!isscenario)
+						{
+							last_used_saveslot = slot;
+						}
 						if(switch_to_corpo)
 						{
 							localsettings.gui_type_chat = 3;
@@ -13007,10 +13043,17 @@ Current version indicated by LITEVER below.
 			proceed_load_from_slot();
 		}
 	}
-	function download_from_slot(slot,islocal)
+	function download_from_slot(slot,islocal,isscenario)
 	{
 		let slotlabel = "";
-		if(islocal)
+		if(isscenario)
+		{
+			if(cachedsavescenariolabels && slot<cachedsavescenariolabels.length)
+			{
+				slotlabel = cachedsavescenariolabels[slot];
+			}
+		}
+		else if(islocal)
 		{
 			if(cachedsaveslotlabels && slot<cachedsaveslotlabels.length)
 			{
@@ -13038,9 +13081,10 @@ Current version indicated by LITEVER below.
 			}
 		};
 
-		if(islocal)
+		if(islocal || isscenario)
 		{
-			indexeddb_load("slot_"+slot+"_data","").then(loadedstorycompressed=>{
+			let datakey = (isscenario?"scenario_"+slot+"_data":"slot_"+slot+"_data");
+			indexeddb_load(datakey,"").then(loadedstorycompressed=>{
 				ondl(loadedstorycompressed);
 			});
 		}
@@ -13070,10 +13114,13 @@ Current version indicated by LITEVER below.
 			});
 		}
 	}
-	function delete_from_slot(slot,islocal,showcontainer)
+	function delete_from_slot(slot,islocal,isscenario,showcontainer)
 	{
 		let slotnumshown = (parseInt(slot)+1);
-		if (islocal) {
+		if (islocal || isscenario) {
+			let metakey = (isscenario?"scenario_"+slot+"_meta":"slot_"+slot+"_meta");
+			let datakey = (isscenario?"scenario_"+slot+"_data":"slot_"+slot+"_data");
+			let lbltype = (isscenario?"Scenario":"Browser Storage Slot");
 			let postdel = function(){
 				if(showcontainer)
 				{
@@ -13085,11 +13132,11 @@ Current version indicated by LITEVER below.
 					populate_corpo_leftpanel();
 				}
 			};
-			msgboxYesNo("Delete story in Browser Storage Slot " + slotnumshown + "?", "Delete Browser Storage Slot " + slotnumshown, () => {
-				indexeddb_save("slot_" + slot + "_data", "");
-				indexeddb_save("slot_" + slot + "_meta", "").then(() => {
+			msgboxYesNo(`Delete data in ${lbltype} ${slotnumshown}?`, `Delete ${lbltype} ${slotnumshown}`, () => {
+				indexeddb_save(datakey, "");
+				indexeddb_save(metakey, "").then(() => {
 					postdel();
-					if(slot==last_used_saveslot)
+					if(!isscenario && slot==last_used_saveslot)
 					{
 						last_used_saveslot = -1;
 					}
@@ -13139,28 +13186,32 @@ Current version indicated by LITEVER below.
 		let selectedslot = document.getElementById("saveslotselecteddropdown").value;
 		let selectedlocation = document.getElementById("saveslotlocationdropdown").value;
 		let islocal = (selectedlocation=="1");
-		save_to_slot(selectedslot,islocal,true);
+		let isscenario = (selectedlocation=="3");
+		save_to_slot(selectedslot,islocal,isscenario,true);
 	}
 	function load_from_curr_slot()
 	{
 		let selectedslot = document.getElementById("saveslotselecteddropdown").value;
 		let selectedlocation = document.getElementById("saveslotlocationdropdown").value;
 		let islocal = (selectedlocation=="1");
-		load_from_slot(selectedslot,islocal,false);
+		let isscenario = (selectedlocation=="3");
+		load_from_slot(selectedslot,islocal,isscenario,false);
 	}
 	function download_from_curr_slot()
 	{
 		let selectedslot = document.getElementById("saveslotselecteddropdown").value;
 		let selectedlocation = document.getElementById("saveslotlocationdropdown").value;
 		let islocal = (selectedlocation=="1");
-		download_from_slot(selectedslot,islocal);
+		let isscenario = (selectedlocation=="3");		
+		download_from_slot(selectedslot,islocal,isscenario);
 	}
 	function delete_from_curr_slot()
 	{
 		let selectedslot = document.getElementById("saveslotselecteddropdown").value;
 		let selectedlocation = document.getElementById("saveslotlocationdropdown").value;
 		let islocal = (selectedlocation=="1");
-		delete_from_slot(selectedslot,islocal,true);
+		let isscenario = (selectedlocation=="3");
+		delete_from_slot(selectedslot,islocal,isscenario,true);
 	}
 
 	var cached_model_list = null;
@@ -23017,7 +23068,7 @@ Current version indicated by LITEVER below.
 				let entry = "";
 				if(testslot)
 				{
-					entry = `<div onclick="load_from_slot(`+i+`, true, true)" class="corpo_leftpanel_btn" type="button">`+testslot+`</div>`;
+					entry = `<div onclick="load_from_slot(`+i+`, true, false, true)" class="corpo_leftpanel_btn" type="button">`+testslot+`</div>`;
 				}
 				panelitems += entry;
 			}
@@ -27576,12 +27627,16 @@ Current version indicated by LITEVER below.
 			<div style="overflow: auto;">
 				<div id="saveloadentries" class="menutext saveloadgrid">
 					<div style="display:flex">
-						<button type="button" style="font-size:12px; margin:2px; padding-left:2px; padding-right:2px; width:33%" name="localsave" class="btn btn-primary" onclick="hide_popups();save_file_button()">💾<br>Download SaveFile</button>
+						<button type="button" style="font-size:12px; margin:2px; padding-left:2px; padding-right:2px; width:33%" name="localsave" class="btn btn-primary" onclick="hide_popups();save_file_button()">💾<br>Download Save</button>
 						<button type="button" style="font-size:12px; margin:2px; padding-left:2px; padding-right:2px; width:33%" name="localload" class="btn btn-primary" onclick="hide_popups();load_file_button()">📁<br>Open File</button>
 						<button type="button" style="font-size:12px; margin:2px; padding-left:2px; padding-right:2px; width:34%" name="shareurl" class="btn btn-primary" onclick="hide_popups();share_story_button()">🌐<br>Share</button>
-					</div>
+					</div>				
+					
 					<div style="margin-top:3px; text-align: center; align-self: center; width: 100%">
 						<span style="font-weight:bold;text-decoration: underline;">Slot Storage Option</span>
+						<span style="float:right; text-align: right;">
+							<button type="button" class="btn btn-primary" style="font-size:10px;padding:2px 5px;margin-left:4px;margin:2px;" onclick="hide_popups();display_settings();display_settings_tab(4);">Configure</button>
+						</span>
 					</div>
 					<div style="display:flex;">
 						<div style="width: 92px; margin:8px; margin-left: 4px; margin-right: 4px; font-size: 14px;">Data Location</div>
@@ -27589,6 +27644,7 @@ Current version indicated by LITEVER below.
 						<select title="Select Slot Location" style="padding:4px;" class="form-control" id="saveslotlocationdropdown" onchange="saveloadchangeslot(true)">
 						<option value="1">Local Browser Cache</option>
 						<option value="2" id="kcppsaveavailable" class="hidden">KoboldCpp Server Storage</option>
+						<option value="3">Local Scenario Library</option>
 						</select>
 						</div>
 					</div>
