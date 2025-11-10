@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 296;
+	const LITEVER = 297;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -1371,6 +1371,15 @@ Current version indicated by LITEVER below.
 	}
 	.scenarioitem.yellow:focus {
 		background-image: var(--img_compass),linear-gradient(to right, #6b5530, #6b5530);
+	}
+	.scenarioitem.brown {
+		background-image: none,	linear-gradient(to right, #a26f41, #73572f);
+	}
+	.scenarioitem.brown:hover {
+		background-image: none,	linear-gradient(to right, #ba7f4c, #8a693a);
+	}
+	.scenarioitem.brown:focus {
+		background-image: none,	linear-gradient(to right, #845a35, #523e22);
 	}
 
 	.branchmenu {
@@ -8962,6 +8971,73 @@ Current version indicated by LITEVER below.
 			}
 		});
 	}
+	
+	function kai_scenario_load(storyobj) //retain all current settings, but overwrite story and a few key items
+	{
+		temp_scenario = {
+			"title":"Custom Scenario",
+			"author":"Unknown",
+			"desc":"Unknown",
+			"prompt":"",
+			"memory":"",
+			"authorsnote": "",
+			"worldinfo": []
+		};
+		if (storyobj.prompt != "") {
+			temp_scenario.prompt += storyobj.prompt;
+		}
+		for (var i = 0; i < storyobj.actions.length; ++i) {
+			temp_scenario.prompt += storyobj.actions[i];
+		}
+		if (storyobj.authorsnote) {
+			temp_scenario.authorsnote = storyobj.authorsnote;
+		}
+		if (storyobj.memory) {
+			temp_scenario.memory = storyobj.memory;
+		}
+		if (storyobj.worldinfo) {
+			temp_scenario.worldinfo = storyobj.worldinfo;
+		}
+		if (storyobj.savedsettings) {
+			if(storyobj.savedsettings.opmode)
+			{
+				temp_scenario.opmode = storyobj.savedsettings.opmode;
+			}
+			if(temp_scenario.opmode==1) //story
+			{				
+				temp_scenario.gui_type = storyobj.savedsettings.gui_type_story?storyobj.savedsettings.gui_type_story:0;
+			}		
+			else if(temp_scenario.opmode==2) //adventure
+			{
+				temp_scenario.adventure_context_mod = storyobj.savedsettings.adventure_context_mod?true:false;
+				temp_scenario.adventure_switch_mode = 1;
+				temp_scenario.gui_type = storyobj.savedsettings.gui_type_adventure?storyobj.savedsettings.gui_type_adventure:0;
+			}
+			else if(temp_scenario.opmode==3) //chat
+			{				
+				temp_scenario.gui_type = storyobj.savedsettings.gui_type_chat?storyobj.savedsettings.gui_type_chat:0;				
+			}
+			else if(temp_scenario.opmode==4) //instruct
+			{				
+				temp_scenario.gui_type = storyobj.savedsettings.gui_type_instruct?storyobj.savedsettings.gui_type_instruct:0;
+			}
+
+			if(temp_scenario.opmode==3 || (temp_scenario.opmode==4 && storyobj.savedsettings.inject_chatnames_instruct))
+			{
+				if(storyobj.savedsettings.chatopponent)
+				{
+					temp_scenario.chatopponent = storyobj.savedsettings.chatopponent;
+				}
+				if(storyobj.savedaestheticsettings && storyobj.savedaestheticsettings.AI_portrait && storyobj.savedaestheticsettings.portrait_ratio_AI)
+				{
+					temp_scenario.image = storyobj.savedaestheticsettings.AI_portrait;
+					temp_scenario.image_aspect = parseFloat(storyobj.savedaestheticsettings.portrait_ratio_AI);
+				}
+			}
+		}
+		complete_load_scenario();
+	}
+
 	function has_tavern_wi_check(obj)
 	{
 		let checkresult = false;
@@ -10345,7 +10421,8 @@ Current version indicated by LITEVER below.
 		document.getElementById("quickstartcontainer").classList.remove("hidden");
 
 		let scenarios = ``;
-		scenarios += `<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="hide_popups();document.getElementById('loadfileinput').click()">Load Save File or Character Card</button>`;
+		scenarios += `<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="hide_popups();document.getElementById('loadfileinput').click()">Load Character Card or JSON File</button>`;
+		scenarios += `<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="hide_popups();display_scenariolibrary();">Load or Save Custom Scenario</button>`;
 		scenarios += `<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="character_creator()">New Character Creator</button>`;
 		
 		for(let i=0;i<scenario_sources.length;++i) {
@@ -12786,6 +12863,11 @@ Current version indicated by LITEVER below.
 			onDoneCallback(esid);
 		});
 	}
+	function display_scenariolibrary()
+	{
+		document.getElementById("saveslotlocationdropdown").value = 3; //scenario library
+		display_saveloadcontainer();
+	}
 	function display_saveloadcontainer()
 	{
 		mainmenu_untab(true);
@@ -12990,11 +13072,19 @@ Current version indicated by LITEVER below.
 					if(loadedstorycompressed)
 					{
 						hide_popups();
-						import_compressed_story(loadedstorycompressed,false);
-						if(!isscenario)
+						if(isscenario)
 						{
+							var story = decompress_story(loadedstorycompressed);
+							if (story != null) {
+								kai_scenario_load(story);
+							}
+						}
+						else
+						{
+							import_compressed_story(loadedstorycompressed,false);					
 							last_used_saveslot = slot;
 						}
+						
 						if(switch_to_corpo)
 						{
 							localsettings.gui_type_chat = 3;
@@ -27662,7 +27752,7 @@ Current version indicated by LITEVER below.
 						<button type="button" id="deleteslot" title="Delete Slot" class="btn btn-primary" onclick="delete_from_curr_slot()"><img class="btnicon-delete"/> Delete Slot</button>
 					</div>
 				</div>
-				<div class="menutext"><p style="padding:6px;font-size: 10px;" class="color_red">Caution: Local Storage Slots are saved to a temporary cache and can be deleted by your browser. KoboldCpp remote storage will save data to a file in your KoboldCpp server. To avoid losing data, use the download file button.</p></div>
+				<div class="menutext"><p style="padding:6px;font-size: 10px;" class="color_red">Caution: Local Storage Slots are saved to a temporary cache and can be deleted by your browser. KoboldCpp remote storage will save data to a file in your KoboldCpp server. To avoid losing data, use the download save button.</p></div>
 				<div class="popupfooter">
 					<button type="button" class="btn btn-primary" id=""
 						onclick="hide_popups()">Back</button>
