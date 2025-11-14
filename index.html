@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 297;
+	const LITEVER = 298;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -22061,14 +22061,14 @@ Current version indicated by LITEVER below.
 
 					if(curr.myturn)
 					{
-						fulltxt += `<hr style="margin-top: 12px; margin-bottom: 12px;"><span class="color_kobotext"><img src="${human_square}" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>${currmsg}</span>`;
+						fulltxt += `<hr style="margin-top: 12px; margin-bottom: 12px;"><span class="color_kobotext"><img src="${human_square}" onclick="classic_click_turn(this,${i})" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>${currmsg}</span>`;
 					}
 					else
 					{
 						if (i == 0) {
 							fulltxt += `${currmsg}`;
 						} else {
-							fulltxt += `<hr style="margin-top: 12px; margin-bottom: 12px;"><img src="${niko_square}" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>${currmsg}</span>`;
+							fulltxt += `<hr style="margin-top: 12px; margin-bottom: 12px;"><img src="${niko_square}" onclick="classic_click_turn(this,${i})" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>${currmsg}</span>`;
 						}
 					}
 				}
@@ -22467,6 +22467,46 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	function classic_delete_turn(idx)
+	{		
+		edit_chunk_save(idx,"",true);
+	}
+
+	function classic_click_turn(button,idx,toggleopen = true)
+	{
+		let incomplete_resp = (synchro_pending_stream != "" || pending_response_id != "");
+		if (incomplete_resp) { return; }
+		
+		function handleOutsideClickClassicTurn(event) {
+			popupMenu.style.display = 'none';
+			document.removeEventListener('click', handleOutsideClickClassicTurn);
+		}
+
+		const rect = button.getBoundingClientRect();
+		const popupMenu = document.getElementById('classicturnmenu');
+		
+		let popcontent = `<button type="button" onclick="classic_delete_turn(${idx})">Delete Turn</button>`;
+		popcontent += `<button type="button" onclick="">Cancel</button>`;
+		popupMenu.innerHTML = popcontent;
+
+		popupMenu.style.left = `${rect.left}px`;
+		popupMenu.style.top = `${rect.top - 10}px`;
+		popupMenu.style.transform = 'translateY(-100%)'; // makes it grow upward
+
+		document.removeEventListener('click', handleOutsideClickClassicTurn);
+		popupMenu.style.display = (popupMenu.style.display === 'flex' ? 'none' : 'flex');
+		if (!toggleopen || popupMenu.style.display === 'none') {
+			popupMenu.style.display = 'none';
+			return;
+		}
+		// if menu is open, attach outside click handler
+		if (popupMenu.style.display === 'flex') {
+			setTimeout(() => { // delay so the current button click doesn't immediately close it
+				document.addEventListener('click', handleOutsideClickClassicTurn);
+			}, 50);
+		}
+	}
+
 	function render_corpo_welcome()
 	{
 		return `<div class='corpowelcome'>
@@ -22626,7 +22666,7 @@ Current version indicated by LITEVER below.
 		return currchatunit;
 	}
 
-	function repack_instruct_history(input) //repack all history into individual turns
+	function repack_instruct_history(input, allow_blank=false) //repack all history into individual turns
 	{
 		if(localsettings.separate_end_tags) {
 			if (get_instruct_starttag_end(true)) {
@@ -22646,7 +22686,7 @@ Current version indicated by LITEVER below.
 		let st = get_instruct_starttag(false);
 		let et = get_instruct_endtag(false);
 
-		let turns = repack_instruct_turns(input,st,et,false);
+		let turns = repack_instruct_turns(input,st,et,allow_blank);
 		return turns;
 	}
 
@@ -22847,12 +22887,13 @@ Current version indicated by LITEVER below.
 		textarea.value = "";
 		corpo_edit_chunk_save();
 	}
-	function corpo_edit_chunk_save()
+
+	function edit_chunk_save(modified_turn, modified_message, allow_blank=false)
 	{
 		let incomplete_resp = (synchro_pending_stream != "" || pending_response_id != "");
 		if (incomplete_resp) { return; }
 
-		let idx = corpo_editing_turn;
+		let idx = modified_turn;
 		let currctx = concat_gametext(false, "", "", "", false);
 		currctx = replace_instruct_placeholders(currctx);
 		let chatunits = [];
@@ -22870,14 +22911,14 @@ Current version indicated by LITEVER below.
 		}
 		else
 		{
-			chatunits = repack_instruct_history(currctx);
+			chatunits = repack_instruct_history(currctx, allow_blank);
 		}
 
-		let textarea = document.getElementById("corpo_edit_inp");
+		
 		let needsave = false;
 
 		let existing_msg_compare = stash_image_placeholders(chatunits[idx].msg,false);
-		if(idx < chatunits.length && textarea.value != existing_msg_compare)
+		if(idx < chatunits.length && modified_message != existing_msg_compare)
 		{
 			needsave = true;
 			gametext_arr = [];
@@ -22887,7 +22928,7 @@ Current version indicated by LITEVER below.
 			retry_preserve_last = false;
 			redo_prev_text = [];
 
-			let newtxt = textarea.value;
+			let newtxt = modified_message;
 			newtxt = unstash_image_placeholders(newtxt);
 
 			if(localsettings.opmode==3) //chat mode
@@ -22961,11 +23002,19 @@ Current version indicated by LITEVER below.
 				}
 			}
 
-			console.log("Merged corpo edit field. Parts:" + gametext_arr.length);
+			console.log("Merged edit done. Parts:" + gametext_arr.length);
 		}
 
 		corpo_editing_turn = -1;
 		render_gametext(needsave,false);
+	}
+
+	function corpo_edit_chunk_save()
+	{
+		let textarea = document.getElementById("corpo_edit_inp");
+		let modified_message = textarea.value;
+		edit_chunk_save(corpo_editing_turn, modified_message);
+		
 	}
 	function corpo_edit_chunk_resend(idx)
 	{
@@ -26029,6 +26078,8 @@ Current version indicated by LITEVER below.
 	</div>
 
 	<div class="branchmenu" id="branchmenu">
+	</div>
+	<div class="branchmenu" id="classicturnmenu">
 	</div>
 
 	<div class="popupcontainer flex hidden" id="memorycontainer">
