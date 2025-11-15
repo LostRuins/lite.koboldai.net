@@ -6801,26 +6801,27 @@ Current version indicated by LITEVER below.
 			let previousIndentation = 0;
 			let inCodeBlock = false;
 			input = input.replace(/\t/g, "    "); //replace tabs with 4 spaces
-			const lines = input.split("\n");
-			const regex = /^( {4,10})(.*)/;
-			let prevIsNewline = false;
-			let withinCodeBlock = false;
-			input = lines.map((line) => {
-				let isNewline = (line.trim()=="");
-				const match = line.match(regex);
-				if (match && (withinCodeBlock||prevIsNewline)) {
-					const [, spaces, content] = match;
-					let lessspaces = spaces.substring(4);
-					withinCodeBlock = true;
-					line = `<pre><code>${lessspaces}${escapeHTML(content)}</code></pre>`;
-				}
-				else
-				{
-					withinCodeBlock = false;
-				}
-				prevIsNewline = isNewline;
-				return line; // Return unmodified if no match or condition not met
-			}).join("\n");
+			// 15nov25: no longer recommended to replace spaced rows with code blocks due to false positives
+			// const lines = input.split("\n");
+			// const regex = /^( {4,10})(.*)/;
+			// let prevIsNewline = false;
+			// let withinCodeBlock = false;
+			// input = lines.map((line) => {
+			// 	let isNewline = (line.trim()=="");
+			// 	const match = line.match(regex);
+			// 	if (match && (withinCodeBlock||prevIsNewline)) {
+			// 		const [, spaces, content] = match;
+			// 		let lessspaces = spaces.substring(4);
+			// 		withinCodeBlock = true;
+			// 		line = `<pre><code>${lessspaces}${escapeHTML(content)}</code></pre>`;
+			// 	}
+			// 	else
+			// 	{
+			// 		withinCodeBlock = false;
+			// 	}
+			// 	prevIsNewline = isNewline;
+			// 	return line; // Return unmodified if no match or condition not met
+			// }).join("\n");
 			return input;
 		};
 		const formatMarkdown = (md) => {
@@ -6896,7 +6897,9 @@ Current version indicated by LITEVER below.
 			.replace(/\^\^(\w.*?)\^\^/gm, "<ins>$1</ins>")
 			.replace(/\{\{(\w.*?)\}\}/gm, "<mark>$1</mark>")
 			.replace(/^((?:(?:\|[^|\r\n]+)*\|[^|\r\n]*[^\s|\r\n][^|\r\n]*(?:\|[^|\r\n]+)*\| {0,2}(?:\r?\n|\r|$))+)/gm,
-				(matchedTable) => convertMarkdownTableToHtml(matchedTable));
+				(matchedTable) => convertMarkdownTableToHtml(matchedTable))
+			.replace(/&lt;sub&gt;(.+?)&lt;\/sub&gt;/g, "<sub>$1</sub>")
+			.replace(/&lt;sup&gt;(.+?)&lt;\/sup&gt;/g, "<sup>$1</sup>");
 			//.replace(/  \n/g, "\n<br/>"); //this is the reddit behavior where spacespacenewline generates extra newline
 
 
