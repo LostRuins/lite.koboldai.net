@@ -22471,6 +22471,38 @@ Current version indicated by LITEVER below.
 	{		
 		edit_chunk_save(idx,"",true);
 	}
+	function classic_edit_turn(idx)
+	{
+		let chatunits = []; //todo: eventually refactor
+		let currctx = concat_gametext(false, "", "", "", false);
+		currctx = replace_instruct_placeholders(currctx);		
+		if(localsettings.opmode==3)
+		{
+			chatunits = repack_chat_history(currctx);
+		}
+		else if(localsettings.opmode==2)
+		{
+			chatunits = repack_adventure_history(currctx);
+		}
+		else if(localsettings.opmode==1)
+		{
+			chatunits = repack_story_history(currctx);
+		}
+		else
+		{
+			chatunits = repack_instruct_history(currctx, true);
+		}
+
+		let currmsg = chatunits[idx].msg;
+		currmsg = stash_image_placeholders(currmsg, false);
+		
+		inputBoxOkCancel("Quickly edit a previous turn message","Quick Edit Turn",currmsg,"(Delete Turn)",()=>{
+			let userinput = getInputBoxValue();
+			edit_chunk_save(idx,userinput,true);
+		},()=>{
+			//do nothing on cancel
+		},true,true);		
+	}
 
 	function classic_click_turn(button,idx,toggleopen = true)
 	{
@@ -22485,7 +22517,8 @@ Current version indicated by LITEVER below.
 		const rect = button.getBoundingClientRect();
 		const popupMenu = document.getElementById('classicturnmenu');
 		
-		let popcontent = `<button type="button" onclick="classic_delete_turn(${idx})">Delete Turn</button>`;
+		let popcontent = `<button type="button" onclick="classic_edit_turn(${idx})">Edit Turn</button>`;
+		popcontent += `<button type="button" onclick="classic_delete_turn(${idx})">Delete Turn</button>`;
 		popcontent += `<button type="button" onclick="">Cancel</button>`;
 		popupMenu.innerHTML = popcontent;
 
@@ -22776,10 +22809,9 @@ Current version indicated by LITEVER below.
 		let incomplete_resp = (synchro_pending_stream != "" || pending_response_id != "");
 		if (incomplete_resp) { return; }
 
-		let currctx = concat_gametext(false, "", "", "", false);
-		currctx = replace_instruct_placeholders(currctx);
-
 		let chatunits = [];
+		let currctx = concat_gametext(false, "", "", "", false);
+		currctx = replace_instruct_placeholders(currctx);		
 		if(localsettings.opmode==3)
 		{
 			chatunits = repack_chat_history(currctx);
@@ -22894,9 +22926,9 @@ Current version indicated by LITEVER below.
 		if (incomplete_resp) { return; }
 
 		let idx = modified_turn;
-		let currctx = concat_gametext(false, "", "", "", false);
-		currctx = replace_instruct_placeholders(currctx);
 		let chatunits = [];
+		let currctx = concat_gametext(false, "", "", "", false);
+		currctx = replace_instruct_placeholders(currctx);		
 		if(localsettings.opmode==3)
 		{
 			chatunits = repack_chat_history(currctx);
@@ -22913,7 +22945,6 @@ Current version indicated by LITEVER below.
 		{
 			chatunits = repack_instruct_history(currctx, allow_blank);
 		}
-
 		
 		let needsave = false;
 
@@ -23048,8 +23079,8 @@ Current version indicated by LITEVER below.
 		}
 
 		let newbodystr = "";
-		input = replace_instruct_placeholders(input);
 		let chatunits = [];
+		input = replace_instruct_placeholders(input);
 		if(localsettings.opmode==3) //chat mode
 		{
 			chatunits = repack_chat_history(input);
@@ -24988,8 +25019,8 @@ Current version indicated by LITEVER below.
 		`;
 
 		//refactor - repack as turns
-		input = replace_instruct_placeholders(input);
 		let chatunits = [];
+		input = replace_instruct_placeholders(input);		
 		if(localsettings.opmode==3) //chat mode
 		{
 			chatunits = repack_chat_history(input);
