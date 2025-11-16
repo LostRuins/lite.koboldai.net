@@ -17594,8 +17594,19 @@ Current version indicated by LITEVER below.
 			{
 				if (pending_context_preinjection == "" && truncated_context != "")
 				{
+					let force_new_turn = false;
 					let endmatcher = get_instructendplaceholder();
-					if (truncated_context.toLowerCase().trim().endsWith(endmatcher.toLowerCase().trim())) {
+					let ends_with_assistant_tag = truncated_context.toLowerCase().trim().endsWith(endmatcher.toLowerCase().trim());
+					if(!localsettings.allow_continue_chat && newgen.trim() == "" && localsettings.inject_chatnames_instruct && localsettings.chatopponent!="")
+					{
+						force_new_turn = true; //interject the chat opponent name into the convo before continue
+						if(!ends_with_assistant_tag)
+						{
+							pending_context_preinjection += endmatcher;
+						}
+					}
+					
+					if (force_new_turn || ends_with_assistant_tag) {
 						if (localsettings.inject_timestamps) {
 							pending_context_preinjection += get_current_timestamp();
 						}
@@ -18094,14 +18105,19 @@ Current version indicated by LITEVER below.
 				{
 					seqs.push(me + "\:");
 				}
-				if(localsettings.chatopponent!="")
+				if(localsettings.chatopponent!="") 
 				{
-					let m_opps = localsettings.chatopponent.split("||$||");
-					for(let i=0;i<m_opps.length;++i)
+					//NOTE: we do not add our opponents name as a stop sequence IF thinking is forced
+					//the model just gets too confused and is likely to repeat the tag.
+					if(localsettings.think_injected!=1)
 					{
-						if(m_opps[i] && m_opps[i].trim()!="")
+						let m_opps = localsettings.chatopponent.split("||$||");
+						for(let i=0;i<m_opps.length;++i)
 						{
-							seqs.push(m_opps[i] + "\:");
+							if(m_opps[i] && m_opps[i].trim()!="")
+							{
+								seqs.push(m_opps[i] + "\:");
+							}
 						}
 					}
 				}
@@ -20114,7 +20130,7 @@ Current version indicated by LITEVER below.
 						gentxt = splitresponse[0];
 					}
 				}
-				if(localsettings.chatopponent!="" && !localsettings.chatopponent.includes("||$||"))
+				if(localsettings.chatopponent!="" && !localsettings.chatopponent.includes("||$||") && localsettings.think_injected!=1)
 				{
 					found = gentxt.indexOf(et2);
 					splitresponse = [];
@@ -20586,7 +20602,7 @@ Current version indicated by LITEVER below.
 				let nextcounter = ++idle_triggered_counter;
 				if(localsettings.opmode == 4) //handle idle messages
 				{
-					if(!localsettings.allow_continue_chat)
+					if(!localsettings.allow_continue_chat && !localsettings.inject_chatnames_instruct) //NOTE: response continue if inject chatname is ALREADY handled inside submit_generation, this is for without chatnames
 					{
 						pending_context_preinjection = get_instructendplaceholder();
 
@@ -25056,13 +25072,13 @@ Current version indicated by LITEVER below.
 				//inject into previous turn, only for instruct OR continuechat
 				if(codeblockcount==0 || codeblockcount%2==0)
 				{
-					chatunits[chatunits.length-1].msg += `<span class='pending_text'>${pendstream}</span>`;
+					chatunits[chatunits.length-1].add_stream_msg = `<span class='pending_text'>${pendstream}</span>`;
 					appended = true;
 				}
 			}
 			if(!appended)
 			{
-				chatunits.push({"msg":`<span class='pending_text'>${pendstream}</span>`,"myturn":false,"unlabelled_name":true, "unlabelled_img":false});
+				chatunits.push({"msg":"","add_stream_msg":`<span class='pending_text'>${pendstream}</span>`,"myturn":false,"unlabelled_name":true, "unlabelled_img":false});
 			}
 		}
 		for(var i=0;i<chatunits.length;++i)
@@ -25094,6 +25110,11 @@ Current version indicated by LITEVER below.
 			});
 
 			curr = repack_postprocess_turn(curr, countmap);
+			if(curr.add_stream_msg)
+			{
+				curr.msg += curr.add_stream_msg; //add it last so it doesnt mess up the pending_text tags
+			}
+
 			if(!curr.msg)
 			{
 				continue; //if turn is empty skip it
