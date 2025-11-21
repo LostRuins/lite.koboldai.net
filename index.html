@@ -6422,20 +6422,23 @@ Current version indicated by LITEVER below.
 									{
 										if(!synchro_polled_respimg && event.data.candidates[0].content.parts[x].inlineData && event.data.candidates[0].content.parts[x].inlineData.data)
 										{
-											synchro_polled_respimg = event.data.candidates[0].content.parts[x].inlineData.data;
+											if(!event.data.candidates[0].content.parts[x].thought) //ignore thought images
+											{
+												synchro_polled_respimg = event.data.candidates[0].content.parts[x].inlineData.data;
+											}
 										}
 										if(event.data.candidates[0].content.parts[x].thought)
 										{
 											streaming_was_thinking = true;
 										}
-										if(!event.data.candidates[0].content.parts[x].text)
-										{
-											continue;
-										}
 										if(!event.data.candidates[0].content.parts[x].thought && streaming_was_thinking)
 										{
 											synchro_pending_stream = `${localsettings.start_thinking_tag}${synchro_pending_stream}${localsettings.stop_thinking_tag}`;
 											streaming_was_thinking = false;
+										}
+										if(!event.data.candidates[0].content.parts[x].text)
+										{
+											continue;
 										}
 										synchro_pending_stream += event.data.candidates[0].content.parts[x].text;
 									}
@@ -18847,13 +18850,14 @@ Current version indicated by LITEVER below.
 					payload["tools"] = [{"google_search": {}}];
 				}
 
-				if(mdlname.includes("gemini-2.5") && !mdlname.includes("image"))
+				if((mdlname.includes("gemini-2.5") && !mdlname.includes("image")) || mdlname.includes("gemini-3-"))
 				{
 					if(!document.getElementById("usegeminithink").checked)
 					{
 						//gemini pro cannot fully disable thinking
 						payload["generationConfig"]["thinkingConfig"] = {"includeThoughts": false, "thinkingBudget": (mdlname.includes("gemini-2.5-pro")?128:0)};
-					}else
+					}
+					else
 					{
 						payload["generationConfig"]["thinkingConfig"] = {"includeThoughts": true};
 					}
