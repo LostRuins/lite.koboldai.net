@@ -15755,7 +15755,7 @@ Current version indicated by LITEVER below.
 
 	function end_trim_to_sentence(input, include_newline = false) {
 		let last = -1;
-		let enders = ['.', '!', '?', '*', '"', ')', '}', '`', ']', ';', '…'];
+		let enders = ['.', '!', '?', '*', '"', ')', '}', '`', ']', ';', '…', '~'];
 		for (let i = 0; i < enders.length; ++i) {
 			last = Math.max(last, input.lastIndexOf(enders[i]));
 		}
@@ -21515,6 +21515,29 @@ Current version indicated by LITEVER below.
 					}
 				}
 
+				if(editedChunks.length>1) //split by chunk lengths in reverse order, we only want the newest
+				{
+					let cl = editedChunks[editedChunks.length-1].length;
+					if(cl>0)
+					{
+						newestChunk = fullmergedstory.slice(-cl);
+						fullmergedstory = fullmergedstory.slice(0,-cl);
+					}
+				}
+
+				//if it ends with a single newline, remove it to avoid ghost newlines
+				if (newestChunk) {
+					if (newestChunk.endsWith("\n") && !newestChunk.endsWith("\n\n")) {
+						newestChunk = newestChunk.slice(0, -1);
+					}
+				}
+				else
+				{
+					if (fullmergedstory.endsWith("\n") && !fullmergedstory.endsWith("\n\n")) {
+						fullmergedstory = fullmergedstory.slice(0, -1);
+					}
+				}
+
 				if(splitbyinsttags)
 				{
 					let ins = get_instructstartplaceholder();
@@ -21554,10 +21577,6 @@ Current version indicated by LITEVER below.
 					}
 					for(let i=0;i<turns.length;++i)
 					{
-						//ghost newline removal
-						if (i==turns.length-1 && turns[i].endsWith("\n") && !turns[i].endsWith("\n\n")) {
-							turns[i] = turns[i].slice(0, -1);
-						}
 						if(turns[i])
 						{
 							gametext_arr.push(turns[i]);
@@ -21566,29 +21585,6 @@ Current version indicated by LITEVER below.
 				}
 				else
 				{
-					if(editedChunks.length>1) //split by chunk lengths in reverse order, we only want the newest
-					{
-						let cl = editedChunks[editedChunks.length-1].length;
-						if(cl>0)
-						{
-							newestChunk = fullmergedstory.slice(-cl);
-							fullmergedstory = fullmergedstory.slice(0,-cl);
-						}
-					}
-
-					//if it ends with a single newline, remove it to avoid ghost newlines
-					if (newestChunk) {
-						if (newestChunk.endsWith("\n") && !newestChunk.endsWith("\n\n")) {
-							newestChunk = newestChunk.slice(0, -1);
-						}
-					}
-					else
-					{
-						if (fullmergedstory.endsWith("\n") && !fullmergedstory.endsWith("\n\n")) {
-							fullmergedstory = fullmergedstory.slice(0, -1);
-						}
-					}
-
 					//split by newlines for the rest
 					if(fullmergedstory.length>0)
 					{
@@ -21605,14 +21601,15 @@ Current version indicated by LITEVER below.
 							}
 						}
 					}
-					if(newestChunk!="")
-					{
-						//little hack to merge a row with only a newline into the last chunk
-						if (gametext_arr.length > 0 && gametext_arr[gametext_arr.length - 1] == "\n") {
-							gametext_arr[gametext_arr.length - 1] += newestChunk;
-						} else {
-							gametext_arr.push(newestChunk);
-						}
+				}
+
+				if(newestChunk!="")
+				{
+					//little hack to merge a row with only a newline into the last chunk
+					if (gametext_arr.length > 0 && gametext_arr[gametext_arr.length - 1] == "\n") {
+						gametext_arr[gametext_arr.length - 1] += newestChunk;
+					} else {
+						gametext_arr.push(newestChunk);
 					}
 				}
 
