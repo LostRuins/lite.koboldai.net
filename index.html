@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 299;
+	const LITEVER = 300;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3859,6 +3859,7 @@ Current version indicated by LITEVER below.
 		autoguess_third_party:false,
 		legacy_savefile:false,
 		allow_continue_user_turn: false,
+		proxy_disable_stream:false,
 
 		//section migrated from story itself
 		extrastopseq: "",
@@ -11629,6 +11630,10 @@ Current version indicated by LITEVER below.
 				return;
 			}
 		}
+		if(uses_cors_proxy && localsettings.proxy_disable_stream)
+		{
+			oaiheaders['nostream'] = true;
+		}
 
 		autofetch_attempt_dict[desired_oai_ep] = true;
 
@@ -13846,6 +13851,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("autoguess_third_party").checked = localsettings.autoguess_third_party;
 		document.getElementById("legacy_savefile").checked = localsettings.legacy_savefile;
 		document.getElementById("allow_continue_user_turn").checked = localsettings.allow_continue_user_turn;
+		document.getElementById("proxy_disable_stream").checked = localsettings.proxy_disable_stream;
 		document.getElementById("render_streaming_markdown").checked = localsettings.render_streaming_markdown;
 		document.getElementById("min_p").value = localsettings.min_p;
 		document.getElementById("dynatemp_range").value = localsettings.dynatemp_range;
@@ -14440,6 +14446,7 @@ Current version indicated by LITEVER below.
 		localsettings.autoguess_third_party = (document.getElementById("autoguess_third_party").checked ? true : false);
 		localsettings.legacy_savefile = (document.getElementById("legacy_savefile").checked ? true : false);
 		localsettings.allow_continue_user_turn = (document.getElementById("allow_continue_user_turn").checked ? true : false);
+		localsettings.proxy_disable_stream = (document.getElementById("proxy_disable_stream").checked ? true : false);
 		localsettings.render_streaming_markdown = (document.getElementById("render_streaming_markdown").checked ? true : false);
 		if(document.getElementById("opmode").value==1)
 		{
@@ -17287,7 +17294,10 @@ Current version indicated by LITEVER below.
 
 		//match the request for creating images in instruct modes
 		let model_allow_imggen = localsettings.img_gen_from_instruct;
-		if(custom_gemini_key!="" && document.getElementById("custom_gemini_model").value=="gemini-2.5-flash-image-preview")
+		if(custom_gemini_key!=""
+		&& (document.getElementById("custom_gemini_model").value.toLowerCase().includes("-flash-image")
+		|| document.getElementById("custom_gemini_model").value.toLowerCase().includes("-pro-image")
+		|| document.getElementById("custom_gemini_model").value.toLowerCase().includes("nano-banana")))
 		{
 			model_allow_imggen = false; //nano banana interferes with imggen instructions
 		}
@@ -18560,6 +18570,11 @@ Current version indicated by LITEVER below.
 				if (custom_oai_key!="" && custom_oai_key!=dummy_api_key) {
                     oaiheaders['Authorization'] = 'Bearer ' + custom_oai_key;
                 }
+
+				if(uses_cors_proxy && localsettings.proxy_disable_stream)
+				{
+					oaiheaders['nostream'] = true;
+				}
 
 				if(targetep.toLowerCase().includes("openrouter.ai"))
 				{
@@ -27580,6 +27595,11 @@ Current version indicated by LITEVER below.
 								class="helptext">In instruct mode, allows the AI to continue generating the user's turn when pressing Generate More.</span></span></div>
 							<input title="Legacy Savefile" type="checkbox" id="allow_continue_user_turn" style="margin:0px 0px 0px 0px;">
 						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">ProxyDisableStream <span class="helpicon">?<span
+								class="helptext">Prevent the CORS proxy from streaming, if applicable.</span></span></div>
+							<input title="Proxy Disable Stream" type="checkbox" id="proxy_disable_stream" style="margin:0px 0px 0px 0px;">
+						</div>
 					</div>
 
 					<div class="settingitem wide">
@@ -28234,8 +28254,12 @@ Current version indicated by LITEVER below.
 					<option value="gemini-2.0-flash">gemini-2.0-flash</option>
 					<option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite</option>
 					<option value="gemini-2.0-pro-exp">gemini-2.0-pro-exp</option>
-					<option value="gemini-2.5-flash-preview-04-17">gemini-2.5-flash-preview-04-17</option>
-					<option value="gemini-2.5-pro-preview-05-06">gemini-2.5-pro-preview-05-06</option>
+					<option value="gemini-2.5-flash">gemini-2.5-flash</option>
+					<option value="gemini-2.5-flash-image-preview">gemini-2.5-flash-image-preview</option>
+					<option value="gemini-2.5-pro">gemini-2.5-pro</option>
+					<option value="gemini-3-pro-preview">gemini-3-pro-preview</option>
+					<option value="gemini-3-pro-image-preview">gemini-3-pro-image-preview</option>
+					<option value="nano-banana-pro-preview">nano-banana-pro-preview</option>
 					<option value="gemma-3-1b-it">gemma-3-1b-it</option>
 					<option value="gemma-3-4b-it">gemma-3-4b-it</option>
 					<option value="gemma-3-12b-it">gemma-3-12b-it</option>
