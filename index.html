@@ -3524,7 +3524,8 @@ Current version indicated by LITEVER below.
 	const a1111_interrogate_endpoint = "/sdapi/v1/interrogate";
 
 	const comfy_models_endpoint = "/models/checkpoints";
-	const comfy_generate_endpoint = "/prompt";
+	const comfy_loras_endpoint = "/models/loras";
+	const comfy_generate_endpoint = "/prompt";	
 	const comfy_history_endpoint = "/history";
 	const comfy_results_endpoint = "/view?filename=";
 	const comfy_upload_endpoint = "/api/upload/image";
@@ -7361,6 +7362,33 @@ Current version indicated by LITEVER below.
 			}
 			comfyui_is_connected = false;
 		});
+		
+		fetch(localsettings.saved_comfy_url + comfy_loras_endpoint)
+		.then(x => x.json())
+		.then(lorasdata => {
+			if (lorasdata == null || lorasdata.length == 0) {
+				msgbox("Invalid data received or no models found. Is ComfyUI running at the url " + localsettings.saved_comfy_url + " ?\n\nIt must be launched with the flags --listen --enable-cors-header '*' to enable API access");
+			} else {
+				let current_loaded_model = lorasdata[0];
+				//repopulate our lora list
+				let dropdown_lora = document.getElementById("generate_images_comfy_lora");
+				
+				//fetch lora
+				let loraSelectionHtml = ``;
+				for (var i = 0; i < lorasdata.length; ++i) {
+					loraSelectionHtml += `<option value="` + lorasdata[i] + `" `+(current_loaded_model==lorasdata[i]?"selected":"")+`>`+lorasdata[i]+`</option>`;
+				}
+
+				dropdown_lora.innerHTML = loraSelectionHtml;
+				comfyui_is_connected = true;
+			}
+		}).catch((error) => {
+			if(!silent)
+			{
+				msgbox("ComfyUI Connect Error: " + error+"\nPlease make sure ComfyUI is running at "+localsettings.saved_comfy_url+" and properly configured!\n\nIt must be launched with the flags --listen --enable-cors-header '*' to enable API access\n");
+			}
+			comfyui_is_connected = false;
+		});	
 	}
 
 	function uploadBase64ImgToComfy(base64Data,filename) {
@@ -7390,11 +7418,16 @@ Current version indicated by LITEVER below.
 
 	function generate_comfy_image(req_payload, autoappend)
 	{
+		let use_lora = false;
+		if (document.getElementById("useLora").checked) {
+			use_lora = true;
+		} else {
+			use_lora = false;
+		}
 		let splits = req_payload.prompt.split("###");
 		let prompt = splits[0].trim();
 		let negprompt = (splits.length > 1 ? splits[1] : "");
 		let comfyimg2imgname = 'kcpp_img2img.jpg';
-
 		let genimg_payload = {
 			"prompt": {
 				"3": {
@@ -7403,7 +7436,7 @@ Current version indicated by LITEVER below.
 						"cfg": req_payload.params.cfg_scale,
 						"denoise": 1,
 						"latent_image": ["5", 0],
-						"model": ["4", 0],
+						"model": use_lora ? ["10", 0] : ["4", 0], 
 						"negative": ["7", 0],
 						"positive": ["6", 0],
 						"sampler_name": "euler",
@@ -7414,9 +7447,7 @@ Current version indicated by LITEVER below.
 				},
 				"4": {
 					"class_type": "CheckpointLoaderSimple",
-					"inputs": {
-						"ckpt_name": req_payload.models[0]
-					}
+					"inputs": { "ckpt_name": req_payload.models[0] }
 				},
 				"5": {
 					"class_type": "EmptyLatentImage",
@@ -7429,15 +7460,15 @@ Current version indicated by LITEVER below.
 				"6": {
 					"class_type": "CLIPTextEncode",
 					"inputs": {
-						"clip": ["4", 1],
-						"text": prompt
+						"text": prompt,
+						"clip": use_lora ? ["10", 1] : ["4", 1] 
 					}
 				},
 				"7": {
 					"class_type": "CLIPTextEncode",
 					"inputs": {
-						"clip": ["4", 1],
-						"text": negprompt
+						"text": negprompt,
+						"clip": use_lora ? ["10", 1] : ["4", 1]
 					}
 				},
 				"8": {
@@ -7456,6 +7487,19 @@ Current version indicated by LITEVER below.
 				}
 			}
 		};
+
+		if (use_lora) {
+			genimg_payload.prompt["10"] = {
+				"class_type": "LoraLoader",
+				"inputs": {
+					"lora_name": req_payload.loras[0],
+					"strength_model": 1.0,
+					"strength_clip": 1.0,
+					"model": ["4", 0],
+					"clip": ["4", 1]
+				}
+			};
+		}
 
 		if(req_payload["source_image"]) //override with img2img nodes
 		{
@@ -19356,7 +19400,9 @@ Current version indicated by LITEVER below.
 		else if(localsettings.generate_images_mode==4) //comfyui
 		{
 			let desired_model = document.getElementById("generate_images_comfy_model").value;
+			let desired_lora = document.getElementById("generate_images_comfy_lora").value;
 			genimg_payload.models = [desired_model];
+			genimg_payload.loras = [desired_lora];
 			imgid = generate_comfy_image(genimg_payload, autoappend);
 		}
 		else if(localsettings.generate_images_mode==5) //pollinations
@@ -28610,6 +28656,12 @@ Current version indicated by LITEVER below.
 			</div>
 			<div class="menutext">
 				Generate Speech <button type="button" class="btn btn-primary" id="btn_inner_genspeech_custom" onclick="manual_tts()">From Prompt</button>
+			</div>
+			<div class="menutext">
+				<input id="useLora" type="checkbox">Use Lora?</input>
+				Select Lora:
+				<select id="generate_images_comfy_lora" class="form-control">
+				</select>
 			</div>
 			<div class="menutext">
 				Capture From <button type="button" class="btn btn-primary" onclick="add_img_btn_webcam()">Camera</button> <button type="button" class="btn btn-primary" onclick="add_img_btn_mic()">Microphone</button>
