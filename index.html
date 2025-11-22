@@ -7366,29 +7366,23 @@ Current version indicated by LITEVER below.
 		fetch(localsettings.saved_comfy_url + comfy_loras_endpoint)
 		.then(x => x.json())
 		.then(lorasdata => {
+			//repopulate our lora list
+			let dropdown_lora = document.getElementById("generate_images_comfy_lora");
+			let loraSelectionHtml = ``;
+
 			if (lorasdata == null || lorasdata.length == 0) {
-				msgbox("Invalid data received or no models found. Is ComfyUI running at the url " + localsettings.saved_comfy_url + " ?\n\nIt must be launched with the flags --listen --enable-cors-header '*' to enable API access");
+				dropdown_lora.disabled = true;
+				loraSelectionHtml = `<option value="" disabled selected>No Lora Found</option>`;
 			} else {
+				dropdown_lora.disabled = false;
 				let current_loaded_model = lorasdata[0];
-				//repopulate our lora list
-				let dropdown_lora = document.getElementById("generate_images_comfy_lora");
-				
-				//fetch lora
-				let loraSelectionHtml = ``;
+
 				for (var i = 0; i < lorasdata.length; ++i) {
 					loraSelectionHtml += `<option value="` + lorasdata[i] + `" `+(current_loaded_model==lorasdata[i]?"selected":"")+`>`+lorasdata[i]+`</option>`;
 				}
-
-				dropdown_lora.innerHTML = loraSelectionHtml;
-				comfyui_is_connected = true;
 			}
-		}).catch((error) => {
-			if(!silent)
-			{
-				msgbox("ComfyUI Connect Error: " + error+"\nPlease make sure ComfyUI is running at "+localsettings.saved_comfy_url+" and properly configured!\n\nIt must be launched with the flags --listen --enable-cors-header '*' to enable API access\n");
-			}
-			comfyui_is_connected = false;
-		});	
+			dropdown_lora.innerHTML = loraSelectionHtml;
+		})
 	}
 
 	function uploadBase64ImgToComfy(base64Data,filename) {
@@ -7418,12 +7412,7 @@ Current version indicated by LITEVER below.
 
 	function generate_comfy_image(req_payload, autoappend)
 	{
-		let use_lora = false;
-		if (document.getElementById("useLora").checked) {
-			use_lora = true;
-		} else {
-			use_lora = false;
-		}
+		let use_lora = document.getElementById("useLora")
 		let splits = req_payload.prompt.split("###");
 		let prompt = splits[0].trim();
 		let negprompt = (splits.length > 1 ? splits[1] : "");
@@ -7436,7 +7425,7 @@ Current version indicated by LITEVER below.
 						"cfg": req_payload.params.cfg_scale,
 						"denoise": 1,
 						"latent_image": ["5", 0],
-						"model": use_lora ? ["10", 0] : ["4", 0], 
+						"model": use_lora.checked ? ["10", 0] : ["4", 0], 
 						"negative": ["7", 0],
 						"positive": ["6", 0],
 						"sampler_name": "euler",
@@ -7461,14 +7450,14 @@ Current version indicated by LITEVER below.
 					"class_type": "CLIPTextEncode",
 					"inputs": {
 						"text": prompt,
-						"clip": use_lora ? ["10", 1] : ["4", 1] 
+						"clip": use_lora.checked ? ["10", 1] : ["4", 1] 
 					}
 				},
 				"7": {
 					"class_type": "CLIPTextEncode",
 					"inputs": {
 						"text": negprompt,
-						"clip": use_lora ? ["10", 1] : ["4", 1]
+						"clip": use_lora.checked ? ["10", 1] : ["4", 1]
 					}
 				},
 				"8": {
@@ -7488,7 +7477,7 @@ Current version indicated by LITEVER below.
 			}
 		};
 
-		if (use_lora) {
+		if (use_lora.checked) {
 			genimg_payload.prompt["10"] = {
 				"class_type": "LoraLoader",
 				"inputs": {
@@ -27039,6 +27028,10 @@ Current version indicated by LITEVER below.
 									<input title="Detect ImgGen Instructions" type="checkbox" id="img_gen_from_instruct" style="margin:0px 0px 0px auto;">
 								</div>
 								<div class="settinglabel">
+									<div class="justifyleft settingsmall"  title="Use Lora for for Image Generation">Use Lora</div>
+									<input title="Use Lora" type="checkbox" id="useLora" style="margin:0px 0px 0px auto;">
+								</div>
+								<div class="settinglabel">
 									<div class="justifyleft settingsmall">Autogenerate Images <span class="helpicon">?<span class="helptext">Allows the AI to generate images on its own. Basic automatically generates images at fixed intervals as you write. Smart mode lets the AI itself choose when to generate images.</span></span></div>
 									<select title="Autogenerate Images" style="padding:1px; height:auto; width: 34px; appearance: none; font-size: 7pt; margin:0px 0px 0px auto;" class="form-control" id="img_autogen_type">
 										<option value="0">Off</option>
@@ -28654,14 +28647,14 @@ Current version indicated by LITEVER below.
 			<div class="menutext">
 				Generate Image <button type="button" class="btn btn-primary" id="btn_inner_genimg_auto" onclick="add_img_btn_auto()">Automatic</button> <button type="button" class="btn btn-primary" id="btn_inner_genimg_custom" onclick="add_img_btn_custom()">From Prompt</button>
 			</div>
-			<div class="menutext">
-				Generate Speech <button type="button" class="btn btn-primary" id="btn_inner_genspeech_custom" onclick="manual_tts()">From Prompt</button>
+			<div class="menutext" id="lora-control-container" style="display: flex; align-items: center; justify-content: center;">
+				<span>Select Lora</span>&nbsp;
+				<select id="generate_images_comfy_lora" class="form-control" style="width: 75%">
+					<option value="" disabled selected>No Lora Found</option>
+				</select>
 			</div>
 			<div class="menutext">
-				<input id="useLora" type="checkbox">Use Lora?</input>
-				Select Lora:
-				<select id="generate_images_comfy_lora" class="form-control">
-				</select>
+				Generate Speech <button type="button" class="btn btn-primary" id="btn_inner_genspeech_custom" onclick="manual_tts()">From Prompt</button>
 			</div>
 			<div class="menutext">
 				Capture From <button type="button" class="btn btn-primary" onclick="add_img_btn_webcam()">Camera</button> <button type="button" class="btn btn-primary" onclick="add_img_btn_mic()">Microphone</button>
