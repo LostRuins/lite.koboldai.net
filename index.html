@@ -3809,7 +3809,7 @@ Current version indicated by LITEVER below.
 		img_gen_from_instruct: true,
 		img_autogen_type: 0, //0 is off, 1 is on, 2 is smart
 		img_allownsfw: true,
-		img_cfgscale: 6,
+		img_cfgscale: 5,
 		img_allowhd: true,
 		img_crop: false,
 		img_newturn: false,
@@ -7726,7 +7726,7 @@ Current version indicated by LITEVER below.
 			const reader = new FileReader();
 			reader.onloadend = () => {
 				let origImg = reader.result;
-				let imgres = localsettings.img_allowhd?(localsettings.img_aspect==0?NO_HD_RES_PX:HD_RES_PX):NO_HD_RES_PX;
+				let imgres = localsettings.img_allowhd?VHD_RES_PX:NO_HD_RES_PX;
 				compressImage(origImg, (newDataUri) => {
 					image_db[imgid].done = true;
 					image_db[imgid].result = newDataUri;
@@ -8201,7 +8201,7 @@ Current version indicated by LITEVER below.
 				document.getElementById("enhancedchatinterface").classList.add("transparentbg");
 				document.getElementById("enhancedchatinterface_inner").classList.add("transparentbg");
 				indexeddb_save("bgimg", compressedImageURI);
-			}, false, 1024, 0.5);
+			}, false, 1024);
 		}
 	};
 	function clear_bg_img()
@@ -16169,7 +16169,7 @@ Current version indicated by LITEVER below.
 			{
 				image_db[imgid].aspect = 2; //landscape
 			}
-		}, false, imgres,0.45,true);
+		}, false, imgres, true);
 	}
 
 	function self_upload_audio(origAudio,filename,modify_curr_turn=false)
@@ -19332,7 +19332,7 @@ Current version indicated by LITEVER below.
 				{
 					//console.log(outputimg);
 					let origImg = "data:image/jpeg;base64," + outputimg;
-					let imgres = localsettings.img_allowhd?(localsettings.img_aspect==0?NO_HD_RES_PX:HD_RES_PX):NO_HD_RES_PX;
+					let imgres = localsettings.img_allowhd?VHD_RES_PX:NO_HD_RES_PX;
 					compressImage(origImg, (newDataUri) => {
 						image_db[imgid].done = true;
 						image_db[imgid].result = newDataUri;
@@ -19377,11 +19377,11 @@ Current version indicated by LITEVER below.
 					{
 						//console.log(outputimg);
 						let origImg = "data:image/jpeg;base64," + outputimg;
-						let imgres = localsettings.img_allowhd?HD_RES_PX:NO_HD_RES_PX;
+						let imgres = localsettings.img_allowhd?VHD_RES_PX:NO_HD_RES_PX;
 						compressImage(origImg, (newDataUri) => {
 							image_db[imgid].done = true;
 							image_db[imgid].result = newDataUri;
-						}, true, imgres);
+						}, false, imgres);
 					}else{
 						image_db[imgid].queue = "Failed";
 						msgbox(`Image Generation Failed!\n\n${outputerr?(outputerr+"\n\n"):""}Please make sure your OpenAI key is set correctly and you are allowed to use DALL-E.\n`);
@@ -20392,8 +20392,7 @@ Current version indicated by LITEVER below.
 										else {
 											img.queue = 0;
 											let origImg = "data:image/jpeg;base64," + finalimg.generations[0].img;
-											//console.log("Original image: " + origImg);
-											let imgres = localsettings.img_allowhd ? (localsettings.img_aspect == 0 ? NO_HD_RES_PX : HD_RES_PX) : NO_HD_RES_PX;
+											let imgres = localsettings.img_allowhd?VHD_RES_PX:NO_HD_RES_PX;
 											compressImage(origImg, (newDataUri) => {
 												img.result = newDataUri;
 											}, false, imgres);
@@ -20447,7 +20446,7 @@ Current version indicated by LITEVER below.
 								reader.onloadend = () => {
 									img.queue = 0;
 									let origImg = reader.result;
-									let imgres = localsettings.img_allowhd?(localsettings.img_aspect==0?NO_HD_RES_PX:HD_RES_PX):NO_HD_RES_PX;
+									let imgres = localsettings.img_allowhd?VHD_RES_PX:NO_HD_RES_PX;
 									compressImage(origImg, (newDataUri) => {
 										img.result = newDataUri;
 									}, false, imgres);
@@ -20513,7 +20512,7 @@ Current version indicated by LITEVER below.
 		}
 	}
 
-	function compressImage(inputDataUri, onDone, fixedSize=true, maxSize=NO_HD_RES_PX, quality = 0.45, letterboxAspect=false) {
+	function compressImage(inputDataUri, onDone, fixedSize=true, maxSize=NO_HD_RES_PX, letterboxAspect=false) {
 		let img = document.createElement('img');
 		let wantedWidth = maxSize;
 		let wantedHeight = maxSize;
@@ -20532,15 +20531,25 @@ Current version indicated by LITEVER below.
 			// We set the dimensions at the wanted size for fixedsize.
 			if(!fixedSize)
 			{
+				const minAllowedSize = 256; //do not allow smaller than this
 				//otherwise, we preserve the original ratio but scale them down to fit
-				let maxImgDim = Math.max(origW,origH);
 				wantedWidth = origW;
 				wantedHeight = origH;
-				if(maxImgDim > maxSize)
+
+				let smallestSide = Math.min(wantedWidth,wantedHeight);
+				if(smallestSide<minAllowedSize && smallestSide>0)
+				{
+					let scalef = minAllowedSize/smallestSide;
+					wantedWidth *= scalef;
+					wantedHeight *= scalef;
+				}
+
+				let maxImgDim = Math.max(wantedWidth,wantedHeight);
+				if(maxImgDim > maxSize && maxImgDim>0)
 				{
 					let scalef = maxImgDim/maxSize;
-					wantedWidth = origW/scalef;
-					wantedHeight = origH/scalef;
+					wantedWidth = wantedWidth/scalef;
+					wantedHeight = wantedHeight/scalef;
 				}
 			}
 
@@ -20623,6 +20632,7 @@ Current version indicated by LITEVER below.
 			}
 
 			var dataURI = "";
+			let quality = 0.45; //standardize quality for all, too many conflicting answers
 			if(isJpeg)
 			{
 				dataURI = canvas.toDataURL(`image/jpeg`, quality);
