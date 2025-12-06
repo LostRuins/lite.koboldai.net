@@ -6468,12 +6468,26 @@ Current version indicated by LITEVER below.
 								}
 								else if(event.data.choices[0].delta && event.data.choices[0].delta.content)
 								{
-									if(streaming_was_thinking)
+									let cnt = event.data.choices[0].delta.content;
+
+									if(cnt && cnt.length>0 && cnt[0].type=="thinking") //mistral
+									{
+										if(cnt[0].thinking && cnt[0].thinking.length>0 && cnt[0].thinking[0].text)
+										{
+											streaming_was_thinking = true;
+											cnt = cnt[0].thinking[0].text;
+										}
+										else
+										{
+											cnt = "";
+										}
+									}
+									else if(streaming_was_thinking)
 									{
 										streaming_was_thinking = false;
 										synchro_pending_stream = `${localsettings.start_thinking_tag}${synchro_pending_stream}${localsettings.stop_thinking_tag}`;
 									}
-									synchro_pending_stream += event.data.choices[0].delta.content;
+									synchro_pending_stream += cnt;
 								}
 								else if(event.data.choices[0].delta && !event.data.choices[0].delta.content && event.data.choices[0].delta.reasoning_content!=null&& event.data.choices[0].delta.reasoning_content!="")
 								{
