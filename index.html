@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 300;
+	const LITEVER = 301;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3745,7 +3745,7 @@ Current version indicated by LITEVER below.
 		saved_palm_jailbreak:"", //gemini system prompt
 		saved_palm_jailbreak2:"", //gemini postfix
 		saved_openrouter_provider:"", //for overriding provider
-		saved_openrouter_reasoning:0, //enable or disable openrouter thinking, 0=default, 1=disable, 2=enable
+		saved_oai_reasoning:"", //if set, reasoning level "none,minimal,low,medium,high", else default
 		saved_oai_custommodel: "", //customized oai custom model
 		saved_oai_role: 3, //0=user,1=assistant,2=system, 3=auto
 		saved_a1111_url: default_a1111_base,
@@ -3810,7 +3810,7 @@ Current version indicated by LITEVER below.
 		img_gen_from_instruct: true,
 		img_autogen_type: 0, //0 is off, 1 is on, 2 is smart
 		img_allownsfw: true,
-		img_cfgscale: 6,
+		img_cfgscale: 5,
 		img_allowhd: true,
 		img_crop: false,
 		img_newturn: false,
@@ -4052,6 +4052,15 @@ Current version indicated by LITEVER below.
 		"system_end":"<|end_of_text|>\\n",
 	},
 	{
+		"name":"Kimi ChatML",
+		"user":"<|im_user|>user<|im_middle|>",
+		"user_end":"<|im_end|>",
+		"assistant":"<|im_assistant|>assistant<|im_middle|>",
+		"assistant_end":"<|im_end|>",
+		"system":"<|im_system|>system<|im_middle|>",
+		"system_end":"<|im_end|>",
+	},
+	{
 		"name":"Llama 2 Chat",
 		"user":"[INST] ",
 		"user_end":"",
@@ -4154,7 +4163,7 @@ Current version indicated by LITEVER below.
 		"name":"OpenAI Harmony Non-Thinking",
 		"user":"<|start|>user<|message|>",
 		"user_end":"<|end|>",
-		"assistant":"<|start|>assistant<|channel|>final<|message|>",
+		"assistant":"<<|start|>assistant<|channel|>analysis<|message|>We can answer immediately.<|end|><|start|>assistant<|channel|>final<|message|>",
 		"assistant_end":"<|end|>",
 		"system":"<|start|>developer<|message|>",
 		"system_end":"<|end|>",
@@ -4766,6 +4775,11 @@ Current version indicated by LITEVER below.
 
 	//setup drag and drop zone for files
 	setupDragDrop();
+
+	//setup autoscroll disabling when manual scroll
+    attach_scroll_detection(document.getElementById("gametext"));
+	attach_scroll_detection(document.getElementById("chat_msg_body"));
+	attach_scroll_detection(document.getElementById("corpostylemain"));
 
 	//fix for iphone zooming
 	if(navigator.userAgent.indexOf('iPhone') > -1 )
@@ -6455,12 +6469,26 @@ Current version indicated by LITEVER below.
 								}
 								else if(event.data.choices[0].delta && event.data.choices[0].delta.content)
 								{
-									if(streaming_was_thinking)
+									let cnt = event.data.choices[0].delta.content;
+
+									if(cnt && cnt.length>0 && cnt[0].type=="thinking") //mistral
+									{
+										if(cnt[0].thinking && cnt[0].thinking.length>0 && cnt[0].thinking[0].text)
+										{
+											streaming_was_thinking = true;
+											cnt = cnt[0].thinking[0].text;
+										}
+										else
+										{
+											cnt = "";
+										}
+									}
+									else if(streaming_was_thinking)
 									{
 										streaming_was_thinking = false;
 										synchro_pending_stream = `${localsettings.start_thinking_tag}${synchro_pending_stream}${localsettings.stop_thinking_tag}`;
 									}
-									synchro_pending_stream += event.data.choices[0].delta.content;
+									synchro_pending_stream += cnt;
 								}
 								else if(event.data.choices[0].delta && !event.data.choices[0].delta.content && event.data.choices[0].delta.reasoning_content!=null&& event.data.choices[0].delta.reasoning_content!="")
 								{
@@ -6894,6 +6922,7 @@ Current version indicated by LITEVER below.
 
 			.replace(/\*\*\*([^\s*][\s\S]*?[^\\])\*\*\*/gm, "<b><em>$1</em></b>")
 			.replace(/\*\*(.)\*\*/g, "<b>$1</b>") //handle single char bold
+			.replace(/ \*\*(\w+(?: \w+)?)\*\* /g, " <b>$1</b> ") //hack: support 1 or 2 nested bolded words (not official)
 			.replace(/\*\*([^\s*][\s\S]*?[^\\])\*\*/gm, "<b>$1</b>")
 			.replace(/(^|[\s.,;:!?<>])\*(.)\*(?=[\s.,;:!?<>]|$)/g, "$1<em>$2</em>") //handle single char italics
 			.replace(/\*([^\s*][\s\S]*?[^\\])\*/gm, "<em>$1</em>")
@@ -7747,7 +7776,7 @@ Current version indicated by LITEVER below.
 			const reader = new FileReader();
 			reader.onloadend = () => {
 				let origImg = reader.result;
-				let imgres = localsettings.img_allowhd?(localsettings.img_aspect==0?NO_HD_RES_PX:HD_RES_PX):NO_HD_RES_PX;
+				let imgres = localsettings.img_allowhd?VHD_RES_PX:NO_HD_RES_PX;
 				compressImage(origImg, (newDataUri) => {
 					image_db[imgid].done = true;
 					image_db[imgid].result = newDataUri;
@@ -8222,7 +8251,7 @@ Current version indicated by LITEVER below.
 				document.getElementById("enhancedchatinterface").classList.add("transparentbg");
 				document.getElementById("enhancedchatinterface_inner").classList.add("transparentbg");
 				indexeddb_save("bgimg", compressedImageURI);
-			}, false, 1024, 0.5);
+			}, false, 1024);
 		}
 	};
 	function clear_bg_img()
@@ -11843,6 +11872,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("oaidesc").classList.add("hidden");
 			document.getElementById("pollinationsdesc").classList.add("hidden");
 			document.getElementById("openrouterproviderbox").classList.add("hidden");
+			document.getElementById("oaireasoningeffort").value = localsettings.saved_oai_reasoning;
 			if(epchoice==2)
 			{
 				document.getElementById("oaidesc").classList.remove("hidden");
@@ -11862,7 +11892,6 @@ Current version indicated by LITEVER below.
 				document.getElementById("openrouterproviderbox").classList.remove("hidden");
 				document.getElementById("custom_oai_endpoint").value = default_openrouter_base;
 				document.getElementById("openrouterproviders").value = localsettings.saved_openrouter_provider;
-				document.getElementById("openrouterreasoning").value = localsettings.saved_openrouter_reasoning;
 				document.getElementById("custom_oai_key").value =(localsettings.saved_openrouter_key==dummy_api_key?"":localsettings.saved_openrouter_key);
 				try_fetch_oai_models_auto();
 			}
@@ -12288,7 +12317,7 @@ Current version indicated by LITEVER below.
 									}
 									else if(localflag && koboldcpp_has_txt2img && no_txt_model && safe_to_overwrite())
 									{
-										msgboxYesNo("This KoboldCpp instance seems to be running an Image Generation model without any Text Generation model loaded.\n\nWould you like to launch StableUI (Dedicated Image Generation WebUI bundled with KoboldCpp)?\n\nIf unsure, select 'No'.","Launch StableUI?", ()=>{
+										msgboxYesNo("This KoboldCpp instance seems to be running an Image Generation model without any Text Generation model loaded.\n\nWould you like to launch StableUI (Dedicated Image Generation WebUI bundled with KoboldCpp)?\n\nIf unsure, select 'Yes'.","Launch StableUI?", ()=>{
 											go_to_stableui();
 										},()=>{
 										});
@@ -12438,8 +12467,8 @@ Current version indicated by LITEVER below.
 				{
 					localsettings.saved_openrouter_key = custom_oai_key;
 					localsettings.saved_openrouter_provider = document.getElementById("openrouterproviders").value;
-					localsettings.saved_openrouter_reasoning = document.getElementById("openrouterreasoning").value;
 				}
+				localsettings.saved_oai_reasoning = document.getElementById("oaireasoningeffort").value;
 				localsettings.saved_oai_jailbreak = document.getElementById("jailbreakprompttext").value;
 				if(localsettings.saved_oai_jailbreak=="")
 				{
@@ -16192,7 +16221,7 @@ Current version indicated by LITEVER below.
 			{
 				image_db[imgid].aspect = 2; //landscape
 			}
-		}, false, imgres,0.35,true);
+		}, false, imgres, true);
 	}
 
 	function self_upload_audio(origAudio,filename,modify_curr_turn=false)
@@ -17294,6 +17323,15 @@ Current version indicated by LITEVER below.
 				} else {
 					pending_context_preinjection = ist; //bot response as first msg
 					pending_context_postinjection = iet;
+				}
+				if (localsettings.inject_timestamps) {
+					pending_context_preinjection += get_current_timestamp();
+				}
+				if (localsettings.inject_chatnames_instruct) {
+					if (localsettings.inject_timestamps) {
+						pending_context_preinjection += " ";
+					}
+					pending_context_preinjection += get_my_multiplayer_chatname() + "\:";
 				}
 			} else {
 				if (gametext_arr.length == 0) {
@@ -18422,7 +18460,7 @@ Current version indicated by LITEVER below.
 					//mistral api does not support presence pen
 					oai_payload.presence_penalty = scaled_rep_pen;
 				}
-				if(document.getElementById("useoainonstandard").checked || targetep.toLowerCase().includes("featherless.ai"))
+				if(document.getElementById("useoainonstandard").checked)
 				{
 					//featherless api supports additional fields, include them
 					oai_payload.top_k = (submit_payload.params.top_k<1?300:submit_payload.params.top_k);
@@ -18452,7 +18490,14 @@ Current version indicated by LITEVER below.
 					}
 				}
 
-				if (document.getElementById("useoaichatcompl").checked) {
+				if (document.getElementById("useoaichatcompl").checked)
+				{
+					let reasoneffort = document.getElementById("oaireasoningeffort").value;
+					if(reasoneffort && reasoneffort!="")
+					{
+						oai_payload.reasoning_effort = reasoneffort;
+					}
+
 					let mainoaibody = submit_payload.prompt; //can be string or array
 					if(insertAIVisionImages.length>0 || insertAIAudioSounds.length>0)
 					{
@@ -18617,6 +18662,15 @@ Current version indicated by LITEVER below.
 					oaiheaders['nostream'] = true;
 				}
 
+				if(targetep.toLowerCase().includes("api.novita.ai"))
+				{
+					if(oai_payload.reasoning_effort && oai_payload.reasoning_effort!="") //adapt reasoning effort for openrouter
+					{
+						oai_payload.enable_thinking = (oai_payload.reasoning_effort=="none"?false:true);
+						delete oai_payload["reasoning_effort"];
+					}
+				}
+
 				if(targetep.toLowerCase().includes("openrouter.ai"))
 				{
 					oaiheaders["HTTP-Referer"] = "https://lite.koboldai.net";
@@ -18627,10 +18681,15 @@ Current version indicated by LITEVER below.
 							"allow_fallbacks": false, //always explicitly selected
 						};
 					}
-					let reasonselect = document.getElementById("openrouterreasoning").value;
-					if(reasonselect!=0)
+
+					if(oai_payload.reasoning_effort && oai_payload.reasoning_effort!="") //adapt reasoning effort for openrouter
 					{
-						oai_payload.reasoning = {"enabled":(reasonselect==2?true:false)};
+						oai_payload.reasoning = {"enabled":(oai_payload.reasoning_effort=="none"?false:true)};
+						if(oai_payload.reasoning_effort!="none")
+						{
+							oai_payload.reasoning.effort = oai_payload.reasoning_effort;
+						}
+						delete oai_payload["reasoning_effort"];
 					}
 				}
 
@@ -19334,7 +19393,7 @@ Current version indicated by LITEVER below.
 				{
 					//console.log(outputimg);
 					let origImg = "data:image/jpeg;base64," + outputimg;
-					let imgres = localsettings.img_allowhd?(localsettings.img_aspect==0?NO_HD_RES_PX:HD_RES_PX):NO_HD_RES_PX;
+					let imgres = localsettings.img_allowhd?VHD_RES_PX:NO_HD_RES_PX;
 					compressImage(origImg, (newDataUri) => {
 						image_db[imgid].done = true;
 						image_db[imgid].result = newDataUri;
@@ -19379,11 +19438,11 @@ Current version indicated by LITEVER below.
 					{
 						//console.log(outputimg);
 						let origImg = "data:image/jpeg;base64," + outputimg;
-						let imgres = localsettings.img_allowhd?HD_RES_PX:NO_HD_RES_PX;
+						let imgres = localsettings.img_allowhd?VHD_RES_PX:NO_HD_RES_PX;
 						compressImage(origImg, (newDataUri) => {
 							image_db[imgid].done = true;
 							image_db[imgid].result = newDataUri;
-						}, true, imgres);
+						}, false, imgres);
 					}else{
 						image_db[imgid].queue = "Failed";
 						msgbox(`Image Generation Failed!\n\n${outputerr?(outputerr+"\n\n"):""}Please make sure your OpenAI key is set correctly and you are allowed to use DALL-E.\n`);
@@ -20397,8 +20456,7 @@ Current version indicated by LITEVER below.
 										else {
 											img.queue = 0;
 											let origImg = "data:image/jpeg;base64," + finalimg.generations[0].img;
-											//console.log("Original image: " + origImg);
-											let imgres = localsettings.img_allowhd ? (localsettings.img_aspect == 0 ? NO_HD_RES_PX : HD_RES_PX) : NO_HD_RES_PX;
+											let imgres = localsettings.img_allowhd?VHD_RES_PX:NO_HD_RES_PX;
 											compressImage(origImg, (newDataUri) => {
 												img.result = newDataUri;
 											}, false, imgres);
@@ -20452,7 +20510,7 @@ Current version indicated by LITEVER below.
 								reader.onloadend = () => {
 									img.queue = 0;
 									let origImg = reader.result;
-									let imgres = localsettings.img_allowhd?(localsettings.img_aspect==0?NO_HD_RES_PX:HD_RES_PX):NO_HD_RES_PX;
+									let imgres = localsettings.img_allowhd?VHD_RES_PX:NO_HD_RES_PX;
 									compressImage(origImg, (newDataUri) => {
 										img.result = newDataUri;
 									}, false, imgres);
@@ -20518,7 +20576,7 @@ Current version indicated by LITEVER below.
 		}
 	}
 
-	function compressImage(inputDataUri, onDone, fixedSize=true, maxSize=NO_HD_RES_PX, quality = 0.35, letterboxAspect=false) {
+	function compressImage(inputDataUri, onDone, fixedSize=true, maxSize=NO_HD_RES_PX, letterboxAspect=false) {
 		let img = document.createElement('img');
 		let wantedWidth = maxSize;
 		let wantedHeight = maxSize;
@@ -20537,15 +20595,25 @@ Current version indicated by LITEVER below.
 			// We set the dimensions at the wanted size for fixedsize.
 			if(!fixedSize)
 			{
+				const minAllowedSize = 256; //do not allow smaller than this
 				//otherwise, we preserve the original ratio but scale them down to fit
-				let maxImgDim = Math.max(origW,origH);
 				wantedWidth = origW;
 				wantedHeight = origH;
-				if(maxImgDim > maxSize)
+
+				let smallestSide = Math.min(wantedWidth,wantedHeight);
+				if(smallestSide<minAllowedSize && smallestSide>0)
+				{
+					let scalef = minAllowedSize/smallestSide;
+					wantedWidth *= scalef;
+					wantedHeight *= scalef;
+				}
+
+				let maxImgDim = Math.max(wantedWidth,wantedHeight);
+				if(maxImgDim > maxSize && maxImgDim>0)
 				{
 					let scalef = maxImgDim/maxSize;
-					wantedWidth = origW/scalef;
-					wantedHeight = origH/scalef;
+					wantedWidth = wantedWidth/scalef;
+					wantedHeight = wantedHeight/scalef;
 				}
 			}
 
@@ -20628,6 +20696,7 @@ Current version indicated by LITEVER below.
 			}
 
 			var dataURI = "";
+			let quality = 0.5; //standardize quality for all, too many conflicting answers
 			if(isJpeg)
 			{
 				dataURI = canvas.toDataURL(`image/jpeg`, quality);
@@ -21934,6 +22003,9 @@ Current version indicated by LITEVER below.
 
 	}
 
+	var autoscrollEnabled = true;
+	var suppressScrollEvent = false;
+	var autoscrollTimeout = null;
 	function handle_autoscroll(alwaysscroll=true)
 	{
 		if (localsettings.autoscroll) {
@@ -21941,8 +22013,9 @@ Current version indicated by LITEVER below.
 			let box2 = document.getElementById("chat_msg_body");
 			let box3 = document.getElementById("corpostylemain");
 			function isScrolledToBottom(element) {
-				return element.scrollHeight - element.scrollTop - element.clientHeight <= 100;
+				return element.scrollHeight - element.scrollTop - element.clientHeight <= (autoscrollEnabled?180:60);
 			}
+			suppressScrollEvent = true;
 			if(alwaysscroll || isScrolledToBottom(box1))
 			{
 				box1.scrollTop = box1.scrollHeight - box1.clientHeight + 10;
@@ -21955,7 +22028,21 @@ Current version indicated by LITEVER below.
 			{
 				box3.scrollTop = box3.scrollHeight - box3.clientHeight + 10;
 			}
+			suppressScrollEvent = false;
 		}
+	}
+	function attach_scroll_detection(element)
+	{
+		element.addEventListener("scroll", () => {
+			if (suppressScrollEvent) { return; }
+			autoscrollEnabled = false;
+			if (autoscrollTimeout) {
+				clearTimeout(autoscrollTimeout);
+			}
+			autoscrollTimeout = setTimeout(() => {
+				autoscrollEnabled = true;
+			}, 100);
+		});
 	}
 
 	function render_gametext(save=true, force_scroll=true)
@@ -25233,7 +25320,7 @@ Current version indicated by LITEVER below.
 			newbodystr += ` style='flex: 1; display:flex; padding: ${as.padding()}; margin: ${as.margin()}; min-height:${as.background_minHeight}px;`
 			+ ` font-size: ${as.font_size}px; flex-direction:column; align-items: ${as.centerHorizontally ? 'center' : 'flex-start'};`
 			+ ` justify-content: center; border-radius: ${as.rounded_bubbles ? '15px' : '0px'}'>`
-			+ `<span>${namepart}${curr.msg}</span></div></div>`;
+			+ `<div>${namepart}${curr.msg}</div></div></div>`;
 		}
 
 		return portraitsStyling + newbodystr.replaceAll(/(\r\n|\r|\n)/g,'<br>'); // Finally, convert newlines to HTML format and return the stylized string.
@@ -25892,7 +25979,9 @@ Current version indicated by LITEVER below.
 				const containerRect = gametext.getBoundingClientRect();
 				if (rect.top < containerRect.top || rect.bottom > containerRect.bottom) {
 					if (range.startContainer && range.startContainer.nodeType === Node.TEXT_NODE) {
+						suppressScrollEvent = true;
 						gametext.scrollTop = 0; //simple fix for safari scrolling
+						suppressScrollEvent = false;
 						const span = document.createElement("span");
 						span.style.display = "inline";
 						span.style.background = "transparent";
@@ -27963,7 +28052,7 @@ Current version indicated by LITEVER below.
 
 	<div class="popupcontainer flex hidden" id="customendpointcontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup flexsize evenhigher">
+		<div class="nspopup flexsize highest">
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Select your AI provider</div>
 			</div>
@@ -28038,8 +28127,8 @@ Current version indicated by LITEVER below.
 			<div id="oaicustom" class="menutext hidden">
 				<span id="oaidesc">
 				Entering your <a class="color_blueurl" target="_blank" href="https://platform.openai.com/api-keys">OpenAI API key</a> will allow you to use KoboldAI Lite with their API.<br>
-				<b>Or, set a custom API URL to use ANY 3rd-party OAI Compatible API</b><br><br>
-				KoboldAI Lite takes no responsibility for your usage of this feature. Your API key is used directly with the OpenAI API, <span class="color_red">unless CORS proxy is used</span>. Reconnecting resets all custom OpenAI URLs.<br>Only Temperature, Top-P and Repetition Penalty samplers are used.<br><br>
+				<b>Set a custom URL to use any 3rd-party Compatible API</b><br><br>
+				You are responsibile for your own usage. API keys are used with OpenAI API directly, <span class="color_red">unless CORS proxy is used</span>. Reconnecting resets all custom OpenAI URLs.<br>Only Temperature, Top-P and Repetition Penalty samplers are used.<br><br>
 				<span class="color_green" style="font-weight: bold;">Please input OpenAI API URL and Key.</span><br>
 				<div style="display:inline-flex">
 					<div><input type="checkbox" id="corsproxy_oai" title="Use CORS Proxy">
@@ -28050,32 +28139,32 @@ Current version indicated by LITEVER below.
 				</span>
 				<span id="openrouterdesc" class="hidden">
 				Entering your <a class="color_blueurl" target="_blank" href="https://openrouter.ai/settings/keys">OpenRouter API key</a> will allow you to use KoboldAI Lite with their API.<br><br>
-				KoboldAI Lite takes no responsibility for your usage of this feature. Your API key is used directly with the OpenRouter API and is not transmitted to us.<br>Only Temperature, Top-P and Repetition Penalty samplers are used.<br><a class="color_blueurl" onclick="fetch_openrouter_balance()" href="#">Click here to see your credit balance.</a><br><br>
+				You are responsibile for your own usage. API keys are used with OpenRouter API directly.<br>Only Temperature, Top-P and Repetition Penalty samplers are used.<br><a class="color_blueurl" onclick="fetch_openrouter_balance()" href="#">Click here to see your credit balance.</a><br><br>
 				<span class="color_green" style="font-weight: bold;">Please input OpenRouter Key.</span><br><br>
 				</span>
 				<span id="mistralaidesc" class="hidden">
 				Entering your <a class="color_blueurl" target="_blank" href="https://docs.mistral.ai/getting-started/quickstart">MistralAI API key</a> will allow you to use KoboldAI Lite with their API.<br><br>
-				KoboldAI Lite takes no responsibility for your usage of this feature. Your API key is used directly with the MistralAI API and is not transmitted to us.<br>Only Temperature and Top-P samplers are used.<br><br>
+				You are responsibile for your own usage. API keys are used with MistralAI API directly.<br>Only Temperature and Top-P samplers are used.<br><br>
 				<span class="color_green" style="font-weight: bold;">Please input MistralAI Key.</span><br><br>
 				</span>
 				<span id="featherlessdesc" class="hidden">
 				Entering your <a class="color_blueurl" target="_blank" href="https://featherless.ai/docs/getting-started">Featherless API key</a> will allow you to use KoboldAI Lite with their API.<br><br>
-				KoboldAI Lite takes no responsibility for your usage of this feature. Your API key is used directly with the Featherless API and is not transmitted to us.<br>Only Temperature, Top-P, Top-K, Min-P and Repetition Penalty samplers are used.<br><br>
+				You are responsibile for your own usage. API keys are used with Featherless API directly.<br>Only Temperature, Top-P, Top-K, Min-P and Repetition Penalty samplers are used.<br><br>
 				<span class="color_green" style="font-weight: bold;">Please input Featherless Key.</span><br><br>
 				</span>
 				<span id="grokdesc" class="hidden">
 				Entering your Grok API key will allow you to use KoboldAI Lite with their API.<br><br>
-				KoboldAI Lite takes no responsibility for your usage of this feature. Your API key is used directly with the Grok API and is not transmitted to us.<br>Only Temperature, Top-P, Top-K, Min-P and Repetition Penalty samplers are used.<br><br>
+				You are responsibile for your own usage. API keys are used with Grok API directly.<br>Only Temperature, Top-P, Top-K, Min-P and Repetition Penalty samplers are used.<br><br>
 				<span class="color_green" style="font-weight: bold;">Please input Grok Key.</span><br><br>
 				</span>
 				<span id="pollinationsdesc" class="hidden">
 				Pollinations.ai API is free to use without any key required.<br><br>
-				KoboldAI Lite takes no responsibility for your usage of this feature. This service is ad driven, ads may appear in the output.<br>Only Temperature, Top-P, Top-K and Repetition Penalty samplers are used.<br><br>
+				You are responsibile for your own usage. This service is ad driven, ads may appear in the output.<br>Only Temperature, Top-P, Top-K and Repetition Penalty samplers are used.<br><br>
 				<span class="color_green" style="font-weight: bold;">No Key Required.</span><br><br>
 				</span>
 				<span id="nvidianimdesc" class="hidden">
 				Entering your <a class="color_blueurl" target="_blank" href="https://build.nvidia.com/explore/discover">Nvidia NIM API key</a> will allow you to use KoboldAI Lite with their API.<br><br>
-				KoboldAI Lite takes no responsibility for your usage of this feature. <span class="color_red">Due to CORS restrictions, your connection WILL be proxied.</span><br>Only Temperature, Top-P and Repetition Penalty samplers are used.<br><br>
+				You are responsibile for your own usage. <span class="color_red">Due to CORS restrictions, your connection WILL be proxied.</span><br>Only Temperature, Top-P and Repetition Penalty samplers are used.<br><br>
 				<span class="color_green" style="font-weight: bold;">Please input Nvidia NIM Key.</span><br><br>
 				</span>
 
@@ -28201,29 +28290,39 @@ Current version indicated by LITEVER below.
 					<div><input type="checkbox" id="useoaichatcompl" title="Use ChatCompletions API" onchange="toggleoaichatcompl()">
 					<div class="box-label">Chat-Completions API</div></div>
 					<div><input type="checkbox" id="useoainonstandard" title="Send Non-Standard Fields">
-					<div class="box-label">Non-Standard Fields</div></div>
+					<div class="box-label">Non-Standard Fields <span class="helpicon">?<span class="helptext">Send extra non-standard samplers like Min-P, Top-K and Top-A.</span></span></div></div>
 				</div>
-				<span id="useoaichatcomplbox" class="hidden" onload="toggleoaichatcompl();">
-					<br>
-					Main Msg Role:
-					<select title="Main Message Role" class="form-control" style="height: 25px; font-size:12px; margin-bottom: 2px; padding:4px;display:inline;width:100px" id="oairoledropdown">
+				<div id="useoaichatcomplbox" class="hidden" onload="toggleoaichatcompl();">
+					<div style="display: inline-block;">
+					Main Message Role:
+					<select title="Main Message Role" class="form-control" style="height: 25px; font-size:12px; margin-bottom: 2px; margin-right:4px; padding:4px;display:inline;width:100px" id="oairoledropdown">
 						<option value="0" selected>User</option>
 						<option value="1">Assistant</option>
 						<option value="2">System</option>
 						<option value="3">AutoRole</option>
 					</select>
+					</div>
+					<div style="display: inline-block;">
 					<input type="checkbox" title="Add Prefix Prompt" id="jailbreakprompt" onchange="togglejailbreak()">
-					<div class="box-label" title="Add Prefix. Forcefully inserts extra text at the start of the prompt to steer the AI.">Add Prefix</div>
+					<div class="box-label" style="padding:4px" title="Add Prefix. Forcefully inserts extra text at the start of the prompt to steer the AI.">Add Prefix</div>
 					<input type="checkbox" title="Add Postfix Prompt" id="jailbreakprompt2" onchange="togglejailbreak2()">
-					<div class="box-label" title="Add Postfix. Forcefully inserts extra text to before the AI response to steer the AI.">Add Postfix</div>
-
+					<div class="box-label" style="padding:4px" title="Add Postfix. Forcefully inserts extra text to before the AI response to steer the AI.">Add Postfix</div>
+					<select title="Reasoning Effort" class="form-control" style="height: 22px; font-size:10px; padding:2px;display:inline;width:120px" id="oaireasoningeffort">
+						<option value="" selected>Reasoning: Default</option>
+						<option value="none">Reasoning: None</option>
+						<option value="minimal">Reasoning: Minimal</option>
+						<option value="low">Reasoning: Low</option>
+						<option value="medium">Reasoning: Medium</option>
+						<option value="high">Reasoning: High</option>
+					</select>
+					</div>
 					<div style="display:flex" id="oaijailbreakpromptblock1">
 					<select title="Injected Prefix Message Role" class="form-control" style="height: 25px; font-size:12px; padding:4px;display:inline;width:100px" id="jailbreakprompttextrole">
 						<option value="0">User</option>
 						<option value="1">Assistant</option>
 						<option value="2" selected>System</option>
 					</select>
-					<textarea title="Enter Prefix Prompt String" class="form-control" rows="3" style="resize: vertical; line-height:1.1; padding:4px; display:inline; width: 100%" type="text" id="jailbreakprompttext" placeholder="(Enter System Prefix)"
+					<textarea title="Enter Prefix Prompt String" class="form-control" rows="2" style="resize: vertical; line-height:1.1; padding:4px; display:inline; width: 100%" type="text" id="jailbreakprompttext" placeholder="(Enter System Prefix)"
 					value="" onload="togglejailbreak();"></textarea>
 					</div>
 
@@ -28233,27 +28332,18 @@ Current version indicated by LITEVER below.
 						<option value="1" selected>Assistant</option>
 						<option value="2">System</option>
 					</select>
-					<textarea title="Enter Postfix Prompt String" class="form-control" rows="3" style="resize: vertical; line-height:1.1; padding:4px;  display:inline; width: 100%;" type="text" id="jailbreakprompttext2" placeholder="(Enter Assistant Postfix)"
+					<textarea title="Enter Postfix Prompt String" class="form-control" rows="2" style="resize: vertical; line-height:1.1; padding:4px;  display:inline; width: 100%;" type="text" id="jailbreakprompttext2" placeholder="(Enter Assistant Postfix)"
 					value="" onload="togglejailbreak2();"></textarea>
 					</div>
-				</span>
-				<span id="openrouterproviderbox" class="hidden">
-					<br>
-					<div style="display:inline;">Prefer Provider: <input title="Enter Preferred AI Provider" style="height: 25px; font-size:12px;padding:4px;display:inline;width:calc(100% - 256px)" class="form-control" type="text" id="openrouterproviders" placeholder="(Automatic)" value=""></div>
-					<div id="openrouterreasoningbox" style="display:inline;">
-						<div style="padding-left:2px;padding-right:2px" class="box-label">Thinking</div>
-						<select title="Thinking Settings" class="form-control" style="height: 25px; font-size:12px; margin-bottom: 2px; padding:3px;display:inline;width:72px" id="openrouterreasoning">
-						<option value="0" selected>Default</option>
-						<option value="1">Disable</option>
-						<option value="2">Enable</option>
-						</select>
-					</div>
-				</span>
+				</div>
+				<div id="openrouterproviderbox" class="hidden">
+					<div style="display:inline;">Prefer Provider: <input title="Enter Preferred AI Provider" style="height: 25px; font-size:12px;padding:4px;display:inline;width:calc(100% - 110px)" class="form-control" type="text" id="openrouterproviders" placeholder="(Automatic)" value=""></div>
+				</div>
 
 			</div>
 			<div id="claudecustom" class="menutext hidden">
 				Entering your Claude API key will allow you to use KoboldAI Lite with their API.<br><br>
-				KoboldAI Lite takes no responsibility for your usage of this feature. <br>Only Temperature, Top-P and Top-K samplers are used.<br><br>
+				You are responsibile for your own usage. <br>Only Temperature, Top-P and Top-K samplers are used.<br><br>
 				<span class="color_green" style="font-weight: bold;">Please input Claude API URL and Key.</span><br><br>
 				<input class="form-control" type="text" id="custom_claude_endpoint" placeholder="Claude API URL" value="">
 				<input class="form-control" type="password" id="custom_claude_key" placeholder="Claude API Key (Required)" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
@@ -28289,7 +28379,7 @@ Current version indicated by LITEVER below.
 			</div>
 			<div id="geminicustom" class="menutext hidden">
 				Entering your <a class="color_blueurl" target="_blank" href="https://docs.mistral.ai/getting-started/quickstart">Google Gemini API key</a> will allow you to use KoboldAI Lite with their API.<br><br>
-				KoboldAI Lite takes no responsibility for your usage of this feature. Your API key is used directly with the Gemini API and is not transmitted to us.<br><br>
+				You are responsibile for your own usage. API keys are used with Gemini API directly.<br><br>
 				<div>
 				<select title="Gemini AI Model Selection" style="padding:4px; width:calc(100% - 110px); display:inline-block" class="form-control" id="custom_gemini_model" onchange="togglegeminimodel()">
 					<option value="gemini-1.5-flash-latest" selected="selected">gemini-1.5-flash-latest</option>
@@ -28316,7 +28406,7 @@ Current version indicated by LITEVER below.
 				<input class="form-control" type="password" id="custom_gemini_key" placeholder="Gemini API Key (Required)" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
 				<div id="gemini_role_options">
 				<div>
-					Main Msg Role:
+					Main Message Role:
 					<select title="Main Message Role" class="form-control" style="height: 25px; font-size:12px; margin-bottom: 2px; padding:4px;display:inline;width:100px" onload="togglegeminirole();" onchange="togglegeminirole();" id="geminiroledropdown">
 						<option value="" selected>Default</option>
 						<option value="user">User</option>
@@ -28347,7 +28437,7 @@ Current version indicated by LITEVER below.
 			</div>
 			<div id="coherecustom" class="menutext hidden">
 				Entering your <a class="color_blueurl" target="_blank" href="https://dashboard.cohere.com/api-keys">Cohere API key</a> will allow you to use KoboldAI Lite with their API.<br><br>
-				KoboldAI Lite takes no responsibility for your usage of this feature. Your API key is used directly with the Cohere API and is not transmitted to us.<br><br>
+				You are responsibile for your own usage. API keys are used with Cohere API directly.<br><br>
 				<select title="Cohere AI Model Selection" style="padding:4px;" class="form-control" id="custom_cohere_model">
 					<option value="command-r-08-2024" selected="selected">command-r-08-2024</option>
 					<option value="command-r-plus-08-2024">command-r-plus-08-2024</option>
