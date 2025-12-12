@@ -3852,6 +3852,7 @@ Current version indicated by LITEVER below.
 		darkmode: true,
 		colortheme: 0, // 0=newtheme, 1=oldtheme, 2=fruity, 3=black
 		render_streaming_markdown: true,
+		enable_tool_use:false,
 
 		raw_instruct_tags: false, //experimental flags
 		show_endpoint_selector: false,
@@ -13844,12 +13845,14 @@ Current version indicated by LITEVER below.
 		document.getElementById("settingsmenumedia_tab").classList.remove("active");
 		document.getElementById("settingsmenutokens_tab").classList.remove("active");
 		document.getElementById("settingsmenuadvanced_tab").classList.remove("active");
+		document.getElementById("settingsmenutools_tab").classList.remove("active");
 
 		document.getElementById("settingsmenusamplers").classList.add("hidden");
 		document.getElementById("settingsmenuformat").classList.add("hidden");
 		document.getElementById("settingsmenumedia").classList.add("hidden");
 		document.getElementById("settingsmenutokens").classList.add("hidden");
 		document.getElementById("settingsmenuadvanced").classList.add("hidden");
+		document.getElementById("settingsmenutools").classList.add("hidden");
 
 		switch (tabidx) {
 			case 0: //format
@@ -13868,7 +13871,11 @@ Current version indicated by LITEVER below.
 				document.getElementById("settingsmenutokens").classList.remove("hidden");
 				document.getElementById("settingsmenutokens_tab").classList.add("active");
 			break;
-			case 4: //advanced
+			case 4: //tools
+				document.getElementById("settingsmenutools").classList.remove("hidden");
+				document.getElementById("settingsmenutools_tab").classList.add("active");
+			break;
+			case 5: //advanced
 				document.getElementById("settingsmenuadvanced").classList.remove("hidden");
 				document.getElementById("settingsmenuadvanced_tab").classList.add("active");
 			break;
@@ -13953,6 +13960,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("second_ep_qty").value = localsettings.second_ep_qty;
 		document.getElementById("second_ep_model").value = localsettings.second_ep_model;
 		document.getElementById("second_ep_url").value = localsettings.second_ep_url;
+		document.getElementById("enable_tool_use").checked = localsettings.enable_tool_use;
 
 		if(is_using_kcpp_with_mirostat())
 		{
@@ -14704,6 +14712,9 @@ Current version indicated by LITEVER below.
 		localsettings.save_remote_images = (document.getElementById("save_remote_images").checked ? true : false);
 		localsettings.prompt_for_savename = (document.getElementById("prompt_for_savename").checked ? true : false);
 		localsettings.img_allownsfw = (document.getElementById("img_allownsfw").checked ? true : false);
+
+		localsettings.enable_tool_use = (document.getElementById("enable_tool_use").checked ? true : false);
+
 		update_genimg_button_visiblility();
 		update_websearch_button_visibility();
 
@@ -18383,6 +18394,40 @@ Current version indicated by LITEVER below.
 		return submit_payload;
 	}
 
+	function oai_append_media(mainoaibody)
+	{
+		for(let i=0;i<insertAIVisionImages.length;++i)
+		{
+			let oaiimg = {
+				"type": "image_url",
+				"image_url": {
+					"url": insertAIVisionImages[i]
+				}
+			};
+			mainoaibody.push(oaiimg);
+		}
+		for(let i=0;i<insertAIAudioSounds.length;++i)
+		{
+			let curr = insertAIAudioSounds[i];
+			let format = "wav";
+			if(curr.includes("base64,"))
+			{
+				let parts = curr.split("base64,");
+				curr = parts[1];
+				format = (parts[0].includes("mp3")||parts[0].includes("mpeg"))?"mp3":"wav";
+			}
+			let oaiimg = {
+				"type": "input_audio",
+				"input_audio": {
+					"data": curr,
+					"format": format
+				}
+			};
+			mainoaibody.push(oaiimg);
+		}
+		return mainoaibody;
+	}
+
 	function dispatch_submit_generation(submit_payload, input_was_empty) //if input is not empty, always unban eos
 	{
 		console.log(submit_payload);
@@ -18412,19 +18457,61 @@ Current version indicated by LITEVER below.
 				last_request_str = JSON.stringify(submit_payload);
 				last_response_obj = null;
 				last_response_streamlog = "";
-				if (localsettings.tokenstreammode==2 && is_using_kcpp_with_sse()) {
-					let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_stream_endpoint);
-					kobold_api_stream_sse(sub_endpt, submit_payload);
-				} else {
-					let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_endpoint);
-					let trackedgenid = pending_response_id; //if it changes, stop streaming
-					kobold_api_sync_req(sub_endpt, submit_payload, trackedgenid);
+
+				let kcpp_use_oai_for_tools = localsettings.enable_tool_use;
+
+				if(kcpp_use_oai_for_tools)
+				{
+					//for tool calling, we hijack the oai endpoint in order to utilize
+					let combinedprompt = submit_payload.prompt;
+					if(submit_payload.memory)
+					{
+						combinedprompt = submit_payload.memory + combinedprompt;
+					}
+					delete submit_payload["memory"];
+					delete submit_payload["prompt"];
+					submit_payload.messages = [];
+					let mhistory = repack_instruct_history(combinedprompt);
+					let oaiimgs = [];
+					oaiimgs = oai_append_media(oaiimgs);
+					if(mhistory.length>0 && oaiimgs.length>0)
+					{
+						mhistory[0].msg = [{type: 'text', text: mhistory[0].msg}];
+						for(let i=0;i<oaiimgs.length;++i)
+						{
+							mhistory[0].msg.push(oaiimgs[i]);
+						}
+					}
+					for(let i=0;i<mhistory.length;++i)
+					{
+						submit_payload.messages.push({ "role": (mhistory[i].myturn?"user":"assistant"), "content": mhistory[i].msg });
+					}
+					let targetep = apply_proxy_url(custom_kobold_endpoint + oai_submit_endpoint_chat);
+					if(is_browser_supports_sse() && localsettings.tokenstreammode!=0)
+					{
+						submit_payload.stream = true;
+						oai_api_stream_sse(targetep,submit_payload,get_kobold_header());
+					}
+					else
+					{
+						oai_api_sync_req(targetep,submit_payload,get_kobold_header());
+					}
+				}
+				else
+				{
+					if (localsettings.tokenstreammode==2 && is_using_kcpp_with_sse()) {
+						let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_stream_endpoint);
+						kobold_api_stream_sse(sub_endpt, submit_payload);
+					} else {
+						let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_endpoint);
+						let trackedgenid = pending_response_id; //if it changes, stop streaming
+						kobold_api_sync_req(sub_endpt, submit_payload, trackedgenid);
+					}
 				}
 				update_custom_kobold_endpoint_model_display();
 			}
 			else if (custom_oai_key != "")//handle for OAI
 			{
-
 				let targetep = apply_proxy_url(custom_oai_endpoint + oai_submit_endpoint);
 
 				let scaled_rep_pen = 0;
@@ -18510,35 +18597,7 @@ Current version indicated by LITEVER below.
 								"text": mainoaibody
 							}
 						];
-						for(let i=0;i<insertAIVisionImages.length;++i)
-						{
-							let oaiimg = {
-								"type": "image_url",
-								"image_url": {
-									"url": insertAIVisionImages[i]
-								}
-							};
-							mainoaibody.push(oaiimg);
-						}
-						for(let i=0;i<insertAIAudioSounds.length;++i)
-						{
-							let curr = insertAIAudioSounds[i];
-							let format = "wav";
-							if(curr.includes("base64,"))
-							{
-								let parts = curr.split("base64,");
-								curr = parts[1];
-								format = (parts[0].includes("mp3")||parts[0].includes("mpeg"))?"mp3":"wav";
-							}
-							let oaiimg = {
-								"type": "input_audio",
-								"input_audio": {
-									"data": curr,
-									"format": format
-								}
-							};
-							mainoaibody.push(oaiimg);
-						}
+						mainoaibody = oai_append_media(mainoaibody);
 					}
 
 					oai_payload.messages = [];
@@ -18588,7 +18647,6 @@ Current version indicated by LITEVER below.
 								mhistory[0].msg.push(mainoaibody[i]);
 							}
 						}
-
 
 						for(let i=0;i<mhistory.length;++i)
 						{
@@ -26535,7 +26593,8 @@ Current version indicated by LITEVER below.
 				<li id="settingsmenusamplers_tab" ><a class="" href="#" title="Open Samplers Menu" onclick="display_settings_tab(1)">Samplers</a></li>
 				<li id="settingsmenumedia_tab" ><a class="" href="#" title="Open Media Menu" onclick="display_settings_tab(2)">Media</a></li>
 				<li id="settingsmenutokens_tab" ><a class="" href="#" title="Open Tokens Menu" onclick="display_settings_tab(3)">Tokens</a></li>
-				<li id="settingsmenuadvanced_tab" ><a class="" href="#" title="Open Advanced Menu" onclick="display_settings_tab(4)">Advanced</a></li>
+				<li id="settingsmenutools_tab" ><a class="" href="#" title="Open Tools Menu" onclick="display_settings_tab(4)">Tools</a></li>
+				<li id="settingsmenuadvanced_tab" ><a class="" href="#" title="Open Advanced Menu" onclick="display_settings_tab(5)">Advanced</a></li>
 			</ul></div>
 
 			<div class="settingsbody">
@@ -27532,6 +27591,17 @@ Current version indicated by LITEVER below.
 					</div>
 				</div>
 
+				<!--tools settings menu top-->
+				<div id="settingsmenutools" class="settingsmenu hidden" onchange="setting_tweaked()">
+					<div class="settingitem wide">
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Enable Tools & MCP <span class="helpicon">?<span
+								class="helptext">Allow tool calling and MCP server usage. Require Chat Completions endpoint (KoboldCpp will auto switch).</span></span></div>
+							<input title="Enable Tools & MCP" type="checkbox" id="enable_tool_use" style="margin:0px 0px 0px auto;">
+						</div>
+					</div>
+				</div>
+
 				<!--advanced settings menu top-->
 				<div id="settingsmenuadvanced" class="settingsmenu hidden" onchange="setting_tweaked()">
 					<div class="settingitem">
@@ -28016,7 +28086,7 @@ Current version indicated by LITEVER below.
 					<div style="margin-top:3px; text-align: center; align-self: center; width: 100%">
 						<span style="font-weight:bold;text-decoration: underline;">Slot Storage Option</span>
 						<span style="float:right; text-align: right;">
-							<button type="button" class="btn btn-primary" style="font-size:10px;padding:2px 5px;margin-left:4px;margin:2px;" onclick="hide_popups();display_settings();display_settings_tab(4);">Configure</button>
+							<button type="button" class="btn btn-primary" style="font-size:10px;padding:2px 5px;margin-left:4px;margin:2px;" onclick="hide_popups();display_settings();display_settings_tab(5);">Configure</button>
 						</span>
 					</div>
 					<div style="display:flex;">
