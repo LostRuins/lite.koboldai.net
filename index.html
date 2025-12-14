@@ -2988,8 +2988,6 @@ Current version indicated by LITEVER below.
 	const instructstartplaceholder_end = "\n{{[INPUT_END]}}\n";
 	const instructendplaceholder_end = "\n{{[OUTPUT_END]}}\n";
 	const instructsysplaceholder_end = "\n{{[SYSTEM_END]}}\n";
-	const toolcallplaceholder = "\n{{[TOOL_CALL]}}\n";
-	const toolresultplaceholder = "\n{{[TOOL_RESULT]}}\n";
 	const get_instructstartplaceholder = ()=>{if(localsettings.raw_instruct_tags){return get_instruct_starttag(false);};return instructstartplaceholder;}
 	const get_instructendplaceholder = ()=>{if(localsettings.raw_instruct_tags){return get_instruct_endtag(false);};return instructendplaceholder;}
 	const get_instructsysplaceholder = ()=>{if(localsettings.raw_instruct_tags){return get_instruct_systag(false);};return instructsysplaceholder;}
@@ -21901,7 +21899,7 @@ Current version indicated by LITEVER below.
 								"name": synchro_polled_resptoolcall.name,
 								"content": synchro_polled_resptoolcall.arguments
 							};
-							let calltxt = toolcallplaceholder + JSON.stringify(callobj);
+							let calltxt = JSON.stringify(callobj);
 							gametext_arr.push(calltxt);
 							if(call_allowed)
 							{
@@ -23262,9 +23260,7 @@ Current version indicated by LITEVER below.
 
 		const roleTags = [
 			{ tag: usertag, placeholder: "%HumanPlaceholder%", myturn: true },
-			{ tag: aitag,   placeholder: "%AIPlaceholder%",    myturn: false },
-			{ tag: toolcallplaceholder.trim(), placeholder: "%ToolCallPlaceholder%", myturn: false },
-			{ tag: toolresultplaceholder.trim(), placeholder: "%ToolResultPlaceholder%", myturn: false }
+			{ tag: aitag,   placeholder: "%AIPlaceholder%",    myturn: false }
 		].filter(r => r.tag);
 
 		let cursor = 0;
@@ -23300,7 +23296,7 @@ Current version indicated by LITEVER below.
 			{
 				myturnchat = true;
 			}
-			else if (curr === "%AIPlaceholder%" ||curr === "%ToolCallPlaceholder%" ||curr === "%ToolResultPlaceholder%")
+			else if (curr === "%AIPlaceholder%")
 			{
 				myturnchat = false;
 			}
@@ -23311,12 +23307,23 @@ Current version indicated by LITEVER below.
 					chatunits.push({
 						msg: curr,
 						myturn: myturnchat,
-						role: myturnchat ? "user" : curr === "%ToolCallPlaceholder%" ? "tool_call" : curr === "%ToolResultPlaceholder%" ? "tool_result" : "assistant",
 						unlabelled_name: unlabelled_turns,
 						unlabelled_img: unlabelled_turns
 					});
 					unlabelled_turns = false;
 				}
+			}
+		}
+
+		//post process the chatunits to handle tool calls
+		for(let i=0;i<chatunits.length;++i)
+		{
+			if(!chatunits[i].myturnchat && (chatunits[i].msg.includes("tool_call_id") || chatunits[i].msg.includes("tool_calls")))
+			{
+				try {
+					let parsed_payload = JSON.parse(chatunits[i].msg);
+					chatunits[i].tool_call = parsed_payload;
+				} catch (e) {}
 			}
 		}
 
