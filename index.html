@@ -1992,6 +1992,35 @@ Current version indicated by LITEVER below.
 		height: 100%;
 	}
 
+	/* tools table */
+	.tools-table {
+		width: 100%;
+		border-collapse: collapse;
+		font-family: sans-serif;
+		font-size: 12px;
+		text-align: left;
+	}
+	.tools-table th,
+	.tools-table td {
+		padding: 4px;
+		vertical-align: top;
+	}
+	.tools-checkbox {
+		width: 30px;
+		text-align: center;
+	}
+	.tool-title {
+		font-weight: 600;
+		margin-bottom: 2px;
+	}
+	.tools_list_container {
+		margin: 4px;
+		max-height: 300px;
+		overflow-y: auto;
+		overflow-x: hidden;
+		color: var(--theme_color_text);
+	}
+
 	/* Aesthetic UI */
 	.ui-settings-inline { font-size: 12px; display:flex; flex-direction: row; }
 	.instruct-settings-input { margin: 0px 2px; font-size:10px; }
@@ -3562,6 +3591,7 @@ Current version indicated by LITEVER below.
 	const default_xtts_base = " http://localhost:8020";
 	const default_alltalk_base = "http://localhost:7851";
 	const default_comfy_base = "http://localhost:8188";
+	const default_mcp_base = "http://localhost:5001";
 
 	const WEBBROWSER_TTS_ID = 1;
 	const KCPP_TTS_ID = 2;
@@ -3640,10 +3670,11 @@ Current version indicated by LITEVER below.
 	var uses_cors_proxy = false; //we start off attempting a direct connection. switch to proxy if that fails
 	var synchro_polled_response = null;
 	var synchro_polled_respimg = null; //sometimes a LLM response can also include an image.
+	var synchro_polled_resptoolcall = null; //set if a tool call was triggered
 	var last_stop_reason = ""; //update stop reason if known
 	var synchro_pending_stream = ""; //used for storing incomplete streaming text
 	var streaming_was_thinking = false; //used as a switch to determine when thinking ends, to wrap output in tags
-	var waiting_for_tool_call = 0; //0=not waiting, 1=autosummary, 2=websearchsummary
+	var waiting_for_summarycall = 0; //0=not waiting, 1=autosummary, 2=websearchsummary
 	var oaiemulatecompletionscontent = "";
 	var italics_regex = new RegExp(/\*(\S[^*]+\S)\*/g); //the fallback regex
 	var bold_regex = new RegExp(/\*\*(\S[^*]+\S)\*\*/g); //the fallback regex
@@ -3752,6 +3783,7 @@ Current version indicated by LITEVER below.
 		saved_comfy_url: default_comfy_base,
 		saved_xtts_url: default_xtts_base,
 		saved_alltalk_url: default_alltalk_base,
+		saved_mcp_url: default_mcp_base,
 		prev_custom_endpoint_type: 0, //show a reconnect box to custom endpoint if needed. 0 is horde, otherwise its dropdown value+1
 		prev_custom_endpoint_model: "", //we may not be able to match, but set it if we do
 		prev_custom_endpoint_ischatcmpl: true,
@@ -3852,7 +3884,7 @@ Current version indicated by LITEVER below.
 		darkmode: true,
 		colortheme: 0, // 0=newtheme, 1=oldtheme, 2=fruity, 3=black
 		render_streaming_markdown: true,
-		enable_tool_use:false,
+		enable_tool_use: false,
 
 		raw_instruct_tags: false, //experimental flags
 		show_endpoint_selector: false,
@@ -6257,6 +6289,7 @@ Current version indicated by LITEVER below.
 			}else if (custom_gemini_key != "" && data.candidates != null && data.candidates.length>0 && data.candidates[0].content && data.candidates[0].content.parts != null && data.candidates[0].content.parts.length>0) {
 				synchro_polled_response = "";
 				synchro_polled_respimg = null;
+				synchro_polled_resptoolcall = null;
 				for(let x=0;x<data.candidates[0].content.parts.length;++x)
 				{
 					if(!synchro_polled_respimg && data.candidates[0].content.parts[x].inlineData && data.candidates[0].content.parts[x].inlineData.data)
@@ -6373,6 +6406,7 @@ Current version indicated by LITEVER below.
 		synchro_pending_stream = "";
 		streaming_was_thinking = false;
 		let logprobs_content_arr = [];
+		let pending_toolcall_obj = null;
 		let reqOpt =
 		{method: 'POST',
 		headers: submit_headers,
@@ -6501,6 +6535,40 @@ Current version indicated by LITEVER below.
 									streaming_was_thinking = true;
 									synchro_pending_stream += event.data.choices[0].delta.reasoning;
 								}
+								else if(event.data.choices[0].delta && !event.data.choices[0].delta.content && event.data.choices[0].delta.tool_calls && event.data.choices[0].delta.tool_calls.length>0)
+								{
+									//handle tool calls
+									if(pending_toolcall_obj==null)
+									{
+										pending_toolcall_obj = {};
+									}
+									let itm = event.data.choices[0].delta.tool_calls[0];
+									if(itm.function)
+									{
+										if(itm.function.name)
+										{
+											if(!pending_toolcall_obj.name)
+											{
+												pending_toolcall_obj.name = itm.function.name;
+											}
+											else if(pending_toolcall_obj.name!=itm.function.name)
+											{
+												pending_toolcall_obj.name += itm.function.name;
+											}
+										}
+										if(itm.function.arguments)
+										{
+											if(!pending_toolcall_obj.arguments)
+											{
+												pending_toolcall_obj.arguments = itm.function.arguments;
+											}
+											else
+											{
+												pending_toolcall_obj.arguments += itm.function.arguments;
+											}
+										}
+									}
+								}
 
 								//collect logprobs if detected
 								if(event.data.choices[0].logprobs && event.data.choices[0].logprobs.content && event.data.choices[0].logprobs.content.length>0)
@@ -6518,6 +6586,10 @@ Current version indicated by LITEVER below.
 								if(event.data.choices[0].finish_reason=="stop")
 								{
 									last_stop_reason = "stop";
+								}
+								else if(event.data.choices[0].finish_reason=="tool_calls")
+								{
+									last_stop_reason = "tool_calls";
 								}
 							}
 
@@ -6565,6 +6637,11 @@ Current version indicated by LITEVER below.
 					if(need_clean_output)
 					{
 						synchro_polled_response = cleanup_story_completion(synchro_polled_response);
+					}
+					if(synchro_polled_response=="" && last_stop_reason=="tool_calls" && pending_toolcall_obj!=null)
+					{
+						//a tool call was triggered instead
+						synchro_polled_resptoolcall = pending_toolcall_obj;
 					}
 					synchro_pending_stream = "";
 					streaming_was_thinking = false;
@@ -7111,6 +7188,310 @@ Current version indicated by LITEVER below.
 			}
 		}).catch(error => {
 			onDone(null); //probe failed
+		});
+	}
+
+	//MCP HTTP client code
+	const MCP_PROTOCOL_VER = "2025-11-25";
+	var mcp_req_id = 0;
+	var mcp_client = null;
+	var cached_mcp_tools = [];
+	function MCPGetAllowedTools()
+	{
+		let allowedtools = [];
+		for(let i=0;i<cached_mcp_tools.length;++i)
+		{
+			let mcptool = document.getElementById(`mcptool_${i}`);
+			if(mcptool && mcptool.checked)
+			{
+				allowedtools.push(cached_mcp_tools[i]);
+			}
+		}
+		return allowedtools;
+	}
+	function MCPToolIsAllowed(toolName)
+	{
+		if(!toolName || !cached_mcp_tools || cached_mcp_tools.length==0)
+		{
+			return false;
+		}
+		let tl = MCPGetAllowedTools();
+		for(let i=0;i<tl.length;++i)
+		{
+			if(tl[i].function.name==toolName)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+	const jsonRPC = {
+		request: function (method, params) {
+			var req = {
+				jsonrpc: "2.0",
+				id: mcp_req_id,
+				method: method
+			};
+			if (params) {
+				req.params = params;
+			}
+			return JSON.stringify(req);
+		},
+		notification: function (method, params) {
+			var notif = {
+				jsonrpc: "2.0",
+				method: method
+			};
+			if (params) {
+				notif.params = params;
+			}
+			return JSON.stringify(notif);
+		},
+		// Message type checkers
+		isNotification: function (msg) { return "method" in msg && !("id" in msg); },
+		isRequest: function (msg) { return "method" in msg && "id" in msg; },
+		isResponse: function (msg) { return ("result" in msg || "error" in msg) && "id" in msg; },
+		isError: function (msg) { return "error" in msg; }
+	};
+	function ParseMCPResp(response, expectedId, onNotification) {
+		let ParseMCPSSE = function(response, expectedId, onNotification) {
+			return new Promise(function (resolve, reject) {
+				var reader = response.body.getReader();
+				var decoder = new TextDecoder();
+				var buffer = "";
+				function read() {
+					reader.read().then(function (result) {
+						if (result.done) {
+							resolve(null); // End of stream without final response
+							return;
+						}
+						buffer += decoder.decode(result.value, { stream: true });
+						var events = buffer.split("\n\n"); // Split on double newlines (SSE event boundary)
+						buffer = events.pop(); // Keep incomplete event in buffer
+						for (var i = 0; i < events.length; i++) {
+							var event = events[i];
+							// Parse SSE event fields
+							var eventType = "message"; // default per SSE spec
+							var data = "";
+							var lines = event.split("\n");
+							for (var j = 0; j < lines.length; j++) {
+								var line = lines[j];
+								if (line.indexOf("event:") === 0) {
+									eventType = line.slice(6).trim();
+								} else if (line.indexOf("data:") === 0) {
+									data += (data ? "\n" : "") + line.slice(5).trim();
+								}
+							}
+							if (!data || eventType !== "message") continue; // Skip non-message events (e.g., ping) or empty data
+							if (data.indexOf("{") !== 0) continue; // Skip non-JSON data
+							try {
+								var message = JSON.parse(data);
+							} catch (e) {
+								continue; // Ignore parse errors
+							}
+							if (jsonRPC.isNotification(message)) {
+								if (onNotification) onNotification(message);
+								continue;
+							}
+							if (jsonRPC.isResponse(message) && message.id === expectedId) {
+								// Must release reader before resolving
+								reader.cancel().catch(function () { }); // Cancel the stream
+								resolve(message);
+								return;
+							}
+						}
+						read(); // Continue reading
+					}).catch(reject);
+				}
+				read(); // Start reading
+			});
+		}
+
+		var contentType = response.headers.get("Content-Type") || "";
+		if (contentType.indexOf("text/event-stream") !== -1) {
+			return ParseMCPSSE(response, expectedId, onNotification);
+		}
+		return response.json();
+	}
+	class MCPClient {
+		constructor(url, sessionId, protocolVersion, customHeaders) {
+			this.url = url;
+			this.sessionId = sessionId;
+			this.protocolVersion = protocolVersion;
+			this.customHeaders = customHeaders || {};
+		}
+		headers() {
+			const headers = Object.assign({}, this.customHeaders);
+			headers["Content-Type"] = "application/json";
+			headers.Accept = "application/json, text/event-stream";
+			headers["MCP-Protocol-Version"] = this.protocolVersion;
+			if (this.sessionId) {
+				headers["MCP-Session-Id"] = this.sessionId;
+			}
+			return headers;
+		}
+		request(method, params, onNotification) {
+			const currentId = ++mcp_req_id;
+			return fetch(this.url, {
+				method: "POST",
+				headers: this.headers(),
+				body: jsonRPC.request(method, params)
+			}).then(response =>
+				ParseMCPResp(response, currentId, onNotification)
+			);
+		}
+		notify(method, params) {
+			return fetch(this.url, {
+				method: "POST",
+				headers: this.headers(),
+				body: jsonRPC.notification(method, params)
+			})
+			.then(response => {
+				console.log(response);
+			})
+			.catch(err => {
+				console.log(err.message || String(err));
+			});
+		}
+		listTools(onNotification) {
+			return this.request("tools/list", {}, onNotification);
+		}
+		callTool(name, args, onNotification) {
+			return this.request(
+				"tools/call",
+				{ name: name, arguments: args || {} },
+				onNotification
+			);
+		}
+	}
+
+	//MCP Exposed functions
+	function MCPInit(url, customHeaders, onNotification) {
+		let mcp_tools = [];
+		const clientName = 'KoboldAI Lite MCP';
+		const clientVersion = '1.0.0';
+		var currentId = ++mcp_req_id;
+		var request = jsonRPC.request("initialize", {
+			protocolVersion: MCP_PROTOCOL_VER,
+			clientInfo: {
+				name: clientName,
+				version: clientVersion
+			},
+			capabilities: {} // empty = minimal client, no roots/sampling/elicitation support
+		});
+		var headers = customHeaders || {};
+		headers["Content-Type"] = "application/json";
+		headers.Accept = "application/json, text/event-stream";
+		return fetch(url, {
+			method: "POST",
+			headers: headers,
+			body: request
+		}).then(function (response) {
+			var sessionId = response.headers.get("MCP-Session-Id");
+			return ParseMCPResp(response, currentId, onNotification)
+				.then(function (result) {
+					var negotiatedVersion = (result.result && result.result.protocolVersion) ? result.result.protocolVersion : MCP_PROTOCOL_VER;
+					var client = new MCPClient(url, sessionId, negotiatedVersion, customHeaders);
+					return client.notify("notifications/initialized")
+						.then(function () {
+							mcp_client = client;
+							return mcp_client.listTools();
+						}).then(function (toolsResult) {
+							console.log(toolsResult);
+							if(toolsResult && toolsResult.result && toolsResult.result.tools)
+							{
+								//convert to openai tools format
+								let remapped = toolsResult.result.tools.map(tool => ({
+									type: "function",
+									function: {
+									name: tool.name,
+									description: tool.description,
+									parameters: tool.inputSchema
+									}
+								}));
+
+								mcp_tools = remapped;
+							}
+							return mcp_tools;
+						}).catch(error => {
+							return null;
+						});
+				}).catch(error => {
+					return null;
+				});
+		}).catch(error => {
+			return null;
+		});
+	}
+	function MCPToolCall(selectedTool, toolArgs) {
+		return new Promise(function(resolve, reject) {
+			// Validate inputs
+			if (!cached_mcp_tools || cached_mcp_tools.length == 0 || !mcp_client || !selectedTool) {
+				reject(new Error("MCPToolCall Invalid parameters"));
+				return;
+			}
+			// Make the tool call
+			mcp_client.callTool(selectedTool, toolArgs, function (notification) {
+				console.log(notification);
+			}).then(function (response) {
+				console.log(response);
+				if (jsonRPC.isError(response)) {
+					console.log("MCP Call Error");
+					console.log(response.error.message);
+					reject(new Error(response.error.message));
+				} else if (response.result) {
+					console.log("MCP Call OK");
+					console.log(response.result);
+					resolve(response.result);
+				} else {
+					// Handle case where there's no error but also no result
+					resolve(response);
+				}
+			}).catch(function (err) {
+				console.log(err.message || String(err));
+				reject(err);
+			});
+		});
+	}
+	function connect_mcp() //connects to an mcp server, updates the tool list
+	{
+		const toolscontainer = document.getElementById("tools_list_container");
+		const mcpurl = document.getElementById("mcpurl").value;
+
+		mcp_client = null;
+		cached_mcp_tools = [];
+		if (mcpurl.trim()=="") {
+			toolscontainer.innerHTML = "<p>No tools available.</p>";
+			return;
+		}
+
+		const customHeaders = {};
+		MCPInit(mcpurl, customHeaders).then(function (mcp_result) {
+			if(mcp_result && Array.isArray(mcp_result) && mcp_result.length>0)
+			{
+				cached_mcp_tools = mcp_result;
+				let toolshtml = `<table class="tools-table"><thead><tr><th>Tool</th><th>Enabled</th></tr></thead><tbody>`;
+				for(let i=0;i<mcp_result.length;++i)
+				{
+					let tool = mcp_result[i].function;
+					toolshtml += `
+						<tr>
+							<td class="tools-info">
+								<div class="tool-title">${tool.name}</div>
+								<div class="tool-description">${tool.description.substr(0, 180)}</div>
+							</td>
+							<td class="tools-checkbox">
+								<input type="checkbox" id="mcptool_${i}" value="${tool.name}" checked/>
+							</td>
+						</tr>
+					`;
+				}
+				toolshtml += `</tbody></table>`;
+				toolscontainer.innerHTML = toolshtml;
+			} else {
+				toolscontainer.innerHTML = "<p>No tools available.</p>";
+				return;
+			}
 		});
 	}
 
@@ -8076,6 +8457,11 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	function determine_if_can_use_mcp()
+	{
+		return (custom_oai_key!="" && document.getElementById("useoaichatcompl").checked) || is_using_kcpp_with_streaming();
+	}
+
 	//returns true if the current multimodal setup for some media can be used, otherwise false.
 	function determine_if_can_use_vision_audio(currmeta)
 	{
@@ -8508,6 +8894,7 @@ Current version indicated by LITEVER below.
 			new_save_storyobj.savedsettings.saved_a1111_url = "";
 			new_save_storyobj.savedsettings.saved_comfy_url = "";
 			new_save_storyobj.savedsettings.saved_xtts_url = "";
+			new_save_storyobj.savedsettings.saved_mcp_url = "";
 
 			new_save_storyobj.savedsettings.modelhashes = [];
 
@@ -8943,6 +9330,7 @@ Current version indicated by LITEVER below.
 					let tmp_comfy = localsettings.saved_comfy_url;
 					let tmp_xtts = localsettings.saved_xtts_url;
 					let tmp_imggen = localsettings.generate_images_mode;
+					let tmp_mcp = localsettings.saved_mcp_url;
 
 					if(loadgensettings)
 					{
@@ -8999,6 +9387,7 @@ Current version indicated by LITEVER below.
 					localsettings.saved_comfy_url = tmp_comfy;
 					localsettings.saved_xtts_url = tmp_xtts;
 					localsettings.generate_images_mode = tmp_imggen;
+					localsettings.saved_mcp_url = tmp_mcp;
 
 					if(loadaessettings)
 					{
@@ -13961,6 +14350,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("second_ep_model").value = localsettings.second_ep_model;
 		document.getElementById("second_ep_url").value = localsettings.second_ep_url;
 		document.getElementById("enable_tool_use").checked = localsettings.enable_tool_use;
+		document.getElementById("mcpurl").value = localsettings.saved_mcp_url;
 
 		if(is_using_kcpp_with_mirostat())
 		{
@@ -14127,6 +14517,16 @@ Current version indicated by LITEVER below.
 		else
 		{
 			document.getElementById("websearchunsupporteddiv").classList.remove("hidden");
+		}
+		if(determine_if_can_use_mcp())
+		{
+			document.getElementById("nomcp").classList.add("hidden");
+			document.getElementById("tools_list_container").classList.remove("hidden");
+			document.getElementById("connect_mcp_btn").disabled = false;
+		}else{
+			document.getElementById("nomcp").classList.remove("hidden");
+			document.getElementById("tools_list_container").classList.add("hidden");
+			document.getElementById("connect_mcp_btn").disabled = true;
 		}
 		if(is_using_custom_ep())
 		{
@@ -14714,6 +15114,7 @@ Current version indicated by LITEVER below.
 		localsettings.img_allownsfw = (document.getElementById("img_allownsfw").checked ? true : false);
 
 		localsettings.enable_tool_use = (document.getElementById("enable_tool_use").checked ? true : false);
+		localsettings.saved_mcp_url = document.getElementById("mcpurl").value.trim()?document.getElementById("mcpurl").value.trim():default_mcp_base;
 
 		update_genimg_button_visiblility();
 		update_websearch_button_visibility();
@@ -15243,7 +15644,7 @@ Current version indicated by LITEVER below.
 			onDoneFn("");
 		} else {
 			pending_response_id = "-1";
-			waiting_for_tool_call = 2;
+			waiting_for_summarycall = 2;
 			let max_allowed_characters = Math.floor(localsettings.max_context_length * 3.0) - 100;
 			let truncated_context = recentCtx.substring(recentCtx.length - max_allowed_characters);
 
@@ -15308,7 +15709,7 @@ Current version indicated by LITEVER below.
 		temp_automem_store = document.getElementById("memorytext").value;
 		let onOk = ()=>{
 			pending_response_id = "-1";
-			waiting_for_tool_call = 1;
+			waiting_for_summarycall = 1;
 			let max_allowed_characters = Math.floor(localsettings.max_context_length * 3.0)-100;
 			let truncated_context = concat_gametext(true, "");
 
@@ -15381,7 +15782,7 @@ Current version indicated by LITEVER below.
 	function handle_incoming_autosummary(gentxt)
 	{
 		retry_in_progress = false;
-		waiting_for_tool_call = 0;
+		waiting_for_summarycall = 0;
 		gentxt = gentxt.trim();
 		gentxt = gentxt.split("###")[0];
 		gentxt = replaceAll(gentxt,"\n\n","\n");
@@ -15420,7 +15821,7 @@ Current version indicated by LITEVER below.
 	function handle_incoming_searchsummary(gentxt)
 	{
 		retry_in_progress = false;
-		waiting_for_tool_call = 0;
+		waiting_for_summarycall = 0;
 		gentxt = gentxt.trim();
 		gentxt = gentxt.split("###")[0];
 		gentxt = replaceAll(gentxt,"\n\n","\n");
@@ -15604,10 +16005,11 @@ Current version indicated by LITEVER below.
 		poll_in_progress = false;
 		synchro_polled_response = null;
 		synchro_polled_respimg = null;
+		synchro_polled_resptoolcall = null;
 		last_stop_reason = "";
 		synchro_pending_stream = "";
 		streaming_was_thinking = false;
-		waiting_for_tool_call = 0;
+		waiting_for_summarycall = 0;
 		horde_poll_nearly_completed = false;
 		oaiemulatecompletionscontent = "";
 	}
@@ -15630,10 +16032,11 @@ Current version indicated by LITEVER below.
 		pending_response_id = "";
 		synchro_polled_response = null;
 		synchro_polled_respimg = null;
+		synchro_polled_resptoolcall = null;
 		last_stop_reason = "";
 		synchro_pending_stream = "";
 		streaming_was_thinking = false;
-		waiting_for_tool_call = 0;
+		waiting_for_summarycall = 0;
 		oaiemulatecompletionscontent = "";
 		last_reply_was_empty = false;
 		pending_context_preinjection = "";
@@ -17426,7 +17829,7 @@ Current version indicated by LITEVER below.
 
 		if (!user_input_empty || gametext_arr.length > 0 || current_memory != "" || current_anote != "")
 		{
-			waiting_for_tool_call = 0;
+			waiting_for_summarycall = 0;
 			idle_timer = 0;
 			idle_triggered_counter = 0;
 			if (localsettings.tts_mode > 0)
@@ -18442,6 +18845,7 @@ Current version indicated by LITEVER below.
 			poll_in_progress = false;
 			synchro_polled_response = null;
 			synchro_polled_respimg = null;
+			synchro_polled_resptoolcall = null;
 			last_stop_reason = "";
 			synchro_pending_stream = "";
 			streaming_was_thinking = false;
@@ -18485,6 +18889,14 @@ Current version indicated by LITEVER below.
 					for(let i=0;i<mhistory.length;++i)
 					{
 						submit_payload.messages.push({ "role": (mhistory[i].myturn?"user":"assistant"), "content": mhistory[i].msg });
+					}
+					if(determine_if_can_use_mcp() && cached_mcp_tools && cached_mcp_tools.length>0)
+					{
+						let senttools = MCPGetAllowedTools();
+						if(senttools.length>0)
+						{
+							submit_payload.tools = senttools;
+						}
 					}
 					let targetep = apply_proxy_url(custom_kobold_endpoint + oai_submit_endpoint_chat);
 					if(is_browser_supports_sse() && localsettings.tokenstreammode!=0)
@@ -18651,6 +19063,15 @@ Current version indicated by LITEVER below.
 						for(let i=0;i<mhistory.length;++i)
 						{
 							oai_payload.messages.push({ "role": (mhistory[i].myturn?"user":"assistant"), "content": mhistory[i].msg });
+						}
+					}
+
+					if(determine_if_can_use_mcp() && cached_mcp_tools && cached_mcp_tools.length>0)
+					{
+						let senttools = MCPGetAllowedTools();
+						if(senttools.length>0)
+						{
+							oai_payload.tools = senttools;
 						}
 					}
 
@@ -21384,7 +21805,7 @@ Current version indicated by LITEVER below.
 					{
 						//still waiting, do nothing until next poll
 						console.log("sync request: still awaiting reply");
-						let polledstreaming = (waiting_for_tool_call==0 && localsettings.tokenstreammode==1 && is_using_kcpp_with_streaming());
+						let polledstreaming = (waiting_for_summarycall==0 && localsettings.tokenstreammode==1 && is_using_kcpp_with_streaming());
 						//only check once every 2 ticks if remote
 						if (polledstreaming && (localflag?true:(poll_ticks_passed%2==0)))
 						{
@@ -21429,7 +21850,7 @@ Current version indicated by LITEVER below.
 						pending_response_id = "";
 						poll_in_progress = false;
 						let resp = synchro_polled_response;
-						if(waiting_for_tool_call==0)
+						if(waiting_for_summarycall==0)
 						{
 							last_reply_was_empty = (resp=="" || resp.trim()=="");
 						}
@@ -21438,11 +21859,11 @@ Current version indicated by LITEVER below.
 							let genworker = "Custom Endpoint";
 							let genkudos = "0";
 							let genmdl = (selected_models.length>0?selected_models[0].name:"Unknown Model");
-							if(waiting_for_tool_call==2)
+							if(waiting_for_summarycall==2)
 							{
 								handle_incoming_searchsummary(gentxt);
 							}
-							else if(waiting_for_tool_call==1)
+							else if(waiting_for_summarycall==1)
 							{
 								handle_incoming_autosummary(gentxt);
 							}
@@ -21460,6 +21881,30 @@ Current version indicated by LITEVER below.
 						show_abort_button(false);
 						render_gametext(true,false); //only scroll to bottom if autoscroll is on
 						sync_multiplayer(false);
+					}
+					if(synchro_polled_resptoolcall && cached_mcp_tools)
+					{
+						try {
+							let obj = JSON.parse(synchro_polled_resptoolcall.arguments);
+							//make sure we are allowed to call this tool
+							let call_allowed = MCPToolIsAllowed(synchro_polled_resptoolcall.name);
+							//if valid, execute the tool call and get the result
+							if(call_allowed)
+							{
+								MCPToolCall(synchro_polled_resptoolcall.name,obj)
+								.then(function (response) {
+									console.log(response);
+								}).catch(function (error) {
+									// Handle errors
+									console.error("MCP ToolCall Error:", error.message);
+								});
+							}
+						}
+						catch (e) {
+							console.log("Failed to parse tool call!");
+							console.log(synchro_polled_resptoolcall);
+						}
+						synchro_polled_resptoolcall = null;
 					}
 					if(synchro_polled_respimg)
 					{
@@ -21514,9 +21959,9 @@ Current version indicated by LITEVER below.
 												let genworker = data.generations[0].worker_name;
 												let genmdl = data.generations[0].model;
 												let genkudos = data.kudos;
-												if (waiting_for_tool_call == 2) {
+												if (waiting_for_summarycall == 2) {
 													handle_incoming_searchsummary(gentxt);
-												} else if (waiting_for_tool_call == 1) {
+												} else if (waiting_for_summarycall == 1) {
 													handle_incoming_autosummary(gentxt);
 												}
 												else {
@@ -22385,7 +22830,7 @@ Current version indicated by LITEVER below.
 			}
 
 			//streaming display for all other cases
-			if(!alreadyShowedStreaming && synchro_pending_stream!="" && waiting_for_tool_call==0)
+			if(!alreadyShowedStreaming && synchro_pending_stream!="" && waiting_for_summarycall==0)
 			{
 				let pend = escape_html(pending_context_preinjection) + format_streaming_text(escape_html(synchro_pending_stream));
 				fulltxt += `<span class="color_yellow pending_text">${pend}</span>`;
@@ -27595,10 +28040,25 @@ Current version indicated by LITEVER below.
 				<div id="settingsmenutools" class="settingsmenu hidden" onchange="setting_tweaked()">
 					<div class="settingitem wide">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Enable Tools & MCP <span class="helpicon">?<span
+							<div class="justifyleft settingsmall">Enable MCP Toolcalling <span class="helpicon">?<span
 								class="helptext">Allow tool calling and MCP server usage. Require Chat Completions endpoint (KoboldCpp will auto switch).</span></span></div>
-							<input title="Enable Tools & MCP" type="checkbox" id="enable_tool_use" style="margin:0px 0px 0px auto;">
+							<input title="Enable MCP Tools" type="checkbox" id="enable_tool_use" style="margin:0px 0px 0px auto;">
 						</div>
+
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">MCP Server URL <span class="helpicon">?<span
+								class="helptext">Connect to a local or remote MCP server to use tools there.</span></span></div>
+							<input class="settinglabel miniinput" style="width:calc(100% - 64px)" title="Style Tags" type="text" placeholder="MCP server URL (e.g. http://localhost:3000/mcp)" value="http://localhost:5001/mcp" id="mcpurl">
+							<button type="button" id="connect_mcp_btn" class="btn btn-primary" style="width:60px; padding:2px 3px;font-size:12px; margin-left: 2px;" onclick="connect_mcp()">Connect</button>
+						</div>
+
+						<div class="color_red hidden" id="nomcp">MCP Toolcalling unavailable, requires chat completions.</div>
+
+						<div id="tools_list_container" class="tools_list_container">
+
+						</div>
+
+
 					</div>
 				</div>
 
