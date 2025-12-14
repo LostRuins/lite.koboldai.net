@@ -2988,6 +2988,8 @@ Current version indicated by LITEVER below.
 	const instructstartplaceholder_end = "\n{{[INPUT_END]}}\n";
 	const instructendplaceholder_end = "\n{{[OUTPUT_END]}}\n";
 	const instructsysplaceholder_end = "\n{{[SYSTEM_END]}}\n";
+	const toolcallplaceholder = "\n{{[TOOL_CALL]}}\n";
+	const toolresultplaceholder = "\n{{[TOOL_RESULT]}}\n";
 	const get_instructstartplaceholder = ()=>{if(localsettings.raw_instruct_tags){return get_instruct_starttag(false);};return instructstartplaceholder;}
 	const get_instructendplaceholder = ()=>{if(localsettings.raw_instruct_tags){return get_instruct_endtag(false);};return instructendplaceholder;}
 	const get_instructsysplaceholder = ()=>{if(localsettings.raw_instruct_tags){return get_instruct_systag(false);};return instructsysplaceholder;}
@@ -3917,8 +3919,8 @@ Current version indicated by LITEVER below.
 		second_ep_model:"gpt2",
 		second_ep_url:"",
 
-		max_context_length: (localflag?8192:3600),
-		max_length: (localflag?768:420),
+		max_context_length: (localflag?8192:3800),
+		max_length: (localflag?896:460),
 		last_maxctx: 0,
 		auto_ctxlen: true,
 		auto_genamt: true,
@@ -6543,6 +6545,10 @@ Current version indicated by LITEVER below.
 										pending_toolcall_obj = {};
 									}
 									let itm = event.data.choices[0].delta.tool_calls[0];
+									if(itm.id)
+									{
+										pending_toolcall_obj.id = itm.id;
+									}
 									if(itm.function)
 									{
 										if(itm.function.name)
@@ -18894,6 +18900,7 @@ Current version indicated by LITEVER below.
 						let senttools = MCPGetAllowedTools();
 						if(senttools.length>0)
 						{
+							submit_payload.use_default_badwordsids = false;
 							submit_payload.tools = senttools;
 						}
 					}
@@ -21888,15 +21895,23 @@ Current version indicated by LITEVER below.
 							//make sure we are allowed to call this tool
 							let call_allowed = MCPToolIsAllowed(synchro_polled_resptoolcall.name);
 							//if valid, execute the tool call and get the result
+							let callobj = {
+								"role": "tool",
+								"tool_call_id": synchro_polled_resptoolcall.id,
+								"name": synchro_polled_resptoolcall.name,
+								"content": synchro_polled_resptoolcall.arguments
+							};
+							let calltxt = toolcallplaceholder + JSON.stringify(callobj);
+							gametext_arr.push(calltxt);
 							if(call_allowed)
 							{
-								MCPToolCall(synchro_polled_resptoolcall.name,obj)
-								.then(function (response) {
-									console.log(response);
-								}).catch(function (error) {
-									// Handle errors
-									console.error("MCP ToolCall Error:", error.message);
-								});
+								// MCPToolCall(synchro_polled_resptoolcall.name,obj)
+								// .then(function (response) {
+								// 	console.log(response);
+								// }).catch(function (error) {
+								// 	// Handle errors
+								// 	console.error("MCP ToolCall Error:", error.message);
+								// });
 							}
 						}
 						catch (e) {
@@ -23237,78 +23252,77 @@ Current version indicated by LITEVER below.
 			</div>`;
 	}
 
-	function repack_instruct_turns(input,usertag,aitag,allow_blank)
+	function repack_instruct_turns(input, usertag, aitag, allow_blank)
 	{
-		let myturnchat = false; //who is currently speaking?
-		let chatunits = []; //parse chat body into nice chat chunks
-
+		let myturnchat = false;
+		let chatunits = [];
 		let combined_chunks = [];
-		let turnchunks = input.split(usertag);
+		let unlabelled_turns = true;
 		let startoppo = true;
-		let unlabelled_turns = true; //is true until an instruct tag is encountered
-		for(let i=0;i<turnchunks.length;++i)
-		{
-			let chnk = turnchunks[i];
-			if(chnk.trim().length==0)
-			{
-				if(i==0)
-				{
-					startoppo = false;
-				}
-				continue;
-			}
-			let turnchunks2 = chnk.split(aitag);
-			for(let j=0;j<turnchunks2.length;++j)
-			{
-				if(j==0)
-				{
-					if(startoppo)
-					{
-						startoppo = false;
-						combined_chunks.push("%AIPlaceholder%");
-					}
-					else
-					{
-						combined_chunks.push("%HumanPlaceholder%");
-					}
 
-					combined_chunks.push(turnchunks2[j]);
-				}
-				else
+		const roleTags = [
+			{ tag: usertag, placeholder: "%HumanPlaceholder%", myturn: true },
+			{ tag: aitag,   placeholder: "%AIPlaceholder%",    myturn: false },
+			{ tag: toolcallplaceholder.trim(), placeholder: "%ToolCallPlaceholder%", myturn: false },
+			{ tag: toolresultplaceholder.trim(), placeholder: "%ToolResultPlaceholder%", myturn: false }
+		].filter(r => r.tag);
+
+		let cursor = 0;
+		while (cursor < input.length)
+		{
+			let next = null;
+			for (const r of roleTags)
+			{
+				const idx = input.indexOf(r.tag, cursor);
+				if (idx !== -1 && (!next || idx < next.idx))
 				{
-					combined_chunks.push("%AIPlaceholder%");
-					combined_chunks.push(turnchunks2[j]);
+					next = { tag: r.tag, placeholder: r.placeholder, idx: idx };
 				}
 			}
+			if (!next)
+			{
+				combined_chunks.push(input.slice(cursor));
+				break;
+			}
+			const chunk = input.slice(cursor, next.idx);
+			if (chunk.length > 0)
+			{
+				combined_chunks.push(chunk);
+			}
+			combined_chunks.push(next.placeholder);
+			cursor = next.idx + next.tag.length;
 		}
 
-		for(let i=0;i<combined_chunks.length;++i)
+		for (let i = 0; i < combined_chunks.length; ++i)
 		{
-			let curr = combined_chunks[i];
-			if(curr=="%HumanPlaceholder%")
+			const curr = combined_chunks[i];
+			if (curr === "%HumanPlaceholder%")
 			{
 				myturnchat = true;
 			}
-			else if(curr=="%AIPlaceholder%")
+			else if (curr === "%AIPlaceholder%" ||curr === "%ToolCallPlaceholder%" ||curr === "%ToolResultPlaceholder%")
 			{
 				myturnchat = false;
 			}
 			else
 			{
-				if(allow_blank || curr.trim()!="")
+				if (allow_blank || curr.trim() !== "")
 				{
 					chatunits.push({
-					msg:curr,
-					myturn:myturnchat,
-					unlabelled_name:unlabelled_turns,
-					unlabelled_img:unlabelled_turns
-				});
+						msg: curr,
+						myturn: myturnchat,
+						role: myturnchat ? "user" : curr === "%ToolCallPlaceholder%" ? "tool_call" : curr === "%ToolResultPlaceholder%" ? "tool_result" : "assistant",
+						unlabelled_name: unlabelled_turns,
+						unlabelled_img: unlabelled_turns
+					});
+					unlabelled_turns = false;
 				}
-				unlabelled_turns = false;
 			}
 		}
+
 		return chatunits;
 	}
+
 
 	function repack_postprocess_turn(currchatunit, countmap)
 	{
