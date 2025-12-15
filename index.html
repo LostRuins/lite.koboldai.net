@@ -6872,7 +6872,7 @@ Current version indicated by LITEVER below.
 			input = input.replace(/^<blockquote>\n([\s\S]*?)\n<\/blockquote>/gm, (match, p1) => {
 				return `<blockquote>${p1}</blockquote>`; //return blockquotes to their rightful place
 			});
-			input = input.replace(/(^|[^\\])\$(\S[^$\n]*?\S)\$(?!\d)/g, (match, prefix, p1) => {
+			input = input.replace(/(^|[^\\])\$(\S[^$\n]*?\S)\$(?!\w)/g, (match, prefix, p1) => {
 				let content = p1;
 				content = unescape_html(content);
 				if(content.replace(/\s+/g, '').match(/^\${1,}$/)) //only dollar signs, just return
@@ -18891,7 +18891,17 @@ Current version indicated by LITEVER below.
 					}
 					for(let i=0;i<mhistory.length;++i)
 					{
-						submit_payload.messages.push({ "role": (mhistory[i].myturn?"user":"assistant"), "content": mhistory[i].msg });
+						let cturn = { "role": (mhistory[i].myturn?"user":"assistant"), "content": mhistory[i].msg };
+						if(!mhistory[i].myturn && mhistory[i].tool_calls)
+						{
+							cturn.content = null;
+							cturn.tool_calls = mhistory[i].tool_calls;
+						}
+						else if(!mhistory[i].myturn && mhistory[i].tool_results)
+						{
+							cturn = mhistory[i].tool_results;
+						}
+						submit_payload.messages.push(cturn);
 					}
 					if(determine_if_can_use_mcp() && cached_mcp_tools && cached_mcp_tools.length>0)
 					{
@@ -21903,7 +21913,14 @@ Current version indicated by LITEVER below.
 								}
 								}
 							]};
-							let calltxt = JSON.stringify(savedcallobj);
+
+							let calltxt = "";
+							if(!(gametext_arr.length>0 && gametext_arr[gametext_arr.length-1].trim().endsWith("{{[OUTPUT]}}")))
+							{
+								calltxt = get_instructendplaceholder(); //add instruct tag if needed
+							}
+							calltxt += JSON.stringify(savedcallobj) + get_instructendplaceholder();
+
 							gametext_arr.push(calltxt);
 							let callresp = {
                                 "role": "tool",
@@ -21913,20 +21930,26 @@ Current version indicated by LITEVER below.
                             };
 							if(call_allowed)
 							{
+								let callresptxt = "";
+								if(!(gametext_arr.length>0 && gametext_arr[gametext_arr.length-1].trim().endsWith("{{[OUTPUT]}}")))
+								{
+									callresptxt = get_instructendplaceholder(); //add instruct tag if needed
+								}
+
 								MCPToolCall(synchro_polled_resptoolcall.name,obj)
 								.then(function (response) {
 									if(response.content && response.content.length>0)
 									{
-										callresp.content = response.content[0];
+										callresp.content = JSON.stringify(response.content[0]);
 									}
-									let callresptxt = get_instructendplaceholder() + JSON.stringify(callresp);
+									callresptxt += JSON.stringify(callresp) + get_instructendplaceholder();
 									gametext_arr.push(callresptxt);
 									console.log(response);
 									render_gametext(false,false);
 								}).catch(function (error) {
 									// Handle errors
 									callresp.content = "{\"error\": \"Tool call failed\"}";
-									let callresptxt = JSON.stringify(callresp);
+									callresptxt += JSON.stringify(callresp) + get_instructendplaceholder();
 									gametext_arr.push(callresptxt);
 									console.error("MCP ToolCall Error:", error.message);
 									render_gametext(false,false);
@@ -21934,7 +21957,7 @@ Current version indicated by LITEVER below.
 							}
 							else
 							{
-								gametext_arr.push(calltxt);
+								gametext_arr.push(get_instructendplaceholder() + callresp);
 							}
 						}
 						catch (e) {
@@ -22731,6 +22754,7 @@ Current version indicated by LITEVER below.
 				}
 
 				let instruct_turns = repack_instruct_turns(fulltxt, `%SpcStg%`,`%SpcEtg%`, true);
+				repact_instruct_turns_beautify_render(instruct_turns);
 				fulltxt = "";
 				for(let i=0;i<instruct_turns.length;++i)
 				{
@@ -23365,6 +23389,25 @@ Current version indicated by LITEVER below.
 				} catch (e) {}
 			}
 		}
+
+		return chatunits;
+	}
+
+	function repact_instruct_turns_beautify_render(chatunits) //to turn ugly turn calls into nice looking placeholders
+	{
+		for(let i=0;i<chatunits.length;++i)
+		{
+			if(chatunits[i].tool_calls)
+			{
+				chatunits[i].origmsg = chatunits[i].msg;
+				chatunits[i].msg = `<span class="color_lightgreen" style="font-weight:bold;">Made a tool call ${chatunits[i].tool_calls[0].id} to ${chatunits[i].tool_calls[0].function.name}</span>`;
+			}
+			if(chatunits[i].tool_results)
+			{
+				chatunits[i].origmsg = chatunits[i].msg;
+				chatunits[i].msg = `<span class="color_lightgreen" style="font-weight:bold;">Received tool call results for ${chatunits[i].tool_results.tool_call_id} to ${chatunits[i].tool_results.name}</span>`;
+			}
+		}
 		return chatunits;
 	}
 
@@ -23842,6 +23885,7 @@ Current version indicated by LITEVER below.
 		else
 		{
 			chatunits = repack_instruct_history(input);
+			repact_instruct_turns_beautify_render(chatunits);
 		}
 
 		let incomplete_resp = (synchro_pending_stream!="" || pending_response_id!="");
@@ -23864,7 +23908,7 @@ Current version indicated by LITEVER below.
 			let bodypart = (corpo_editing_turn == i ?
 				`<div class="corpo_edit_outer">
 				<div class="corpo_edit_inner" id="corpo_edit_inp_lengthtester" style="white-space: nowrap; visibility: hidden; height: 0px; position:absolute; width: auto;"></div>
-				<textarea class="corpo_edit_inner" id="corpo_edit_inp" type="text" name="crpeditinp"  role="presentation" autocomplete="noppynop" spellcheck="true" rows="1" wrap="on" placeholder="Edit Message" value="" oninput="corpoedit_resize_input();"/>${stash_image_placeholders(curr.msg, false)}</textarea>
+				<textarea class="corpo_edit_inner" id="corpo_edit_inp" type="text" name="crpeditinp"  role="presentation" autocomplete="noppynop" spellcheck="true" rows="1" wrap="on" placeholder="Edit Message" value="" oninput="corpoedit_resize_input();"/>${stash_image_placeholders(curr.origmsg?curr.origmsg:curr.msg, false)}</textarea>
 				</div>
 				<button type="button" class="btn btn-primary corpoeditbtn" style="float:right;" onclick="corpo_edit_chunk_start(-1)">Cancel</button>
 				${resendbtn}
@@ -25784,6 +25828,7 @@ Current version indicated by LITEVER below.
 		else
 		{
 			chatunits = repack_instruct_history(input);
+			repact_instruct_turns_beautify_render(chatunits);
 		}
 
 		let newbodystr = "";
