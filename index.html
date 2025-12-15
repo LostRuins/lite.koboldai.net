@@ -7198,24 +7198,27 @@ Current version indicated by LITEVER below.
 	//MCP HTTP client code
 	const MCP_PROTOCOL_VER = "2025-11-25";
 	var mcp_req_id = 0;
-	var mcp_client = null;
-	var cached_mcp_tools = [];
+	var cached_mcp_tools = {}; //key is url, value is tools array
 	function MCPGetAllowedTools()
 	{
 		let allowedtools = [];
-		for(let i=0;i<cached_mcp_tools.length;++i)
+		for(key in cached_mcp_tools)
 		{
-			let mcptool = document.getElementById(`mcptool_${i}`);
-			if(mcptool && mcptool.checked)
+			let currarr = cached_mcp_tools[key];
+			for(let i=0;i<currarr.length;++i)
 			{
-				allowedtools.push(cached_mcp_tools[i]);
+				let mcptool = document.getElementById(`mcptool_${currarr[i].function.name}`);
+				if(mcptool && mcptool.checked)
+				{
+					allowedtools.push(currarr[i]);
+				}
 			}
 		}
 		return allowedtools;
 	}
 	function MCPToolIsAllowed(toolName)
 	{
-		if(!toolName || !cached_mcp_tools || cached_mcp_tools.length==0)
+		if(!toolName || !cached_mcp_tools || Object.keys(cached_mcp_tools).length === 0)
 		{
 			return false;
 		}
@@ -7228,6 +7231,25 @@ Current version indicated by LITEVER below.
 			}
 		}
 		return false;
+	}
+	function GetMCPUrlOfTool(toolName)
+	{
+		if(!toolName || !cached_mcp_tools || Object.keys(cached_mcp_tools).length === 0)
+		{
+			return null;
+		}
+		for(key in cached_mcp_tools)
+		{
+			let currarr = cached_mcp_tools[key];
+			for(let i=0;i<currarr.length;++i)
+			{
+				if(currarr[i].function.name==toolName)
+				{
+					return key;
+				}
+			}
+		}
+		return null;
 	}
 	const jsonRPC = {
 		request: function (method, params) {
@@ -7396,30 +7418,7 @@ Current version indicated by LITEVER below.
 				.then(function (result) {
 					var negotiatedVersion = (result.result && result.result.protocolVersion) ? result.result.protocolVersion : MCP_PROTOCOL_VER;
 					var client = new MCPClient(url, sessionId, negotiatedVersion, customHeaders);
-					return client.notify("notifications/initialized")
-						.then(function () {
-							mcp_client = client;
-							return mcp_client.listTools();
-						}).then(function (toolsResult) {
-							console.log(toolsResult);
-							if(toolsResult && toolsResult.result && toolsResult.result.tools)
-							{
-								//convert to openai tools format
-								let remapped = toolsResult.result.tools.map(tool => ({
-									type: "function",
-									function: {
-									name: tool.name,
-									description: tool.description,
-									parameters: tool.inputSchema
-									}
-								}));
-
-								mcp_tools = remapped;
-							}
-							return mcp_tools;
-						}).catch(error => {
-							return null;
-						});
+					return client.notify("notifications/initialized").then(() => client);
 				}).catch(error => {
 					return null;
 				});
@@ -7427,10 +7426,33 @@ Current version indicated by LITEVER below.
 			return null;
 		});
 	}
-	function MCPToolCall(selectedTool, toolArgs) {
+	function MCPToolList(mcp_client)
+	{
+		return mcp_client.listTools().then(function (toolsResult) {
+			console.log(toolsResult);
+			if(toolsResult && toolsResult.result && toolsResult.result.tools)
+			{
+				//convert to openai tools format
+				let remapped = toolsResult.result.tools.map(tool => ({
+					type: "function",
+					function: {
+					name: tool.name,
+					description: tool.description,
+					parameters: tool.inputSchema
+					}
+				}));
+
+				mcp_tools = remapped;
+			}
+			return mcp_tools;
+		}).catch(error => {
+			return null;
+		});
+	}
+	function MCPToolCall(mcp_client, selectedTool, toolArgs) {
 		return new Promise(function(resolve, reject) {
 			// Validate inputs
-			if (!cached_mcp_tools || cached_mcp_tools.length == 0 || !mcp_client || !selectedTool) {
+			if (!cached_mcp_tools || Object.keys(cached_mcp_tools).length === 0 || !selectedTool) {
 				reject(new Error("MCPToolCall Invalid parameters"));
 				return;
 			}
@@ -7457,23 +7479,24 @@ Current version indicated by LITEVER below.
 			});
 		});
 	}
-	function connect_mcp() //connects to an mcp server, updates the tool list
+	function Fetch_MCP_Tools() //connects to an mcp server, updates the tool list
 	{
 		const toolscontainer = document.getElementById("tools_list_container");
 		const mcpurl = document.getElementById("mcpurl").value;
 
-		mcp_client = null;
-		cached_mcp_tools = [];
+		cached_mcp_tools = {};
 		if (mcpurl.trim()=="") {
 			toolscontainer.innerHTML = "<p>No tools available.</p>";
 			return;
 		}
 
 		const customHeaders = {};
-		MCPInit(mcpurl, customHeaders).then(function (mcp_result) {
+		MCPInit(mcpurl, customHeaders)
+		.then(mcp_client => { return MCPToolList(mcp_client); })
+		.then(function (mcp_result) {
 			if(mcp_result && Array.isArray(mcp_result) && mcp_result.length>0)
 			{
-				cached_mcp_tools = mcp_result;
+				cached_mcp_tools[mcpurl] = mcp_result;
 				let toolshtml = `<table class="tools-table"><thead><tr><th>Tool</th><th>Enabled</th></tr></thead><tbody>`;
 				for(let i=0;i<mcp_result.length;++i)
 				{
@@ -7485,7 +7508,7 @@ Current version indicated by LITEVER below.
 								<div class="tool-description">${tool.description.substr(0, 180)}</div>
 							</td>
 							<td class="tools-checkbox">
-								<input type="checkbox" id="mcptool_${i}" value="${tool.name}" checked/>
+								<input type="checkbox" id="mcptool_${tool.name}" value="${tool.name}" checked/>
 							</td>
 						</tr>
 					`;
@@ -18903,7 +18926,7 @@ Current version indicated by LITEVER below.
 						}
 						submit_payload.messages.push(cturn);
 					}
-					if(determine_if_can_use_mcp() && cached_mcp_tools && cached_mcp_tools.length>0)
+					if(determine_if_can_use_mcp() && cached_mcp_tools && Object.keys(cached_mcp_tools).length>0)
 					{
 						let senttools = MCPGetAllowedTools();
 						if(senttools.length>0)
@@ -19080,7 +19103,7 @@ Current version indicated by LITEVER below.
 						}
 					}
 
-					if(determine_if_can_use_mcp() && cached_mcp_tools && cached_mcp_tools.length>0)
+					if(determine_if_can_use_mcp() && cached_mcp_tools && Object.keys(cached_mcp_tools).length>0)
 					{
 						let senttools = MCPGetAllowedTools();
 						if(senttools.length>0)
@@ -21936,8 +21959,15 @@ Current version indicated by LITEVER below.
 									callresptxt = get_instructendplaceholder(); //add instruct tag if needed
 								}
 
-								MCPToolCall(synchro_polled_resptoolcall.name,obj)
-								.then(function (response) {
+								//show busy while waiting
+								pending_response_id = "toolcall-v1-dummy-id-"+(Math.floor(1000 + Math.random() * 9000)).toString(); //dummy id, autogenerated
+
+								const customHeaders = {};
+								let mcpurl = GetMCPUrlOfTool(callresp.name);
+								MCPInit(mcpurl, customHeaders)
+								.then(mcp_client => {
+									return MCPToolCall(mcp_client,callresp.name,obj);
+								}).then(function (response) {
 									if(response.content && response.content.length>0)
 									{
 										callresp.content = JSON.stringify(response.content[0]);
@@ -21945,6 +21975,9 @@ Current version indicated by LITEVER below.
 									callresptxt += JSON.stringify(callresp) + get_instructendplaceholder();
 									gametext_arr.push(callresptxt);
 									console.log(response);
+									pending_response_id = "";
+									poll_in_progress = false;
+									show_abort_button(false);
 									render_gametext(false,false);
 								}).catch(function (error) {
 									// Handle errors
@@ -21952,6 +21985,9 @@ Current version indicated by LITEVER below.
 									callresptxt += JSON.stringify(callresp) + get_instructendplaceholder();
 									gametext_arr.push(callresptxt);
 									console.error("MCP ToolCall Error:", error.message);
+									pending_response_id = "";
+									poll_in_progress = false;
+									show_abort_button(false);
 									render_gametext(false,false);
 								});
 							}
@@ -28151,7 +28187,7 @@ Current version indicated by LITEVER below.
 							<div class="justifyleft settingsmall">MCP Server URL <span class="helpicon">?<span
 								class="helptext">Connect to a local or remote MCP server to use tools there.</span></span></div>
 							<input class="settinglabel miniinput" style="width:calc(100% - 64px)" title="Style Tags" type="text" placeholder="MCP server URL (e.g. http://localhost:3000/mcp)" value="http://localhost:5001/mcp" id="mcpurl">
-							<button type="button" id="connect_mcp_btn" class="btn btn-primary" style="width:60px; padding:2px 3px;font-size:12px; margin-left: 2px;" onclick="connect_mcp()">Connect</button>
+							<button type="button" id="connect_mcp_btn" class="btn btn-primary" style="width:60px; padding:2px 3px;font-size:12px; margin-left: 2px;" onclick="Fetch_MCP_Tools()">Connect</button>
 						</div>
 
 						<div class="color_red hidden" id="nomcp">MCP Toolcalling unavailable, requires chat completions.</div>
