@@ -3783,7 +3783,7 @@ Current version indicated by LITEVER below.
 		saved_comfy_url: default_comfy_base,
 		saved_xtts_url: default_xtts_base,
 		saved_alltalk_url: default_alltalk_base,
-		saved_mcp_url: default_mcp_base,
+		saved_mcp_urls: default_mcp_base,
 		prev_custom_endpoint_type: 0, //show a reconnect box to custom endpoint if needed. 0 is horde, otherwise its dropdown value+1
 		prev_custom_endpoint_model: "", //we may not be able to match, but set it if we do
 		prev_custom_endpoint_ischatcmpl: true,
@@ -7204,7 +7204,7 @@ Current version indicated by LITEVER below.
 		let allowedtools = [];
 		for(key in cached_mcp_tools)
 		{
-			let currarr = cached_mcp_tools[key];
+			let currarr = cached_mcp_tools[key].tools;
 			for(let i=0;i<currarr.length;++i)
 			{
 				let mcptool = document.getElementById(`mcptool_${currarr[i].function.name}`);
@@ -7240,7 +7240,7 @@ Current version indicated by LITEVER below.
 		}
 		for(key in cached_mcp_tools)
 		{
-			let currarr = cached_mcp_tools[key];
+			let currarr = cached_mcp_tools[key].tools;
 			for(let i=0;i<currarr.length;++i)
 			{
 				if(currarr[i].function.name==toolName)
@@ -7479,46 +7479,96 @@ Current version indicated by LITEVER below.
 			});
 		});
 	}
-	function Fetch_MCP_Tools() //connects to an mcp server, updates the tool list
+	function parseMcpUrls() {
+		const textarea = document.getElementById('mcpurls');
+		const lines = textarea.value.split('\n').filter(line => line.trim());
+		const servers = {};
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i];
+			const commaIndex = line.indexOf(',');
+			let url, apiKey;
+			if (commaIndex !== -1) {
+				url = line.substring(0, commaIndex).trim();
+				apiKey = line.substring(commaIndex + 1).trim();
+			} else {
+				url = line.trim();
+				apiKey = null;
+			}
+			servers[url] = { apikey: apiKey, tools:[] };
+		}
+		return servers;
+	}
+	function Fetch_MCP_Tools() //connects to multiple mcp servers, updates the tool list
 	{
 		const toolscontainer = document.getElementById("tools_list_container");
-		const mcpurl = document.getElementById("mcpurl").value;
+		toolscontainer.innerHTML = "<p>Fetching tools from all servers...</p>";
+		cached_mcp_tools = parseMcpUrls();
 
-		cached_mcp_tools = {};
-		if (mcpurl.trim()=="") {
-			toolscontainer.innerHTML = "<p>No tools available.</p>";
-			return;
-		}
+		const urls = Object.keys(cached_mcp_tools);
+		const fetchPromises = [];
 
-		const customHeaders = {};
-		MCPInit(mcpurl, customHeaders)
-		.then(mcp_client => { return MCPToolList(mcp_client); })
-		.then(function (mcp_result) {
-			if(mcp_result && Array.isArray(mcp_result) && mcp_result.length>0)
+		urls.forEach(url => {
+			const customHeaders = cached_mcp_tools[url].apikey ?
+				{ 'Authorization': `Bearer ${cached_mcp_tools[url].apikey}` } : {};
+
+			let purl = url;
+			if(document.getElementById("corsproxy_mcp").checked)
 			{
-				cached_mcp_tools[mcpurl] = mcp_result;
-				let toolshtml = `<table class="tools-table"><thead><tr><th>Tool</th><th>Enabled</th></tr></thead><tbody>`;
-				for(let i=0;i<mcp_result.length;++i)
-				{
-					let tool = mcp_result[i].function;
+				purl = apply_proxy_url(url,true);
+			}
+			const fetchPromise = MCPInit(purl, customHeaders)
+				.then(mcp_client => MCPToolList(mcp_client))
+				.then(mcp_result => {
+					if (mcp_result && Array.isArray(mcp_result) && mcp_result.length > 0) {
+						cached_mcp_tools[url].tools = mcp_result;
+						return { url, tools: mcp_result};
+					}
+					return { url, tools: []};
+				}).catch(error => {
+					console.error(`Error fetching tools from ${url}:`, error);
+					return { url, tools: []};
+				});
+
+			fetchPromises.push(fetchPromise);
+		});
+
+		// wait till all fetched or failed
+		Promise.all(fetchPromises)
+		.then(results => {
+			let toolshtml = `<table class="tools-table"><thead><tr><th>Tool</th><th>Enabled</th></tr></thead><tbody>`;
+			let hasAnyTools = false;
+
+			results.forEach(result => {
+				result.tools.forEach(tool => {
+					const toolFunction = tool.function || tool;
+					hasAnyTools = true;
 					toolshtml += `
 						<tr>
 							<td class="tools-info">
-								<div class="tool-title">${tool.name}</div>
-								<div class="tool-description">${tool.description.substr(0, 180)}</div>
+								<div class="tool-title">${toolFunction.name}</div>
+								<div class="tool-description">${toolFunction.description ? toolFunction.description.substr(0, 180) : 'No description'}</div>
 							</td>
 							<td class="tools-checkbox">
-								<input type="checkbox" id="mcptool_${tool.name}" value="${tool.name}" checked/>
+								<input type="checkbox" id="mcptool_${toolFunction.name}" value="${toolFunction.name}" checked/>
 							</td>
 						</tr>
 					`;
-				}
-				toolshtml += `</tbody></table>`;
-				toolscontainer.innerHTML = toolshtml;
+				});
+			});
+			toolshtml += `</tbody></table>`;
+
+			let finalHtml = '';
+			if (hasAnyTools) {
+				finalHtml += toolshtml;
 			} else {
-				toolscontainer.innerHTML = "<p>No tools available.</p>";
-				return;
+				finalHtml += "<p>No tools were found from any reachable server.</p>";
 			}
+
+			toolscontainer.innerHTML = finalHtml;
+		})
+		.catch(error => {
+			console.error("An unexpected error occurred during the overall fetch process:", error);
+			toolscontainer.innerHTML = "<p>An unexpected error occurred. Please check the console.</p>";
 		});
 	}
 
@@ -8921,7 +8971,7 @@ Current version indicated by LITEVER below.
 			new_save_storyobj.savedsettings.saved_a1111_url = "";
 			new_save_storyobj.savedsettings.saved_comfy_url = "";
 			new_save_storyobj.savedsettings.saved_xtts_url = "";
-			new_save_storyobj.savedsettings.saved_mcp_url = "";
+			new_save_storyobj.savedsettings.saved_mcp_urls = "";
 
 			new_save_storyobj.savedsettings.modelhashes = [];
 
@@ -9357,7 +9407,7 @@ Current version indicated by LITEVER below.
 					let tmp_comfy = localsettings.saved_comfy_url;
 					let tmp_xtts = localsettings.saved_xtts_url;
 					let tmp_imggen = localsettings.generate_images_mode;
-					let tmp_mcp = localsettings.saved_mcp_url;
+					let tmp_mcp = localsettings.saved_mcp_urls;
 
 					if(loadgensettings)
 					{
@@ -9414,7 +9464,7 @@ Current version indicated by LITEVER below.
 					localsettings.saved_comfy_url = tmp_comfy;
 					localsettings.saved_xtts_url = tmp_xtts;
 					localsettings.generate_images_mode = tmp_imggen;
-					localsettings.saved_mcp_url = tmp_mcp;
+					localsettings.saved_mcp_urls = tmp_mcp;
 
 					if(loadaessettings)
 					{
@@ -14377,7 +14427,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("second_ep_model").value = localsettings.second_ep_model;
 		document.getElementById("second_ep_url").value = localsettings.second_ep_url;
 		document.getElementById("enable_tool_use").checked = localsettings.enable_tool_use;
-		document.getElementById("mcpurl").value = localsettings.saved_mcp_url;
+		document.getElementById("mcpurls").value = localsettings.saved_mcp_urls;
 
 		if(is_using_kcpp_with_mirostat())
 		{
@@ -15141,7 +15191,7 @@ Current version indicated by LITEVER below.
 		localsettings.img_allownsfw = (document.getElementById("img_allownsfw").checked ? true : false);
 
 		localsettings.enable_tool_use = (document.getElementById("enable_tool_use").checked ? true : false);
-		localsettings.saved_mcp_url = document.getElementById("mcpurl").value.trim()?document.getElementById("mcpurl").value.trim():default_mcp_base;
+		localsettings.saved_mcp_urls = document.getElementById("mcpurls").value.trim()?document.getElementById("mcpurls").value.trim():default_mcp_base;
 
 		update_genimg_button_visiblility();
 		update_websearch_button_visibility();
@@ -21962,8 +22012,13 @@ Current version indicated by LITEVER below.
 								//show busy while waiting
 								pending_response_id = "toolcall-v1-dummy-id-"+(Math.floor(1000 + Math.random() * 9000)).toString(); //dummy id, autogenerated
 
-								const customHeaders = {};
 								let mcpurl = GetMCPUrlOfTool(callresp.name);
+								const customHeaders = cached_mcp_tools[mcpurl].apikey ?
+								{ 'Authorization': `Bearer ${cached_mcp_tools[mcpurl].apikey}` } : {};
+								if(document.getElementById("corsproxy_mcp").checked)
+								{
+									mcpurl = apply_proxy_url(mcpurl,true);
+								}
 								MCPInit(mcpurl, customHeaders)
 								.then(mcp_client => {
 									return MCPToolCall(mcp_client,callresp.name,obj);
@@ -28180,16 +28235,26 @@ Current version indicated by LITEVER below.
 				<div id="settingsmenutools" class="settingsmenu hidden" onchange="setting_tweaked()">
 					<div class="settingitem wide">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Enable MCP Toolcalling <span class="helpicon">?<span
+							<div class="justifyleft settingsmall">Enable Toolcalling <span class="helpicon">?<span
 								class="helptext">Allow tool calling and MCP server usage. Require Chat Completions endpoint (KoboldCpp will auto switch).</span></span></div>
 							<input title="Enable MCP Tools" type="checkbox" id="enable_tool_use" style="margin:0px 0px 0px auto;">
 						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Automatically Execute Tools <span class="helpicon">?<span
+								class="helptext">If disabled, you need to manually execute every tool call the AI suggests.</span></span></div>
+							<input title="Automatically Execute Tools" type="checkbox" id="tools_auto_exec" style="margin:0px 0px 0px auto;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Use CORS Proxy for MCP <span class="helpicon">?<span
+								class="helptext">Many public MCP servers restrict CORS, use this to proxy your requests. Setting cannot be saved.</span></span></div>
+							<input title="Use CORS Proxy for MCP" type="checkbox" id="corsproxy_mcp" style="margin:0px 0px 0px auto;">
+						</div>
 
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall">MCP Server URL <span class="helpicon">?<span
-								class="helptext">Connect to a local or remote MCP server to use tools there.</span></span></div>
-							<input class="settinglabel miniinput" style="width:calc(100% - 64px)" title="Style Tags" type="text" placeholder="MCP server URL (e.g. http://localhost:3000/mcp)" value="http://localhost:5001/mcp" id="mcpurl">
-							<button type="button" id="connect_mcp_btn" class="btn btn-primary" style="width:60px; padding:2px 3px;font-size:12px; margin-left: 2px;" onclick="Fetch_MCP_Tools()">Connect</button>
+							<div class="justifyleft settingsmall">MCP Server URLs <span class="helpicon">?<span
+								class="helptext">Connect to local or remote MCP servers to use tools there. One URL per row, optional API keys separated by commas.</span></span></div>
+							<textarea class="form-control menuinput_multiline" style="height: 80px;line-height:1.1;margin-bottom: 4px;" id="mcpurls" placeholder="MCP server URLs (e.g. http://localhost:3000/mcp)&#10;One URL per row, optional API keys separated by commas." rows="4"></textarea>
+							<button type="button" id="connect_mcp_btn" class="btn btn-primary" style="width:80px; padding:2px 3px;font-size:12px; margin: 0px 0px 0px auto;" onclick="Fetch_MCP_Tools()">Connect All</button>
 						</div>
 
 						<div class="color_red hidden" id="nomcp">MCP Toolcalling unavailable, requires chat completions.</div>
