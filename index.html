@@ -5192,7 +5192,7 @@ Current version indicated by LITEVER below.
 		inputtxt = replaceAll(inputtxt,instructsysplaceholder_end.trim(),get_instruct_systag_end(false));
 		return inputtxt;
 	}
-	function replace_noninstruct_placeholders(inputtxt,escape=false,isgametext=true,persistent_countmap=null)
+	function replace_noninstruct_placeholders(inputtxt,escape=false,isgametext=true,persistent_countmap=null,original=null)
 	{
 		let firstopponent = localsettings.chatopponent;
 		if (firstopponent && firstopponent.includes("||$||")) {
@@ -5209,6 +5209,11 @@ Current version indicated by LITEVER below.
 		{
 			inputtxt = replaceAll(inputtxt,"{{user}}",(localsettings.chatname?localsettings.chatname:"User"),true);
 			inputtxt = replaceAll(inputtxt,"{{char}}",(localsettings.chatopponent?firstopponent:defaultchatopponent),true);
+		}
+
+		if(original !== null) //replacing with "" is allowed
+		{
+			inputtxt = replaceAll(inputtxt,"{{original}}",escape?escape_html(original):original,true);
 		}
 
 		for(let i=0;i<localsettings.placeholder_tags_data.length;++i)
@@ -5298,12 +5303,12 @@ Current version indicated by LITEVER below.
 	}
 	//if alwaysreplace, then settings are not considered, otherwise checks settings
 	//if isgametext is true, then keeping the random values stable will be prioritized
-	function replace_placeholders(inputtxt, escape=false, alwaysreplace=false, isgametext=true)
+	function replace_placeholders(inputtxt, escape=false, alwaysreplace=false, isgametext=true, original=null)
 	{
 		inputtxt = replace_instruct_placeholders(inputtxt);
 		if(alwaysreplace || localsettings.placeholder_tags)
 		{
-			inputtxt = replace_noninstruct_placeholders(inputtxt,escape,isgametext,null);
+			inputtxt = replace_noninstruct_placeholders(inputtxt,escape,isgametext,null,original);
 		}
 		return inputtxt;
 	}
@@ -9329,11 +9334,13 @@ Current version indicated by LITEVER below.
 			console.log("Loading tavern obj");
 			let chatopponent = obj.name?obj.name:defaultchatopponent;
 			let myname = ((localsettings.chatname && localsettings.chatname!="")?localsettings.chatname:"User");
-			let memory = obj.description?("Persona: "+obj.description):"";
+			let memory = obj.description?("Description: "+obj.description):"";
 			memory += obj.personality?("\nPersonality: "+obj.personality):"";
 			let scenario = obj.scenario?obj.scenario:"";
 			let examplemsg = obj.mes_example?obj.mes_example:"";
 			let sysprompt = obj.system_prompt?obj.system_prompt:"";
+			let personalnotes = obj.creator_notes?obj.creator_notes:"";
+			let authorsnote = obj.post_history_instructions?obj.post_history_instructions:"";
 			let greeting = selectedgreeting;
 
 			//post process
@@ -9343,7 +9350,7 @@ Current version indicated by LITEVER below.
 			}
 			if(examplemsg!="")
 			{
-				examplemsg = "\n"+examplemsg;
+				examplemsg = "\n"+(examplemsg.startsWith("<START>")?"":"<START>\n")+examplemsg;
 			}
 			if(sysprompt!="")
 			{
@@ -9372,6 +9379,8 @@ Current version indicated by LITEVER below.
 				localsettings.chatname = myname;
 				localsettings.chatopponent = chatopponent;
 				current_memory = combinedmem + "\n***";
+				current_anote = authorsnote;
+				personal_notes = personalnotes;
 				localsettings.multiline_replies = true;
 				if(usechatmode)
 				{
@@ -9552,22 +9561,18 @@ Current version indicated by LITEVER below.
 			}
 
 			let chatopponent = obj.name?obj.name:"Bot";
-			let memory = obj.description?("Persona: "+obj.description):"";
+			let memory = obj.description?("Description: "+obj.description):"";
 			memory += obj.personality?("\nPersonality: "+obj.personality):"";
 			let scenario = obj.scenario?obj.scenario:"";
 			let examplemsg = obj.mes_example?obj.mes_example:"";
 			let greeting = obj.first_mes?obj.first_mes:"";
 			let sysprompt = obj.system_prompt?obj.system_prompt:"";
+			let creatornotes = obj.creator_notes?obj.creator_notes:"";
+			let posthistoryinstructions = obj.post_history_instructions?obj.post_history_instructions:"";	
 
 			//aliases
-			if(examplemsg=="" && obj.mesExample!="")
-			{
-				examplemsg = obj.mesExample;
-			}
-			if(greeting=="" && obj.firstMes!="")
-			{
-				greeting = obj.firstMes;
-			}
+			examplemsg = (examplemsg==="" && obj.mesExample)?obj.mesExample:examplemsg;
+			greeting = (greeting==="" && obj.firstMes)?obj.firstMes:greeting;
 
 			if(scenario!="")
 			{
@@ -9575,7 +9580,7 @@ Current version indicated by LITEVER below.
 			}
 			if(examplemsg!="")
 			{
-				examplemsg = "\n"+examplemsg;
+				examplemsg = "\n"+(examplemsg.startsWith("<START>")?"":"<START>\n")+examplemsg;
 			}
 			if(sysprompt!="")
 			{
@@ -9589,6 +9594,8 @@ Current version indicated by LITEVER below.
 			temp_scenario.chatopponent = chatopponent;
 			temp_scenario.prompt = ("\n{{char}}: "+ greeting);
 			temp_scenario.memory = combinedmem;
+			temp_scenario.personalnotes = creatornotes;
+			temp_scenario.authorsnote = posthistoryinstructions;
 
 			//since cai format has no wi, try to grab it from tavern format
 			let myname = ((localsettings.chatname && localsettings.chatname!="")?localsettings.chatname:"User");
@@ -9838,14 +9845,14 @@ Current version indicated by LITEVER below.
 			current_anote = temp_scenario.authorsnote;
 			if(!localsettings.placeholder_tags)
 			{
-				current_anote = replace_placeholders(current_anote, false, true, false);
+				current_anote = replace_placeholders(current_anote, false, true, false, (localsettings.opmode===4)?localsettings.custom_jailbreak_text:"");
 			}
 		}
 		if (temp_scenario.memory != "") {
 			current_memory = temp_scenario.memory;
 			if(!localsettings.placeholder_tags)
 			{
-				current_memory = replace_placeholders(current_memory, false, true, false);
+				current_memory = replace_placeholders(current_memory, false, true, false, (localsettings.opmode===4)?localsettings.instruct_sysprompt:"");
 			}
 		}
 		if (temp_scenario.image && temp_scenario.image != "") {
@@ -9855,6 +9862,9 @@ Current version indicated by LITEVER below.
 		}
 		if (temp_scenario.worldinfo && temp_scenario.worldinfo.length > 0) {
 			current_wi = temp_scenario.worldinfo;
+		}
+		if (temp_scenario.personalnotes && temp_scenario.personalnotes != "") {
+			personal_notes = temp_scenario.personalnotes;
 		}
 
 		localsettings.opmode = temp_scenario.opmode;
@@ -15302,7 +15312,7 @@ Current version indicated by LITEVER below.
 			let truncated_context = concat_gametext(true, "");
 
 			let max_mem_len = Math.floor(max_allowed_characters*0.8);
-			let truncated_memory = current_memory.substring(current_memory.length - max_mem_len);
+			let truncated_memory = truncate_memory(current_memory, max_mem_len, false);
 			if (truncated_memory != null && truncated_memory != "") {
 				truncated_memory += "\n";
 			}
@@ -15910,6 +15920,24 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	//Prioritizes truncating example messages in memory
+	function truncate_memory(current_memory, max_mem_len, to_boundary)
+	{
+		if(current_memory.length <= max_mem_len) {
+			return current_memory;
+		}
+		let basictrunc = to_boundary?substring_to_boundary:((str,len) => str.substring(str.length-len));
+		let startidx = current_memory.indexOf("<START>"); //start of examplemsg
+		if(startidx === -1) {
+			return basictrunc(current_memory, max_mem_len);
+		}
+		let suffix = current_memory.endsWith("\n***")?"\n***":"";
+		if(max_mem_len < startidx+7+suffix.length) { //discard all examplemsg
+			return basictrunc(current_memory.substring(0,startidx)+suffix,max_mem_len);
+		}
+		return current_memory.substring(0,startidx+7)+basictrunc(currrent_memory.substring(startidx+7),max_mem_len-startidx-7);
+	}
+		
 	var warn_unsaved = false;
 	function handle_quit()
 	{
@@ -17741,7 +17769,7 @@ Current version indicated by LITEVER below.
 						{
 							pending_context_preinjection = pending_context_preinjection + localsettings.start_thinking_tag.replaceAll("\\n", "\n") + "\n\n" + localsettings.stop_thinking_tag.replaceAll("\\n", "\n");
 						}
-						if(localsettings.inject_jailbreak_instruct)
+						if(localsettings.inject_jailbreak_instruct && (!localsettings.placeholder_tags || !current_anote.includes("\{\{original\}\}")))
 						{
 							pending_context_preinjection = pending_context_preinjection + localsettings.custom_jailbreak_text.replaceAll("\\n", "\n");
 						}
@@ -17772,7 +17800,7 @@ Current version indicated by LITEVER below.
 			let max_anote_len = Math.floor(max_allowed_characters*0.6);
 			let max_wi_len = Math.floor(max_allowed_characters*0.5);
 			let appendedsysprompt = "";
-			if(localsettings.opmode==4 && localsettings.instruct_sysprompt!="")
+			if(localsettings.opmode==4 && localsettings.instruct_sysprompt!="" && (!localsettings.placeholder_tags || !current_memory.includes("\{\{original\}\}")))
 			{
 				max_mem_len = Math.floor(max_allowed_characters*0.7);
 				appendedsysprompt = get_instruct_systag(false) + localsettings.instruct_sysprompt;
@@ -17782,7 +17810,7 @@ Current version indicated by LITEVER below.
 				}
 				appendedsysprompt += "\n";
 			}
-			let truncated_memory = substring_to_boundary(current_memory, max_mem_len);
+			let truncated_memory = truncate_memory(current_memory, max_mem_len, true);
 			if (truncated_memory != null && truncated_memory != "") {
 				if(newlineaftermemory)
 				{
@@ -17993,7 +18021,7 @@ Current version indicated by LITEVER below.
 				truncated_memory += wistr;
 			}
 
-			truncated_memory = appendedsysprompt + substring_to_boundary(truncated_memory, max_mem_len);
+			truncated_memory = truncate_memory(appendedsysprompt+truncated_memory, appendedsysprompt.length+max_mem_len, true);
 
 			//now we resize the context such that the memory and authors note can fit inside
 			truncated_context = substring_to_boundary(truncated_context, max_allowed_characters);
@@ -18002,8 +18030,8 @@ Current version indicated by LITEVER below.
 			//only do this processing if memory or anote is not blank
 			if (truncated_memory.length > 0 || current_anote.length > 0)
 			{
-				truncated_memory = replace_placeholders(truncated_memory,false,false,true);
-				truncated_anote = replace_placeholders(truncated_anote,false,false,false);
+				truncated_memory = replace_placeholders(truncated_memory,false,false,true,(localsettings.opmode===4)?localsettings.instruct_sysprompt:"");
+				truncated_anote = replace_placeholders(truncated_anote,false,false,false,(localsettings.opmode===4)?localsettings.custom_jailbreak_text:"");
 				if(!is_using_kcpp_with_added_memory())
 				{
 					let augmented_len = truncated_memory.length + truncated_context.length + truncated_anote.length;
