@@ -5211,6 +5211,8 @@ Current version indicated by LITEVER below.
 			inputtxt = replaceAll(inputtxt,"{{char}}",(localsettings.chatopponent?firstopponent:defaultchatopponent),true);
 		}
 
+		inputtxt = replaceAll(inputtxt,"{{original}}","",true); //redundant in Lite; use sysprompt or assistant jailbreak instead
+
 		for(let i=0;i<localsettings.placeholder_tags_data.length;++i)
 		{
 			if(localsettings.placeholder_tags_data[i].p && localsettings.placeholder_tags_data[i].r)
@@ -9329,11 +9331,13 @@ Current version indicated by LITEVER below.
 			console.log("Loading tavern obj");
 			let chatopponent = obj.name?obj.name:defaultchatopponent;
 			let myname = ((localsettings.chatname && localsettings.chatname!="")?localsettings.chatname:"User");
-			let memory = obj.description?("Persona: "+obj.description):"";
+			let memory = obj.description?("Description: "+obj.description):"";
 			memory += obj.personality?("\nPersonality: "+obj.personality):"";
 			let scenario = obj.scenario?obj.scenario:"";
 			let examplemsg = obj.mes_example?obj.mes_example:"";
 			let sysprompt = obj.system_prompt?obj.system_prompt:"";
+			let personalnotes = obj.creator_notes?obj.creator_notes:"";
+			let posthistoryinstructions = obj.post_history_instructions?obj.post_history_instructions:"";
 			let greeting = selectedgreeting;
 
 			//post process
@@ -9341,15 +9345,19 @@ Current version indicated by LITEVER below.
 			{
 				scenario = "\n[Scenario: "+scenario+"]";
 			}
+			if(posthistoryinstructions!="")
+			{
+				posthistoryinstructions = "\n[Special Instructions: "+posthistoryinstructions+"]";
+			}
 			if(examplemsg!="")
 			{
-				examplemsg = "\n"+examplemsg;
+				examplemsg = "\n"+(/^<START>\r?\n/.test(examplemsg)?"":"<START>\n")+examplemsg;
 			}
 			if(sysprompt!="")
 			{
 				sysprompt = sysprompt+"\n";
 			}
-			let combinedmem = sysprompt + memory + scenario + examplemsg;
+			let combinedmem = sysprompt + memory + scenario + posthistoryinstructions + examplemsg;
 			let agnaidatafieldsempty = scenario + examplemsg + (obj.personality?obj.personality:"") + greeting;
 			let has_tav_wi_check = has_tavern_wi_check(obj);
 			//check if it's a world info only card, if so, do not restart game
@@ -9372,6 +9380,7 @@ Current version indicated by LITEVER below.
 				localsettings.chatname = myname;
 				localsettings.chatopponent = chatopponent;
 				current_memory = combinedmem + "\n***";
+				personal_notes = personalnotes;
 				localsettings.multiline_replies = true;
 				if(usechatmode)
 				{
@@ -9552,36 +9561,36 @@ Current version indicated by LITEVER below.
 			}
 
 			let chatopponent = obj.name?obj.name:"Bot";
-			let memory = obj.description?("Persona: "+obj.description):"";
+			let memory = obj.description?("Description: "+obj.description):"";
 			memory += obj.personality?("\nPersonality: "+obj.personality):"";
 			let scenario = obj.scenario?obj.scenario:"";
 			let examplemsg = obj.mes_example?obj.mes_example:"";
 			let greeting = obj.first_mes?obj.first_mes:"";
 			let sysprompt = obj.system_prompt?obj.system_prompt:"";
+			let creatornotes = obj.creator_notes?obj.creator_notes:"";
+			let posthistoryinstructions = obj.post_history_instructions?obj.post_history_instructions:"";	
 
 			//aliases
-			if(examplemsg=="" && obj.mesExample!="")
-			{
-				examplemsg = obj.mesExample;
-			}
-			if(greeting=="" && obj.firstMes!="")
-			{
-				greeting = obj.firstMes;
-			}
+			examplemsg = (examplemsg==="" && obj.mesExample)?obj.mesExample:examplemsg;
+			greeting = (greeting==="" && obj.firstMes)?obj.firstMes:greeting;
 
 			if(scenario!="")
 			{
 				scenario = "\n[Scenario: "+scenario+"]";
 			}
+			if(posthistoryinstructions!="")
+			{
+				posthistoryinstructions = "\n[Special Instructions: "+posthistoryinstructions+"]";
+			}
 			if(examplemsg!="")
 			{
-				examplemsg = "\n"+examplemsg;
+				examplemsg = "\n"+(/^<START>\r?\n/.test(examplemsg)?"":"<START>\n")+examplemsg;
 			}
 			if(sysprompt!="")
 			{
 				sysprompt = sysprompt+"\n";
 			}
-			let combinedmem = sysprompt + memory + scenario + examplemsg;
+			let combinedmem = sysprompt + memory + scenario + posthistoryinstructions + examplemsg;
 			temp_scenario.title = chatopponent;
 			let prev2 = replaceAll(obj.description,"{{char}}",chatopponent,true);
 			prev2 = replaceAll(prev2,"{{user}}","User",true);
@@ -9589,6 +9598,7 @@ Current version indicated by LITEVER below.
 			temp_scenario.chatopponent = chatopponent;
 			temp_scenario.prompt = ("\n{{char}}: "+ greeting);
 			temp_scenario.memory = combinedmem;
+			temp_scenario.personalnotes = creatornotes;
 
 			//since cai format has no wi, try to grab it from tavern format
 			let myname = ((localsettings.chatname && localsettings.chatname!="")?localsettings.chatname:"User");
@@ -9855,6 +9865,9 @@ Current version indicated by LITEVER below.
 		}
 		if (temp_scenario.worldinfo && temp_scenario.worldinfo.length > 0) {
 			current_wi = temp_scenario.worldinfo;
+		}
+		if (temp_scenario.personalnotes && temp_scenario.personalnotes != "") {
+			personal_notes = temp_scenario.personalnotes;
 		}
 
 		localsettings.opmode = temp_scenario.opmode;
@@ -15302,7 +15315,7 @@ Current version indicated by LITEVER below.
 			let truncated_context = concat_gametext(true, "");
 
 			let max_mem_len = Math.floor(max_allowed_characters*0.8);
-			let truncated_memory = current_memory.substring(current_memory.length - max_mem_len);
+			let truncated_memory = truncate_memory(current_memory, max_mem_len, false);
 			if (truncated_memory != null && truncated_memory != "") {
 				truncated_memory += "\n";
 			}
@@ -15910,6 +15923,25 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	//Prioritizes truncating example messages in memory
+	function truncate_memory(current_memory, max_mem_len, to_boundary)
+	{
+		if(current_memory.length <= max_mem_len) {
+			return current_memory;
+		}
+		let basictrunc = to_boundary?substring_to_boundary:((str,len) => str.substring(str.length-len));
+		let examplemsg = current_memory.match(/<START>\r?\n/);
+		if(!examplemsg) {
+			return basictrunc(current_memory, max_mem_len);
+		}
+		let examplemsgstart = examplemsg.index+examplemsg[0].length;
+		let suffix = current_memory.endsWith("\n***")?"\n***":"";
+		if(max_mem_len < examplemsgstart+suffix.length) { //discard all examplemsg
+			return basictrunc(current_memory.substring(0,examplemsg.index)+suffix,max_mem_len);
+		}
+		return current_memory.substring(0,examplemsgstart)+basictrunc(currrent_memory.substring(examplemsgstart),max_mem_len-examplemsgstart);
+	}
+		
 	var warn_unsaved = false;
 	function handle_quit()
 	{
@@ -17782,7 +17814,7 @@ Current version indicated by LITEVER below.
 				}
 				appendedsysprompt += "\n";
 			}
-			let truncated_memory = substring_to_boundary(current_memory, max_mem_len);
+			let truncated_memory = truncate_memory(current_memory, max_mem_len, true);
 			if (truncated_memory != null && truncated_memory != "") {
 				if(newlineaftermemory)
 				{
@@ -17993,7 +18025,7 @@ Current version indicated by LITEVER below.
 				truncated_memory += wistr;
 			}
 
-			truncated_memory = appendedsysprompt + substring_to_boundary(truncated_memory, max_mem_len);
+			truncated_memory = appendedsysprompt + truncate_memory(truncated_memory, max_mem_len, true);
 
 			//now we resize the context such that the memory and authors note can fit inside
 			truncated_context = substring_to_boundary(truncated_context, max_allowed_characters);
