@@ -19343,7 +19343,17 @@ Current version indicated by LITEVER below.
 
 						for(let i=0;i<mhistory.length;++i)
 						{
-							oai_payload.messages.push({ "role": (mhistory[i].myturn?"user":"assistant"), "content": mhistory[i].msg });
+							let cturn = { "role": (mhistory[i].myturn?"user":"assistant"), "content": mhistory[i].msg };
+							if(!mhistory[i].myturn && mhistory[i].tool_calls)
+							{
+								cturn.content = null;
+								cturn.tool_calls = mhistory[i].tool_calls;
+							}
+							else if(!mhistory[i].myturn && mhistory[i].tool_results)
+							{
+								cturn = mhistory[i].tool_results;
+							}
+							oai_payload.messages.push(cturn);
 						}
 					}
 
