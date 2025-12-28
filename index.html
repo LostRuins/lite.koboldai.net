@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 302;
+	const LITEVER = 303;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3888,6 +3888,7 @@ Current version indicated by LITEVER below.
 		tools_auto_exec: true,
 		corsproxy_mcp: false,
 		cached_mcp_tools: {}, //key is url, value is tools array
+		disabled_mcp_tools: [], //maintain a list of unwanted tools that was deselected
 
 		raw_instruct_tags: false, //experimental flags
 		show_endpoint_selector: false,
@@ -7228,6 +7229,7 @@ Current version indicated by LITEVER below.
 	const MCP_PROTOCOL_VER = "2025-11-25";
 	var mcp_req_id = 0;
 	var pending_cached_mcp_tools = {};
+	var pending_disabled_mcp_tools = []; //array of strings
 	function MCPGetAllowedTools()
 	{
 		let allowedtools = [];
@@ -7236,8 +7238,7 @@ Current version indicated by LITEVER below.
 			let currarr = localsettings.cached_mcp_tools[key].tools;
 			for(let i=0;i<currarr.length;++i)
 			{
-				let mcptool = document.getElementById(`mcptool_${currarr[i].function.name}`);
-				if(mcptool && mcptool.checked)
+				if(!localsettings.disabled_mcp_tools.includes(currarr[i].function.name))
 				{
 					allowedtools.push(currarr[i]);
 				}
@@ -7608,31 +7609,31 @@ Current version indicated by LITEVER below.
 	{
 		const toolscontainer = document.getElementById("tools_list_container");
 		toolscontainer.innerHTML = "<p>Fetching tools from all servers...</p>";
-		pending_cached_mcp_tools = parseMcpUrls();
+		let urlsobj = parseMcpUrls();
 
-		const urls = Object.keys(pending_cached_mcp_tools);
+		const urls = Object.keys(urlsobj);
 		const fetchPromises = [];
 
 		urls.forEach(url => {
-			const customHeaders = pending_cached_mcp_tools[url].apikey ?
-				{ 'Authorization': `Bearer ${pending_cached_mcp_tools[url].apikey}` } : {};
+			const customHeaders = urlsobj[url].apikey ?
+				{ 'Authorization': `Bearer ${urlsobj[url].apikey}` } : {};
 
 			let purl = url;
 			if(localsettings.corsproxy_mcp)
 			{
 				purl = apply_proxy_url(url,true);
 			}
+			let retobj = {url:url, apikey:urlsobj[url].apikey, tools:[]};
 			const fetchPromise = MCPInit(purl, customHeaders)
 				.then(mcp_client => MCPToolList(mcp_client))
 				.then(mcp_result => {
 					if (mcp_result && Array.isArray(mcp_result) && mcp_result.length > 0) {
-						pending_cached_mcp_tools[url].tools = mcp_result;
-						return { url, tools: mcp_result};
+						retobj.tools = mcp_result;
 					}
-					return { url, tools: []};
+					return retobj;
 				}).catch(error => {
 					console.error(`Error fetching tools from ${url}:`, error);
-					return { url, tools: []};
+					return retobj;
 				});
 
 			fetchPromises.push(fetchPromise);
@@ -7641,45 +7642,60 @@ Current version indicated by LITEVER below.
 		// wait till all fetched or failed
 		Promise.all(fetchPromises)
 		.then(results => {
-			let toolshtml = `<table class="tools-table"><thead><tr><th>Tool</th><th>Enabled</th></tr></thead><tbody>`;
-			let hasAnyTools = false;
-
-			results.forEach(result => {
-				result.tools.forEach(tool => {
-					const toolFunction = tool.function || tool;
-					hasAnyTools = true;
-					toolshtml += `
-						<tr>
-							<td class="tools-info">
-								<div class="tool-title">${toolFunction.name}</div>
-								<div class="tool-description">${toolFunction.description ? toolFunction.description.substr(0, 180) : 'No description'}</div>
-							</td>
-							<td class="tools-checkbox">
-								<input type="checkbox" id="mcptool_${toolFunction.name}" value="${toolFunction.name}" checked/>
-							</td>
-						</tr>
-					`;
-				});
-			});
-			toolshtml += `</tbody></table>`;
-
-			let finalHtml = '';
-			if (hasAnyTools) {
-				finalHtml += toolshtml;
-			} else {
-				finalHtml += "<p>No tools were found from any reachable server.</p>";
+			pending_cached_mcp_tools = {};
+			for(let i=0;i<results.length;++i)
+			{
+				let itm = results[i];
+				pending_cached_mcp_tools[itm.url] = {apikey: itm.apikey, tools:itm.tools };
 			}
-
-			toolscontainer.innerHTML = finalHtml;
+			Render_MCP_Tools(pending_cached_mcp_tools,pending_disabled_mcp_tools);
 		})
 		.catch(error => {
 			console.error("An unexpected error occurred during the overall fetch process:", error);
 			toolscontainer.innerHTML = "<p>An unexpected error occurred. Please check the console.</p>";
 		});
 	}
-	function Render_MCP_Tools()
+	function Clear_MCP_Tools()
 	{
+		pending_cached_mcp_tools = {};
+		pending_disabled_mcp_tools = [];
+		Render_MCP_Tools(pending_cached_mcp_tools,pending_disabled_mcp_tools);
+	}
+	function Render_MCP_Tools(mcp_tools,disabled_tools)
+	{
+		const toolscontainer = document.getElementById("tools_list_container");
+		let toolshtml = `<table class="tools-table"><thead><tr><th>Tool</th><th>Enabled</th></tr></thead><tbody>`;
+		let hasAnyTools = false;
 
+		for(let url in mcp_tools)
+		{
+			let itm = mcp_tools[url];
+			itm.tools.forEach(tool => {
+				const toolFunction = tool.function || tool;
+				hasAnyTools = true;
+				toolshtml += `
+					<tr>
+						<td class="tools-info">
+							<div class="tool-title">${toolFunction.name}</div>
+							<div class="tool-description">${toolFunction.description ? toolFunction.description.substr(0, 180) : 'No description'}</div>
+						</td>
+						<td class="tools-checkbox">
+							<input type="checkbox" id="mcptool_${toolFunction.name}" value="${toolFunction.name}" ${disabled_tools.includes(toolFunction.name)?"":"checked"}/>
+						</td>
+					</tr>
+				`;
+			});
+		}
+		toolshtml += `</tbody></table>`;
+
+		let finalHtml = '';
+		if (hasAnyTools) {
+			finalHtml += toolshtml;
+		} else {
+			finalHtml += "<p>No tools were found from any reachable server.</p>";
+		}
+
+		toolscontainer.innerHTML = finalHtml;
 	}
 
 	//read any parameters passed in from the URL, and load content if found
@@ -14554,6 +14570,8 @@ Current version indicated by LITEVER below.
 		document.getElementById("corsproxy_mcp").checked = localsettings.corsproxy_mcp;
 		document.getElementById("mcpurls").value = localsettings.saved_mcp_urls;
 		pending_cached_mcp_tools = JSON.parse(JSON.stringify(localsettings.cached_mcp_tools));
+		pending_disabled_mcp_tools = JSON.parse(JSON.stringify(localsettings.disabled_mcp_tools));
+		Render_MCP_Tools(pending_cached_mcp_tools,pending_disabled_mcp_tools);
 
 		if(is_using_kcpp_with_mirostat())
 		{
@@ -15326,6 +15344,20 @@ Current version indicated by LITEVER below.
 		localsettings.corsproxy_mcp = (document.getElementById("corsproxy_mcp").checked ? true : false);
 		localsettings.saved_mcp_urls = document.getElementById("mcpurls").value.trim()?document.getElementById("mcpurls").value.trim():default_mcp_base;
 		localsettings.cached_mcp_tools = JSON.parse(JSON.stringify(pending_cached_mcp_tools));
+		pending_disabled_mcp_tools = [];
+		for(key in localsettings.cached_mcp_tools)
+		{
+			let currarr = localsettings.cached_mcp_tools[key].tools;
+			for(let i=0;i<currarr.length;++i)
+			{
+				let mcptool = document.getElementById(`mcptool_${currarr[i].function.name}`);
+				if(mcptool && !mcptool.checked)
+				{
+					pending_disabled_mcp_tools.push(currarr[i].function.name);
+				}
+			}
+		}
+		localsettings.disabled_mcp_tools = JSON.parse(JSON.stringify(pending_disabled_mcp_tools));
 
 		update_genimg_button_visiblility();
 		update_websearch_button_visibility();
@@ -28404,9 +28436,10 @@ Current version indicated by LITEVER below.
 
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">MCP Server URLs <span class="helpicon">?<span
-								class="helptext">Connect to local or remote MCP servers to use tools there. One URL per row, optional API keys separated by commas.</span></span></div>
+								class="helptext">Connect to local or remote MCP servers to use tools there. One URL per row, optional API keys separated by commas. Caution: MCP API keys are stored in plaintext in saves!</span></span></div>
 							<textarea class="form-control menuinput_multiline" style="height: 80px;line-height:1.1;margin-bottom: 4px;" id="mcpurls" placeholder="MCP server URLs (e.g. http://localhost:3000/mcp)&#10;One URL per row, optional API keys separated by commas." rows="4"></textarea>
-							<button type="button" id="connect_mcp_btn" class="btn btn-primary" style="width:80px; padding:2px 3px;font-size:12px; margin: 0px 0px 0px auto;" onclick="Fetch_MCP_Tools()">Connect All</button>
+							<button type="button" id="clear_mcp_btn" class="btn btn-primary" style="width:80px; padding:2px 3px;font-size:12px; margin: 0px 0px 0px auto;" onclick="Clear_MCP_Tools()">Remove All</button>
+							<button type="button" id="connect_mcp_btn" class="btn btn-primary" style="width:80px; padding:2px 3px;font-size:12px; margin: 0px 0px 0px 3px;" onclick="Fetch_MCP_Tools()">Connect All</button>
 						</div>
 
 						<div class="color_red hidden" id="nomcp">MCP Toolcalling unavailable, requires chat completions.</div>
