@@ -3898,6 +3898,8 @@ Current version indicated by LITEVER below.
 		legacy_savefile:false,
 		allow_continue_user_turn: false,
 		proxy_disable_stream:false,
+		new_session_erase_memory: false,
+		new_session_clear_branches: false,
 
 		//section migrated from story itself
 		extrastopseq: "",
@@ -15816,28 +15818,24 @@ Current version indicated by LITEVER below.
 
 	function display_newgame() {
 		mainmenu_untab(true);
-		document.getElementById("keep_ai_selected").checked = true;
+		document.getElementById("new_session_erase_memory").checked = localsettings.new_session_erase_memory;
+		document.getElementById("new_session_clear_branches").checked = localsettings.new_session_clear_branches;
 		document.getElementById("newgamecontainer").classList.remove("hidden");
-		if(localflag)
-		{
-			document.getElementById("keep_ai_selected_row").classList.add("hidden");
-		}else
-		{
-			document.getElementById("keep_ai_selected_row").classList.remove("hidden");
-		}
 	}
 
 	function confirm_newgame() {
-		if(!localflag && !document.getElementById("keep_ai_selected").checked)
-		{
-			selected_models = [];
-			selected_workers = [];
-			localsettings.opmode = 1;
-		}
+		localsettings.new_session_erase_memory = document.getElementById("new_session_erase_memory").checked;
+		localsettings.new_session_clear_branches = document.getElementById("new_session_clear_branches").checked;
 		hide_popups();
-		restart_new_game(true, document.getElementById("keep_memory").checked);
+		restart_new_game(true, !localsettings.new_session_erase_memory,!localsettings.new_session_clear_branches);
 		sync_multiplayer(true);
 		update_for_sidepanel();
+		hide_popups();
+	}
+	function cancel_newgame()
+	{
+		localsettings.new_session_erase_memory = document.getElementById("new_session_erase_memory").checked;
+		localsettings.new_session_clear_branches = document.getElementById("new_session_clear_branches").checked;
 		hide_popups();
 	}
 
@@ -16268,12 +16266,11 @@ Current version indicated by LITEVER below.
 		oaiemulatecompletionscontent = "";
 	}
 
-	function restart_new_game(save = true, keep_memory = false) {
+	function restart_new_game(save = true, keep_memory = false, keep_branches=false) {
 		xtts_is_playing = false;
 		idle_timer = 0;
 		idle_triggered_counter = 0;
 		gametext_arr = [];
-		alt_gametext_branches = [];
 		redo_arr = [];
 		last_request_str = "No Requests Available";
 		last_response_obj = null;
@@ -16316,6 +16313,10 @@ Current version indicated by LITEVER below.
 		recentSearchQueries = [];
 		lastSearchResults = [];
 		toolcall_waiting_approve = null;
+		if(!keep_branches)
+		{
+			alt_gametext_branches = [];
+		}
 		if (!keep_memory)
 		{
 			personal_notes = "";
@@ -16357,7 +16358,6 @@ Current version indicated by LITEVER below.
 			restart_new_game();
 			display_settings();
 			confirm_settings();
-			document.getElementById("keep_memory").checked = false;
 			clear_bg_img();
 			pick_default_horde_models();
 			indexeddb_save("savedusermod","");
@@ -29447,13 +29447,13 @@ Current version indicated by LITEVER below.
 				Unsaved data will be lost.<br><br>
 				<div>
 					<div style="vertical-align: middle;">
-						<div id="keep_ai_selected_row" title="If disabled, brings you back to the start page">
-							<span>Keep AI Selected? </span>
-							<input type="checkbox" id="keep_ai_selected" style=" vertical-align: top;" checked>
+						<div>
+							<span class="color_red">Clear all Branches? </span>
+							<input type="checkbox" id="new_session_clear_branches" style="vertical-align: top;" checked>
 						</div>
 						<div>
-							<span>Keep Memory and World Info? </span>
-							<input type="checkbox" id="keep_memory" style=" vertical-align: top;">
+							<span class="color_red">Also Reset Memory and World Info? </span>
+							<input type="checkbox" id="new_session_erase_memory" style="vertical-align: top;">
 						</div>
 					</div>
 				</div>
@@ -29461,7 +29461,7 @@ Current version indicated by LITEVER below.
 			</div>
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="confirm_newgame()">Ok</button>
-				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
+				<button type="button" class="btn btn-primary" onclick="cancel_newgame()">Cancel</button>
 			</div>
 		</div>
 	</div>
