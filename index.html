@@ -7312,56 +7312,77 @@ Current version indicated by LITEVER below.
 		isError: function (msg) { return "error" in msg; }
 	};
 	function ParseMCPResp(response, expectedId, onNotification) {
-		let ParseMCPSSE = function(response, expectedId, onNotification) {
+		let ParseMCPSSE = function ParseMCPSSE(response, expectedId, onNotification) {
 			return new Promise(function (resolve, reject) {
-				var reader = response.body.getReader();
-				var decoder = new TextDecoder();
-				var buffer = "";
+				const reader = response.body.getReader();
+				const decoder = new TextDecoder();
+				let buffer = "";
+				function isTerminalResult(msg) {
+					if (!msg || !msg.result) return false;
+					if (msg.result.status === "queued") return false;
+					if (msg.result.status === "in_progress") return false;
+					return true;
+				}
+				function finish(message) {
+					reader.cancel().catch(() => { });
+					resolve(message);
+				}
 				function read() {
 					reader.read().then(function (result) {
-						if (result.done) {
-							resolve(null); // End of stream without final response
+						if (result.done) { // Stream ended without a terminal result
+							resolve(null);
 							return;
 						}
 						buffer += decoder.decode(result.value, { stream: true });
-						var events = buffer.split("\n\n"); // Split on double newlines (SSE event boundary)
-						buffer = events.pop(); // Keep incomplete event in buffer
-						for (var i = 0; i < events.length; i++) {
-							var event = events[i];
-							// Parse SSE event fields
-							var eventType = "message"; // default per SSE spec
-							var data = "";
-							var lines = event.split("\n");
-							for (var j = 0; j < lines.length; j++) {
-								var line = lines[j];
-								if (line.indexOf("event:") === 0) {
+						const events = buffer.split("\n\n");
+						buffer = events.pop(); // keep partial event
+						for (let i = 0; i < events.length; i++) {
+							const event = events[i];
+							let eventType = "message";
+							let data = "";
+							const lines = event.split("\n");
+							for (let j = 0; j < lines.length; j++) {
+								const line = lines[j];
+								if (line.startsWith("event:")) {
 									eventType = line.slice(6).trim();
-								} else if (line.indexOf("data:") === 0) {
+								} else if (line.startsWith("data:")) {
 									data += (data ? "\n" : "") + line.slice(5).trim();
 								}
 							}
-							if (!data || eventType !== "message") continue; // Skip non-message events (e.g., ping) or empty data
-							if (data.indexOf("{") !== 0) continue; // Skip non-JSON data
+							if (!data || eventType !== "message") { continue; }
+							if (data[0] !== "{") { continue; }
+							let message;
 							try {
-								var message = JSON.parse(data);
-							} catch (e) {
-								continue; // Ignore parse errors
-							}
-							if (jsonRPC.isNotification(message)) {
-								if (onNotification) onNotification(message);
+								message = JSON.parse(data);
+							} catch {
 								continue;
 							}
+							// Notifications
+							if (jsonRPC.isNotification(message)) {
+								if (message.method === "notifications/progress") {// progress update
+									if (onNotification) onNotification(message);
+									continue;
+								}
+								// final result delivered via notification
+								if (message.method === "notifications/result" && message.params?.id === expectedId) {
+									finish({ jsonrpc: "2.0", id: expectedId, result: message.params.result });
+									return;
+								}
+								if (onNotification) { onNotification(message); }
+								continue;
+							}
+
+							// Responses
 							if (jsonRPC.isResponse(message) && message.id === expectedId) {
-								// Must release reader before resolving
-								reader.cancel().catch(function () { }); // Cancel the stream
-								resolve(message);
+								if (!isTerminalResult(message)) { continue; }// queued / in-progress
+								finish(message);
 								return;
 							}
 						}
-						read(); // Continue reading
+						read();
 					}).catch(reject);
 				}
-				read(); // Start reading
+				read();
 			});
 		}
 
@@ -7425,7 +7446,6 @@ Current version indicated by LITEVER below.
 
 	//MCP Exposed functions
 	function MCPInit(url, customHeaders, onNotification) {
-		let mcp_tools = [];
 		const clientName = 'KoboldAI Lite MCP';
 		const clientVersion = '1.0.0';
 		var currentId = ++mcp_req_id;
@@ -7462,6 +7482,7 @@ Current version indicated by LITEVER below.
 	{
 		return mcp_client.listTools().then(function (toolsResult) {
 			console.log(toolsResult);
+			let mcp_tools = [];
 			if(toolsResult && toolsResult.result && toolsResult.result.tools)
 			{
 				//convert to openai tools format
@@ -7621,7 +7642,7 @@ Current version indicated by LITEVER below.
 				{ 'Authorization': `Bearer ${urlsobj[url].apikey}` } : {};
 
 			let purl = url;
-			if(localsettings.corsproxy_mcp)
+			if(document.getElementById("corsproxy_mcp").checked) //localsettings.corsproxy_mcp not yet saved
 			{
 				purl = apply_proxy_url(url,true);
 			}
