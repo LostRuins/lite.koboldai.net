@@ -7312,86 +7312,72 @@ Current version indicated by LITEVER below.
 		isError: function (msg) { return "error" in msg; }
 	};
 	function ParseMCPResp(response, expectedId, onNotification) {
-		let ParseMCPSSE = function ParseMCPSSE(response, expectedId, onNotification) {
+		let ParseMCPSSE = function (response, expectedId, onNotification) {
 			return new Promise(function (resolve, reject) {
-				const reader = response.body.getReader();
-				const decoder = new TextDecoder();
-				let buffer = "";
-				function isTerminalResult(msg) {
-					if (!msg || !msg.result) return false;
-					if (msg.result.status === "queued") return false;
-					if (msg.result.status === "in_progress") return false;
-					return true;
-				}
-				function finish(message) {
-					reader.cancel().catch(() => { });
-					resolve(message);
+				var reader = response.body.getReader();
+				var decoder = new TextDecoder();
+				var buffer = "";
+				function processBuffer() {
+					let idx;
+					while ((idx = buffer.search(/\r?\n\r?\n/)) !== -1) {
+						let rawEvent = buffer.slice(0, idx);
+						buffer = buffer.slice(idx).replace(/^\r?\n\r?\n/, "");
+						let eventType = "message";
+						let dataLines = [];
+						let lines = rawEvent.split(/\r?\n/);
+						for (let i = 0; i < lines.length; i++) {
+							let line = lines[i];
+							if (line.startsWith("event:")) {
+								eventType = line.slice(6).trim();
+							} else if (line.startsWith("data:")) {
+								let d = line.slice(5);
+								if (d.startsWith(" ")) d = d.slice(1);
+								dataLines.push(d);
+							}
+						}
+						if (eventType !== "message" || !dataLines.length) continue;
+						let data = dataLines.join("\n");
+						if (data[0] !== "{") continue;
+						let message;
+						try {
+							message = JSON.parse(data);
+						} catch (e) {
+							continue;
+						}
+						if (jsonRPC.isNotification(message)) {
+							onNotification && onNotification(message);
+							continue;
+						}
+						if (jsonRPC.isResponse(message) && message.id === expectedId) {
+							reader.cancel().catch(function () {});
+							resolve(message);
+							return true;
+						}
+					}
+					return false;
 				}
 				function read() {
 					reader.read().then(function (result) {
-						if (result.done) { // Stream ended without a terminal result
+						if (result.done) {
 							resolve(null);
 							return;
 						}
 						buffer += decoder.decode(result.value, { stream: true });
-						const events = buffer.split("\n\n");
-						buffer = events.pop(); // keep partial event
-						for (let i = 0; i < events.length; i++) {
-							const event = events[i];
-							let eventType = "message";
-							let data = "";
-							const lines = event.split("\n");
-							for (let j = 0; j < lines.length; j++) {
-								const line = lines[j];
-								if (line.startsWith("event:")) {
-									eventType = line.slice(6).trim();
-								} else if (line.startsWith("data:")) {
-									data += (data ? "\n" : "") + line.slice(5).trim();
-								}
-							}
-							if (!data || eventType !== "message") { continue; }
-							if (data[0] !== "{") { continue; }
-							let message;
-							try {
-								message = JSON.parse(data);
-							} catch {
-								continue;
-							}
-							// Notifications
-							if (jsonRPC.isNotification(message)) {
-								if (message.method === "notifications/progress") {// progress update
-									if (onNotification) onNotification(message);
-									continue;
-								}
-								// final result delivered via notification
-								if (message.method === "notifications/result" && message.params?.id === expectedId) {
-									finish({ jsonrpc: "2.0", id: expectedId, result: message.params.result });
-									return;
-								}
-								if (onNotification) { onNotification(message); }
-								continue;
-							}
-
-							// Responses
-							if (jsonRPC.isResponse(message) && message.id === expectedId) {
-								if (!isTerminalResult(message)) { continue; }// queued / in-progress
-								finish(message);
-								return;
-							}
+						if (!processBuffer()) {
+							read();
 						}
-						read();
 					}).catch(reject);
 				}
 				read();
 			});
-		}
-
+		};
 		var contentType = response.headers.get("Content-Type") || "";
 		if (contentType.indexOf("text/event-stream") !== -1) {
 			return ParseMCPSSE(response, expectedId, onNotification);
 		}
 		return response.json();
 	}
+
 	class MCPClient {
 		constructor(url, sessionId, protocolVersion, customHeaders) {
 			this.url = url;
