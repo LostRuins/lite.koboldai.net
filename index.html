@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 303;
+	const LITEVER = 304;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3519,6 +3519,7 @@ Current version indicated by LITEVER below.
 	const koboldcpp_savedata_list_endpoint = "/api/extra/data/list";
 	const koboldcpp_savedata_save_endpoint = "/api/extra/data/save";
 	const koboldcpp_savedata_load_endpoint = "/api/extra/data/load";
+	const koboldcpp_mcp_endpoint = "/mcp";
 
 	const oai_models_endpoint = "/models";
 	const oai_submit_endpoint = "/completions";
@@ -3591,7 +3592,6 @@ Current version indicated by LITEVER below.
 	const default_xtts_base = " http://localhost:8020";
 	const default_alltalk_base = "http://localhost:7851";
 	const default_comfy_base = "http://localhost:8188";
-	const default_mcp_base = "http://localhost:5001";
 
 	const WEBBROWSER_TTS_ID = 1;
 	const KCPP_TTS_ID = 2;
@@ -3783,7 +3783,7 @@ Current version indicated by LITEVER below.
 		saved_comfy_url: default_comfy_base,
 		saved_xtts_url: default_xtts_base,
 		saved_alltalk_url: default_alltalk_base,
-		saved_mcp_urls: default_mcp_base,
+		saved_mcp_urls: "",
 		prev_custom_endpoint_type: 0, //show a reconnect box to custom endpoint if needed. 0 is horde, otherwise its dropdown value+1
 		prev_custom_endpoint_model: "", //we may not be able to match, but set it if we do
 		prev_custom_endpoint_ischatcmpl: true,
@@ -3887,6 +3887,7 @@ Current version indicated by LITEVER below.
 		enable_tool_use: false,
 		tools_auto_exec: true,
 		corsproxy_mcp: false,
+		kcpp_mcp_bridge: false,
 		cached_mcp_tools: {}, //key is url, value is tools array
 		disabled_mcp_tools: [], //maintain a list of unwanted tools that was deselected
 
@@ -7612,6 +7613,11 @@ Current version indicated by LITEVER below.
 				apiKey = null;
 			}
 			servers[url] = { apikey: apiKey, tools:[] };
+		}
+		if(document.getElementById("kcpp_mcp_bridge").checked && is_using_kcpp_with_lcppui())
+		{
+			let url = apply_proxy_url(custom_kobold_endpoint + koboldcpp_mcp_endpoint);
+			servers[url] = { apikey: (custom_kobold_key!=""?custom_kobold_key:null), tools:[] };
 		}
 		return servers;
 	}
@@ -14578,6 +14584,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("enable_tool_use").checked = localsettings.enable_tool_use;
 		document.getElementById("tools_auto_exec").checked = localsettings.tools_auto_exec;
 		document.getElementById("corsproxy_mcp").checked = localsettings.corsproxy_mcp;
+		document.getElementById("kcpp_mcp_bridge").checked = localsettings.kcpp_mcp_bridge;
 		document.getElementById("mcpurls").value = localsettings.saved_mcp_urls;
 		pending_cached_mcp_tools = JSON.parse(JSON.stringify(localsettings.cached_mcp_tools));
 		pending_disabled_mcp_tools = JSON.parse(JSON.stringify(localsettings.disabled_mcp_tools));
@@ -15352,7 +15359,8 @@ Current version indicated by LITEVER below.
 		localsettings.enable_tool_use = (document.getElementById("enable_tool_use").checked ? true : false);
 		localsettings.tools_auto_exec = (document.getElementById("tools_auto_exec").checked ? true : false);
 		localsettings.corsproxy_mcp = (document.getElementById("corsproxy_mcp").checked ? true : false);
-		localsettings.saved_mcp_urls = document.getElementById("mcpurls").value.trim()?document.getElementById("mcpurls").value.trim():default_mcp_base;
+		localsettings.kcpp_mcp_bridge = (document.getElementById("kcpp_mcp_bridge").checked ? true : false);
+		localsettings.saved_mcp_urls = document.getElementById("mcpurls").value.trim();
 		localsettings.cached_mcp_tools = JSON.parse(JSON.stringify(pending_cached_mcp_tools));
 		pending_disabled_mcp_tools = [];
 		for(key in localsettings.cached_mcp_tools)
@@ -28445,7 +28453,11 @@ Current version indicated by LITEVER below.
 								class="helptext">Many public MCP servers restrict CORS, use this to proxy your requests. Uses external tools, please only use if necessary.</span></span></div>
 							<input title="Use CORS Proxy for MCP" type="checkbox" id="corsproxy_mcp" style="margin:0px 0px 0px auto;">
 						</div>
-
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Include KoboldCpp MCP Bridge <span class="helpicon">?<span
+								class="helptext">If selected, attempts to connect to any MCP configured in KoboldCpp MCP bridge. Requires KoboldCpp.</span></span></div>
+							<input title="Include KoboldCpp MCP Bridge" type="checkbox" id="kcpp_mcp_bridge" style="margin:0px 0px 0px auto;">
+						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">MCP Server URLs <span class="helpicon">?<span
 								class="helptext">Connect to local or remote MCP servers to use tools there. One URL per row, optional API keys separated by commas. Caution: MCP API keys are stored in plaintext in saves!</span></span></div>
@@ -28453,6 +28465,7 @@ Current version indicated by LITEVER below.
 							<button type="button" id="clear_mcp_btn" class="btn btn-primary" style="width:80px; padding:2px 3px;font-size:12px; margin: 0px 0px 0px auto;" onclick="Clear_MCP_Tools()">Remove All</button>
 							<button type="button" id="connect_mcp_btn" class="btn btn-primary" style="width:80px; padding:2px 3px;font-size:12px; margin: 0px 0px 0px 3px;" onclick="Fetch_MCP_Tools()">Connect All</button>
 						</div>
+
 
 						<div class="color_red hidden" id="nomcp">MCP Toolcalling unavailable, requires chat completions.</div>
 
