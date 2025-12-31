@@ -1166,8 +1166,8 @@ Current version indicated by LITEVER below.
 	}
 	.popupfooter button {
 		width: 100px;
-		margin-left: 10px;
-		margin-right: 10px;
+		margin-left: 6px;
+		margin-right: 6px;
 	}
 
 	/* World info table */
@@ -20652,6 +20652,43 @@ Current version indicated by LITEVER below.
 		currmediaidx = 0;
 	}
 
+	function download_curr_media() {
+		let elementId = document.getElementById("zoomedaudio")?"zoomedaudio":"zoomedimg";
+		let filename = document.getElementById("zoomedaudio")?"audio.mp3":"image.jpg";
+		let triggerDownload = function(url, filename) {
+			var a = document.createElement("a");
+			a.href = url;
+			a.download = filename;
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			// Cleanup blob URLs
+			if (url.indexOf("blob:") === 0) {
+				setTimeout(function () {
+					URL.revokeObjectURL(url);
+				}, 1000);
+			}
+		}
+		var el = document.getElementById(elementId);
+		if (!el || !el.src) return;
+		var src = el.src;
+		if (src.indexOf("blob:") === 0) {
+			var xhr = new XMLHttpRequest();
+			xhr.open("GET", src, true);
+			xhr.responseType = "blob";
+
+			xhr.onload = function () {
+				if (xhr.status === 200) {
+					triggerDownload(URL.createObjectURL(xhr.response), filename);
+				}
+			};
+			xhr.send();
+		}
+		else {
+			triggerDownload(src, filename);
+		}
+	}
+
 	function render_all_media_html(text, float=true, center=false)
 	{
 		let siclass = (float?"storyimgfloat":(center?"storyimgcenter":"storyimgsidevertical"));
@@ -29511,7 +29548,8 @@ Current version indicated by LITEVER below.
 			</div>
 			<br>
 			<div class="popupfooter">
-				<button type="button" class="bg_red btn btn-primary" style="width: 124px;" onclick="delete_curr_media();clear_zoomed_img_and_audio();hide_popups();">Delete Media</button>
+				<button type="button" class="bg_red btn btn-primary" onclick="delete_curr_media();clear_zoomed_img_and_audio();hide_popups();">Delete</button>
+				<button type="button" class="btn btn-primary" onclick="download_curr_media();">Download</button>
 				<button type="button" class="btn btn-primary" onclick="clear_zoomed_img_and_audio();hide_popups()">Close</button>
 			</div>
 		</div>
