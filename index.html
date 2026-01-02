@@ -6532,6 +6532,19 @@ Current version indicated by LITEVER below.
 							if (event.data && event.data.choices && event.data.choices.length>0) {
 								if(event.data.choices[0].text)
 								{
+									//crappy fix for OpenRouter completions, which can provide reasoning on the same chunk
+									if(streaming_was_thinking)
+									{
+										streaming_was_thinking = false;
+										if(event.data.choices[0].reasoning!=null && event.data.choices[0].reasoning!="")
+										{
+											synchro_pending_stream += event.data.choices[0].reasoning;
+										}
+										if(localsettings.think_injected==1 || synchro_pending_stream.includes(localsettings.start_thinking_tag.replaceAll("\\n", "\n")))
+										{
+											synchro_pending_stream += localsettings.stop_thinking_tag.replaceAll("\\n", "\n");
+										}
+									}
 									synchro_pending_stream += event.data.choices[0].text;
 								}
 								else if(event.data.choices[0].delta && event.data.choices[0].delta.content)
@@ -6604,6 +6617,11 @@ Current version indicated by LITEVER below.
 											}
 										}
 									}
+								}
+								else if(event.data.choices[0].reasoning!=null && event.data.choices[0].reasoning!="")
+								{
+									streaming_was_thinking = true;
+									synchro_pending_stream += event.data.choices[0].reasoning;
 								}
 
 								//collect logprobs if detected
