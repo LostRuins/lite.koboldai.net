@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 
 <script id="init-config">
-	const LITEVER = 301;
+	const LITEVER = 304;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -1166,8 +1166,8 @@ Current version indicated by LITEVER below.
 	}
 	.popupfooter button {
 		width: 100px;
-		margin-left: 10px;
-		margin-right: 10px;
+		margin-left: 6px;
+		margin-right: 6px;
 	}
 
 	/* World info table */
@@ -1990,6 +1990,35 @@ Current version indicated by LITEVER below.
 	.pagebox.fullscroll
 	{
 		height: 100%;
+	}
+
+	/* tools table */
+	.tools-table {
+		width: 100%;
+		border-collapse: collapse;
+		font-family: sans-serif;
+		font-size: 12px;
+		text-align: left;
+	}
+	.tools-table th,
+	.tools-table td {
+		padding: 4px;
+		vertical-align: top;
+	}
+	.tools-checkbox {
+		width: 30px;
+		text-align: center;
+	}
+	.tool-title {
+		font-weight: 600;
+		margin-bottom: 2px;
+	}
+	.tools_list_container {
+		margin: 4px;
+		max-height: 300px;
+		overflow-y: auto;
+		overflow-x: hidden;
+		color: var(--theme_color_text);
 	}
 
 	/* Aesthetic UI */
@@ -3490,6 +3519,7 @@ Current version indicated by LITEVER below.
 	const koboldcpp_savedata_list_endpoint = "/api/extra/data/list";
 	const koboldcpp_savedata_save_endpoint = "/api/extra/data/save";
 	const koboldcpp_savedata_load_endpoint = "/api/extra/data/load";
+	const koboldcpp_mcp_endpoint = "/mcp";
 
 	const oai_models_endpoint = "/models";
 	const oai_submit_endpoint = "/completions";
@@ -3640,10 +3670,11 @@ Current version indicated by LITEVER below.
 	var uses_cors_proxy = false; //we start off attempting a direct connection. switch to proxy if that fails
 	var synchro_polled_response = null;
 	var synchro_polled_respimg = null; //sometimes a LLM response can also include an image.
+	var synchro_polled_resptoolcall = null; //set if a tool call was triggered
 	var last_stop_reason = ""; //update stop reason if known
 	var synchro_pending_stream = ""; //used for storing incomplete streaming text
 	var streaming_was_thinking = false; //used as a switch to determine when thinking ends, to wrap output in tags
-	var waiting_for_tool_call = 0; //0=not waiting, 1=autosummary, 2=websearchsummary
+	var waiting_for_summarycall = 0; //0=not waiting, 1=autosummary, 2=websearchsummary
 	var oaiemulatecompletionscontent = "";
 	var italics_regex = new RegExp(/\*(\S[^*]+\S)\*/g); //the fallback regex
 	var bold_regex = new RegExp(/\*\*(\S[^*]+\S)\*\*/g); //the fallback regex
@@ -3699,6 +3730,7 @@ Current version indicated by LITEVER below.
 	var preaudiobuffers = [], preaudioblobs = []; //will store 2 preblobs at a time
 	var koboldcpp_has_tts = false;
 	var koboldcpp_has_guidance = false;
+	var koboldcpp_has_jinja = false;
 	var no_escape_html = false;
 	var timetaken_timestamp = performance.now();
 	var bg_silence = null;
@@ -3752,6 +3784,7 @@ Current version indicated by LITEVER below.
 		saved_comfy_url: default_comfy_base,
 		saved_xtts_url: default_xtts_base,
 		saved_alltalk_url: default_alltalk_base,
+		saved_mcp_urls: "",
 		prev_custom_endpoint_type: 0, //show a reconnect box to custom endpoint if needed. 0 is horde, otherwise its dropdown value+1
 		prev_custom_endpoint_model: "", //we may not be able to match, but set it if we do
 		prev_custom_endpoint_ischatcmpl: true,
@@ -3852,6 +3885,12 @@ Current version indicated by LITEVER below.
 		darkmode: true,
 		colortheme: 0, // 0=newtheme, 1=oldtheme, 2=fruity, 3=black
 		render_streaming_markdown: true,
+		enable_tool_use: false,
+		tools_auto_exec: true,
+		corsproxy_mcp: false,
+		kcpp_mcp_bridge: false,
+		cached_mcp_tools: {}, //key is url, value is tools array
+		disabled_mcp_tools: [], //maintain a list of unwanted tools that was deselected
 
 		raw_instruct_tags: false, //experimental flags
 		show_endpoint_selector: false,
@@ -3861,6 +3900,7 @@ Current version indicated by LITEVER below.
 		legacy_savefile:false,
 		allow_continue_user_turn: false,
 		proxy_disable_stream:false,
+		new_session_erase_memory: false,
 
 		//section migrated from story itself
 		extrastopseq: "",
@@ -3884,8 +3924,8 @@ Current version indicated by LITEVER below.
 		second_ep_model:"gpt2",
 		second_ep_url:"",
 
-		max_context_length: (localflag?8192:3600),
-		max_length: (localflag?768:420),
+		max_context_length: (localflag?8192:3800),
+		max_length: (localflag?896:460),
 		last_maxctx: 0,
 		auto_ctxlen: true,
 		auto_genamt: true,
@@ -3916,6 +3956,8 @@ Current version indicated by LITEVER below.
 		dry_sequence_breakers: ["\n", ":", "\"", "*"],
 		xtc_threshold: 0.2,
 		xtc_probability: 0.0,
+		adaptivep_target: -1.0,
+		adaptivep_decay: 0.9,
 		sampler_order: [6, 0, 1, 3, 4, 2, 5],
 	};
 
@@ -4037,7 +4079,16 @@ Current version indicated by LITEVER below.
 		"name":"GLM-4.5 Non-Thinking",
 		"user":"<|user|>\\n",
 		"user_end":"/nothink",
-		"assistant":"<|assistant|>\\n<think></think>",
+		"assistant":"<|assistant|>\\n<think>We can answer immediately.</think>",
+		"assistant_end":"",
+		"system":"<|system|>\\n",
+		"system_end":"",
+	},
+	{
+		"name":"GLM-4.7 Non-Thinking",
+		"user":"<|user|>\\n",
+		"user_end":"/nothink",
+		"assistant":"<|assistant|></think>",
 		"assistant_end":"",
 		"system":"<|system|>\\n",
 		"system_end":"",
@@ -4389,6 +4440,28 @@ Current version indicated by LITEVER below.
 		.replace(/\\r/g, "\r")
 		.replace(/\[temp_rr_seq\]/g, "\\\\");
 	}
+	function replaceStringsInObject(obj, src, tgt) { //recursively traverse an object, replacing all strings with another string
+		if (obj === null || obj === undefined) {
+			return obj;
+		}
+		if (typeof obj === 'string') {
+			return obj.replace(new RegExp(src, 'g'), tgt);
+		}
+		if (Array.isArray(obj)) {
+			return obj.map(item => replaceStringsInObject(item, src, tgt));
+		}
+		if (typeof obj === 'object') {
+			const result = {};
+			for (let key in obj) {
+				if (obj.hasOwnProperty(key)) {
+					result[key] = replaceStringsInObject(obj[key], src, tgt);
+				}
+			}
+			return result;
+		}
+		return obj;
+	}
+
 	function get_cursor_position() { //get the caret position in a text
 		let editor = document.getElementById("gametext");
 
@@ -5210,6 +5283,8 @@ Current version indicated by LITEVER below.
 			inputtxt = replaceAll(inputtxt,"{{user}}",(localsettings.chatname?localsettings.chatname:"User"),true);
 			inputtxt = replaceAll(inputtxt,"{{char}}",(localsettings.chatopponent?firstopponent:defaultchatopponent),true);
 		}
+
+		inputtxt = replaceAll(inputtxt,"{{original}}","",true); //redundant in Lite; use sysprompt or assistant jailbreak instead
 
 		for(let i=0;i<localsettings.placeholder_tags_data.length;++i)
 		{
@@ -6256,6 +6331,7 @@ Current version indicated by LITEVER below.
 			}else if (custom_gemini_key != "" && data.candidates != null && data.candidates.length>0 && data.candidates[0].content && data.candidates[0].content.parts != null && data.candidates[0].content.parts.length>0) {
 				synchro_polled_response = "";
 				synchro_polled_respimg = null;
+				synchro_polled_resptoolcall = null;
 				for(let x=0;x<data.candidates[0].content.parts.length;++x)
 				{
 					if(!synchro_polled_respimg && data.candidates[0].content.parts[x].inlineData && data.candidates[0].content.parts[x].inlineData.data)
@@ -6372,6 +6448,7 @@ Current version indicated by LITEVER below.
 		synchro_pending_stream = "";
 		streaming_was_thinking = false;
 		let logprobs_content_arr = [];
+		let pending_toolcall_obj = null;
 		let reqOpt =
 		{method: 'POST',
 		headers: submit_headers,
@@ -6465,6 +6542,19 @@ Current version indicated by LITEVER below.
 							if (event.data && event.data.choices && event.data.choices.length>0) {
 								if(event.data.choices[0].text)
 								{
+									//crappy fix for OpenRouter completions, which can provide reasoning on the same chunk
+									if(streaming_was_thinking)
+									{
+										streaming_was_thinking = false;
+										if(event.data.choices[0].reasoning!=null && event.data.choices[0].reasoning!="")
+										{
+											synchro_pending_stream += event.data.choices[0].reasoning;
+										}
+										if(localsettings.think_injected==1 || synchro_pending_stream.includes(localsettings.start_thinking_tag.replaceAll("\\n", "\n")))
+										{
+											synchro_pending_stream += localsettings.stop_thinking_tag.replaceAll("\\n", "\n");
+										}
+									}
 									synchro_pending_stream += event.data.choices[0].text;
 								}
 								else if(event.data.choices[0].delta && event.data.choices[0].delta.content)
@@ -6500,6 +6590,49 @@ Current version indicated by LITEVER below.
 									streaming_was_thinking = true;
 									synchro_pending_stream += event.data.choices[0].delta.reasoning;
 								}
+								else if(event.data.choices[0].delta && !event.data.choices[0].delta.content && event.data.choices[0].delta.tool_calls && event.data.choices[0].delta.tool_calls.length>0)
+								{
+									//handle tool calls
+									if(pending_toolcall_obj==null)
+									{
+										pending_toolcall_obj = {};
+									}
+									let itm = event.data.choices[0].delta.tool_calls[0];
+									if(itm.id)
+									{
+										pending_toolcall_obj.id = itm.id;
+									}
+									if(itm.function)
+									{
+										if(itm.function.name)
+										{
+											if(!pending_toolcall_obj.name)
+											{
+												pending_toolcall_obj.name = itm.function.name;
+											}
+											else if(pending_toolcall_obj.name!=itm.function.name)
+											{
+												pending_toolcall_obj.name += itm.function.name;
+											}
+										}
+										if(itm.function.arguments)
+										{
+											if(!pending_toolcall_obj.arguments)
+											{
+												pending_toolcall_obj.arguments = itm.function.arguments;
+											}
+											else
+											{
+												pending_toolcall_obj.arguments += itm.function.arguments;
+											}
+										}
+									}
+								}
+								else if(event.data.choices[0].reasoning!=null && event.data.choices[0].reasoning!="")
+								{
+									streaming_was_thinking = true;
+									synchro_pending_stream += event.data.choices[0].reasoning;
+								}
 
 								//collect logprobs if detected
 								if(event.data.choices[0].logprobs && event.data.choices[0].logprobs.content && event.data.choices[0].logprobs.content.length>0)
@@ -6517,6 +6650,10 @@ Current version indicated by LITEVER below.
 								if(event.data.choices[0].finish_reason=="stop")
 								{
 									last_stop_reason = "stop";
+								}
+								else if(event.data.choices[0].finish_reason=="tool_calls")
+								{
+									last_stop_reason = "tool_calls";
 								}
 							}
 
@@ -6564,6 +6701,11 @@ Current version indicated by LITEVER below.
 					if(need_clean_output)
 					{
 						synchro_polled_response = cleanup_story_completion(synchro_polled_response);
+					}
+					if(synchro_polled_response=="" && last_stop_reason=="tool_calls" && pending_toolcall_obj!=null)
+					{
+						//a tool call was triggered instead
+						synchro_polled_resptoolcall = pending_toolcall_obj;
 					}
 					synchro_pending_stream = "";
 					streaming_was_thinking = false;
@@ -6790,7 +6932,7 @@ Current version indicated by LITEVER below.
 			input = input.replace(/^<blockquote>\n([\s\S]*?)\n<\/blockquote>/gm, (match, p1) => {
 				return `<blockquote>${p1}</blockquote>`; //return blockquotes to their rightful place
 			});
-			input = input.replace(/(^|[^\\])\$(\S[^$\n]*?\S)\$(?!\d)/g, (match, prefix, p1) => {
+			input = input.replace(/(^|[^\\])\$(\S[^$\n]*?\S)\$(?!\w)/g, (match, prefix, p1) => {
 				let content = p1;
 				content = unescape_html(content);
 				if(content.replace(/\s+/g, '').match(/^\${1,}$/)) //only dollar signs, just return
@@ -6963,8 +7105,10 @@ Current version indicated by LITEVER below.
 				}
 				//to aid the latex renderer, we temporarily add newlines between some blocks
 				md = md.replace(/<\/li><li>/gm, "</li>\n<li>");
+				md = md.replace(/<\/tr><tr class/gm, "</tr>\n<tr class");
 				md = replaceLatex(md);
 				md = md.replace(/<\/li>\n<li>/gm, "</li><li>");
+				md = md.replace(/<\/tr>\n<tr class/gm, "</tr><tr class");
 			}
 			md = md.replace(/<\/ul>\n/gm, "</ul>").replace(/<\/ol>\n/gm, "</ol>");
 			md = md.replace(/\\([`_~\*\+\-\.\^\\\<\>\(\)\[\]])/gm, "$1");
@@ -7111,6 +7255,491 @@ Current version indicated by LITEVER below.
 		}).catch(error => {
 			onDone(null); //probe failed
 		});
+	}
+
+	//MCP HTTP client code
+	const MCP_PROTOCOL_VER = "2025-11-25";
+	var mcp_req_id = 0;
+	var pending_cached_mcp_tools = {};
+	var pending_disabled_mcp_tools = []; //array of strings
+	function MCPGetAllowedTools()
+	{
+		let allowedtools = [];
+		for(key in localsettings.cached_mcp_tools)
+		{
+			let currarr = localsettings.cached_mcp_tools[key].tools;
+			for(let i=0;i<currarr.length;++i)
+			{
+				if(!localsettings.disabled_mcp_tools.includes(currarr[i].function.name))
+				{
+					allowedtools.push(currarr[i]);
+				}
+			}
+		}
+		return allowedtools;
+	}
+	function MCPToolIsAllowed(toolName)
+	{
+		if(!toolName || !localsettings.cached_mcp_tools || Object.keys(localsettings.cached_mcp_tools).length === 0)
+		{
+			return false;
+		}
+		let tl = MCPGetAllowedTools();
+		for(let i=0;i<tl.length;++i)
+		{
+			if(tl[i].function.name==toolName)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+	function GetMCPUrlOfTool(toolName)
+	{
+		if(!toolName || !localsettings.cached_mcp_tools || Object.keys(localsettings.cached_mcp_tools).length === 0)
+		{
+			return null;
+		}
+		for(key in localsettings.cached_mcp_tools)
+		{
+			let currarr = localsettings.cached_mcp_tools[key].tools;
+			for(let i=0;i<currarr.length;++i)
+			{
+				if(currarr[i].function.name==toolName)
+				{
+					return key;
+				}
+			}
+		}
+		return null;
+	}
+	const jsonRPC = {
+		request: function (method, params) {
+			var req = {
+				jsonrpc: "2.0",
+				id: mcp_req_id,
+				method: method
+			};
+			if (params) {
+				req.params = params;
+			}
+			return JSON.stringify(req);
+		},
+		notification: function (method, params) {
+			var notif = {
+				jsonrpc: "2.0",
+				method: method
+			};
+			if (params) {
+				notif.params = params;
+			}
+			return JSON.stringify(notif);
+		},
+		// Message type checkers
+		isNotification: function (msg) { return "method" in msg && !("id" in msg); },
+		isRequest: function (msg) { return "method" in msg && "id" in msg; },
+		isResponse: function (msg) { return ("result" in msg || "error" in msg) && "id" in msg; },
+		isError: function (msg) { return "error" in msg; }
+	};
+	function ParseMCPResp(response, expectedId, onNotification) {
+		let ParseMCPSSE = function (response, expectedId, onNotification) {
+			return new Promise(function (resolve, reject) {
+				var reader = response.body.getReader();
+				var decoder = new TextDecoder();
+				var buffer = "";
+				function processBuffer() {
+					let idx;
+					while ((idx = buffer.search(/\r?\n\r?\n/)) !== -1) {
+						let rawEvent = buffer.slice(0, idx);
+						buffer = buffer.slice(idx).replace(/^\r?\n\r?\n/, "");
+						let eventType = "message";
+						let dataLines = [];
+						let lines = rawEvent.split(/\r?\n/);
+						for (let i = 0; i < lines.length; i++) {
+							let line = lines[i];
+							if (line.startsWith("event:")) {
+								eventType = line.slice(6).trim();
+							} else if (line.startsWith("data:")) {
+								let d = line.slice(5);
+								if (d.startsWith(" ")) d = d.slice(1);
+								dataLines.push(d);
+							}
+						}
+						if (eventType !== "message" || !dataLines.length) continue;
+						let data = dataLines.join("\n");
+						if (data[0] !== "{") continue;
+						let message;
+						try {
+							message = JSON.parse(data);
+						} catch (e) {
+							continue;
+						}
+						if (jsonRPC.isNotification(message)) {
+							onNotification && onNotification(message);
+							continue;
+						}
+						if (jsonRPC.isResponse(message) && message.id === expectedId) {
+							reader.cancel().catch(function () {});
+							resolve(message);
+							return true;
+						}
+					}
+					return false;
+				}
+				function read() {
+					reader.read().then(function (result) {
+						if (result.done) {
+							resolve(null);
+							return;
+						}
+						buffer += decoder.decode(result.value, { stream: true });
+						if (!processBuffer()) {
+							read();
+						}
+					}).catch(reject);
+				}
+				read();
+			});
+		};
+		var contentType = response.headers.get("Content-Type") || "";
+		if (contentType.indexOf("text/event-stream") !== -1) {
+			return ParseMCPSSE(response, expectedId, onNotification);
+		}
+		return response.json();
+	}
+
+	class MCPClient {
+		constructor(url, sessionId, protocolVersion, customHeaders) {
+			this.url = url;
+			this.sessionId = sessionId;
+			this.protocolVersion = protocolVersion;
+			this.customHeaders = customHeaders || {};
+		}
+		headers() {
+			const headers = Object.assign({}, this.customHeaders);
+			headers["Content-Type"] = "application/json";
+			headers.Accept = "application/json, text/event-stream";
+			headers["MCP-Protocol-Version"] = this.protocolVersion;
+			if (this.sessionId) {
+				headers["MCP-Session-Id"] = this.sessionId;
+			}
+			return headers;
+		}
+		request(method, params, onNotification) {
+			const currentId = ++mcp_req_id;
+			return fetch(this.url, {
+				method: "POST",
+				headers: this.headers(),
+				body: jsonRPC.request(method, params)
+			}).then(response =>
+				ParseMCPResp(response, currentId, onNotification)
+			);
+		}
+		notify(method, params) {
+			return fetch(this.url, {
+				method: "POST",
+				headers: this.headers(),
+				body: jsonRPC.notification(method, params)
+			})
+			.then(response => {
+				console.log(response);
+			})
+			.catch(err => {
+				console.log(err.message || String(err));
+			});
+		}
+		listTools(onNotification) {
+			return this.request("tools/list", {}, onNotification);
+		}
+		callTool(name, args, onNotification) {
+			return this.request(
+				"tools/call",
+				{ name: name, arguments: args || {} },
+				onNotification
+			);
+		}
+	}
+
+	//MCP Exposed functions
+	function MCPInit(url, customHeaders, onNotification) {
+		const clientName = 'KoboldAI Lite MCP';
+		const clientVersion = '1.0.0';
+		var currentId = ++mcp_req_id;
+		var request = jsonRPC.request("initialize", {
+			protocolVersion: MCP_PROTOCOL_VER,
+			clientInfo: {
+				name: clientName,
+				version: clientVersion
+			},
+			capabilities: {} // empty = minimal client, no roots/sampling/elicitation support
+		});
+		var headers = customHeaders || {};
+		headers["Content-Type"] = "application/json";
+		headers.Accept = "application/json, text/event-stream";
+		return fetch(url, {
+			method: "POST",
+			headers: headers,
+			body: request
+		}).then(function (response) {
+			var sessionId = response.headers.get("MCP-Session-Id");
+			return ParseMCPResp(response, currentId, onNotification)
+				.then(function (result) {
+					var negotiatedVersion = (result && result.result && result.result.protocolVersion) ? result.result.protocolVersion : MCP_PROTOCOL_VER;
+					var client = new MCPClient(url, sessionId, negotiatedVersion, customHeaders);
+					return client.notify("notifications/initialized").then(() => client);
+				}).catch(error => {
+					return null;
+				});
+		}).catch(error => {
+			return null;
+		});
+	}
+	function MCPToolList(mcp_client)
+	{
+		return mcp_client.listTools().then(function (toolsResult) {
+			console.log(toolsResult);
+			let mcp_tools = [];
+			if(toolsResult && toolsResult.result && toolsResult.result.tools)
+			{
+				//convert to openai tools format
+				let remapped = toolsResult.result.tools.map(tool => ({
+					type: "function",
+					function: {
+					name: tool.name,
+					description: tool.description,
+					parameters: tool.inputSchema
+					}
+				}));
+
+				mcp_tools = remapped;
+			}
+			return mcp_tools;
+		}).catch(error => {
+			return null;
+		});
+	}
+	function MCPToolCallInternal(mcp_client, selectedTool, toolArgs) {
+		return new Promise(function(resolve, reject) {
+			// Validate inputs
+			if (!localsettings.cached_mcp_tools || Object.keys(localsettings.cached_mcp_tools).length === 0 || !selectedTool) {
+				reject(new Error("tool call invalid parameters"));
+				return;
+			}
+			// Make the tool call
+			mcp_client.callTool(selectedTool, toolArgs, function (notification) {
+				console.log(notification);
+			}).then(function (response) {
+				console.log(response);
+				if (jsonRPC.isError(response)) {
+					console.log("MCP Call Error");
+					console.log(response.error.message);
+					reject(new Error(response.error.message));
+				} else if (response.result) {
+					console.log("MCP Call OK");
+					console.log(response.result);
+					resolve(response.result);
+				} else {
+					// Handle case where there's no error but also no result
+					resolve(response);
+				}
+			}).catch(function (err) {
+				console.log(err.message || String(err));
+				reject(err);
+			});
+		});
+	}
+	function MCPToolCall(toolcall_obj)
+	{
+		if(!toolcall_obj || !toolcall_obj.tool_calls || toolcall_obj.tool_calls.length==0)
+		{
+			console.log("Error: cannot call tool, toolcall_obj is empty");
+			return;
+		}
+		let callargs = null;
+		try{
+			callargs = JSON.parse(toolcall_obj.tool_calls[0].function.arguments);
+		}
+		catch (e) {
+			console.log("Failed to parse tool call!");
+			return;
+		}
+		let callname = toolcall_obj.tool_calls[0].function.name;
+		let callid = toolcall_obj.tool_calls[0].id;
+		let call_allowed = MCPToolIsAllowed(callname);
+		let callresp = {
+			"role": "tool",
+			"tool_call_id": callid,
+			"name": callname,
+			"content": "{\"error\": \"Tool not found\"}"
+		};
+		if(call_allowed)
+		{
+			let callresptxt = "";
+			if(!(gametext_arr.length>0 && gametext_arr[gametext_arr.length-1].trim().endsWith("{{[OUTPUT]}}")))
+			{
+				callresptxt = get_instructendplaceholder(); //add instruct tag if needed
+			}
+
+			//show busy while waiting
+			pending_response_id = "toolcall-v1-dummy-id-"+(Math.floor(1000 + Math.random() * 9000)).toString(); //dummy id, autogenerated
+
+			let mcpurl = GetMCPUrlOfTool(callresp.name);
+			const customHeaders = localsettings.cached_mcp_tools[mcpurl].apikey ?
+			{ 'Authorization': `Bearer ${localsettings.cached_mcp_tools[mcpurl].apikey}` } : {};
+			if(localsettings.corsproxy_mcp)
+			{
+				mcpurl = apply_proxy_url(mcpurl,true);
+			}
+			MCPInit(mcpurl, customHeaders)
+			.then(mcp_client => {
+				return MCPToolCallInternal(mcp_client,callresp.name,callargs);
+			}).then(function (response) {
+				if(response.content && response.content.length>0)
+				{
+					let tgt = replaceStringsInObject(response.content[0],"&quot;","\""); //we must remove existing escaped quotes or things break later
+					callresp.content = JSON.stringify(tgt);
+				}
+				callresptxt += JSON.stringify(callresp) + get_instructendplaceholder();
+				gametext_arr.push(callresptxt);
+				console.log(response);
+				pending_response_id = "";
+				poll_in_progress = false;
+				show_abort_button(false);
+				submit_generation(""); //generate final response or new toolcall
+				render_gametext(false,false);
+			}).catch(function (error) {
+				// Handle errors
+				callresp.content = "{\"error\": \"Tool call failed\"}";
+				callresptxt += JSON.stringify(callresp) + get_instructendplaceholder();
+				gametext_arr.push(callresptxt);
+				console.error("MCP ToolCall Error:", error.message);
+				pending_response_id = "";
+				poll_in_progress = false;
+				show_abort_button(false);
+				submit_generation("");  //generate final response or new toolcall
+				render_gametext(false,false);
+			});
+		}
+		else
+		{
+			gametext_arr.push(get_instructendplaceholder() + callresp);
+		}
+	}
+	function parseMcpUrls() {
+		const textarea = document.getElementById('mcpurls');
+		const lines = textarea.value.split('\n').filter(line => line.trim());
+		const servers = {};
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i];
+			const commaIndex = line.indexOf(',');
+			let url, apiKey;
+			if (commaIndex !== -1) {
+				url = line.substring(0, commaIndex).trim();
+				apiKey = line.substring(commaIndex + 1).trim();
+			} else {
+				url = line.trim();
+				apiKey = null;
+			}
+			servers[url] = { apikey: apiKey, tools:[] };
+		}
+		if(document.getElementById("kcpp_mcp_bridge").checked && is_using_kcpp_with_lcppui())
+		{
+			let url = apply_proxy_url(custom_kobold_endpoint + koboldcpp_mcp_endpoint);
+			servers[url] = { apikey: (custom_kobold_key!=""?custom_kobold_key:null), tools:[] };
+		}
+		return servers;
+	}
+	function Fetch_MCP_Tools() //connects to multiple mcp servers, updates the tool list
+	{
+		const toolscontainer = document.getElementById("tools_list_container");
+		toolscontainer.innerHTML = "<p>Fetching tools from all servers...</p>";
+		let urlsobj = parseMcpUrls();
+
+		const urls = Object.keys(urlsobj);
+		const fetchPromises = [];
+
+		urls.forEach(url => {
+			const customHeaders = urlsobj[url].apikey ?
+				{ 'Authorization': `Bearer ${urlsobj[url].apikey}` } : {};
+
+			let purl = url;
+			if(document.getElementById("corsproxy_mcp").checked) //localsettings.corsproxy_mcp not yet saved
+			{
+				purl = apply_proxy_url(url,true);
+			}
+			let retobj = {url:url, apikey:urlsobj[url].apikey, tools:[]};
+			const fetchPromise = MCPInit(purl, customHeaders)
+				.then(mcp_client => MCPToolList(mcp_client))
+				.then(mcp_result => {
+					if (mcp_result && Array.isArray(mcp_result) && mcp_result.length > 0) {
+						retobj.tools = mcp_result;
+					}
+					return retobj;
+				}).catch(error => {
+					console.error(`Error fetching tools from ${url}:`, error);
+					return retobj;
+				});
+
+			fetchPromises.push(fetchPromise);
+		});
+
+		// wait till all fetched or failed
+		Promise.all(fetchPromises)
+		.then(results => {
+			pending_cached_mcp_tools = {};
+			for(let i=0;i<results.length;++i)
+			{
+				let itm = results[i];
+				pending_cached_mcp_tools[itm.url] = {apikey: itm.apikey, tools:itm.tools };
+			}
+			Render_MCP_Tools(pending_cached_mcp_tools,pending_disabled_mcp_tools);
+		})
+		.catch(error => {
+			console.error("An unexpected error occurred during the overall fetch process:", error);
+			toolscontainer.innerHTML = "<p>An unexpected error occurred. Please check the console.</p>";
+		});
+	}
+	function Clear_MCP_Tools()
+	{
+		pending_cached_mcp_tools = {};
+		pending_disabled_mcp_tools = [];
+		Render_MCP_Tools(pending_cached_mcp_tools,pending_disabled_mcp_tools);
+	}
+	function Render_MCP_Tools(mcp_tools,disabled_tools)
+	{
+		const toolscontainer = document.getElementById("tools_list_container");
+		let toolshtml = `<table class="tools-table"><thead><tr><th>Tool</th><th>Enabled</th></tr></thead><tbody>`;
+		let hasAnyTools = false;
+
+		for(let url in mcp_tools)
+		{
+			let itm = mcp_tools[url];
+			itm.tools.forEach(tool => {
+				const toolFunction = tool.function || tool;
+				hasAnyTools = true;
+				toolshtml += `
+					<tr>
+						<td class="tools-info">
+							<div class="tool-title">${toolFunction.name}</div>
+							<div class="tool-description">${toolFunction.description ? toolFunction.description.substr(0, 180) : 'No description'}</div>
+						</td>
+						<td class="tools-checkbox">
+							<input type="checkbox" id="mcptool_${toolFunction.name}" value="${toolFunction.name}" ${disabled_tools.includes(toolFunction.name)?"":"checked"}/>
+						</td>
+					</tr>
+				`;
+			});
+		}
+		toolshtml += `</tbody></table>`;
+
+		let finalHtml = '';
+		if (hasAnyTools) {
+			finalHtml += toolshtml;
+		} else {
+			finalHtml += "<p>No tools were found from any reachable server.</p>";
+		}
+
+		toolscontainer.innerHTML = finalHtml;
 	}
 
 	//read any parameters passed in from the URL, and load content if found
@@ -8039,6 +8668,10 @@ Current version indicated by LITEVER below.
 	{
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.102") >= 0);
 	}
+	function is_using_kcpp_with_jinja()
+	{
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.104") >= 0 && koboldcpp_has_jinja);
+	}
 	function is_using_web_lite()
 	{
 		return (window.location.hostname.includes("koboldai.net") || window.location.hostname.includes("lostruins.github.io"));
@@ -8073,6 +8706,11 @@ Current version indicated by LITEVER below.
 		else {
 			return (localsettings.eos_ban_mode == 2 ? true : false);
 		}
+	}
+
+	function determine_if_can_use_mcp()
+	{
+		return (custom_oai_key!="" && document.getElementById("useoaichatcompl").checked) || is_using_kcpp_with_streaming();
 	}
 
 	//returns true if the current multimodal setup for some media can be used, otherwise false.
@@ -8507,6 +9145,7 @@ Current version indicated by LITEVER below.
 			new_save_storyobj.savedsettings.saved_a1111_url = "";
 			new_save_storyobj.savedsettings.saved_comfy_url = "";
 			new_save_storyobj.savedsettings.saved_xtts_url = "";
+			new_save_storyobj.savedsettings.saved_mcp_urls = "";
 
 			new_save_storyobj.savedsettings.modelhashes = [];
 
@@ -8942,6 +9581,7 @@ Current version indicated by LITEVER below.
 					let tmp_comfy = localsettings.saved_comfy_url;
 					let tmp_xtts = localsettings.saved_xtts_url;
 					let tmp_imggen = localsettings.generate_images_mode;
+					let tmp_mcp = localsettings.saved_mcp_urls;
 
 					if(loadgensettings)
 					{
@@ -8998,6 +9638,7 @@ Current version indicated by LITEVER below.
 					localsettings.saved_comfy_url = tmp_comfy;
 					localsettings.saved_xtts_url = tmp_xtts;
 					localsettings.generate_images_mode = tmp_imggen;
+					localsettings.saved_mcp_urls = tmp_mcp;
 
 					if(loadaessettings)
 					{
@@ -9329,11 +9970,13 @@ Current version indicated by LITEVER below.
 			console.log("Loading tavern obj");
 			let chatopponent = obj.name?obj.name:defaultchatopponent;
 			let myname = ((localsettings.chatname && localsettings.chatname!="")?localsettings.chatname:"User");
-			let memory = obj.description?("Persona: "+obj.description):"";
+			let memory = obj.description?("Description: "+obj.description):"";
 			memory += obj.personality?("\nPersonality: "+obj.personality):"";
 			let scenario = obj.scenario?obj.scenario:"";
 			let examplemsg = obj.mes_example?obj.mes_example:"";
 			let sysprompt = obj.system_prompt?obj.system_prompt:"";
+			let personalnotes = obj.creator_notes?obj.creator_notes:"";
+			let posthistoryinstructions = obj.post_history_instructions?obj.post_history_instructions:"";
 			let greeting = selectedgreeting;
 
 			//post process
@@ -9341,15 +9984,19 @@ Current version indicated by LITEVER below.
 			{
 				scenario = "\n[Scenario: "+scenario+"]";
 			}
+			if(posthistoryinstructions!="")
+			{
+				posthistoryinstructions = "\n[Special Instructions: "+posthistoryinstructions+"]";
+			}
 			if(examplemsg!="")
 			{
-				examplemsg = "\n"+examplemsg;
+				examplemsg = "\n"+(/^<START>\r?\n/.test(examplemsg)?"":"<START>\n")+examplemsg;
 			}
 			if(sysprompt!="")
 			{
 				sysprompt = sysprompt+"\n";
 			}
-			let combinedmem = sysprompt + memory + scenario + examplemsg;
+			let combinedmem = sysprompt + memory + scenario + posthistoryinstructions + examplemsg;
 			let agnaidatafieldsempty = scenario + examplemsg + (obj.personality?obj.personality:"") + greeting;
 			let has_tav_wi_check = has_tavern_wi_check(obj);
 			//check if it's a world info only card, if so, do not restart game
@@ -9372,6 +10019,7 @@ Current version indicated by LITEVER below.
 				localsettings.chatname = myname;
 				localsettings.chatopponent = chatopponent;
 				current_memory = combinedmem + "\n***";
+				personal_notes = personalnotes;
 				localsettings.multiline_replies = true;
 				if(usechatmode)
 				{
@@ -9552,36 +10200,36 @@ Current version indicated by LITEVER below.
 			}
 
 			let chatopponent = obj.name?obj.name:"Bot";
-			let memory = obj.description?("Persona: "+obj.description):"";
+			let memory = obj.description?("Description: "+obj.description):"";
 			memory += obj.personality?("\nPersonality: "+obj.personality):"";
 			let scenario = obj.scenario?obj.scenario:"";
 			let examplemsg = obj.mes_example?obj.mes_example:"";
 			let greeting = obj.first_mes?obj.first_mes:"";
 			let sysprompt = obj.system_prompt?obj.system_prompt:"";
+			let creatornotes = obj.creator_notes?obj.creator_notes:"";
+			let posthistoryinstructions = obj.post_history_instructions?obj.post_history_instructions:"";
 
 			//aliases
-			if(examplemsg=="" && obj.mesExample!="")
-			{
-				examplemsg = obj.mesExample;
-			}
-			if(greeting=="" && obj.firstMes!="")
-			{
-				greeting = obj.firstMes;
-			}
+			examplemsg = (examplemsg==="" && obj.mesExample)?obj.mesExample:examplemsg;
+			greeting = (greeting==="" && obj.firstMes)?obj.firstMes:greeting;
 
 			if(scenario!="")
 			{
 				scenario = "\n[Scenario: "+scenario+"]";
 			}
+			if(posthistoryinstructions!="")
+			{
+				posthistoryinstructions = "\n[Special Instructions: "+posthistoryinstructions+"]";
+			}
 			if(examplemsg!="")
 			{
-				examplemsg = "\n"+examplemsg;
+				examplemsg = "\n"+(/^<START>\r?\n/.test(examplemsg)?"":"<START>\n")+examplemsg;
 			}
 			if(sysprompt!="")
 			{
 				sysprompt = sysprompt+"\n";
 			}
-			let combinedmem = sysprompt + memory + scenario + examplemsg;
+			let combinedmem = sysprompt + memory + scenario + posthistoryinstructions + examplemsg;
 			temp_scenario.title = chatopponent;
 			let prev2 = replaceAll(obj.description,"{{char}}",chatopponent,true);
 			prev2 = replaceAll(prev2,"{{user}}","User",true);
@@ -9589,6 +10237,7 @@ Current version indicated by LITEVER below.
 			temp_scenario.chatopponent = chatopponent;
 			temp_scenario.prompt = ("\n{{char}}: "+ greeting);
 			temp_scenario.memory = combinedmem;
+			temp_scenario.personalnotes = creatornotes;
 
 			//since cai format has no wi, try to grab it from tavern format
 			let myname = ((localsettings.chatname && localsettings.chatname!="")?localsettings.chatname:"User");
@@ -9855,6 +10504,9 @@ Current version indicated by LITEVER below.
 		}
 		if (temp_scenario.worldinfo && temp_scenario.worldinfo.length > 0) {
 			current_wi = temp_scenario.worldinfo;
+		}
+		if (temp_scenario.personalnotes && temp_scenario.personalnotes != "") {
+			personal_notes = temp_scenario.personalnotes;
 		}
 
 		localsettings.opmode = temp_scenario.opmode;
@@ -12207,7 +12859,8 @@ Current version indicated by LITEVER below.
 									koboldcpp_admin_type = (data.admin?data.admin:0);
 									koboldcpp_has_savedatafile = (data.savedata?true:false);
 									koboldcpp_has_guidance = (data.guidance?true:false);
-									koboldcpp_has_embeddings = (data.embeddings ? true : false)
+									koboldcpp_has_embeddings = (data.embeddings ? true : false);
+									koboldcpp_has_jinja = (data.jinja ? true : false);
 									let has_password = (data.protected?true:false);
 									koboldcpp_has_txt2img = (data.txt2img?true:false);
 									let no_txt_model = (mdlname=="inactive");
@@ -13844,12 +14497,14 @@ Current version indicated by LITEVER below.
 		document.getElementById("settingsmenumedia_tab").classList.remove("active");
 		document.getElementById("settingsmenutokens_tab").classList.remove("active");
 		document.getElementById("settingsmenuadvanced_tab").classList.remove("active");
+		document.getElementById("settingsmenutools_tab").classList.remove("active");
 
 		document.getElementById("settingsmenusamplers").classList.add("hidden");
 		document.getElementById("settingsmenuformat").classList.add("hidden");
 		document.getElementById("settingsmenumedia").classList.add("hidden");
 		document.getElementById("settingsmenutokens").classList.add("hidden");
 		document.getElementById("settingsmenuadvanced").classList.add("hidden");
+		document.getElementById("settingsmenutools").classList.add("hidden");
 
 		switch (tabidx) {
 			case 0: //format
@@ -13868,7 +14523,11 @@ Current version indicated by LITEVER below.
 				document.getElementById("settingsmenutokens").classList.remove("hidden");
 				document.getElementById("settingsmenutokens_tab").classList.add("active");
 			break;
-			case 4: //advanced
+			case 4: //tools
+				document.getElementById("settingsmenutools").classList.remove("hidden");
+				document.getElementById("settingsmenutools_tab").classList.add("active");
+			break;
+			case 5: //advanced
 				document.getElementById("settingsmenuadvanced").classList.remove("hidden");
 				document.getElementById("settingsmenuadvanced_tab").classList.add("active");
 			break;
@@ -13946,6 +14605,8 @@ Current version indicated by LITEVER below.
 		document.getElementById("dry_multiplier").value = localsettings.dry_multiplier;
 		document.getElementById("xtc_threshold").value = localsettings.xtc_threshold;
 		document.getElementById("xtc_probability").value = localsettings.xtc_probability;
+		document.getElementById("adaptivep_target").value = localsettings.adaptivep_target;
+		document.getElementById("adaptivep_decay").value = localsettings.adaptivep_decay;
 		document.getElementById("dry_base").value = localsettings.dry_base;
 		document.getElementById("dry_allowed_length").value = localsettings.dry_allowed_length;
 		document.getElementById("dry_penalty_last_n").value = localsettings.dry_penalty_last_n;
@@ -13953,6 +14614,14 @@ Current version indicated by LITEVER below.
 		document.getElementById("second_ep_qty").value = localsettings.second_ep_qty;
 		document.getElementById("second_ep_model").value = localsettings.second_ep_model;
 		document.getElementById("second_ep_url").value = localsettings.second_ep_url;
+		document.getElementById("enable_tool_use").checked = localsettings.enable_tool_use;
+		document.getElementById("tools_auto_exec").checked = localsettings.tools_auto_exec;
+		document.getElementById("corsproxy_mcp").checked = localsettings.corsproxy_mcp;
+		document.getElementById("kcpp_mcp_bridge").checked = localsettings.kcpp_mcp_bridge;
+		document.getElementById("mcpurls").value = localsettings.saved_mcp_urls;
+		pending_cached_mcp_tools = JSON.parse(JSON.stringify(localsettings.cached_mcp_tools));
+		pending_disabled_mcp_tools = JSON.parse(JSON.stringify(localsettings.disabled_mcp_tools));
+		Render_MCP_Tools(pending_cached_mcp_tools,pending_disabled_mcp_tools);
 
 		if(is_using_kcpp_with_mirostat())
 		{
@@ -14120,6 +14789,16 @@ Current version indicated by LITEVER below.
 		{
 			document.getElementById("websearchunsupporteddiv").classList.remove("hidden");
 		}
+		if(determine_if_can_use_mcp())
+		{
+			document.getElementById("nomcp").classList.add("hidden");
+			document.getElementById("tools_list_container").classList.remove("hidden");
+			document.getElementById("connect_mcp_btn").disabled = false;
+		}else{
+			document.getElementById("nomcp").classList.remove("hidden");
+			document.getElementById("tools_list_container").classList.add("hidden");
+			document.getElementById("connect_mcp_btn").disabled = true;
+		}
 		if(is_using_custom_ep())
 		{
 			document.getElementById("nologitbias").classList.add("hidden");
@@ -14219,6 +14898,8 @@ Current version indicated by LITEVER below.
 			document.getElementById("dry_allowed_length").value = defaultsettings.dry_allowed_length;
 			document.getElementById("dry_penalty_last_n").value = defaultsettings.dry_penalty_last_n;
 			document.getElementById("xtc_threshold").value = defaultsettings.xtc_threshold;
+			document.getElementById("adaptivep_target").value = defaultsettings.adaptivep_target;
+			document.getElementById("adaptivep_decay").value = defaultsettings.adaptivep_decay;
 		} else {
 			document.getElementById("presetsdesc").innerText = "";
 		}
@@ -14279,6 +14960,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("presetsdesc").innerText = found.description;
 			let changed = (document.getElementById("temperature").value != found.temp ||
 			document.getElementById("presence_penalty").value != found.presence_penalty ||
+			document.getElementById("adaptivep_target").value != -1 ||
 			document.getElementById("min_p").value != found.min_p ||
 			document.getElementById("dynatemp_range").value != found.dynatemp_range ||
 			document.getElementById("dynatemp_exponent").value != found.dynatemp_exponent ||
@@ -14583,6 +15265,8 @@ Current version indicated by LITEVER below.
 		localsettings.custom_jailbreak_text = pendingassistantjailbreak;
 		localsettings.xtc_threshold = parseFloat(document.getElementById("xtc_threshold").value);
 		localsettings.xtc_probability = parseFloat(document.getElementById("xtc_probability").value);
+		localsettings.adaptivep_target = parseFloat(document.getElementById("adaptivep_target").value);
+		localsettings.adaptivep_decay = parseFloat(document.getElementById("adaptivep_decay").value);
 		localsettings.token_count_multiplier = parseInt(document.getElementById("token_count_multiplier").value);
 		localsettings.guidance_scale = parseFloat(document.getElementById("guidance_scale").value);
 		localsettings.guidance_prompt = document.getElementById("guidance_prompt").value;
@@ -14704,6 +15388,28 @@ Current version indicated by LITEVER below.
 		localsettings.save_remote_images = (document.getElementById("save_remote_images").checked ? true : false);
 		localsettings.prompt_for_savename = (document.getElementById("prompt_for_savename").checked ? true : false);
 		localsettings.img_allownsfw = (document.getElementById("img_allownsfw").checked ? true : false);
+
+		localsettings.enable_tool_use = (document.getElementById("enable_tool_use").checked ? true : false);
+		localsettings.tools_auto_exec = (document.getElementById("tools_auto_exec").checked ? true : false);
+		localsettings.corsproxy_mcp = (document.getElementById("corsproxy_mcp").checked ? true : false);
+		localsettings.kcpp_mcp_bridge = (document.getElementById("kcpp_mcp_bridge").checked ? true : false);
+		localsettings.saved_mcp_urls = document.getElementById("mcpurls").value.trim();
+		localsettings.cached_mcp_tools = JSON.parse(JSON.stringify(pending_cached_mcp_tools));
+		pending_disabled_mcp_tools = [];
+		for(key in localsettings.cached_mcp_tools)
+		{
+			let currarr = localsettings.cached_mcp_tools[key].tools;
+			for(let i=0;i<currarr.length;++i)
+			{
+				let mcptool = document.getElementById(`mcptool_${currarr[i].function.name}`);
+				if(mcptool && !mcptool.checked)
+				{
+					pending_disabled_mcp_tools.push(currarr[i].function.name);
+				}
+			}
+		}
+		localsettings.disabled_mcp_tools = JSON.parse(JSON.stringify(pending_disabled_mcp_tools));
+
 		update_genimg_button_visiblility();
 		update_websearch_button_visibility();
 
@@ -14791,6 +15497,8 @@ Current version indicated by LITEVER below.
 		localsettings.dry_penalty_last_n = cleannum(localsettings.dry_penalty_last_n, 0.0, localsettings.max_context_length);
 		localsettings.xtc_probability = cleannum(localsettings.xtc_probability, 0.0, 1.0);
 		localsettings.xtc_threshold = cleannum(localsettings.xtc_threshold, 0.0, 1.0);
+		localsettings.adaptivep_target = cleannum(localsettings.adaptivep_target, -1, 1);
+		localsettings.adaptivep_decay = cleannum(localsettings.adaptivep_decay, 0.01, 0.99);
 		localsettings.sampler_seed = cleannum(localsettings.sampler_seed, -1, 999999);
 		localsettings.token_count_multiplier = cleannum(localsettings.token_count_multiplier, 70, 130);
 		localsettings.second_ep_qty = cleannum(Math.floor(localsettings.second_ep_qty), 0, 1024);
@@ -15150,28 +15858,21 @@ Current version indicated by LITEVER below.
 
 	function display_newgame() {
 		mainmenu_untab(true);
-		document.getElementById("keep_ai_selected").checked = true;
+		document.getElementById("new_session_erase_memory").checked = localsettings.new_session_erase_memory;
 		document.getElementById("newgamecontainer").classList.remove("hidden");
-		if(localflag)
-		{
-			document.getElementById("keep_ai_selected_row").classList.add("hidden");
-		}else
-		{
-			document.getElementById("keep_ai_selected_row").classList.remove("hidden");
-		}
 	}
 
 	function confirm_newgame() {
-		if(!localflag && !document.getElementById("keep_ai_selected").checked)
-		{
-			selected_models = [];
-			selected_workers = [];
-			localsettings.opmode = 1;
-		}
+		localsettings.new_session_erase_memory = document.getElementById("new_session_erase_memory").checked;
 		hide_popups();
-		restart_new_game(true, document.getElementById("keep_memory").checked);
+		restart_new_game(true, !localsettings.new_session_erase_memory);
 		sync_multiplayer(true);
 		update_for_sidepanel();
+		hide_popups();
+	}
+	function cancel_newgame()
+	{
+		localsettings.new_session_erase_memory = document.getElementById("new_session_erase_memory").checked;
 		hide_popups();
 	}
 
@@ -15232,7 +15933,7 @@ Current version indicated by LITEVER below.
 			onDoneFn("");
 		} else {
 			pending_response_id = "-1";
-			waiting_for_tool_call = 2;
+			waiting_for_summarycall = 2;
 			let max_allowed_characters = Math.floor(localsettings.max_context_length * 3.0) - 100;
 			let truncated_context = recentCtx.substring(recentCtx.length - max_allowed_characters);
 
@@ -15297,12 +15998,12 @@ Current version indicated by LITEVER below.
 		temp_automem_store = document.getElementById("memorytext").value;
 		let onOk = ()=>{
 			pending_response_id = "-1";
-			waiting_for_tool_call = 1;
+			waiting_for_summarycall = 1;
 			let max_allowed_characters = Math.floor(localsettings.max_context_length * 3.0)-100;
 			let truncated_context = concat_gametext(true, "");
 
 			let max_mem_len = Math.floor(max_allowed_characters*0.8);
-			let truncated_memory = current_memory.substring(current_memory.length - max_mem_len);
+			let truncated_memory = truncate_memory(current_memory, max_mem_len, false);
 			if (truncated_memory != null && truncated_memory != "") {
 				truncated_memory += "\n";
 			}
@@ -15370,7 +16071,7 @@ Current version indicated by LITEVER below.
 	function handle_incoming_autosummary(gentxt)
 	{
 		retry_in_progress = false;
-		waiting_for_tool_call = 0;
+		waiting_for_summarycall = 0;
 		gentxt = gentxt.trim();
 		gentxt = gentxt.split("###")[0];
 		gentxt = replaceAll(gentxt,"\n\n","\n");
@@ -15409,7 +16110,7 @@ Current version indicated by LITEVER below.
 	function handle_incoming_searchsummary(gentxt)
 	{
 		retry_in_progress = false;
-		waiting_for_tool_call = 0;
+		waiting_for_summarycall = 0;
 		gentxt = gentxt.trim();
 		gentxt = gentxt.split("###")[0];
 		gentxt = replaceAll(gentxt,"\n\n","\n");
@@ -15593,10 +16294,11 @@ Current version indicated by LITEVER below.
 		poll_in_progress = false;
 		synchro_polled_response = null;
 		synchro_polled_respimg = null;
+		synchro_polled_resptoolcall = null;
 		last_stop_reason = "";
 		synchro_pending_stream = "";
 		streaming_was_thinking = false;
-		waiting_for_tool_call = 0;
+		waiting_for_summarycall = 0;
 		horde_poll_nearly_completed = false;
 		oaiemulatecompletionscontent = "";
 	}
@@ -15606,7 +16308,6 @@ Current version indicated by LITEVER below.
 		idle_timer = 0;
 		idle_triggered_counter = 0;
 		gametext_arr = [];
-		alt_gametext_branches = [];
 		redo_arr = [];
 		last_request_str = "No Requests Available";
 		last_response_obj = null;
@@ -15619,10 +16320,11 @@ Current version indicated by LITEVER below.
 		pending_response_id = "";
 		synchro_polled_response = null;
 		synchro_polled_respimg = null;
+		synchro_polled_resptoolcall = null;
 		last_stop_reason = "";
 		synchro_pending_stream = "";
 		streaming_was_thinking = false;
-		waiting_for_tool_call = 0;
+		waiting_for_summarycall = 0;
 		oaiemulatecompletionscontent = "";
 		last_reply_was_empty = false;
 		pending_context_preinjection = "";
@@ -15647,6 +16349,8 @@ Current version indicated by LITEVER below.
 		voice_is_processing = false;
 		recentSearchQueries = [];
 		lastSearchResults = [];
+		toolcall_waiting_approve = null;
+		alt_gametext_branches = [];
 		if (!keep_memory)
 		{
 			personal_notes = "";
@@ -15688,7 +16392,6 @@ Current version indicated by LITEVER below.
 			restart_new_game();
 			display_settings();
 			confirm_settings();
-			document.getElementById("keep_memory").checked = false;
 			clear_bg_img();
 			pick_default_horde_models();
 			indexeddb_save("savedusermod","");
@@ -15908,6 +16611,25 @@ Current version indicated by LITEVER below.
 			}
 			return trim;
 		}
+	}
+
+	//Prioritizes truncating example messages in memory
+	function truncate_memory(current_memory, max_mem_len, to_boundary)
+	{
+		if(current_memory.length <= max_mem_len) {
+			return current_memory;
+		}
+		let basictrunc = to_boundary?substring_to_boundary:((str,len) => str.substring(str.length-len));
+		let examplemsg = current_memory.match(/<START>\r?\n/);
+		if(!examplemsg) {
+			return basictrunc(current_memory, max_mem_len);
+		}
+		let examplemsgstart = examplemsg.index+examplemsg[0].length;
+		let suffix = current_memory.endsWith("\n***")?"\n***":"";
+		if(max_mem_len < examplemsgstart+suffix.length) { //discard all examplemsg
+			return basictrunc(current_memory.substring(0,examplemsg.index)+suffix,max_mem_len);
+		}
+		return current_memory.substring(0,examplemsgstart)+basictrunc(current_memory.substring(examplemsgstart),max_mem_len-examplemsgstart);
 	}
 
 	var warn_unsaved = false;
@@ -17318,8 +18040,8 @@ Current version indicated by LITEVER below.
 		}
 		else //may be continuting existing instruction OR starting a brand new session. check if first action
 		{
-			if (is_impersonate_user) {
-				is_impersonate_user = false;
+			let latest_human = is_instruct_latest_human_turn();
+			if (is_impersonate_user && !latest_human) {
 				if (localsettings.separate_end_tags) {
 					pending_context_preinjection = prev_et + ist; //bot response as first msg
 					pending_context_postinjection = iste + iet;
@@ -17415,7 +18137,7 @@ Current version indicated by LITEVER below.
 
 		if (!user_input_empty || gametext_arr.length > 0 || current_memory != "" || current_anote != "")
 		{
-			waiting_for_tool_call = 0;
+			waiting_for_summarycall = 0;
 			idle_timer = 0;
 			idle_triggered_counter = 0;
 			if (localsettings.tts_mode > 0)
@@ -17430,7 +18152,7 @@ Current version indicated by LITEVER below.
 			{
 				newgen = wrap_newgen_instruct_format(newgen,true);
 				let latest_human = is_instruct_latest_human_turn();
-				if(!localsettings.allow_continue_user_turn && newgen=="" && latest_human) //assume the user is trying to get the AI to respond even though there's no output tag
+				if(!localsettings.allow_continue_user_turn && newgen=="" && latest_human && !is_impersonate_user) //assume the user is trying to get the AI to respond even though there's no output tag
 				{
 					//so we force one
 					let iet = get_instructendplaceholder();
@@ -17639,7 +18361,6 @@ Current version indicated by LITEVER below.
 				let original_co = co;
 				if(is_impersonate_user) //replace opponent with ourselves if needed
 				{
-					is_impersonate_user = false;
 					co = get_my_multiplayer_chatname();
 				}
 
@@ -17782,7 +18503,7 @@ Current version indicated by LITEVER below.
 				}
 				appendedsysprompt += "\n";
 			}
-			let truncated_memory = substring_to_boundary(current_memory, max_mem_len);
+			let truncated_memory = truncate_memory(current_memory, max_mem_len, true);
 			if (truncated_memory != null && truncated_memory != "") {
 				if(newlineaftermemory)
 				{
@@ -17993,7 +18714,7 @@ Current version indicated by LITEVER below.
 				truncated_memory += wistr;
 			}
 
-			truncated_memory = appendedsysprompt + substring_to_boundary(truncated_memory, max_mem_len);
+			truncated_memory = appendedsysprompt + truncate_memory(truncated_memory, max_mem_len, true);
 
 			//now we resize the context such that the memory and authors note can fit inside
 			truncated_context = substring_to_boundary(truncated_context, max_allowed_characters);
@@ -18356,6 +19077,8 @@ Current version indicated by LITEVER below.
 		if((custom_kobold_endpoint != "" && is_using_kcpp_with_mirostat()) || custom_oai_endpoint!="")
 		{
 			submit_payload.params.presence_penalty = localsettings.presence_penalty;
+			submit_payload.params.adaptive_target = localsettings.adaptivep_target;
+			submit_payload.params.adaptive_decay = localsettings.adaptivep_decay;
 			submit_payload.params.logit_bias = JSON.parse(JSON.stringify(localsettings.logitbiasdict));
 		}
 
@@ -18383,6 +19106,40 @@ Current version indicated by LITEVER below.
 		return submit_payload;
 	}
 
+	function oai_append_media(mainoaibody)
+	{
+		for(let i=0;i<insertAIVisionImages.length;++i)
+		{
+			let oaiimg = {
+				"type": "image_url",
+				"image_url": {
+					"url": insertAIVisionImages[i]
+				}
+			};
+			mainoaibody.push(oaiimg);
+		}
+		for(let i=0;i<insertAIAudioSounds.length;++i)
+		{
+			let curr = insertAIAudioSounds[i];
+			let format = "wav";
+			if(curr.includes("base64,"))
+			{
+				let parts = curr.split("base64,");
+				curr = parts[1];
+				format = (parts[0].includes("mp3")||parts[0].includes("mpeg"))?"mp3":"wav";
+			}
+			let oaiimg = {
+				"type": "input_audio",
+				"input_audio": {
+					"data": curr,
+					"format": format
+				}
+			};
+			mainoaibody.push(oaiimg);
+		}
+		return mainoaibody;
+	}
+
 	function dispatch_submit_generation(submit_payload, input_was_empty) //if input is not empty, always unban eos
 	{
 		console.log(submit_payload);
@@ -18397,6 +19154,7 @@ Current version indicated by LITEVER below.
 			poll_in_progress = false;
 			synchro_polled_response = null;
 			synchro_polled_respimg = null;
+			synchro_polled_resptoolcall = null;
 			last_stop_reason = "";
 			synchro_pending_stream = "";
 			streaming_was_thinking = false;
@@ -18412,19 +19170,81 @@ Current version indicated by LITEVER below.
 				last_request_str = JSON.stringify(submit_payload);
 				last_response_obj = null;
 				last_response_streamlog = "";
-				if (localsettings.tokenstreammode==2 && is_using_kcpp_with_sse()) {
-					let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_stream_endpoint);
-					kobold_api_stream_sse(sub_endpt, submit_payload);
-				} else {
-					let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_endpoint);
-					let trackedgenid = pending_response_id; //if it changes, stop streaming
-					kobold_api_sync_req(sub_endpt, submit_payload, trackedgenid);
+
+				if(localsettings.opmode==4 &&
+				(is_using_kcpp_with_jinja() || (localsettings.enable_tool_use && determine_if_can_use_mcp() && localsettings.cached_mcp_tools && Object.keys(localsettings.cached_mcp_tools).length>0)))
+				{
+					//for tool calling, we hijack the oai endpoint in order to utilize
+					let combinedprompt = submit_payload.prompt;
+					if(submit_payload.memory)
+					{
+						combinedprompt = submit_payload.memory + combinedprompt;
+					}
+					delete submit_payload["memory"];
+					delete submit_payload["prompt"];
+					delete submit_payload["images"];
+					submit_payload.messages = [];
+					submit_payload.continue_assistant_turn = true;
+					let mhistory = repack_instruct_history(combinedprompt);
+					let oaiimgs = [];
+					oaiimgs = oai_append_media(oaiimgs);
+					if(mhistory.length>0 && oaiimgs.length>0)
+					{
+						mhistory[0].msg = [{type: 'text', text: mhistory[0].msg}];
+						for(let i=0;i<oaiimgs.length;++i)
+						{
+							mhistory[0].msg.push(oaiimgs[i]);
+						}
+					}
+					for(let i=0;i<mhistory.length;++i)
+					{
+						let cturn = { "role": (mhistory[i].myturn?"user":"assistant"), "content": mhistory[i].msg };
+						if(!mhistory[i].myturn && mhistory[i].tool_calls)
+						{
+							cturn.content = null;
+							cturn.tool_calls = mhistory[i].tool_calls;
+						}
+						else if(!mhistory[i].myturn && mhistory[i].tool_results)
+						{
+							cturn = mhistory[i].tool_results;
+						}
+						submit_payload.messages.push(cturn);
+					}
+					if(localsettings.enable_tool_use && determine_if_can_use_mcp() && localsettings.cached_mcp_tools && Object.keys(localsettings.cached_mcp_tools).length>0)
+					{
+						let senttools = MCPGetAllowedTools();
+						if(senttools.length>0)
+						{
+							submit_payload.use_default_badwordsids = false;
+							submit_payload.tools = senttools;
+						}
+					}
+					let targetep = apply_proxy_url(custom_kobold_endpoint + oai_submit_endpoint_chat);
+					if(is_browser_supports_sse() && localsettings.tokenstreammode!=0)
+					{
+						submit_payload.stream = true;
+						oai_api_stream_sse(targetep,submit_payload,get_kobold_header());
+					}
+					else
+					{
+						oai_api_sync_req(targetep,submit_payload,get_kobold_header());
+					}
+				}
+				else
+				{
+					if (localsettings.tokenstreammode==2 && is_using_kcpp_with_sse()) {
+						let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_stream_endpoint);
+						kobold_api_stream_sse(sub_endpt, submit_payload);
+					} else {
+						let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_endpoint);
+						let trackedgenid = pending_response_id; //if it changes, stop streaming
+						kobold_api_sync_req(sub_endpt, submit_payload, trackedgenid);
+					}
 				}
 				update_custom_kobold_endpoint_model_display();
 			}
 			else if (custom_oai_key != "")//handle for OAI
 			{
-
 				let targetep = apply_proxy_url(custom_oai_endpoint + oai_submit_endpoint);
 
 				let scaled_rep_pen = 0;
@@ -18510,35 +19330,7 @@ Current version indicated by LITEVER below.
 								"text": mainoaibody
 							}
 						];
-						for(let i=0;i<insertAIVisionImages.length;++i)
-						{
-							let oaiimg = {
-								"type": "image_url",
-								"image_url": {
-									"url": insertAIVisionImages[i]
-								}
-							};
-							mainoaibody.push(oaiimg);
-						}
-						for(let i=0;i<insertAIAudioSounds.length;++i)
-						{
-							let curr = insertAIAudioSounds[i];
-							let format = "wav";
-							if(curr.includes("base64,"))
-							{
-								let parts = curr.split("base64,");
-								curr = parts[1];
-								format = (parts[0].includes("mp3")||parts[0].includes("mpeg"))?"mp3":"wav";
-							}
-							let oaiimg = {
-								"type": "input_audio",
-								"input_audio": {
-									"data": curr,
-									"format": format
-								}
-							};
-							mainoaibody.push(oaiimg);
-						}
+						mainoaibody = oai_append_media(mainoaibody);
 					}
 
 					oai_payload.messages = [];
@@ -18589,10 +19381,28 @@ Current version indicated by LITEVER below.
 							}
 						}
 
-
 						for(let i=0;i<mhistory.length;++i)
 						{
-							oai_payload.messages.push({ "role": (mhistory[i].myturn?"user":"assistant"), "content": mhistory[i].msg });
+							let cturn = { "role": (mhistory[i].myturn?"user":"assistant"), "content": mhistory[i].msg };
+							if(!mhistory[i].myturn && mhistory[i].tool_calls)
+							{
+								cturn.content = null;
+								cturn.tool_calls = mhistory[i].tool_calls;
+							}
+							else if(!mhistory[i].myturn && mhistory[i].tool_results)
+							{
+								cturn = mhistory[i].tool_results;
+							}
+							oai_payload.messages.push(cturn);
+						}
+					}
+
+					if(localsettings.enable_tool_use && determine_if_can_use_mcp() && localsettings.cached_mcp_tools && Object.keys(localsettings.cached_mcp_tools).length>0)
+					{
+						let senttools = MCPGetAllowedTools();
+						if(senttools.length>0)
+						{
+							oai_payload.tools = senttools;
 						}
 					}
 
@@ -18636,13 +19446,11 @@ Current version indicated by LITEVER below.
 						oaiemulatecompletionscontent = mainoaibody;
 					}
 
-					if(targetep.toLowerCase().includes("text.pollinations.ai"))
+					if(localsettings.opmode==1)
 					{
-						if(localsettings.opmode==1)
-						{
-							oai_payload.messages.unshift({ "role": "system", "content": "Please continue this story directly from where it stopped. Just respond with a direct partial continuation of the story immediately from the latest word." });
-						}
+						oai_payload.messages.unshift({ "role": "system", "content": "Please continue this text directly from where it stopped. Just respond with a direct partial continuation of the story immediately from the latest word." });
 					}
+
 				}
 				else
 				{
@@ -18779,7 +19587,7 @@ Current version indicated by LITEVER below.
 
 				if(localsettings.opmode==1)
 				{
-					claude_payload.system = "Always respond with a direct partial continuation of the story immediately from the latest word.";
+					claude_payload.system = "Always respond with a direct partial continuation of the text immediately from the latest word.";
 					if(sysprompt)
 					{
 						claude_payload.system = sysprompt +"\n"+ claude_payload.system;
@@ -18868,10 +19676,9 @@ Current version indicated by LITEVER below.
 
 				if(localsettings.opmode==1)
 				{
-					submit_payload.prompt = submit_payload.prompt + " \nASSISTANT: Here is a direct partial continuation of the story without repeating it: \nASSISTANT:";
+					submit_payload.prompt = submit_payload.prompt + " \nASSISTANT: Here is a direct partial continuation of the text without repeating it: \nASSISTANT:";
 					submit_payload.params.max_length += 100; //add length
 				}
-
 
 				let geminiparts = [];
 
@@ -19874,6 +20681,43 @@ Current version indicated by LITEVER below.
 		currmediaidx = 0;
 	}
 
+	function download_curr_media() {
+		let elementId = document.getElementById("zoomedaudio")?"zoomedaudio":"zoomedimg";
+		let filename = document.getElementById("zoomedaudio")?"audio.mp3":"image.jpg";
+		let triggerDownload = function(url, filename) {
+			var a = document.createElement("a");
+			a.href = url;
+			a.download = filename;
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			// Cleanup blob URLs
+			if (url.indexOf("blob:") === 0) {
+				setTimeout(function () {
+					URL.revokeObjectURL(url);
+				}, 1000);
+			}
+		}
+		var el = document.getElementById(elementId);
+		if (!el || !el.src) return;
+		var src = el.src;
+		if (src.indexOf("blob:") === 0) {
+			var xhr = new XMLHttpRequest();
+			xhr.open("GET", src, true);
+			xhr.responseType = "blob";
+
+			xhr.onload = function () {
+				if (xhr.status === 200) {
+					triggerDownload(URL.createObjectURL(xhr.response), filename);
+				}
+			};
+			xhr.send();
+		}
+		else {
+			triggerDownload(src, filename);
+		}
+	}
+
 	function render_all_media_html(text, float=true, center=false)
 	{
 		let siclass = (float?"storyimgfloat":(center?"storyimgcenter":"storyimgsidevertical"));
@@ -19937,7 +20781,7 @@ Current version indicated by LITEVER below.
 		if (canvisionaudio) {
 			vision_indicator_hide = "";
 		}
-		const str = `<span><br><button type="button" title="Attached Audio" class="btn btn-primary" style="font-size:12px; padding:8px 8px; border-radius: 16px" onclick="return click_audio(this,\'${audiohash}\',\'${audioblob}\',${duplicate_idx});">🔊 Attached Audio ${fndisp}<span class="mediaindicator ${vision_indicator_hide}"> 🦻</span></button><br></span>`;
+		const str = `<span><br><button type="button" title="Attached Audio" class="btn btn-primary" style="font-size:12px; padding:8px 8px; border-radius: 16px" onclick="return click_audio(this,\'${audiohash}\',\'${audioblob}\',${duplicate_idx});">🔊 Attached Audio ${fndisp}<span class="mediaindicator ${vision_indicator_hide}"> 👁️</span></button><br></span>`;
 		return str;
 	}
 
@@ -21326,7 +22170,7 @@ Current version indicated by LITEVER below.
 					{
 						//still waiting, do nothing until next poll
 						console.log("sync request: still awaiting reply");
-						let polledstreaming = (waiting_for_tool_call==0 && localsettings.tokenstreammode==1 && is_using_kcpp_with_streaming());
+						let polledstreaming = (waiting_for_summarycall==0 && localsettings.tokenstreammode==1 && is_using_kcpp_with_streaming());
 						//only check once every 2 ticks if remote
 						if (polledstreaming && (localflag?true:(poll_ticks_passed%2==0)))
 						{
@@ -21371,7 +22215,7 @@ Current version indicated by LITEVER below.
 						pending_response_id = "";
 						poll_in_progress = false;
 						let resp = synchro_polled_response;
-						if(waiting_for_tool_call==0)
+						if(waiting_for_summarycall==0)
 						{
 							last_reply_was_empty = (resp=="" || resp.trim()=="");
 						}
@@ -21380,11 +22224,11 @@ Current version indicated by LITEVER below.
 							let genworker = "Custom Endpoint";
 							let genkudos = "0";
 							let genmdl = (selected_models.length>0?selected_models[0].name:"Unknown Model");
-							if(waiting_for_tool_call==2)
+							if(waiting_for_summarycall==2)
 							{
 								handle_incoming_searchsummary(gentxt);
 							}
-							else if(waiting_for_tool_call==1)
+							else if(waiting_for_summarycall==1)
 							{
 								handle_incoming_autosummary(gentxt);
 							}
@@ -21402,6 +22246,36 @@ Current version indicated by LITEVER below.
 						show_abort_button(false);
 						render_gametext(true,false); //only scroll to bottom if autoscroll is on
 						sync_multiplayer(false);
+					}
+					if(synchro_polled_resptoolcall && localsettings.cached_mcp_tools)
+					{
+						//if valid, execute the tool call and get the result
+						let savedcallobj = {"tool_calls": [
+							{
+							"id": synchro_polled_resptoolcall.id,
+							"type": "function",
+							"function": {
+								"name": synchro_polled_resptoolcall.name,
+								"arguments": synchro_polled_resptoolcall.arguments
+							}
+							}
+						]};
+
+						let calltxt = "";
+						if(!(gametext_arr.length>0 && gametext_arr[gametext_arr.length-1].trim().endsWith("{{[OUTPUT]}}")))
+						{
+							calltxt = get_instructendplaceholder(); //add instruct tag if needed
+						}
+						calltxt += JSON.stringify(savedcallobj) + get_instructendplaceholder();
+						gametext_arr.push(calltxt);
+
+						if(localsettings.tools_auto_exec)
+						{
+							MCPToolCall(savedcallobj);
+						}
+
+						synchro_polled_resptoolcall = null;
+						render_gametext(false,false);
 					}
 					if(synchro_polled_respimg)
 					{
@@ -21456,9 +22330,9 @@ Current version indicated by LITEVER below.
 												let genworker = data.generations[0].worker_name;
 												let genmdl = data.generations[0].model;
 												let genkudos = data.kudos;
-												if (waiting_for_tool_call == 2) {
+												if (waiting_for_summarycall == 2) {
 													handle_incoming_searchsummary(gentxt);
-												} else if (waiting_for_tool_call == 1) {
+												} else if (waiting_for_summarycall == 1) {
 													handle_incoming_autosummary(gentxt);
 												}
 												else {
@@ -22190,6 +23064,7 @@ Current version indicated by LITEVER below.
 				}
 
 				let instruct_turns = repack_instruct_turns(fulltxt, `%SpcStg%`,`%SpcEtg%`, true);
+				repact_instruct_turns_beautify_render(instruct_turns);
 				fulltxt = "";
 				for(let i=0;i<instruct_turns.length;++i)
 				{
@@ -22327,7 +23202,7 @@ Current version indicated by LITEVER below.
 			}
 
 			//streaming display for all other cases
-			if(!alreadyShowedStreaming && synchro_pending_stream!="" && waiting_for_tool_call==0)
+			if(!alreadyShowedStreaming && synchro_pending_stream!="" && waiting_for_summarycall==0)
 			{
 				let pend = escape_html(pending_context_preinjection) + format_streaming_text(escape_html(synchro_pending_stream));
 				fulltxt += `<span class="color_yellow pending_text">${pend}</span>`;
@@ -22805,7 +23680,74 @@ Current version indicated by LITEVER below.
 				unlabelled_turns = false;
 			}
 		}
+
+		//post process the chatunits to handle tool calls
+		for(let i=0;i<chatunits.length;++i)
+		{
+			if(!chatunits[i].myturnchat && (chatunits[i].msg.includes("tool_call_id") || chatunits[i].msg.includes("tool_calls")))
+			{
+				try {
+					let unsc = unescape_html(chatunits[i].msg);
+					let parsed_payload = JSON.parse(unsc);
+					if(parsed_payload.tool_calls && parsed_payload.tool_calls.length>0)
+					{
+						chatunits[i].tool_calls = parsed_payload.tool_calls;
+					}
+					else if(parsed_payload.role=="tool")
+					{
+						chatunits[i].tool_results = parsed_payload;
+					}
+				} catch (e) {}
+			}
+		}
+
 		return chatunits;
+	}
+
+	var toolcall_waiting_approve = null;
+	function repact_instruct_turns_beautify_render(chatunits) //to turn ugly turn calls into nice looking placeholders
+	{
+		toolcall_waiting_approve = null;
+		for(let i=0;i<chatunits.length;++i)
+		{
+			if(chatunits[i].tool_calls)
+			{
+				chatunits[i].origmsg = chatunits[i].msg;
+				chatunits[i].msg = `<span class="color_lightgreen" style="font-weight:bold;">Made a tool call to ${chatunits[i].tool_calls[0].function.name}</span>`;
+				if(!localsettings.tools_auto_exec && (i==chatunits.length-1 || (i==chatunits.length-2 && chatunits[chatunits.length-1].msg=="")))
+				{
+					toolcall_waiting_approve = {"tool_calls":chatunits[i].tool_calls};
+					let approvebtns = "";
+					if(pending_response_id == "")
+					{
+						approvebtns = `<button type="button" title="Inspect Tool Call" class="btn btn-primary" style="font-size:12px;padding:2px 2px; margin-left:4px;" onclick="inspect_waiting_toolcall()">Inspect</button><button type="button" title="Approve Tool Call" class="btn btn-primary" style="font-size:12px;padding:2px 2px; margin-left:4px;" onclick="execute_waiting_toolcall()">Approve</button>`;
+					}
+					chatunits[i].msg = `<span class="color_lightgreen" style="font-weight:bold;">Requesting a tool call to ${chatunits[i].tool_calls[0].function.name}</span>${approvebtns}`;
+				}
+			}
+			if(chatunits[i].tool_results)
+			{
+				chatunits[i].origmsg = chatunits[i].msg;
+				chatunits[i].msg = `<span class="color_lightgreen" style="font-weight:bold;">Received tool call results for ${chatunits[i].tool_results.name}</span>`;
+			}
+		}
+		return chatunits;
+	}
+	function inspect_waiting_toolcall()
+	{
+		msgbox(toolcall_waiting_approve?JSON.stringify(toolcall_waiting_approve):"No Pending Tool Call","Pending Tool Call");
+	}
+	function execute_waiting_toolcall()
+	{
+		if(toolcall_waiting_approve && localsettings.cached_mcp_tools && Object.keys(localsettings.cached_mcp_tools).length > 0)
+		{
+			MCPToolCall(toolcall_waiting_approve);
+			render_gametext(false,false);
+		}
+		else
+		{
+			msgbox("Tools disconnected or cached tool is missing. Please generate tool call again.","Pending Tool Call Missing.");
+		}
 	}
 
 	function repack_postprocess_turn(currchatunit, countmap)
@@ -23282,6 +24224,7 @@ Current version indicated by LITEVER below.
 		else
 		{
 			chatunits = repack_instruct_history(input);
+			repact_instruct_turns_beautify_render(chatunits);
 		}
 
 		let incomplete_resp = (synchro_pending_stream!="" || pending_response_id!="");
@@ -23304,7 +24247,7 @@ Current version indicated by LITEVER below.
 			let bodypart = (corpo_editing_turn == i ?
 				`<div class="corpo_edit_outer">
 				<div class="corpo_edit_inner" id="corpo_edit_inp_lengthtester" style="white-space: nowrap; visibility: hidden; height: 0px; position:absolute; width: auto;"></div>
-				<textarea class="corpo_edit_inner" id="corpo_edit_inp" type="text" name="crpeditinp"  role="presentation" autocomplete="noppynop" spellcheck="true" rows="1" wrap="on" placeholder="Edit Message" value="" oninput="corpoedit_resize_input();"/>${stash_image_placeholders(curr.msg, false)}</textarea>
+				<textarea class="corpo_edit_inner" id="corpo_edit_inp" type="text" name="crpeditinp"  role="presentation" autocomplete="noppynop" spellcheck="true" rows="1" wrap="on" placeholder="Edit Message" value="" oninput="corpoedit_resize_input();"/>${stash_image_placeholders(curr.origmsg?curr.origmsg:curr.msg, false)}</textarea>
 				</div>
 				<button type="button" class="btn btn-primary corpoeditbtn" style="float:right;" onclick="corpo_edit_chunk_start(-1)">Cancel</button>
 				${resendbtn}
@@ -25224,6 +26167,7 @@ Current version indicated by LITEVER below.
 		else
 		{
 			chatunits = repack_instruct_history(input);
+			repact_instruct_turns_beautify_render(chatunits);
 		}
 
 		let newbodystr = "";
@@ -25265,7 +26209,7 @@ Current version indicated by LITEVER below.
 							return partB; // leave as is
 						} else {
 							let x = partB.replace(/[“”"]/g, "&quot;");
-							x = x.replace(/&quot;([\s\S]*?)&quot;/g, '<span class="quotespn">“$1”</span>');
+							x = x.replace(/(^|[^\d])&quot;([\s\S]*?)&quot;/g, '$1<span class="quotespn">“$2”</span>');
 							return x;
 						}
 					}).join('');
@@ -26535,7 +27479,8 @@ Current version indicated by LITEVER below.
 				<li id="settingsmenusamplers_tab" ><a class="" href="#" title="Open Samplers Menu" onclick="display_settings_tab(1)">Samplers</a></li>
 				<li id="settingsmenumedia_tab" ><a class="" href="#" title="Open Media Menu" onclick="display_settings_tab(2)">Media</a></li>
 				<li id="settingsmenutokens_tab" ><a class="" href="#" title="Open Tokens Menu" onclick="display_settings_tab(3)">Tokens</a></li>
-				<li id="settingsmenuadvanced_tab" ><a class="" href="#" title="Open Advanced Menu" onclick="display_settings_tab(4)">Advanced</a></li>
+				<li id="settingsmenutools_tab" ><a class="" href="#" title="Open Tools Menu" onclick="display_settings_tab(4)">Tools</a></li>
+				<li id="settingsmenuadvanced_tab" ><a class="" href="#" title="Open Advanced Menu" onclick="display_settings_tab(5)">Advanced</a></li>
 			</ul></div>
 
 			<div class="settingsbody">
@@ -26646,6 +27591,11 @@ Current version indicated by LITEVER below.
 							<div class="justifyleft settingsmall">Multiline Replies <span class="helpicon">?<span
 							class="helptext">Whether to allow multiple lines in AI responses (Chat/Adventure). Disable this if the AI starts generating rubbish.</span></span> </div>
 							<input type="checkbox" title="Multiline Replies" id="multiline_replies" style="margin:0px 0px 0px auto;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Continue User Turns <span class="helpicon">?<span
+								class="helptext">In instruct mode, allows the AI to continue generating the user's turn when pressing Generate More.</span></span></div>
+							<input title="Legacy Savefile" type="checkbox" id="allow_continue_user_turn" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Continue Bot Replies <span class="helpicon">?<span
@@ -26878,6 +27828,11 @@ Current version indicated by LITEVER below.
 								<div class="justifyleft settingsmall" style="width:100%">
 								<input title="Presence Penalty" class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="presence_penalty"></div>
 							</div>
+							<div class="settinglabel settingcell">
+								<div title="Top N Sigma. 0 to deactivate. Range 0 to 5." class="justifyleft settingsmall" style="width:100%">T.NSigma</div>
+								<div class="justifyleft settingsmall" style="width:100%">
+								<input title="Top N Sigma. 0 to deactivate. Range 0 to 5." class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="nsigma"></div>
+							</div>
 						</div>
 						<div style="display:flex;width:100%;">
 							<div class="settinglabel settingcell">
@@ -27040,10 +27995,24 @@ Current version indicated by LITEVER below.
 								</div>
 							</div>
 							<div class="settinglabel settingcell">
-								<div title="Top N Sigma. 0 to deactivate. Range 0 to 5." class="justifyleft settingsmall" style="width:100%">T.NSigma</div>
-								<div class="justifyleft settingsmall" style="width:100%">
-								<input title="Top N Sigma. 0 to deactivate. Range 0 to 5." class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="nsigma"></div>
+								<div title="Adaptive-P" class="justifyleft settingsmall" style="width:100%">Adapt.P. <span class="helpicon">?<span class="helptext">
+									Enables Adaptive-P Sampling. Target ranges 0.0 to 1.0, 0 to deactivate. Decay ranges from 0.0 to 1.0. Not supported on Horde.</span></span></div>
+									<div class="justifyleft settingsmall" style="width:100%">
+									<div id="adaptpsupporteddiv" style="display:flex;">
+										<div class="settinglabel settingcell">
+											<div title="Adaptive-P Target" class="justifyleft settingsmall" style="width:100%">Target</div>
+											<div class="justifyleft settingsmall" style="width:100%">
+											<input title="Adaptive-P Target" class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0.0" value="0.0" id="adaptivep_target"></div>
+										</div>
+										<div class="settinglabel settingcell">
+											<div title="Adaptive-P Decay" class="justifyleft settingsmall" style="width:100%">Decay</div>
+											<div class="justifyleft settingsmall" style="width:100%">
+											<input title="Adaptive-P Decay" class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0.0" value="0.0" id="adaptivep_decay"></div>
+										</div>
+									</div>
+								</div>
 							</div>
+
 							<div class="settinglabel settingcell">
 								<div class="justifyleft settingsmall" style="width:100%">SecondEpSampler <span class="helpicon">?<span class="helptext">
 									If enabled, sample N tokens from a second OpenAI Compatible endpoint first before a request. This can be useful for jailbreak purposes.</span></span></div>
@@ -27532,6 +28501,48 @@ Current version indicated by LITEVER below.
 					</div>
 				</div>
 
+				<!--tools settings menu top-->
+				<div id="settingsmenutools" class="settingsmenu hidden" onchange="setting_tweaked()">
+					<div class="settingitem wide">
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Enable Toolcalling <span class="helpicon">?<span
+								class="helptext">Allow tool calling and MCP server usage. Require Chat Completions endpoint (KoboldCpp will auto switch).</span></span></div>
+							<input title="Enable MCP Tools" type="checkbox" id="enable_tool_use" style="margin:0px 0px 0px auto;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Automatically Execute Tools <span class="helpicon">?<span
+								class="helptext">If disabled, you need to manually execute every tool call the AI suggests.</span></span></div>
+							<input title="Automatically Execute Tools" type="checkbox" id="tools_auto_exec" style="margin:0px 0px 0px auto;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Use CORS Proxy for MCP <span class="helpicon">?<span
+								class="helptext">Many public MCP servers restrict CORS, use this to proxy your requests. Uses external tools, please only use if necessary.</span></span></div>
+							<input title="Use CORS Proxy for MCP" type="checkbox" id="corsproxy_mcp" style="margin:0px 0px 0px auto;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Include KoboldCpp MCP Bridge <span class="helpicon">?<span
+								class="helptext">If selected, attempts to connect to any MCP configured in KoboldCpp MCP bridge. Requires KoboldCpp.</span></span></div>
+							<input title="Include KoboldCpp MCP Bridge" type="checkbox" id="kcpp_mcp_bridge" style="margin:0px 0px 0px auto;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">MCP Server URLs <span class="helpicon">?<span
+								class="helptext">Connect to local or remote MCP servers to use tools there. One URL per row, optional API keys separated by commas. Caution: MCP API keys are stored in plaintext in saves!</span></span></div>
+							<textarea class="form-control menuinput_multiline" style="height: 80px;line-height:1.1;margin-bottom: 4px;" id="mcpurls" placeholder="MCP server URLs (e.g. http://localhost:3000/mcp)&#10;One URL per row, optional API keys separated by commas." rows="4"></textarea>
+							<button type="button" id="clear_mcp_btn" class="btn btn-primary" style="width:80px; padding:2px 3px;font-size:12px; margin: 0px 0px 0px auto;" onclick="Clear_MCP_Tools()">Remove All</button>
+							<button type="button" id="connect_mcp_btn" class="btn btn-primary" style="width:80px; padding:2px 3px;font-size:12px; margin: 0px 0px 0px 3px;" onclick="Fetch_MCP_Tools()">Connect All</button>
+						</div>
+
+
+						<div class="color_red hidden" id="nomcp">MCP Toolcalling unavailable, requires chat completions.</div>
+
+						<div id="tools_list_container" class="tools_list_container">
+
+						</div>
+
+
+					</div>
+				</div>
+
 				<!--advanced settings menu top-->
 				<div id="settingsmenuadvanced" class="settingsmenu hidden" onchange="setting_tweaked()">
 					<div class="settingitem">
@@ -27725,11 +28736,6 @@ Current version indicated by LITEVER below.
 							<div class="justifyleft settingsmall">LegacySavefile <span class="helpicon">?<span
 								class="helptext">Adds extra data to the savefile for better legacy support. Will make your savefile much larger.</span></span></div>
 							<input title="Legacy Savefile" type="checkbox" id="legacy_savefile" style="margin:0px 0px 0px 0px;">
-						</div>
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall">AllowContinueUserTurn <span class="helpicon">?<span
-								class="helptext">In instruct mode, allows the AI to continue generating the user's turn when pressing Generate More.</span></span></div>
-							<input title="Legacy Savefile" type="checkbox" id="allow_continue_user_turn" style="margin:0px 0px 0px 0px;">
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">ProxyDisableStream <span class="helpicon">?<span
@@ -28016,7 +29022,7 @@ Current version indicated by LITEVER below.
 					<div style="margin-top:3px; text-align: center; align-self: center; width: 100%">
 						<span style="font-weight:bold;text-decoration: underline;">Slot Storage Option</span>
 						<span style="float:right; text-align: right;">
-							<button type="button" class="btn btn-primary" style="font-size:10px;padding:2px 5px;margin-left:4px;margin:2px;" onclick="hide_popups();display_settings();display_settings_tab(4);">Configure</button>
+							<button type="button" class="btn btn-primary" style="font-size:10px;padding:2px 5px;margin-left:4px;margin:2px;" onclick="hide_popups();display_settings();display_settings_tab(5);">Configure</button>
 						</span>
 					</div>
 					<div style="display:flex;">
@@ -28250,36 +29256,24 @@ Current version indicated by LITEVER below.
 					<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
 				</select>
 				<select title="Pollinations AI Model Selection" style="padding:4px;display:inline;width:calc(100% - 220px)" class="form-control hidden" id="custom_pollinations_model" onchange="oai_model_change(true)">
-					<option value="deepseek">deepseek</option>
-					<option value="deepseek-reasoning">deepseek-reasoning</option>
-					<option value="evil">evil</option>
-					<option value="hormoz">hormoz</option>
-					<option value="llama">llama</option>
-					<option value="llama-vision">llama-vision</option>
-					<option value="llamascout">llamascout</option>
+					<option value="bidara">bidara</option>
+					<option value="chickytutor">chickytutor</option>
+					<option value="gemini">gemini</option>
 					<option value="midijourney">midijourney</option>
-					<option value="mirexa">mirexa</option>
 					<option value="mistral">mistral</option>
 					<option value="openai">openai</option>
 					<option value="openai-fast">openai-fast</option>
-					<option value="openai-large">openai-large</option>
-					<option value="phi">phi</option>
-					<option value="qwen-coder">qwen-coder</option>
-					<option value="rtist">rtist</option>
-					<option value="searchgpt">searchgpt</option>
-					<option value="unity">unity</option>
-					<option value="bidara">bidara</option>
 					<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
 				</select>
 				<select title="Nvidia NIM AI Model Selection" style="padding:4px;display:inline;width:calc(100% - 220px)" class="form-control hidden" id="custom_nvidianim_model" onchange="oai_model_change(true)">
-					<option value="bytedance/seed-oss-36b-instruct">bytedance/seed-oss-36b-instruct</option>
 					<option value="deepseek-ai/deepseek-v3.1-terminus">deepseek-ai/deepseek-v3.1-terminus</option>
 					<option value="google/gemma-3-27b-it">google/gemma-3-27b-it</option>
 					<option value="meta/llama-3.3-70b-instruct">meta/llama-3.3-70b-instruct</option>
-					<option value="mistralai/mistral-large">mistralai/mistral-large</option>
-					<option value="moonshotai/kimi-k2-instruct" selected>moonshotai/kimi-k2-instruct</option>
+					<option value="mistralai/mistral-medium-3-instruct">mistralai/mistral-medium-3-instruct</option>
+					<option value="moonshotai/kimi-k2-instruct-0905" selected>moonshotai/kimi-k2-instruct-0905</option>
 					<option value="nvidia/llama-3.3-nemotron-super-49b-v1">nvidia/llama-3.3-nemotron-super-49b-v1</option>
 					<option value="qwen/qwen3-235b-a22b">qwen/qwen3-235b-a22b</option>
+					<option value="z-ai/glm4.7">z-ai/glm4.7</option>
 				<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
 				</select>
 				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaifetchlist" onclick="oai_fetch_models()">Fetch List</button>
@@ -28513,13 +29507,9 @@ Current version indicated by LITEVER below.
 				Unsaved data will be lost.<br><br>
 				<div>
 					<div style="vertical-align: middle;">
-						<div id="keep_ai_selected_row" title="If disabled, brings you back to the start page">
-							<span>Keep AI Selected? </span>
-							<input type="checkbox" id="keep_ai_selected" style=" vertical-align: top;" checked>
-						</div>
 						<div>
-							<span>Keep Memory and World Info? </span>
-							<input type="checkbox" id="keep_memory" style=" vertical-align: top;">
+							<span class="color_red">Also Reset Memory and World Info? </span>
+							<input type="checkbox" id="new_session_erase_memory" style="vertical-align: top;">
 						</div>
 					</div>
 				</div>
@@ -28527,7 +29517,7 @@ Current version indicated by LITEVER below.
 			</div>
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="confirm_newgame()">Ok</button>
-				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
+				<button type="button" class="btn btn-primary" onclick="cancel_newgame()">Cancel</button>
 			</div>
 		</div>
 	</div>
@@ -28575,7 +29565,8 @@ Current version indicated by LITEVER below.
 			</div>
 			<br>
 			<div class="popupfooter">
-				<button type="button" class="bg_red btn btn-primary" style="width: 124px;" onclick="delete_curr_media();clear_zoomed_img_and_audio();hide_popups();">Delete Media</button>
+				<button type="button" class="bg_red btn btn-primary" onclick="delete_curr_media();clear_zoomed_img_and_audio();hide_popups();">Delete</button>
+				<button type="button" class="btn btn-primary" onclick="download_curr_media();">Download</button>
 				<button type="button" class="btn btn-primary" onclick="clear_zoomed_img_and_audio();hide_popups()">Close</button>
 			</div>
 		</div>
