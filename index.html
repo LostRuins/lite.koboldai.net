@@ -4226,8 +4226,7 @@ Current version indicated by LITEVER below.
 		oai_tts_voice: "alloy",
 		wb_tts_choice: 0,
 		kcpp_tts_json: "",
-		beep_on: false,
-		notify_on: false,
+		beep_notify_mode: 0, //0=off, 1=beep, 2=notify, 3=beep+notify
 		narrate_targets: 1, //0=nobody, 1=ai only, 2=both sides
 		narrate_only_dialog: false,
 		embed_narrations: false,
@@ -14881,8 +14880,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("settingsmenusamplers_tab").classList.remove("active");
 		document.getElementById("settingsmenugeneral_tab").classList.remove("active");
 		document.getElementById("settingsmenuappearance_tab").classList.remove("active");
-		document.getElementById("settingsmenuimages_tab").classList.remove("active");
-		document.getElementById("settingsmenuspeech_tab").classList.remove("active");
+		document.getElementById("settingsmenumedia_tab").classList.remove("active");
 		document.getElementById("settingsmenutokens_tab").classList.remove("active");
 		document.getElementById("settingsmenuadvanced_tab").classList.remove("active");
 		document.getElementById("settingsmenutools_tab").classList.remove("active");
@@ -14890,8 +14888,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("settingsmenusamplers").classList.add("hidden");
 		document.getElementById("settingsmenugeneral").classList.add("hidden");
 		document.getElementById("settingsmenuappearance").classList.add("hidden");
-		document.getElementById("settingsmenuimages").classList.add("hidden");
-		document.getElementById("settingsmenuspeech").classList.add("hidden");
+		document.getElementById("settingsmenumedia").classList.add("hidden");
 		document.getElementById("settingsmenutokens").classList.add("hidden");
 		document.getElementById("settingsmenuadvanced").classList.add("hidden");
 		document.getElementById("settingsmenutools").classList.add("hidden");
@@ -14910,22 +14907,18 @@ Current version indicated by LITEVER below.
 				document.getElementById("settingsmenusamplers_tab").classList.add("active");
 			break;
 			case 3: //images
-				document.getElementById("settingsmenuimages").classList.remove("hidden");
-				document.getElementById("settingsmenuimages_tab").classList.add("active");
+				document.getElementById("settingsmenumedia").classList.remove("hidden");
+				document.getElementById("settingsmenumedia_tab").classList.add("active");
 			break;
-			case 4: //speech
-				document.getElementById("settingsmenuspeech").classList.remove("hidden");
-				document.getElementById("settingsmenuspeech_tab").classList.add("active");
-			break;
-			case 5: //tokens
+			case 4: //tokens
 				document.getElementById("settingsmenutokens").classList.remove("hidden");
 				document.getElementById("settingsmenutokens_tab").classList.add("active");
 			break;
-			case 6: //tools
+			case 5: //tools
 				document.getElementById("settingsmenutools").classList.remove("hidden");
 				document.getElementById("settingsmenutools_tab").classList.add("active");
 			break;
-			case 7: //advanced
+			case 6: //advanced
 				document.getElementById("settingsmenuadvanced").classList.remove("hidden");
 				document.getElementById("settingsmenuadvanced_tab").classList.add("active");
 			break;
@@ -15150,9 +15143,7 @@ Current version indicated by LITEVER below.
 		}
 		kcpp_tts_json = localsettings.kcpp_tts_json;
 		toggle_tts_mode();
-		// TODO: FIX THIS
-		// document.getElementById("beep_on").checked = localsettings.beep_on;
-		// document.getElementById("notify_on").checked = localsettings.notify_on;
+		document.getElementById("beep_notify_mode").value = localsettings.beep_notify_mode;
 		document.getElementById("no_escape_html").checked = no_escape_html;
 		document.getElementById("narrate_targets").value = localsettings.narrate_targets;
 		document.getElementById("narrate_only_dialog").checked = localsettings.narrate_only_dialog;
@@ -15759,9 +15750,7 @@ Current version indicated by LITEVER below.
 		localsettings.oai_tts_voice = document.getElementById("oai_tts_voice").value?document.getElementById("oai_tts_voice").value:defaultsettings.oai_tts_voice;
 		localsettings.wb_tts_choice = document.getElementById("wb_tts_choice").value?document.getElementById("wb_tts_choice").value:0;
 		localsettings.kcpp_tts_json = kcpp_tts_json;
-		// TODO: fix this!!
-		// localsettings.beep_on = (document.getElementById("beep_on").checked?true:false);
-		// localsettings.notify_on = (document.getElementById("notify_on").checked?true:false);
+		localsettings.beep_notify_mode = document.getElementById("beep_notify_mode").value;
 		no_escape_html = (document.getElementById("no_escape_html").checked?true:false);
 		localsettings.narrate_targets = document.getElementById("narrate_targets").value;
 		localsettings.narrate_only_dialog = (document.getElementById("narrate_only_dialog").checked?true:false);
@@ -21591,11 +21580,11 @@ Current version indicated by LITEVER below.
 			gametext_arr.push(gentxt); //delete last message if retry is hit, since response was added
 			retry_preserve_last = false;
 		}
-		if(localsettings.beep_on)
+		if(localsettings.beep_notify_mode==1 || localsettings.beep_notify_mode==3)
 		{
 			playbeep();
 		}
-		if(localsettings.notify_on)
+		if(localsettings.beep_notify_mode==2 || localsettings.beep_notify_mode==3)
 		{
 			shownotify();
 		}
@@ -27882,127 +27871,124 @@ Current version indicated by LITEVER below.
 				<div class="popuptitletext" title="Settings Menu">Settings</div>
 			</div>
 			<div><ul class="nav nav-tabs settingsnav">
-				<li id="settingsmenugeneral_tab" class="active"><a class="" href="#" title="Open General Menu" onclick="display_settings_tab(0)">General</a></li>
-				<li id="settingsmenuappearance_tab" class="active"><a class="" href="#" title="Open Appearance Menu" onclick="display_settings_tab(1)">Appearance</a></li>
-				<li id="settingsmenusamplers_tab" ><a class="" href="#" title="Open Samplers Menu" onclick="display_settings_tab(2)">Samplers</a></li>
-				<li id="settingsmenuimages_tab" ><a class="" href="#" title="Open Image Settings Menu" onclick="display_settings_tab(3)">Images</a></li>
-				<li id="settingsmenuspeech_tab" ><a class="" href="#" title="Open TTS Menu" onclick="display_settings_tab(4)">Speech</a></li>
-				<li id="settingsmenutokens_tab" ><a class="" href="#" title="Open Tokens Menu" onclick="display_settings_tab(5)">Tokens</a></li>
-				<li id="settingsmenutools_tab" ><a class="" href="#" title="Open Tools Menu" onclick="display_settings_tab(6)">Tools</a></li>
-				<li id="settingsmenuadvanced_tab" ><a class="" href="#" title="Open Advanced Menu" onclick="display_settings_tab(7)">Advanced</a></li>
+				<li id="settingsmenugeneral_tab" class="active"><a class="" href="#" title="General Menu" onclick="display_settings_tab(0)">General</a></li>
+				<li id="settingsmenuappearance_tab" class="active"><a class="" href="#" title="Appearance Menu" onclick="display_settings_tab(1)">Appearance</a></li>
+				<li id="settingsmenusamplers_tab" ><a class="" href="#" title="Samplers Menu" onclick="display_settings_tab(2)">Samplers</a></li>
+				<li id="settingsmenumedia_tab" ><a class="" href="#" title="Media Settings Menu" onclick="display_settings_tab(3)">Media</a></li>
+				<li id="settingsmenutokens_tab" ><a class="" href="#" title="Tokens Menu" onclick="display_settings_tab(4)">Tokens</a></li>
+				<li id="settingsmenutools_tab" ><a class="" href="#" title="Tools Menu" onclick="display_settings_tab(5)">Tools</a></li>
+				<li id="settingsmenuadvanced_tab" ><a class="" href="#" title="Advanced Menu" onclick="display_settings_tab(6)">Advanced</a></li>
 			</ul></div>
 
 			<div class="settingsbody">
 				<!-- format settings menu -->
 				<div id="settingsmenugeneral" class="settingsmenu hidden" onchange="setting_tweaked()">
 					<div class="settingitem wide">
-						<div class="settingsbox">
-							<div>
-								<div class="settinglabel">
-									<div class="justifyleft settingsmall">Mode
-		<span class="helpicon">?<span class="helptext">Story Mode is best for novel style writing. Adventure Mode is best for Interactive Fiction RPGs. Chat Mode is best for chat conversations with the AI. Instruct mode is for giving the AI ChatGPT styled tasks.</span></span></div>
-									<select title="Usage Mode Selection" class="form-control" id="opmode" style="margin:0px 0 0 auto;" onchange="toggle_opmode()">
-										<option value="4">Instruct Mode</option>
-										<option value="1">Story Mode</option>
-										<option value="2">Adventure Mode</option>
-										<option value="3">Chat Mode</option>
-									</select>
-								</div>
-								<div id="opmodedesc" class="settingsdesctxt justifyright"></div>
+						<div>
+							<div class="settinglabel">
+								<div class="justifyleft settingsmall">Usage Mode <span class="helpicon">?<span class="helptext">Story Mode is best for novel style writing. Adventure Mode is best for Interactive Fiction RPGs. Chat Mode is best for chat conversations with the AI. Instruct mode is for giving the AI ChatGPT styled tasks.</span></span></div>
+								<select title="Usage Mode Selection" class="form-control" id="opmode" style="margin:0px 0 0 auto;" onchange="toggle_opmode()">
+									<option value="4">Instruct Mode</option>
+									<option value="1">Story Mode</option>
+									<option value="2">Adventure Mode</option>
+									<option value="3">Chat Mode</option>
+								</select>
 							</div>
+							<div id="opmodedesc" class="settingsdesctxt justifyright"></div>
+						</div>
 
-							<div class="wide" id="chatnamessection">
-								<div class="settingsitem" style="margin-top: 3px; margin-bottom: 3px; padding: 10px;">
-									<div style="display:flex;width:100%;">
-										<div class="settinglabel settingcell" style="padding-bottom:0px">
-											<div  class="justifyleft settingsmall" style="width:100%">Your Name <span class="helpicon">?<span class="helptext">The name the AI will see you as</span></span></div>
-										</div>
-										<div class="settinglabel settingcell" style="padding-bottom:0px">
-											<div class="justifyleft settingsmall" style="width:100%">AI Name <span class="helpicon">?<span class="helptext">Name of the person(s) you want to chat with. Multiple opponents can be specified, creating a group chat, separate their names using multiple lines.</span></span></div>
-										</div>
+						<div class="settingitem wide" id="chatnamessection">
+							<div class="settingsitem" style="margin-top: 3px; margin-bottom: 3px; padding: 10px;">
+								<div style="display:flex;width:100%;">
+									<div class="settinglabel settingcell" style="padding-bottom:0px">
+										<div  class="justifyleft settingsmall" style="width:100%">Your Name <span class="helpicon">?<span class="helptext">The name the AI will see you as</span></span></div>
 									</div>
-									<div style="display:flex;width:100%;">
-										<div class="settinglabel settingcell">
-											<div class="justifyleft settingsmall" style="width:100%">
-											<textarea class="settinglabel miniinput" style="resize: none;overflow:hidden;"  placeholder="(Enter Name)" rows="1" wrap="off" id="chatname" title="The name that you will be chatting as"></textarea>
-											</div>
-										</div>
-										<div class="settinglabel settingcell">
-											<div class="justifyleft settingsmall" style="width:100%">
-											<textarea class="settinglabel miniinput" style="resize: none;overflow:hidden;" id="chatopponent" placeholder="(Auto)" rows="1" wrap="off" title="The name of the person you want to chat with" oninput="handle_bot_name_input()" onchange="handle_bot_name_onchange()"></textarea>
-											</div>
-										</div>
-									</div>
-									<div class="settinglabel" style="width:100%">
-										<button type="button" class="btn btn-primary" style="padding:2px 4px;margin:2px;margin-left:auto;font-size:11px;" onclick="add_another_participant()">Add Another Participant</button>
+									<div class="settinglabel settingcell" style="padding-bottom:0px">
+										<div class="justifyleft settingsmall" style="width:100%">AI Name <span class="helpicon">?<span class="helptext">Name of the person(s) you want to chat with. Multiple opponents can be specified, creating a group chat, separate their names using multiple lines.</span></span></div>
 									</div>
 								</div>
-
-								<div style="margin-bottom: 7px;"></div>
-
-								<div class="settinglabel">
-									<div class="justifyleft settingsmall">Match any name <span class="helpicon">?<span
-									class="helptext">Match formatting against any name, instead of only specified chat names.</span></span></div>
-									<input type="checkbox" title="Chat Match Any Name" id="chat_match_any_name" style="margin:0px 0px 0px auto;">
+								<div style="display:flex;width:100%;">
+									<div class="settinglabel settingcell">
+										<div class="justifyleft settingsmall" style="width:100%">
+										<textarea class="settinglabel miniinput" style="resize: none;overflow:hidden;"  placeholder="(Enter Name)" rows="1" wrap="off" id="chatname" title="The name that you will be chatting as"></textarea>
+										</div>
+									</div>
+									<div class="settinglabel settingcell">
+										<div class="justifyleft settingsmall" style="width:100%">
+										<textarea class="settinglabel miniinput" style="resize: none;overflow:hidden;" id="chatopponent" placeholder="(Auto)" rows="1" wrap="off" title="The name of the person you want to chat with" oninput="handle_bot_name_input()" onchange="handle_bot_name_onchange()"></textarea>
+										</div>
+									</div>
+								</div>
+								<div class="settinglabel" style="width:100%">
+									<button type="button" class="btn btn-primary" style="padding:2px 4px;margin:2px;margin-left:auto;font-size:11px;" onclick="add_another_participant()">Add Another Participant</button>
 								</div>
 							</div>
 
-							<div class="wide" id="instructtagsection">
-								<div class="settinglabel" style="margin-top: 4px;">
-									<div class="justifyleft">Instruct preset <span class="helpicon">?<span class="helptext">Quickly select between common instruct tag formats. Different models are trained with different tags.</span></span></div>
-									<div style="margin: 0 0 0 auto;">
-										<select title="Instruct Tag Preset" class="form-control" id="instruct_tag_format"  onchange="toggle_instruct_tag_format()">
-										</select>
-									</div>
-								</div>
+							<div style="margin-bottom: 7px;"></div>
 
-								<div class="settinglabel">
-									<div class="settingsbox" style="margin-top: 7px;">
-										<div class="justifyleft" style="display: flex; width: 100%; margin:2px">
-											<div style="width:120px">System Tag <span class="helpicon">?<span class="helptext">The sequence to start the system prompt</span></span></div>
-											<div style="width:calc(100% - 100px); display:flex; gap:2px">
-											<input class="settinglabel miniinput" title="System Tag" style="width:100%" type="text" placeholder="(Unused)" value="" id="instruct_systag" onchange="edit_instruct_tag_format()">
-											<input class="settinglabel miniinput" title="System Tag End" style="width:100%" type="text" placeholder="(Unused)" value="" id="instruct_systag_end" onchange="edit_instruct_tag_format()">
-											</div>
-										</div>
-										<div class="justifyleft" style="display: flex; width: 100%; margin:2px; min-height: 24px; max-height: 150px;">
-											<div style="width:120px">Sys. Prompt <span class="helpicon">?<span class="helptext">A fixed system message sent at the very start to guide the AI behavior. Usually NOT needed</span></span></div>
-											<textarea class="settinglabel miniinput" title="System Prompt" style="resize:vertical;width:calc(100% - 100px); min-height: 24px; height: 24px; max-height: 120px; padding: 3px;" rows="1" style="height: 24px !important;" type="text" placeholder="(Unused)" value="" id="instruct_sysprompt" onchange="edit_instruct_tag_format()"></textarea>
-										</div>
-										<div class="justifyleft" style="display: flex; width: 100%; margin:2px">
-											<div style="width:120px">User Tag <span class="helpicon">?<span class="helptext">The sequence to start an instruction prompt</span></span></div>
-											<div style="width:calc(100% - 100px); display:flex; gap:2px">
-											<input class="settinglabel miniinput" title="User Tag" style="width:100%" type="text" placeholder="(Instruct Start)" value="" id="instruct_starttag" onchange="edit_instruct_tag_format()" title="The sequence to begin an instruction prompt">
-											<input class="settinglabel miniinput" title="User Tag End" style="width:100%" type="text" placeholder="(Instruct End)" value="" id="instruct_starttag_end" onchange="edit_instruct_tag_format()" title="The sequence to finish an instruction prompt">
-											</div>
-										</div>
-										<div class="justifyleft" style="display: flex; width: 100%; margin:2px">
-											<div style="width:120px">Assistant Tag <span class="helpicon">?<span class="helptext">The sequence to start an assistant response</span></span></div>
-											<div style="width:calc(100% - 100px); display:flex; gap:2px">
-											<input class="settinglabel miniinput" title="Assistant Tag" style="width:100%" type="text" placeholder="(Response Start)" value="" id="instruct_endtag" onchange="edit_instruct_tag_format()" title="The sequence to begin an response prompt">
-											<input class="settinglabel miniinput" title="Assistant Tag End" style="width:100%" type="text" placeholder="(Response End)" value="" id="instruct_endtag_end" onchange="edit_instruct_tag_format()" title="The sequence to finish an response prompt">
-											</div>
-										</div>
-									</div>
-								</div>
-
-								<p></p>
-
-								<div class="settinglabel">
-									<div class="justifyleft settingsmall">Continue user turns <span class="helpicon">?<span
-										class="helptext">In instruct mode, allows the AI to continue generating the user's turn when pressing Generate More.</span></span></div>
-									<input title="Legacy Savefile" type="checkbox" id="allow_continue_user_turn" style="margin:0px 0px 0px auto;">
-								</div>
-							</div>
-
-							<div class="wide" id="adventuresettingssection">
-								<div id="idlesection" class="settinglabel">
-									<div class="justifyleft settingsmall" title="Adventure Roll Modifier">Adventure roll modifer&nbsp;<span class="helpicon">?<span
-										class="helptext">Adds an integer modifier to adventure mode dice rolls.</span></span></div>
-									<input class="settinglabel" title="Adventure Roll Modifer" type="text" inputmode="decimal" value="0" id="adventure_roll_modifier" style="width: 30px; margin:0px 0px 0px auto;">
-								</div>
+							<div class="settinglabel">
+								<div class="justifyleft settingsmall">Match any name <span class="helpicon">?<span
+								class="helptext">Match formatting against any name, instead of only specified chat names.</span></span></div>
+								<input type="checkbox" title="Chat Match Any Name" id="chat_match_any_name" style="margin:0px 0px 0px auto;">
 							</div>
 						</div>
+
+						<div class="settingitem wide" id="instructtagsection">
+							<div class="settinglabel" style="margin-top: 4px;">
+								<div class="justifyleft">Instruct preset <span class="helpicon">?<span class="helptext">Quickly select between common instruct tag formats. Different models are trained with different tags.</span></span></div>
+								<div style="margin: 0 0 0 auto;">
+									<select title="Instruct Tag Preset" class="form-control" id="instruct_tag_format"  onchange="toggle_instruct_tag_format()">
+									</select>
+								</div>
+							</div>
+
+							<div class="settinglabel">
+								<div class="settingsbox" style="margin-top: 7px;">
+									<div class="justifyleft" style="display: flex; width: 100%; margin:2px">
+										<div style="width:120px">System Tag <span class="helpicon">?<span class="helptext">The sequence to start the system prompt</span></span></div>
+										<div style="width:calc(100% - 100px); display:flex; gap:2px">
+										<input class="settinglabel miniinput" title="System Tag" style="width:100%" type="text" placeholder="(Unused)" value="" id="instruct_systag" onchange="edit_instruct_tag_format()">
+										<input class="settinglabel miniinput" title="System Tag End" style="width:100%" type="text" placeholder="(Unused)" value="" id="instruct_systag_end" onchange="edit_instruct_tag_format()">
+										</div>
+									</div>
+									<div class="justifyleft" style="display: flex; width: 100%; margin:2px; min-height: 24px; max-height: 150px;">
+										<div style="width:120px">Sys. Prompt <span class="helpicon">?<span class="helptext">A fixed system message sent at the very start to guide the AI behavior. Usually NOT needed</span></span></div>
+										<textarea class="settinglabel miniinput" title="System Prompt" style="resize:vertical;width:calc(100% - 100px); min-height: 24px; height: 24px; max-height: 120px; padding: 3px;" rows="1" style="height: 24px !important;" type="text" placeholder="(Unused)" value="" id="instruct_sysprompt" onchange="edit_instruct_tag_format()"></textarea>
+									</div>
+									<div class="justifyleft" style="display: flex; width: 100%; margin:2px">
+										<div style="width:120px">User Tag <span class="helpicon">?<span class="helptext">The sequence to start an instruction prompt</span></span></div>
+										<div style="width:calc(100% - 100px); display:flex; gap:2px">
+										<input class="settinglabel miniinput" title="User Tag" style="width:100%" type="text" placeholder="(Instruct Start)" value="" id="instruct_starttag" onchange="edit_instruct_tag_format()" title="The sequence to begin an instruction prompt">
+										<input class="settinglabel miniinput" title="User Tag End" style="width:100%" type="text" placeholder="(Instruct End)" value="" id="instruct_starttag_end" onchange="edit_instruct_tag_format()" title="The sequence to finish an instruction prompt">
+										</div>
+									</div>
+									<div class="justifyleft" style="display: flex; width: 100%; margin:2px">
+										<div style="width:120px">Assistant Tag <span class="helpicon">?<span class="helptext">The sequence to start an assistant response</span></span></div>
+										<div style="width:calc(100% - 100px); display:flex; gap:2px">
+										<input class="settinglabel miniinput" title="Assistant Tag" style="width:100%" type="text" placeholder="(Response Start)" value="" id="instruct_endtag" onchange="edit_instruct_tag_format()" title="The sequence to begin an response prompt">
+										<input class="settinglabel miniinput" title="Assistant Tag End" style="width:100%" type="text" placeholder="(Response End)" value="" id="instruct_endtag_end" onchange="edit_instruct_tag_format()" title="The sequence to finish an response prompt">
+										</div>
+									</div>
+								</div>
+							</div>
+
+							<p></p>
+
+							<div class="settinglabel">
+								<div class="justifyleft settingsmall">Continue user turns <span class="helpicon">?<span
+									class="helptext">In instruct mode, allows the AI to continue generating the user's turn when pressing Generate More.</span></span></div>
+								<input title="Legacy Savefile" type="checkbox" id="allow_continue_user_turn" style="margin:0px 0px 0px auto;">
+							</div>
+						</div>
+
+						<div class="settingitem wide" id="adventuresettingssection">
+							<div id="idlesection" class="settinglabel">
+								<div class="justifyleft settingsmall" title="Adventure Roll Modifier">Adventure roll modifer&nbsp;<span class="helpicon">?<span
+									class="helptext">Adds an integer modifier to adventure mode dice rolls.</span></span></div>
+								<input class="settinglabel" title="Adventure Roll Modifer" type="text" inputmode="decimal" value="0" id="adventure_roll_modifier" style="width: 30px; margin:0px 0px 0px auto;">
+							</div>
+						</div>
+
 
 						<h3>Responses</h3>
 						<div class="settinglabel">
@@ -28598,7 +28584,8 @@ Current version indicated by LITEVER below.
 
 
 				<!-- media settings menu-->
-				<div id="settingsmenuimages" class="settingsmenu hidden" onchange="setting_tweaked()">
+				<div id="settingsmenumedia" class="settingsmenu hidden" onchange="setting_tweaked()">
+					<h3>Images</h3>
 					<div class="settingitem wide">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Backend <span class="helpicon">?<span class="helptext">Use the AI Horde or a local KoboldCpp / Forge / A1111 instance to insert AI generated images into your story.</span></span></div>
@@ -28677,7 +28664,7 @@ Current version indicated by LITEVER below.
 
 							<div class="settinglabel">
 								<div class="justifyleft">When done generating:</div>
-								<select title="On imagegen completion" style="margin:0px 0px 0px auto; width: 100px;" class="form-control" id="img_completion_notif">
+								<select title="On imagegen completion" style="margin:0px 0px 0px auto; width: 100px;" class="form-control" id="beep_notify_mode">
 									<option value="0">Do nothing</option>
 									<option value="1">Beep</option>
 									<option value="2">Notify</option>
@@ -28696,17 +28683,7 @@ Current version indicated by LITEVER below.
 								<div class="justifyleft settingsmall"  title="Parse user input text in instruct mode, and trigger image generation if requested">Detect image generation requests </div>
 								<input title="Detect ImgGen Instructions" type="checkbox" id="img_gen_from_instruct" style="margin:0px 0px 0px auto;">
 							</div>
-								<!--
-									<div class="settinglabel" style="margin-top: 2px;">
-										<div class="justifyleft settingsmall" title="Play a sound when generation is complete">Beep on Done </div>
-										<input title="Beep On Done" type="checkbox" id="beep_on" style="margin:0px 0px 0px auto;">
-									</div>
-									<div class="settinglabel">
-										<div class="justifyleft settingsmall" title="Show notification when generation is complete">Notify on Done
-										</div>
-										<input title="Notify On Done" type="checkbox" id="notify_on" style="margin:0px 0px 0px auto;">
-									</div>
-								-->
+
 
 							<div class="settingssep"></div>
 
@@ -28804,9 +28781,8 @@ Current version indicated by LITEVER below.
 							</div>
 						</div>
 					</div>
-				</div>
 
-				<div id="settingsmenuspeech" class="settingsmenu hidden" onchange="setting_tweaked()">
+					<h3>Audio</h3>
 					<div class="settingitem wide">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" style="width: 100%;">Text To Speech <span class="helpicon">?<span class="helptext">Enable Text-To-Speech to have your story automatically read to you.</span></span></div>
