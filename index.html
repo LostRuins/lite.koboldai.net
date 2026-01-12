@@ -4149,6 +4149,7 @@ Current version indicated by LITEVER below.
 	var preaudiobuffers = [], preaudioblobs = []; //will store 2 preblobs at a time
 	var koboldcpp_has_tts = false;
 	var koboldcpp_has_guidance = false;
+	var koboldcpp_has_jinja = false;
 	var no_escape_html = false;
 	var timetaken_timestamp = performance.now();
 	var bg_silence = null;
@@ -4496,11 +4497,20 @@ Current version indicated by LITEVER below.
 		"name":"GLM-4.5 Non-Thinking",
 		"user":"<|user|>\\n",
 		"user_end":"/nothink",
-		"assistant":"<|assistant|>\\n<think>We can answer immediately.</think>",
+		"assistant":"<|assistant|>\\n<think></think>",
 		"assistant_end":"",
 		"system":"<|system|>\\n",
 		"system_end":"",
 	},
+	{
+        "name":"GLM-4.7 Non-Thinking",
+        "user":"<|user|>\\n",
+        "user_end":"/nothink",
+        "assistant":"<|assistant|></think>",
+        "assistant_end":"",
+        "system":"<|system|>\\n",
+        "system_end":"",
+    },
 	{
 		"name":"Granite 4",
 		"user":"<|start_of_role|>user<|end_of_role|>",
@@ -9083,6 +9093,10 @@ Current version indicated by LITEVER below.
 	{
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.102") >= 0);
 	}
+	function is_using_kcpp_with_jinja()
+    {
+        return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.104") >= 0 && koboldcpp_has_jinja);
+    }
 	function is_using_web_lite()
 	{
 		return (window.location.hostname.includes("koboldai.net") || window.location.hostname.includes("lostruins.github.io"));
@@ -13270,7 +13284,8 @@ Current version indicated by LITEVER below.
 									koboldcpp_admin_type = (data.admin?data.admin:0);
 									koboldcpp_has_savedatafile = (data.savedata?true:false);
 									koboldcpp_has_guidance = (data.guidance?true:false);
-									koboldcpp_has_embeddings = (data.embeddings ? true : false)
+									koboldcpp_has_embeddings = (data.embeddings ? true : false);
+                                    koboldcpp_has_jinja = (data.jinja ? true : false);
 									let has_password = (data.protected?true:false);
 									koboldcpp_has_txt2img = (data.txt2img?true:false);
 									let no_txt_model = (mdlname=="inactive");
@@ -19587,10 +19602,8 @@ Current version indicated by LITEVER below.
 				last_response_obj = null;
 				last_response_streamlog = "";
 
-				let kcpp_use_oai_for_tools = localsettings.enable_tool_use;
-
-				if(kcpp_use_oai_for_tools &&
-				determine_if_can_use_mcp() && localsettings.cached_mcp_tools && Object.keys(localsettings.cached_mcp_tools).length>0)
+				if(localsettings.opmode==4 &&
+				(is_using_kcpp_with_jinja() || (localsettings.enable_tool_use && determine_if_can_use_mcp() && localsettings.cached_mcp_tools && Object.keys(localsettings.cached_mcp_tools).length>0)))
 				{
 					//for tool calling, we hijack the oai endpoint in order to utilize
 					let combinedprompt = submit_payload.prompt;
@@ -19864,12 +19877,9 @@ Current version indicated by LITEVER below.
 						oaiemulatecompletionscontent = mainoaibody;
 					}
 
-					if(targetep.toLowerCase().includes("text.pollinations.ai"))
+					if(localsettings.opmode==1)
 					{
-						if(localsettings.opmode==1)
-						{
-							oai_payload.messages.unshift({ "role": "system", "content": "Please continue this story directly from where it stopped. Just respond with a direct partial continuation of the story immediately from the latest word." });
-						}
+						oai_payload.messages.unshift({ "role": "system", "content": "Please continue this text directly from where it stopped. Just respond with a direct partial continuation of the text immediately from the latest word." });
 					}
 				}
 				else
@@ -20007,7 +20017,7 @@ Current version indicated by LITEVER below.
 
 				if(localsettings.opmode==1)
 				{
-					claude_payload.system = "Always respond with a direct partial continuation of the story immediately from the latest word.";
+					claude_payload.system = "Always respond with a direct partial continuation of the text immediately from the latest word.";
 					if(sysprompt)
 					{
 						claude_payload.system = sysprompt +"\n"+ claude_payload.system;
@@ -20096,7 +20106,7 @@ Current version indicated by LITEVER below.
 
 				if(localsettings.opmode==1)
 				{
-					submit_payload.prompt = submit_payload.prompt + " \nASSISTANT: Here is a direct partial continuation of the story without repeating it: \nASSISTANT:";
+					submit_payload.prompt = submit_payload.prompt + " \nASSISTANT: Here is a direct partial continuation of the text without repeating it: \nASSISTANT:";
 					submit_payload.params.max_length += 100; //add length
 				}
 
@@ -29816,37 +29826,25 @@ Current version indicated by LITEVER below.
 					<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
 				</select>
 				<select title="Pollinations AI Model Selection" style="padding:4px;display:inline;width:calc(100% - 220px)" class="form-control hidden" id="custom_pollinations_model" onchange="oai_model_change(true)">
-					<option value="deepseek">deepseek</option>
-					<option value="deepseek-reasoning">deepseek-reasoning</option>
-					<option value="evil">evil</option>
-					<option value="hormoz">hormoz</option>
-					<option value="llama">llama</option>
-					<option value="llama-vision">llama-vision</option>
-					<option value="llamascout">llamascout</option>
+					<option value="bidara">bidara</option>
+					<option value="chickytutor">chickytutor</option>
+					<option value="gemini">gemini</option>
 					<option value="midijourney">midijourney</option>
-					<option value="mirexa">mirexa</option>
 					<option value="mistral">mistral</option>
 					<option value="openai">openai</option>
 					<option value="openai-fast">openai-fast</option>
-					<option value="openai-large">openai-large</option>
-					<option value="phi">phi</option>
-					<option value="qwen-coder">qwen-coder</option>
-					<option value="rtist">rtist</option>
-					<option value="searchgpt">searchgpt</option>
-					<option value="unity">unity</option>
-					<option value="bidara">bidara</option>
 					<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
 				</select>
 				<select title="Nvidia NIM AI Model Selection" style="padding:4px;display:inline;width:calc(100% - 220px)" class="form-control hidden" id="custom_nvidianim_model" onchange="oai_model_change(true)">
-					<option value="bytedance/seed-oss-36b-instruct">bytedance/seed-oss-36b-instruct</option>
 					<option value="deepseek-ai/deepseek-v3.1-terminus">deepseek-ai/deepseek-v3.1-terminus</option>
 					<option value="google/gemma-3-27b-it">google/gemma-3-27b-it</option>
 					<option value="meta/llama-3.3-70b-instruct">meta/llama-3.3-70b-instruct</option>
-					<option value="mistralai/mistral-large">mistralai/mistral-large</option>
+					<option value="mistralai/mistral-medium-3-instruct">mistralai/mistral-medium-3-instruct</option>
 					<option value="moonshotai/kimi-k2-instruct-0905" selected>moonshotai/kimi-k2-instruct-0905</option>
 					<option value="nvidia/llama-3.3-nemotron-super-49b-v1">nvidia/llama-3.3-nemotron-super-49b-v1</option>
 					<option value="qwen/qwen3-235b-a22b">qwen/qwen3-235b-a22b</option>
-				<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
+					<option value="z-ai/glm4.7">z-ai/glm4.7</option>
+					<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
 				</select>
 				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaifetchlist" onclick="oai_fetch_models()">Fetch List</button>
 				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaiusecustom" onclick="select_custom_oai_model()">Use Custom</button>
