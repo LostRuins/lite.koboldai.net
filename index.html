@@ -622,6 +622,10 @@ Current version indicated by LITEVER below.
 	.bigclampedcontainer {
 		width: 1770px;
 	}}
+	@media (min-width: 810px) {
+	.smallclampedcontainer {
+		width: 800px;
+	}}
 	.centeredcontainer {
 		width: calc(100% - 620px)!important;
 	}
@@ -4211,7 +4215,7 @@ Current version indicated by LITEVER below.
 
 		autoscroll: true, //automatically scroll to bottom on render
 		printer_view: false, //automatically scroll to bottom on render
-		viewport_width_mode: 0, //0=adapt, 1=clamp, 2=hdclamp, 3=unlock
+		viewport_width_mode: 0, //0=adapt, 1=clamp, 2=hdclamp, 3=unlock, 4=smallclamp
 		trimsentences: true, //trim to last punctuation
 		trimwhitespace: false, //trim trailing whitespace
 		compressnewlines: false, //compress multiple newlines
@@ -16666,6 +16670,7 @@ Current version indicated by LITEVER below.
 		}
 		return input;
 	}
+
 	function apply_custom_css()
 	{
 		indexeddb_load("savedcustomcss","").then(currcss=>{
@@ -16679,6 +16684,38 @@ Current version indicated by LITEVER below.
 				//do nothing on cancel
 			},true,true);
 		});
+	}
+
+	function toggle_fullscreen()
+	{
+		const doc = window.document;
+		const docEl = doc.documentElement;
+		const isFullscreen =
+			doc.fullscreenElement ||
+			doc.mozFullScreenElement ||
+			doc.webkitFullscreenElement ||
+			doc.msFullscreenElement;
+		if (!isFullscreen) {
+			if (docEl.requestFullscreen) {
+				docEl.requestFullscreen();
+			} else if (docEl.mozRequestFullScreen) { // Firefox
+				docEl.mozRequestFullScreen();
+			} else if (docEl.webkitRequestFullscreen) { // Chrome, Safari, Opera
+				docEl.webkitRequestFullscreen();
+			} else if (docEl.msRequestFullscreen) { // IE/Edge
+				docEl.msRequestFullscreen();
+			}
+		} else {
+			if (doc.exitFullscreen) {
+				doc.exitFullscreen();
+			} else if (doc.mozCancelFullScreen) { // Firefox
+				doc.mozCancelFullScreen();
+			} else if (doc.webkitExitFullscreen) { // Chrome, Safari, Opera
+				doc.webkitExitFullscreen();
+			} else if (doc.msExitFullscreen) { // IE/Edge
+				doc.msExitFullscreen();
+			}
+		}
 	}
 
 	function set_voice_clone()
@@ -23917,23 +23954,34 @@ Current version indicated by LITEVER below.
 			maincon.classList.remove("adaptivecontainer");
 			maincon.classList.remove("clampedcontainer");
 			maincon.classList.remove("bigclampedcontainer");
+			maincon.classList.remove("smallclampedcontainer");
 		}else if(localsettings.viewport_width_mode==1) //clamped
 		{
 			maincon.classList.remove("adaptivecontainer");
 			maincon.classList.add("clampedcontainer");
 			maincon.classList.remove("bigclampedcontainer");
+			maincon.classList.remove("smallclampedcontainer");
 		}
 		else if(localsettings.viewport_width_mode==2) //bigclamp
 		{
 			maincon.classList.remove("adaptivecontainer");
 			maincon.classList.remove("clampedcontainer");
 			maincon.classList.add("bigclampedcontainer");
+			maincon.classList.remove("smallclampedcontainer");
+		}
+		else if(localsettings.viewport_width_mode==4) //smallclamp
+		{
+			maincon.classList.remove("adaptivecontainer");
+			maincon.classList.remove("clampedcontainer");
+			maincon.classList.remove("bigclampedcontainer");
+			maincon.classList.add("smallclampedcontainer");
 		}
 		else //adaptive
 		{
 			maincon.classList.add("adaptivecontainer");
 			maincon.classList.remove("clampedcontainer");
 			maincon.classList.remove("bigclampedcontainer");
+			maincon.classList.remove("smallclampedcontainer");
 		}
 
 		update_genimg_button_visiblility();
@@ -28197,6 +28245,7 @@ Current version indicated by LITEVER below.
 								<div style="margin:0px 0px 0px auto;">
 								<select title="Viewport width" style="margin:0px 0px 0px auto;" class="form-control" id="viewport_width_mode">
 								<option value="0">Adapt</option>
+								<option value="4">Square</option>
 								<option value="1">Clamp</option>
 								<option value="2">HDClamp</option>
 								<option value="3">Unlock</option>
@@ -28233,6 +28282,10 @@ Current version indicated by LITEVER below.
 						<div class="settinglabel">
 							<div class="justifyleft">Custom CSS <span class="helpicon">?<span class="helptext">Allows you to load third-party CSS styles (caution).</span></span></div>
 							<button type="button" class="btn btn-primary" style="margin:0px 0px 0px auto;" onclick="apply_custom_css()">Apply Custom CSS</button>
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft">Toggle Fullscreen <span class="helpicon">?<span class="helptext">Attempts to switch to fullscreen mode. This setting cannot be saved.</span></span></div>
+							<button type="button" class="btn btn-primary" style="margin:0px 0px 0px auto;" onclick="toggle_fullscreen()">Toggle Fullscreen</button>
 						</div>
 					</div>
 				</div>
