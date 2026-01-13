@@ -1232,7 +1232,7 @@ Current version indicated by LITEVER below.
 		border-radius: 8px;
 	}
 	#actionmenuitems button,#actionmenuitems2 button {
-		width: 68px;
+		width: 66px;
 		padding-left: 6px;
 		padding-right: 6px;
 	}
@@ -1255,9 +1255,9 @@ Current version indicated by LITEVER below.
 		min-height: 13px;
 		appearance: auto;
 	}
-	@media (max-width: 666px) {
+	@media (max-width: 600px) {
 		#actionmenuitems button,#actionmenuitems2 button {
-			width: 56px;
+			width: 54px;
 			padding: 4px 4px;
 			font-size: 12px;
 		}
@@ -2311,6 +2311,7 @@ Current version indicated by LITEVER below.
 	}
 	.chat_msg_history {
 		overflow-y: auto;
+		word-break: break-word;
 	}
 	.chat_msg_history img {
 		max-width: 100%;
@@ -2854,6 +2855,7 @@ Current version indicated by LITEVER below.
 	.corpostyleitemcontent
 	{
 		white-space: pre-wrap;
+		word-break: break-word;
 	}
 	.corpostyleitemcontent img {
 		max-width: 100%;
@@ -10978,7 +10980,7 @@ Current version indicated by LITEVER below.
 				localsettings.opmode = 4;
 				if(localsettings.gui_type_instruct!=3)
 				{
-					if (temp_scenario.gui_type===1) { localsettings.gui_type_instruct = 2; } // instruct has no messenger theme
+					if (temp_scenario.gui_type===1) { localsettings.gui_type_instruct = 1; }
 					else if(temp_scenario.gui_type===2) { localsettings.gui_type_instruct = 2; }
 					else if(temp_scenario.gui_type===0) { localsettings.gui_type_instruct = 0; }
 				}
@@ -16244,6 +16246,7 @@ Current version indicated by LITEVER below.
 		}
 		if (document.getElementById('opmode').value == 4) {
 			document.getElementById('gui_type').value = localsettings.gui_type_instruct;
+			document.getElementById('uipicker_messenger').classList.remove('hidden');
 			document.getElementById('uipicker_aesthetic').classList.remove('hidden');
 			document.getElementById('uipicker_corpo').classList.remove('hidden');
 			document.getElementById('instructtagsection').classList.remove('hidden');
@@ -23363,30 +23366,42 @@ Current version indicated by LITEVER below.
 	var autoscrollEnabled = true;
 	var suppressScrollEvent = false;
 	var autoscrollTimeout = null;
-	function handle_autoscroll(alwaysscroll=true)
-	{
-		if (localsettings.autoscroll) {
-			let box1 = document.getElementById("gametext");
-			let box2 = document.getElementById("chat_msg_body");
-			let box3 = document.getElementById("corpostylemain");
-			function isScrolledToBottom(element) {
-				return element.scrollHeight - element.scrollTop - element.clientHeight <= (autoscrollEnabled?180:60);
-			}
+	let autoscrollRAF = null;
+	function handle_autoscroll(alwaysscroll = true) {
+		if (!localsettings.autoscroll) return;
+
+		// Cancel pending frame to avoid stacking work
+		if (autoscrollRAF) cancelAnimationFrame(autoscrollRAF);
+
+		autoscrollRAF = requestAnimationFrame(() => {
+			const boxes = [
+				document.getElementById("gametext"),
+				document.getElementById("chat_msg_body"),
+				document.getElementById("corpostylemain")
+			].filter(Boolean);
+
+			if (!boxes.length) return;
+
+			// ---- READ PHASE (no writes) ----
+			const threshold = autoscrollEnabled ? 180 : 60;
+
+			const scrollData = boxes.map(el => {
+				const maxScrollTop = el.scrollHeight - el.clientHeight + 10;
+				const isAtBottom =
+					el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
+
+				return { el, maxScrollTop, shouldScroll: alwaysscroll || isAtBottom };
+			});
+
+			// ---- WRITE PHASE (no reads) ----
 			suppressScrollEvent = true;
-			if(alwaysscroll || isScrolledToBottom(box1))
-			{
-				box1.scrollTop = box1.scrollHeight - box1.clientHeight + 10;
-			}
-			if(alwaysscroll || isScrolledToBottom(box2))
-			{
-				box2.scrollTop = box2.scrollHeight - box2.clientHeight + 10;
-			}
-			if(alwaysscroll || isScrolledToBottom(box3))
-			{
-				box3.scrollTop = box3.scrollHeight - box3.clientHeight + 10;
+			for (const item of scrollData) {
+				if (item.shouldScroll) {
+					item.el.scrollTop = item.maxScrollTop;
+				}
 			}
 			suppressScrollEvent = false;
-		}
+		});
 	}
 	function attach_scroll_detection(element)
 	{
@@ -23878,7 +23893,8 @@ Current version indicated by LITEVER below.
 				textToRender = concat_gametext(false, "", "", "", true);
 				textToRender = apply_display_only_regex(textToRender);
 				textToRender = replace_placeholders(textToRender,true);
-				if(localsettings.opmode==3 && localsettings.gui_type_chat==1)
+				if((localsettings.opmode==3 && localsettings.gui_type_chat==1) ||
+				(localsettings.opmode==4 && localsettings.gui_type_instruct==1))
 				{
 					document.getElementById("chat_msg_body").innerHTML = render_messenger_ui(textToRender);
 				}
@@ -25011,34 +25027,64 @@ Current version indicated by LITEVER below.
 
 	function render_messenger_ui(input)
 	{
+		if(localsettings.separate_end_tags) {
+			if (get_instruct_starttag_end(true)) {
+				input = replaceAll(input, get_instruct_starttag_end(true), "");
+			}
+			if (get_instruct_endtag_end(true)) {
+				input = replaceAll(input, get_instruct_endtag_end(true), "");
+			}
+			if (get_instruct_systag_end(true)) {
+				input = replaceAll(input, get_instruct_systag_end(true), "");
+			}
+		}
+
 		let newbodystr = "";
-		let chatunits = repack_chat_history(input);
+		let chatunits = [];
+		input = replace_instruct_placeholders(input);
+		if(localsettings.opmode==3) //chat mode
+		{
+			chatunits = repack_chat_history(input);
+		}
+		else
+		{
+			chatunits = repack_instruct_history(input);
+			repact_instruct_turns_beautify_render(chatunits);
+		}
 
 		let colormap = {}, colidx = 0;
+		let countmap = new Map();
 		for(var i=0;i<chatunits.length;++i)
 		{
 			let curr = chatunits[i];
 			if(curr.msg && curr.msg!="")
 			{
-				curr.msg = curr.msg.replace(bold_regex,"<b style='opacity:0.7'>$1</b>");
-				curr.msg = curr.msg.replace(italics_regex,"<em style='opacity:0.7'>$1</em>");
+				if(localsettings.opmode==4)
+				{
+					curr = repack_postprocess_turn(curr, countmap); //change whole object
+				}
+				else
+				{
+					curr.msg = curr.msg.replace(bold_regex,"<b style='opacity:0.7'>$1</b>");
+					curr.msg = curr.msg.replace(italics_regex,"<em style='opacity:0.7'>$1</em>");
+				}
 				//convert the msg into images
 				curr.msg = render_all_media_html(curr.msg,false,true);
 			}
 
 			if(curr.myturn)
 			{
-				let namepart = (curr.name!=""?`<span style="font-weight: bolder;color:var(--theme_color_user_name);">`+escape_html(curr.name)+`</span><br>`:"");
+				let namepart = (curr.name?`<span style="font-weight: bolder;color:var(--theme_color_user_name);">${escape_html(curr.name)}</span><br>`:"");
 				newbodystr += `<div class="chat_outgoing_msg"><div class="chat_sent_msg"><p>`+namepart+curr.msg+`</p></div></div>`;
 			}else{
-				let oname = escape_html(curr.name);
+				let oname = (curr.name?escape_html(curr.name):"");
 				let onametrim = oname.trim();
 				if(colormap[onametrim]==null)
 				{
 					colormap[onametrim] = get_unique_color(colidx);
 					++colidx;
 				}
-				let namepart = (curr.name!=""?`<span class='`+colormap[onametrim]+`' style="font-weight: bolder;">`+oname+`</span><br>`:"");
+				let namepart = (curr.name?`<span class='${colormap[onametrim]}' style="font-weight: bolder;">${oname}</span><br>`:"");
 				newbodystr += `<div class="incoming_msg"><div class="chat_received_msg"><div class="chat_received_withd_msg"><p>`+namepart+curr.msg+`</p></div></div></div>`;
 			}
 
