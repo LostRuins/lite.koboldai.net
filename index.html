@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 <head>
 	<script id="init-config">
-	const LITEVER = 304;
+	const LITEVER = 306;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -880,6 +880,7 @@ Current version indicated by LITEVER below.
 	.settingsbody
 	{
 		height: calc(86vh - 110px);
+		height: calc(86svh - 110px);
 		overflow-y: auto;
 		overflow-x: hidden;
 		text-align: center;
@@ -2385,6 +2386,7 @@ Current version indicated by LITEVER below.
 	.pagebox
 	{
 		height: calc(100vh - 54px);
+		height: calc(100svh - 54px);
 		display: flex;
 		flex-direction: column;
 	}
@@ -2654,6 +2656,7 @@ Current version indicated by LITEVER below.
 		padding-right: 8px;
 		transition: transform 0.3s ease;
 		height: calc(100vh - 54px);
+		height: calc(100svh - 54px);
 		z-index: 1;
 	}
 	body.darkmode .corpoleftpanel
@@ -2759,6 +2762,7 @@ Current version indicated by LITEVER below.
 	{
 		width: 100%;
 		height: calc(100vh - 54px);
+		height: calc(100svh - 54px);
 		display: flex;
 		flex-direction: column;
 		padding-left: 2px;
@@ -2808,7 +2812,7 @@ Current version indicated by LITEVER below.
 		display: flex;
 		justify-content: center;
 		align-items: center;
-		height: 75vh;
+		height: 100%;
 		flex-direction: column;
 		text-align: center;
 	}
@@ -4335,7 +4339,7 @@ Current version indicated by LITEVER below.
 		start_thinking_tag: "<think>",
 		stop_thinking_tag: "</think>",
 		hide_think_stream: false,
-		think_injected: 0, //0=normal, 1=force, 2=prevent
+		think_injected: 0, //0=normal, 1=force
 		strip_thinking_mode: 1, //0=no stripping, 1=strip except recent, 2=strip all
 		websearch_enabled: false,
 		websearch_multipass: false,
@@ -9064,6 +9068,10 @@ Current version indicated by LITEVER below.
 	function is_using_kcpp_with_xtc()
 	{
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.74") >= 0);
+	}
+	function is_using_kcpp_with_adaptp()
+	{
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.104") >= 0);
 	}
 	function is_using_kcpp_with_multiplayer()
 	{
@@ -15068,7 +15076,6 @@ Current version indicated by LITEVER below.
 			document.getElementById("mirosupporteddiv").classList.add("hidden");
 			document.getElementById("mirounsupporteddiv").classList.remove("hidden");
 		}
-
 		if(is_using_kcpp_with_dry())
 		{
 			document.getElementById("drysupporteddiv").classList.remove("hidden");
@@ -15079,7 +15086,6 @@ Current version indicated by LITEVER below.
 			document.getElementById("drysupporteddiv").classList.add("hidden");
 			document.getElementById("dryunsupporteddiv").classList.remove("hidden");
 		}
-
 		if(is_using_kcpp_with_xtc())
 		{
 			document.getElementById("xtcsupporteddiv").classList.remove("hidden");
@@ -15090,13 +15096,35 @@ Current version indicated by LITEVER below.
 			document.getElementById("xtcsupporteddiv").classList.add("hidden");
 			document.getElementById("xtcunsupporteddiv").classList.remove("hidden");
 		}
+		if(is_using_kcpp_with_grammar())
+		{
+			document.getElementById("grammarsupporteddiv").classList.remove("hidden");
+			document.getElementById("grammarunsupporteddiv").classList.add("hidden");
+		}
+		else
+		{
+			document.getElementById("grammarsupporteddiv").classList.add("hidden");
+			document.getElementById("grammarunsupporteddiv").classList.remove("hidden");
+		}
+		if(is_using_kcpp_with_adaptp())
+		{
+			document.getElementById("adaptpsupporteddiv").classList.remove("hidden");
+			document.getElementById("adaptpunsupporteddiv").classList.add("hidden");
+			document.getElementById("nsigmasupporteddiv").classList.remove("hidden");
+			document.getElementById("nsigmaunsupporteddiv").classList.add("hidden");
+		}
+		else
+		{
+			document.getElementById("adaptpsupporteddiv").classList.add("hidden");
+			document.getElementById("adaptpunsupporteddiv").classList.remove("hidden");
+			document.getElementById("nsigmasupporteddiv").classList.add("hidden");
+			document.getElementById("nsigmaunsupporteddiv").classList.remove("hidden");
+		}
 		pendingsequencebreakers = localsettings.dry_sequence_breakers;
 		pendingassistantjailbreak = localsettings.custom_jailbreak_text;
 
-		document.getElementById("setgrammar").disabled = !is_using_kcpp_with_grammar();
 		document.getElementById("voice_typing_mode").disabled = !is_using_kcpp_with_whisper();
 		document.getElementById("transcribe_file_btn").disabled = !is_using_kcpp_with_whisper();
-		document.getElementById("grammar_retain_state").disabled = document.getElementById("setgrammar").disabled;
 
 		if(custom_kobold_endpoint=="" && custom_oai_key=="" && custom_gemini_key=="")
 		{
@@ -15777,7 +15805,6 @@ Current version indicated by LITEVER below.
 
 		localsettings.thinking_action = parseInt(document.getElementById("thinking_action").value);
 		localsettings.think_injected = parseInt(document.getElementById("think_injected").value);
-		update_think_warn();
 		localsettings.strip_thinking_mode = parseInt(document.getElementById("strip_thinking_mode").value);
 		localsettings.start_thinking_tag = document.getElementById("start_thinking_tag").value;
 		localsettings.stop_thinking_tag = document.getElementById("stop_thinking_tag").value;
@@ -16874,7 +16901,7 @@ Current version indicated by LITEVER below.
 
 	function new_randomness_seed()
 	{
-		document.getElementById("inject_randomness_seed").value = (Math.floor(Math.random() * 99999)); //keep within a simple range
+		document.getElementById("inject_randomness_seed").value = (Math.floor(Math.random() * 9999)); //keep within a simple range
 	}
 
 	function btn_editmode()
@@ -18926,10 +18953,6 @@ Current version indicated by LITEVER below.
 						{
 							pending_context_preinjection = pending_context_preinjection + localsettings.start_thinking_tag.replaceAll("\\n", "\n");
 						}
-						else if(localsettings.think_injected==2 && localsettings.start_thinking_tag!="" && localsettings.stop_thinking_tag!="")
-						{
-							pending_context_preinjection = pending_context_preinjection + localsettings.start_thinking_tag.replaceAll("\\n", "\n") + "\n\n" + localsettings.stop_thinking_tag.replaceAll("\\n", "\n");
-						}
 						if(localsettings.inject_jailbreak_instruct)
 						{
 							pending_context_preinjection = pending_context_preinjection + localsettings.custom_jailbreak_text.replaceAll("\\n", "\n");
@@ -19545,9 +19568,13 @@ Current version indicated by LITEVER below.
 		if((custom_kobold_endpoint != "" && is_using_kcpp_with_mirostat()) || custom_oai_endpoint!="")
 		{
 			submit_payload.params.presence_penalty = localsettings.presence_penalty;
+			submit_payload.params.logit_bias = JSON.parse(JSON.stringify(localsettings.logitbiasdict));
+		}
+
+		if((custom_kobold_endpoint != "" && is_using_kcpp_with_adaptp()))
+		{
 			submit_payload.params.adaptive_target = localsettings.adaptivep_target;
 			submit_payload.params.adaptive_decay = localsettings.adaptivep_decay;
-			submit_payload.params.logit_bias = JSON.parse(JSON.stringify(localsettings.logitbiasdict));
 		}
 
 		if(custom_kobold_endpoint != "" && is_using_kcpp_with_guidance() && localsettings.guidance_scale != 1 && localsettings.guidance_prompt!="")
@@ -19783,10 +19810,14 @@ Current version indicated by LITEVER below.
 
 				if (document.getElementById("useoaichatcompl").checked)
 				{
-					let reasoneffort = document.getElementById("oaireasoningeffort").value;
-					if(reasoneffort && reasoneffort!="")
+					let cannotreason = (targetep.toLowerCase().includes("text.pollinations.ai") || targetep.toLowerCase().includes("api.nvidia.com"));
+					if(!cannotreason)
 					{
-						oai_payload.reasoning_effort = reasoneffort;
+						let reasoneffort = document.getElementById("oaireasoningeffort").value;
+						if(reasoneffort && reasoneffort!="")
+						{
+							oai_payload.reasoning_effort = reasoneffort;
+						}
 					}
 
 					let mainoaibody = submit_payload.prompt; //can be string or array
@@ -20396,7 +20427,7 @@ Current version indicated by LITEVER below.
 				submit_payload.params.dynatemp_exponent = localsettings.dynatemp_exponent;
 				submit_payload.params.smoothing_factor = localsettings.smoothing_factor;
 				// submit_payload.params.smoothing_curve = localsettings.smoothing_curve; //no idea if horde supports this, dont care to check
-				submit_payload.params.nsigma = localsettings.nsigma;
+				// submit_payload.params.nsigma = localsettings.nsigma;
 			}
 
 			last_request_str = JSON.stringify(submit_payload);
@@ -23831,14 +23862,18 @@ Current version indicated by LITEVER below.
 		let isAestheticUiStyle = is_aesthetic_ui();
 		let isCorpoUiStyle = is_corpo_ui();
 
+		document.getElementById("corpo_welcome").classList.add("hidden");
 		if (!inEditMode && isCorpoUiStyle)
 		{
 			if(gametext_arr.length == 0)
 			{
-				document.getElementById("corpo_body").innerHTML = render_corpo_welcome();
+				document.getElementById("corpo_body").innerHTML = "";
+				document.getElementById("corpo_welcome").classList.remove("hidden");
+				document.getElementById("corpo_welcome").innerHTML = render_corpo_welcome();
 			}
 			else
 			{
+				document.getElementById("corpo_welcome").classList.add("hidden");
 				let textToRender = concat_gametext(false, "", "", "", true);
 				document.getElementById("corpo_body").innerHTML = render_corpo_ui(textToRender);
 				corpoedit_resize_input();
@@ -24082,7 +24117,8 @@ Current version indicated by LITEVER below.
 
 	function render_corpo_welcome()
 	{
-		return `<div class='corpowelcome'>
+		return `
+			<div style="height:100%" class="corpowelcome">
 			<img src="${corpo_greeter_square}" style="height:80px;width:auto;padding:10px;border-radius: 20%;"/>
 			<p>How can I help you today?</p>
 			${(welcome!=""?`<br><div class='corpowelcomesmall'><em>${escape_html(welcome)}</em></div>`:``)}
@@ -25292,17 +25328,6 @@ Current version indicated by LITEVER below.
 		}
 	}
 
-	function update_think_warn()
-	{
-		if(document.getElementById("think_injected").value==2)
-		{
-			document.getElementById("preventthinkwarn").classList.remove("hidden");
-		}else
-		{
-			document.getElementById("preventthinkwarn").classList.add("hidden");
-		}
-	}
-
 	function populate_regex_replacers()
 	{
 		let regextablehtml = `
@@ -25353,7 +25378,6 @@ Current version indicated by LITEVER below.
 		}
 		document.getElementById("thinking_action").value = localsettings.thinking_action;
 		document.getElementById("think_injected").value = localsettings.think_injected;
-		update_think_warn();
 		document.getElementById("strip_thinking_mode").value = localsettings.strip_thinking_mode;
 		document.getElementById("start_thinking_tag").value = localsettings.start_thinking_tag;
 		document.getElementById("stop_thinking_tag").value = localsettings.stop_thinking_tag;
@@ -27701,6 +27725,7 @@ Current version indicated by LITEVER below.
 				</div>
 				<button title="Show Corpo Side Panel" class="corpo_leftpanel_open mainnav" onclick="show_corpo_leftpanel(true)"><div class="corpo_arrow_right"></div></button>
 				<div class="corporightpanel">
+					<div style="height:100%" id="corpo_welcome"></div>
 					<div id="corpostylemain" class="corpostylemain">
 						<div id="corpo_body" class="corpostyleinner"></div>
 					</div>
@@ -27840,7 +27865,7 @@ Current version indicated by LITEVER below.
 				</select></div>
 
 				<div class="settinglabel" style="padding: 4px;">
-					<div class="justifyleft" title="Controls whether the world info keys are matched in a case-sensitive way.">Case Sensitive Keys </div>
+					<div class="justifyleft">Case Sensitive Keys <span class="helpicon">?<span class="helptext">Controls whether the world info keys are matched in a case-sensitive way.</span></span></div>
 					<input title="World Info Case Sensitive" type="checkbox" id="case_sensitive_wi" style="margin:0px 0px 0px 3px;">
 				</div>
 			</div>
@@ -27950,7 +27975,7 @@ Current version indicated by LITEVER below.
 
 	<div class="popupcontainer flex hidden" id="settingscontainer">
 		<div class="popupbg flex" id="settingscontainerbg"></div>
-		<div class="nspopup flexsize" id="settingscontainerfg" style="margin-top: 4vh;">
+		<div class="nspopup flexsize" id="settingscontainerfg" style="margin-top: 20px;">
 			<div class="popuptitlebar">
 				<div class="popuptitletext" title="Settings Menu">Settings</div>
 			</div>
@@ -28259,7 +28284,8 @@ Current version indicated by LITEVER below.
 						</div>
 						<div class="settinglabel">
 							<input type="file" id="loadbgimg" accept="image/*" onchange="load_bg_img(event)" style="display:none;">
-							<div class="justifyleft">Background image</div>
+							<div class="justifyleft">Background image <span class="helpicon">?<span
+								class="helptext">Set an image as a decorative background. Stored locally.</span></span></div>
 							<button title="Set Background Image" type="button" class="btn btn-primary" style="margin:0px 0px 0px auto;" onclick="load_bgimg_button()">Set</button>
 							<button title="Remove Background Image" type="button" class="btn btn-primary bg_red" style="margin:0px 0px 0px 1px;" onclick="clear_bg_img()">Clear</button>
 						</div>
@@ -28425,8 +28451,8 @@ Current version indicated by LITEVER below.
 									</select>
 								</div>
 								<div class="settinglabel settingcell">
-									<div class="justifyleft">Token Limit Scale <span class="helpicon">?<span
-										class="helptext">Adds a multiplier to token estimations, useful if token counts are inaccurate. Influences text truncation. Higher values increases token allowance.</span></span></div>
+									<div class="justifyleft">Token Limit Mult. <span class="helpicon">?<span
+										class="helptext">Adds a multiplier to token limit estimations, useful if token counts are inaccurate. Influences text truncation. Higher values increases token allowance.</span></span></div>
 										<select title="Token Limit Multiplier" style="padding:1px; margin:0px 0px 0px auto;" class="form-control" id="token_count_multiplier">
 										<option value="70">0.7x</option>
 										<option value="80">0.8x</option>
@@ -28489,7 +28515,7 @@ Current version indicated by LITEVER below.
 									<input title="Repetition Penalty Slope" class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="rep_pen_slope"></div>
 								</div>
 								<div class="settinglabel settingcell">
-									<div title="Smoothing Factor" class="justifyleft" style="width:100%">Sm.Fac</div>
+									<div title="Smoothing Factor. 0 to disable." class="justifyleft" style="width:100%">Sm.Fac</div>
 									<div class="justifyleft" style="width:100%">
 									<input title="Smoothing Factor" class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="smoothing_factor"></div>
 								</div>
@@ -28527,7 +28553,7 @@ Current version indicated by LITEVER below.
 												<input title="Mirostat Eta" class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0.0" value="0.0" id="miro_eta"></div>
 											</div>
 										</div>
-										<div id="mirounsupporteddiv" class="color_red" style="font-weight:bold;padding:3px;font-size:12px">Mirostat Not Supported</div>
+										<div id="mirounsupporteddiv" class="color_red" style="font-weight:bold;padding:3px;font-size:12px">Unsupported</div>
 										</div>
 								</div>
 
@@ -28559,7 +28585,7 @@ Current version indicated by LITEVER below.
 									</div>
 									<button id="setbreakers" type="button" class="btn btn-primary" style="width:100%; padding:2px 3px; font-size:12px;" onclick="setDryBreakers()">Seq. Breaks</button>
 									</div>
-									<div id="dryunsupporteddiv" class="color_red" style="font-weight:bold;padding:3px;font-size:12px">DRY Not Supported</div>
+									<div id="dryunsupporteddiv" class="color_red" style="font-weight:bold;padding:3px;font-size:12px">Unsupported</div>
 									</div>
 								</div>
 							</div>
@@ -28581,7 +28607,7 @@ Current version indicated by LITEVER below.
 												<input title="XTC Probability" class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0.0" value="0.0" id="xtc_probability"></div>
 											</div>
 										</div>
-										<div id="xtcunsupporteddiv" class="color_red" style="font-weight:bold;padding:3px;font-size:12px">XTC Not Supported</div>
+										<div id="xtcunsupporteddiv" class="color_red" style="font-weight:bold;padding:3px;font-size:12px">Unsupported</div>
 										</div>
 								</div>
 								<div class="settinglabel settingcell">
@@ -28600,12 +28626,18 @@ Current version indicated by LITEVER below.
 												<input title="Adaptive-P Decay" class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0.0" value="0.0" id="adaptivep_decay"></div>
 											</div>
 										</div>
+										<div id="adaptpunsupporteddiv" class="color_red" style="font-weight:bold;padding:3px;font-size:12px">Unsupported</div>
 									</div>
 								</div>
 								<div class="settinglabel settingcell">
-									<div title="Top N Sigma. 0 to deactivate. Range 0 to 5." class="justifyleft" style="width:100%">T.NSigma</div>
+
+									<div title="Top N Sigma" class="justifyleft" style="width:100%">T.NSigma <span class="helpicon">?<span class="helptext">
+										Top N-Sigma. 0 to deactivate. Range 0 to 5. Not supported on Horde.</span></span></div>
+									<div id="nsigmasupporteddiv" style="display:flex;">
 									<div class="justifyleft" style="width:100%">
-									<input title="Top N Sigma. 0 to deactivate. Range 0 to 5." class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="nsigma"></div>
+									<input title="Top N Sigma" class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="nsigma"></div>
+									</div>
+									<div id="nsigmaunsupporteddiv" class="color_red" style="font-weight:bold;padding:3px;font-size:12px">Unsupported</div>
 								</div>
 							</div>
 
@@ -28613,16 +28645,20 @@ Current version indicated by LITEVER below.
 								<div class="settinglabel settingcell">
 									<div title="Grammar" class="justifyleft" style="width:100%">Grammar <span class="helpicon">?<span class="helptext">
 										Grammar Sampling (KCPP) - Allows you to constrain output to fit specific structures. Resets grammar state every generation unless Retain is checked.</span></span></div>
-									<div class="justifyleft" style="height: 30px;width:100%;display: flex;">
+									<div id="grammarsupporteddiv" style="display:flex;">
+										<div class="justifyleft" style="height: 30px;width:100%;display: flex;">
 										<button title="Set Grammar GBNF" id="setgrammar" type="button" class="btn btn-primary" style="padding:2px 3px;margin-top:2px;font-size:12px;" onclick="selectGrammar()">GBNF</button>
 										<div style="display:flex;">
 										<div style="margin:2px;margin-top:6px;" title="Do not reset grammar on generate. May not work with multiple users.">Retain </div>
 										<input title="Retain Grammar State" type="checkbox" id="grammar_retain_state" style="padding:2px 3px;">
 										</div>
 									</div>
+									</div>
+									<div id="grammarunsupporteddiv" class="color_red" style="font-weight:bold;padding:3px;font-size:12px">Unsupported</div>
 								</div>
 								<div class="settinglabel settingcell">
-									<div title="DynaTemp Configs. Range 0 to Deactivate." class="justifyleft" style="width:100%">Dy.Temp</div>
+									<div title="DynaTemp Configs." class="justifyleft" style="width:100%">Dy.Temp <span class="helpicon">?<span class="helptext">
+										Dynamic temperature is specified by a Temperature Value and a Temperature Range. Actual temperature is allowed to be automatically adjusted dynamically between (DynaTemp ± DynaRange).</span></span></div>
 									<div class="justifyleft" style="width:100%">
 									<button title="Dynamic Temperature Configuration" type="button" class="btn btn-primary" style="padding:2px 4px;font-size:12px;" onclick="show_dynatemp()"><span id="dynatemp_overview">OFF</span></button>
 									</div>
@@ -28732,19 +28768,19 @@ Current version indicated by LITEVER below.
 							</div>
 
 							<div class="settinglabel">
-								<div class="justifyleft">Step count</div>
+								<div class="justifyleft">Step count <span class="helpicon">?<span class="helptext">How many diffusion steps to use to generate an image. More steps take longer.</span></span></div>
 								<div style="margin:0px 0px 0px auto;">
 									<input title="Number of Steps" type="text" inputmode="decimal" id="img_steps">
 								</div>
 							</div>
 							<div class="settinglabel">
-								<div class="justifyleft">CFG scale</div>
+								<div class="justifyleft">CFG scale <span class="helpicon">?<span class="helptext">CFG Scale to use for image generation, affects prompt adherence.</span></span></div>
 								<div style="margin:0px 0px 0px auto;">
 									<input title="Cfg. Scale" type="text" inputmode="decimal" id="img_cfgscale">
 								</div>
 							</div>
 							<div class="settinglabel">
-								<div class="justifyleft">Image sampler</div>
+								<div class="justifyleft">Image sampler <span class="helpicon">?<span class="helptext">What sampler to use for image generation. Euler is recommended.</span></span></div>
 								<div style="margin:0px 0px 0px auto;">
 									<select title="Image Sampler" class="form-control" id="img_sampler">
 										<option value="Euler">Euler</option>
@@ -28775,7 +28811,7 @@ Current version indicated by LITEVER below.
 							</div>
 
 							<div class="settinglabel">
-								<div class="justifyleft">Clip skip</div>
+								<div class="justifyleft">Clip skip <span class="helpicon">?<span class="helptext">Clip skip used in some image models, -1 to disable.</span></span></div>
 								<div style="margin:0px 0px 0px auto;">
 									<input title="Clip Skip" type="text" inputmode="decimal" id="img_clipskip">
 								</div>
@@ -28995,17 +29031,17 @@ Current version indicated by LITEVER below.
 							</div>
 						</div>
 						<div class="settinglabel">
-							<div class="justifyleft" style="padding:2px"  title="Suppress non-speech (e.g. music and sounds) from transcription">Suppress Non-Speech </div>
+							<div class="justifyleft" style="padding:2px">Suppress Non-Speech <span class="helpicon">?<span class="helptext">Suppress non-speech tokens (e.g. music and sounds) from transcription.</span></span></div>
 							<input title="Suppress Non-Speech" type="checkbox" id="voice_suppress_nonspeech" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="settinglabel">
-							<div class="justifyleft" style="padding:2px" title="Language Code">Language </div>
+							<div class="justifyleft" style="padding:2px">Language <span class="helpicon">?<span class="helptext">Language Code used for transcription e.g. EN.</span></span></div>
 							<div style="margin:0px 0px 0px auto;">
-							<input class="settinglabel" type="text" placeholder="en" value="auto" id="voice_langcode">
+							<input title="Language Code" class="settinglabel" type="text" placeholder="en" value="auto" id="voice_langcode">
 							</div>
 						</div>
 						<div class="settinglabel">
-							<div class="justifyleft" style="padding:3px">Delay </div>
+							<div class="justifyleft" style="padding:3px">Delay <span class="helpicon">?<span class="helptext">How much delay to add before audio stops recording.</span></span></div>
 							<div style="margin:0px 0px 0px auto;">
 							<input title="Voice Delay Milliseconds" type="text" inputmode="decimal" value="300" id="voice_end_delay">
 							</div>
@@ -29108,13 +29144,13 @@ Current version indicated by LITEVER below.
 					</div>
 					<div id="expandthinking" class="hidden">
 						<div class="settinglabel">
-							<div class="justifyleft">Start Think Tag</div>
+							<div class="justifyleft">Start Think Tag <span class="helpicon">?<span class="helptext">Think tag to match for start of CoT.</span></span></div>
 							<div style="margin:0px 0px 0px auto;">
 								<input title="Start Think Tag" type="text" style="width:100px" placeholder="(StartTag)" value="" id="start_thinking_tag">
 							</div>
 						</div>
 						<div class="settinglabel">
-							<div class="justifyleft">Stop Think Tag</div>
+							<div class="justifyleft">Stop Think Tag <span class="helpicon">?<span class="helptext">Think tag to match for end of CoT.</span></span></div>
 							<div style="margin:0px 0px 0px auto;">
 								<input title="Stop Think Tag" type="text" style="width:100px" placeholder="(StopTag)" value="" id="stop_thinking_tag">
 							</div>
@@ -29122,30 +29158,34 @@ Current version indicated by LITEVER below.
 						<div class="settinglabel">
 							<div class="justifyleft">CoT Display <span class="helpicon">?<span
 							class="helptext">Controls the visibility of chain-of-thought thinking sections in the UI. Does not affect submitted thinking tags.</span></span></div>
-							<select title="Chain-Of-Thought Display" id="thinking_action" style="width: 80px; margin:0px 0px 0px auto;" class="form-control">
+							<div style="margin:0px 0px 0px auto;" >
+							<select title="Chain-Of-Thought Display" id="thinking_action" class="form-control">
 								<option value="0">Display</option>
 								<option value="1" selected>Collapse</option>
 								<option value="2">Hide</option>
 							</select>
+							</div>
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft">CoT Submitted <span class="helpicon">?<span
 							class="helptext">Controls which thinking tags are submitted to the AI.</span></span></div>
-							<select title="Chain-Of-Thought Submitted" id="strip_thinking_mode" style="width: 80px; margin:0px 0px 0px auto;" class="form-control">
+							<div style="margin:0px 0px 0px auto;" >
+							<select title="Chain-Of-Thought Submitted" id="strip_thinking_mode" class="form-control">
 							<option value="0">Include All Thinking</option>
 							<option value="1" selected>Only Newest Thinking</option>
 							<option value="2">Exclude All Thinking</option>
 							</select>
+							</div>
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft">Insert Thinking <span class="helpicon">?<span
-							class="helptext">Controls whether thinking tags are inserted or not. Prevented Thinking can be unreliable, set Non-Thinking instruct tags instead!</span></span></div>
-							<select title="Insert Thinking" onchange="update_think_warn()" id="think_injected" style="width: 80px; margin:0px 0px 0px auto;" class="form-control">
+							class="helptext">Controls whether thinking tags are inserted or not. To Prevent thinking, set Non-Thinking instruct tags instead!</span></span></div>
+							<div style="margin:0px 0px 0px auto;" >
+							<select title="Insert Thinking" id="think_injected" style="margin:0px 0px 0px auto;" class="form-control">
 								<option value="0" selected>Normal</option>
 								<option value="1">Forced</option>
-								<option value="2">Prevented</option>
 							</select>
-							<span id="preventthinkwarn" class="color_red hidden" style="margin-top:2px;margin-left:3px;">Prevented can be unreliable - set Non-Thinking instruct tags instead.</span>
+							</div>
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft">Hide Streaming Thinking <span class="helpicon">?
@@ -29174,7 +29214,7 @@ Current version indicated by LITEVER below.
 							<div class="justifyleft">Randomness Seed <span class="helpicon">?<span class="helptext">A seed to generate randomness for {{pick}}, {{roll}} and {{random}}. Set to -1 to disable these three placeholders.</span></span></div>
 							<div style="margin:0px 0px 0px auto;">
 								<input title="Randomness Seed" type="text" inputmode="decimal" placeholder="0" value="" id="inject_randomness_seed">
-								<button title="Regen" type="button" class="btn btn-primary" style="padding:1px 3px;margin:0px 0px 0px auto;font-size:10px;" onclick="new_randomness_seed()">Regen</button>
+								<button title="Regen" type="button" class="btn btn-primary" style="margin:0px 0px 0px auto;" onclick="new_randomness_seed()">Regen</button>
 							</div>
 						</div>
 					</div>
@@ -29390,11 +29430,11 @@ Current version indicated by LITEVER below.
 
 	<div class="popupcontainer flex hidden" id="aestheticsettingscontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup evenhigher" style="margin-left: 20px; margin-right: 20px;">
+		<div class="nspopup highest" style="margin-left: 20px; margin-right: 20px;">
 			<div class="popuptitlebar" id="aesthetic_customization_panel">
 				<div class="popuptitletext">Aesthetic UI customization panel</div>
 			</div>
-			<div class="menutext" style="display: flex; flex-direction: row; height:max(70vh, 480px);">
+			<div class="menutext" style="display: flex; flex-direction: row; height:max(72vh, 500px);">
 				<!-- Settings panel -->
 				<div style="background-color: #122b40;" onchange="refreshAestheticPreview()">
 					<div style="padding: 10px; width:350px; height:100%">
@@ -29528,7 +29568,7 @@ Current version indicated by LITEVER below.
 						</div>
 
 					</div>
-					<div class="popupfooter" id="aesthetic_instruct_footer" style="margin-top: -55px;height:55px;">
+					<div class="popupfooter" id="aesthetic_instruct_footer" style="margin-top:-45px; height:45px;">
 						<button type="button" class="btn btn-primary" id="btn_settingsaccept" onclick="hideAestheticUISettingsMenu(true)">OK</button>
 						<button type="button" class="btn btn-primary" id="btn_settingsclose" onclick="hideAestheticUISettingsMenu(false)">Cancel</button>
 					</div>
@@ -30280,8 +30320,7 @@ Current version indicated by LITEVER below.
 				<div class="popuptitletext">Dynamic Temperature Wizard</div>
 			</div>
 			<div class="inlinelabel">
-			Dynamic temperature is specified by a Temperature Value and a Temperature Range. Actual temperature is allowed to be automatically adjusted dynamically between (DynaTemp ± DynaRange).<br><br>
-			For ease of use, a simple converter is provided here. Setting both values to the same temperature disables DynaTemp.<br><br>
+			For ease of use, a simple converter is provided here. Setting both values to the same temperature (Range 0) disables DynaTemp.<br><br>
 			</div>
 
 			<div class="inlinelabel">
