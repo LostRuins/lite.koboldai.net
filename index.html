@@ -22990,6 +22990,30 @@ Current version indicated by LITEVER below.
 		});
 	}
 
+	function splitIntoGroups(inputstr, chunks_per_group) { //function to break up a massive story into more managable parts, so we can keep them as distinct spans in the DOM
+		const MARKER = '<span class="txtchunk">';
+		const parts = inputstr.split(MARKER);
+		const result = [];
+		let buffer = [];
+		let count = 0;
+		if (parts[0]) { // leading junk before first txtchunk
+			buffer.push(parts[0]);
+		}
+		for (let i = 1; i < parts.length; i++) {
+			buffer.push(MARKER, parts[i]);
+			count++;
+			if (count === chunks_per_group) {
+				result.push(buffer.join(''));
+				buffer.length = 0; // reuse array
+				count = 0;
+			}
+		}
+		if (buffer.length) {
+			result.push(buffer.join(''));
+		}
+		return result;
+	}
+
 	function merge_edit_field() {
 		gametext_focused = false;
 		if (gametext_arr.length > 0 && document.getElementById("allowediting").checked) {
@@ -23767,6 +23791,16 @@ Current version indicated by LITEVER below.
 			if(fulltxt == "" && gametext_arr.length == 0 && synchro_pending_stream=="" && pending_response_id!="")
 			{
 				fulltxt = "Generating...";
+			}
+			if(inEditMode)
+			{
+				//fix to prevent layout thrashing due to forced reflow in chrome when deleting text, break into multiple spans with nothing else in between
+				let multigroups = splitIntoGroups(fulltxt, 150);
+				for(let i=0;i<multigroups.length;++i)
+				{
+					multigroups[i] = "<span>"+multigroups[i]+"</span>";
+				}
+				fulltxt = multigroups.join('');
 			}
 			document.getElementById("gametext").innerHTML = fulltxt;
 		}
