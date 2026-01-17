@@ -10939,7 +10939,7 @@ Current version indicated by LITEVER below.
 		let righttoggle = "";
 		if(temp_scenario.opmode==3 || temp_scenario.opmode==2)
 		{
-			righttoggle = `<span style="float:right"><span class="helpicon">?<span class="helptext">Load scenario in Instruct Mode instead of Chat Mode. Some AI models need this format.</span></span> Use Instruct Mode <input type="checkbox" title="Use Instruct Mode" id="scenarioforceinstruct"></span>`;
+			righttoggle = `<span style="float:right"><span class="helpicon">?<span class="helptext">Load scenario in Instruct Mode instead of Chat Mode. Some AI models need this format.</span></span> Use Instruct Mode <input type="checkbox" title="Use Instruct Mode" style="vertical-align: middle;" class="smallcheckbox" id="scenarioforceinstruct"></span>`;
 		}
 		let scenario_desc = `${image}${righttoggle}<p><b><u>${escape_html(temp_scenario.title)}</u></b></p><p><b>Mode:</b> ${modetitle}${author}</p><p>${blurb}</p>`;
 
@@ -11410,17 +11410,18 @@ Current version indicated by LITEVER below.
 		},
 		// aicharactercards.com
 		{
-			name: "aicharactercards.com / character-tavern.com",
+			name: "aicharactercards.com",
 			urlParam: "aicc",
 			inputBox: {
-				text: "Enter aicharactercards.com or character-tavern.com card URL",
+				text: "Enter aicharactercards.com card URL",
 				placeholder: "https://aicharactercards.com/character-cards/work-jobs/deffcolony/lara-lightland",
 			},
 			extraction: (userInput) => {
 				if (userInput.match(/aicharactercards\.com\//i) && userInput.match(/sdm_process_download/i))
 				{
 					return userInput;
-				} else if(userInput.match(/character-tavern\.com\//i))
+				}
+				else if(userInput.match(/character-tavern\.com\//i))
 				{
 					userInput = userInput.replaceAll("%20","%2520");
 					if(userInput.match(/com\/character\//i))
@@ -11495,41 +11496,44 @@ Current version indicated by LITEVER below.
 					});
 			}
 		},
+		//character-tavern, duplicated and split for now
 		{
-		name: "char-archive.evulid.cc",
-			urlParam: "carc",
+			name: "character-tavern.com",
+			urlParam: "aicc",
 			inputBox: {
-				text: "Enter char-archive.evulid.cc card URL",
-				placeholder: "https://char-archive.evulid.cc/#/chub/Cyber_Elite/character/Cat",
+				text: "Enter character-tavern.com card URL",
+				placeholder: "https://character-tavern.com/character/yousef/Shinku",
 			},
 			extraction: (userInput) => {
-				if (userInput.match(/char-archive\.evulid\.cc\/\#\//i))
-				{
-					let parsedInput = userInput.split("?")[0];
-					parsedInput = parsedInput.split("char-archive.evulid.cc/#/")[1];
-					let parts = parsedInput.split("/");
-
-					if (parts.length == 3) {
-						let final = parts[2];
-						final = final.includes("+")?("+"+final.split("+")[1]):final;
-						return `https://char-archive.evulid.cc/api/archive/v1/${parts[0]}/image/character/${final}?definition=true`;
-					}
-					if (parts.length == 2 || parts[0] == 'generic') {
-						let final = parts[1];
-						final = final.includes("+")?(final.split("+")[1]):final;
-						return `https://char-archive.evulid.cc/api/archive/v1/${parts[0]}/image/character/${final}?definition=true`;
-					}
-					if (parts.length !== 4 || parts[2] !== 'character') {
-						//bad format, return original
-						return userInput;
-					}
-					let final = parts[3];
-					final = final.includes("+")?("+"+final.split("+")[1]):final;
-					return `https://char-archive.evulid.cc/api/archive/v1/${parts[0]}/image/character/${parts[1]}/${final}?definition=true`;
-				}
-				else
+				if (userInput.match(/aicharactercards\.com\//i) && userInput.match(/sdm_process_download/i))
 				{
 					return userInput;
+				}
+				else if(userInput.match(/character-tavern\.com\//i))
+				{
+					userInput = userInput.replaceAll("%20","%2520");
+					if(userInput.match(/com\/character\//i))
+					{
+						userInput = userInput.split(".png")[0];
+						userInput = userInput.split("?")[0];
+						userInput = userInput.split(".com/character/")[1];
+						userInput = userInput.endsWith('/') ? userInput.slice(0, -1) : userInput;
+						return `https://cards.character-tavern.com/${userInput}.png?action=download`;
+					}
+					return userInput;
+				}
+				else {
+					userInput = userInput.split("#")[0].split("?")[0];
+					userInput = userInput.endsWith('/') ? userInput.slice(0, -1) : userInput;
+					if (userInput.match(/aicharactercards\.com\//i) || userInput.match(/AICC\//i)) {
+						// is a URL, extract the character name
+						let tmp = userInput.split("/");
+						if(tmp.length >= 2)
+						{
+							userInput = tmp[tmp.length-2] + "/" + tmp[tmp.length-1];
+						}
+					}
+					return "https://aicharactercards.com/wp-json/pngapi/v1/image/"+userInput;
 				}
 			},
 			fetch: (userInput) => {
@@ -11580,6 +11584,93 @@ Current version indicated by LITEVER below.
 					});
 			}
 		},
+
+		// char-archive has shut down
+		// {
+		// name: "char-archive.evulid.cc",
+		// 	urlParam: "carc",
+		// 	inputBox: {
+		// 		text: "Enter char-archive.evulid.cc card URL",
+		// 		placeholder: "https://char-archive.evulid.cc/#/chub/Cyber_Elite/character/Cat",
+		// 	},
+		// 	extraction: (userInput) => {
+		// 		if (userInput.match(/char-archive\.evulid\.cc\/\#\//i))
+		// 		{
+		// 			let parsedInput = userInput.split("?")[0];
+		// 			parsedInput = parsedInput.split("char-archive.evulid.cc/#/")[1];
+		// 			let parts = parsedInput.split("/");
+
+		// 			if (parts.length == 3) {
+		// 				let final = parts[2];
+		// 				final = final.includes("+")?("+"+final.split("+")[1]):final;
+		// 				return `https://char-archive.evulid.cc/api/archive/v1/${parts[0]}/image/character/${final}?definition=true`;
+		// 			}
+		// 			if (parts.length == 2 || parts[0] == 'generic') {
+		// 				let final = parts[1];
+		// 				final = final.includes("+")?(final.split("+")[1]):final;
+		// 				return `https://char-archive.evulid.cc/api/archive/v1/${parts[0]}/image/character/${final}?definition=true`;
+		// 			}
+		// 			if (parts.length !== 4 || parts[2] !== 'character') {
+		// 				//bad format, return original
+		// 				return userInput;
+		// 			}
+		// 			let final = parts[3];
+		// 			final = final.includes("+")?("+"+final.split("+")[1]):final;
+		// 			return `https://char-archive.evulid.cc/api/archive/v1/${parts[0]}/image/character/${parts[1]}/${final}?definition=true`;
+		// 		}
+		// 		else
+		// 		{
+		// 			return userInput;
+		// 		}
+		// 	},
+		// 	fetch: (userInput) => {
+		// 		temp_scenario = {
+		// 			"title":"",
+		// 			"desc": "",
+		// 			"opmode":3,
+		// 			"chatopponent": "",
+		// 			"gui_type":1,
+		// 			"prompt":"",
+		// 			"memory": "",
+		// 			"authorsnote": "",
+		// 			"worldinfo": [],
+		// 		};
+
+		// 		finalurl = apply_proxy_url(userInput,true);
+		// 		//try to obtain the full portrait image
+		// 		return fetch(finalurl, {
+		// 			method: 'GET',
+		// 			redirect: 'follow',
+		// 			referrerPolicy: 'no-referrer',
+		// 			})
+		// 			.then(rb => {
+		// 				if(rb.ok)
+		// 				{
+		// 					return rb.blob();
+		// 				}else{
+		// 					throw new Error('Cannot fetch tavern image');
+		// 				}
+		// 			})
+		// 			.then(blob => {
+		// 				preview_temp_scenario();
+
+		// 				readTavernPngFromBlob(blob,(obj)=>{
+		// 					load_temp_scenario_from_tavernobj(obj);
+		// 				});
+
+		// 				const objectURL = URL.createObjectURL(blob);
+		// 				const compressedImg = compressImage(objectURL, (compressedImageURI, aspectratio)=>{
+		// 					temp_scenario.image = compressedImageURI;
+		// 					temp_scenario.image_aspect = aspectratio;
+		// 					preview_temp_scenario();
+		// 				}, true, AVATAR_PX);
+		// 			})
+		// 			.catch(error => {
+		// 				throw new Error("Selected scenario is invalid.");
+		// 				console.error(error);
+		// 			});
+		// 	}
+		// },
 	];
 
 	/**
