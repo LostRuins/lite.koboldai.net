@@ -15339,7 +15339,7 @@ Current version indicated by LITEVER below.
 		npresets += `<option value="9999" title="User Defined Settings">[Custom]</option>`;
 		document.getElementById("samplerpresets").innerHTML = npresets;
 		document.getElementById("samplerpresets").value = localsettings.last_selected_preset;
-		document.getElementById("bth_delete_samplerpreset").disabled = (1000 <= localsettings.last_selected_preset && localsettings.last_selected_preset < 9999) ? false : true;
+		document.getElementById("btn_delete_samplerpreset").disabled = (1000 <= localsettings.last_selected_preset && localsettings.last_selected_preset < 9999) ? false : true;
 
 		//populate instruct presets
 		let inspresets = `<option value="0">[Custom]</option>`;
@@ -15481,10 +15481,10 @@ Current version indicated by LITEVER below.
 	}
 
 	function toggle_preset() {
-		document.getElementById("bth_delete_samplerpreset").disabled = true;
-		let p_sel = document.getElementById("samplerpresets");
-		let p_name = p_sel.options[p_sel.selectedIndex].text;
-		let p_value = p_sel.value;
+		document.getElementById("btn_delete_samplerpreset").disabled = true;
+		let p_select = document.getElementById("samplerpresets");
+		let p_name = p_select.options[p_select.selectedIndex].text;
+		let p_value = p_select.value;
 		let found = samplerpresets.find(p => p.preset === p_name);
 		if (found) {
 			document.getElementById("temperature").value = document.getElementById("temperature_slide").value = found.temp;
@@ -15521,7 +15521,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("adaptivep_target").value = defaultsettings.adaptivep_target;
 			document.getElementById("adaptivep_decay").value = defaultsettings.adaptivep_decay;
 			if (1000 <= p_value && p_value < 9999) {
-				document.getElementById("bth_delete_samplerpreset").disabled = false;
+				document.getElementById("btn_delete_samplerpreset").disabled = false;
 			}
 		} else {
 			document.getElementById("presetsdesc").innerText = "";
@@ -15601,11 +15601,25 @@ Current version indicated by LITEVER below.
 		document.getElementById("samplerpresets").value = new_value;
 		document.getElementById("presetsdesc").innerText = "[Custom] - " + newpreset.description;
 		document.getElementById("savesamplerpresetcontainer").classList.add("hidden");
-		document.getElementById("bth_delete_samplerpreset").disabled = false;
+		document.getElementById("btn_delete_samplerpreset").disabled = false;
 	}
 
 	function delete_sampler_preset() {
-		alert("TODO");
+		var p_select = document.getElementById("samplerpresets");
+		var p_opt = p_select.options[p_select.selectedIndex];
+		var found_idx = samplerpresets.findIndex(p => p.preset === p_opt.text);
+		var found = found_idx >= 0 ? samplerpresets[found_idx] : undefined;
+		if (found && found.is_custom) {
+			msgboxYesNo(`Are you sure you want to delete the preset '${samplerpresets[found_idx].preset}'?`, "Delete Preset", () => {
+				p_select.removeChild(p_opt);
+				p_select.value = "9999";
+				document.getElementById("btn_delete_samplerpreset").disabled = true;
+				document.getElementById("presetsdesc").innerText = "Custom settings with modified settings.";
+				samplerpresets.splice(found_idx, 1);
+			}, () => {});
+		} else {
+			alert("Cannot delete a predefined preset.");
+		}
 	}
 
 
@@ -28688,7 +28702,7 @@ Current version indicated by LITEVER below.
 									<option value="1" title="Select a Preset">[Default]</option>
 								</select>
 								<button type="button" class="btn btn-primary" style="margin: 0px 2px; padding: 3px; font-size: 12px;" id="btn_save_samplerpreset" onclick="show_savesamplerpreset()">Save</button>
-								<button type="button" class="btn btn-primary bg_red" style="margin: 0px; padding: 3px; font-size: 12px;" id="bth_delete_samplerpreset" onclick="delete_sampler_preset()">Delete</button>
+								<button type="button" class="btn btn-primary bg_red" style="margin: 0px; padding: 3px; font-size: 12px;" id="btn_delete_samplerpreset" onclick="delete_sampler_preset()">Delete</button>
 						</div>
 						</div>
 						<div id="presetsdesc" class="settingsdesctxt justifyright"></div>
