@@ -5371,7 +5371,8 @@ Current version indicated by LITEVER below.
 		indexeddb_load("savedcustomcss",""),
 		indexeddb_load("savedusermod",""),
 		indexeddb_load("usermodprops",""),
-	]).then(([loadedsettingsjson, loadedstorycompressed, loadedbackgroundimg, currcss, currmod, modpropsstr]) => {
+		indexeddb_load("samplerpresets","")
+	]).then(([loadedsettingsjson, loadedstorycompressed, loadedbackgroundimg, currcss, currmod, modpropsstr, loadedsamplerpresetsjson]) => {
 	try
 	{
 		if (loadedsettingsjson != null && loadedsettingsjson != "" && loadedstorycompressed != null && loadedstorycompressed != "") {
@@ -5471,6 +5472,14 @@ Current version indicated by LITEVER below.
 			indexeddb_save("savedusermod", "");
 			indexeddb_save("usermodprops", "");
 			window.history.replaceState(null, null, window.location.pathname);
+		}
+
+		// load custom sampler presets
+		if (loadedsamplerpresetsjson != null && loadedsamplerpresetsjson != "") {
+			let loadedsamplerpresets = JSON.parse(loadedsamplerpresetsjson);
+			let custompresets = Object.values(loadedsamplerpresets).map((p) => { p.is_custom = true; return p; });
+			samplerpresets.push(...custompresets);
+			console.log(`Loaded ${custompresets.length} custom sampler presets`);
 		}
 
 	} catch (e) {
@@ -15528,6 +15537,19 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	function store_samplerpresets() {
+		const data = samplerpresets.filter((p) => p.is_custom === true)
+			.map((p) => { 
+				let p_copy = {...p};
+				delete p_copy.is_custom; 
+				return p_copy; 
+			})
+			.reduce((acc, p) => { acc[p.preset] = p; return acc; }, {});
+
+		indexeddb_save("samplerpresets", JSON.stringify(data))
+			.catch((e) => console.error("Failed to save sampler presets to IndexedDB."));
+	}
+
 	function save_sampler_preset() {
 		let presetname = document.getElementById("sampler_preset_name").value.trim();
 		if (presetname == "") {
@@ -15544,7 +15566,7 @@ Current version indicated by LITEVER below.
 			preset: presetname,
 			description: document.getElementById("sampler_preset_description").value.trim(),
 			temp: parseFloat(document.getElementById("temperature").value),
-			//max_length: parseInt(document.getElementById("max_length").value, 10), // This one exists in localsettings.max_length. We could save it to our custom presets.
+			max_length: parseInt(document.getElementById("max_length").value, 10),
 			dynatemp_range: parseFloat(document.getElementById("dynatemp_range").value),
 			dynatemp_exponent: parseFloat(document.getElementById("dynatemp_exponent").value),
 			smoothing_factor: parseFloat(document.getElementById("smoothing_factor").value),
@@ -15577,6 +15599,7 @@ Current version indicated by LITEVER below.
 		};
 
 		samplerpresets.push(newpreset);
+		store_samplerpresets();
 
 		const options = Array.from(document.getElementById('samplerpresets').options);
 		const custom_option = options.find(o => o.value === "9999");
@@ -15616,6 +15639,7 @@ Current version indicated by LITEVER below.
 				document.getElementById("btn_delete_samplerpreset").disabled = true;
 				document.getElementById("presetsdesc").innerText = "Custom settings with modified settings.";
 				samplerpresets.splice(found_idx, 1);
+				store_samplerpresets();
 			}, () => {});
 		} else {
 			alert("Cannot delete a predefined preset.");
