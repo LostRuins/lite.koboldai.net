@@ -568,6 +568,10 @@ Current version indicated by LITEVER below.
 	.push-right {
 		margin-left: auto;
 	}
+	.push-all-right {
+		margin-left: auto;
+		display: flex;
+	}
 	.justifyleft {
 		text-align: left;
 	}
@@ -12195,6 +12199,13 @@ Current version indicated by LITEVER below.
 		mainmenu_untab(false);
 	}
 
+	function show_savesamplerpreset()
+	{
+		document.getElementById("sampler_preset_name").value = "";
+		document.getElementById("sampler_preset_description").value = "";
+		document.getElementById("savesamplerpresetcontainer").classList.remove("hidden");
+	}
+
 	function preview_dynatemp(isModifiedRange)
 	{
 		if(isModifiedRange)
@@ -15314,12 +15325,21 @@ Current version indicated by LITEVER below.
 
 		//populate the sampler presets list
 		let npresets = "";
-		for (var i = 0; i < samplerpresets.length; ++i) {
+		var i = 0;
+		for (i; i < samplerpresets.length; ++i) { // 1st the predefined presets
+			if (samplerpresets[i].is_custom) {
+				break;
+			}
 			npresets += `<option value="` + i + `" title="` + samplerpresets[i].description + `">` + samplerpresets[i].preset + `</option>`;
+		}
+		var custom_idx = 1000; 
+		for (i; i < samplerpresets.length; ++i, ++custom_idx) { // then the custom ones
+			npresets += `<option value="` + custom_idx + `" title="` + samplerpresets[i].description + `">` + samplerpresets[i].preset + `</option>`;
 		}
 		npresets += `<option value="9999" title="User Defined Settings">[Custom]</option>`;
 		document.getElementById("samplerpresets").innerHTML = npresets;
 		document.getElementById("samplerpresets").value = localsettings.last_selected_preset;
+		document.getElementById("bth_delete_samplerpreset").disabled = (1000 <= localsettings.last_selected_preset && localsettings.last_selected_preset < 9999) ? false : true;
 
 		//populate instruct presets
 		let inspresets = `<option value="0">[Custom]</option>`;
@@ -15461,8 +15481,11 @@ Current version indicated by LITEVER below.
 	}
 
 	function toggle_preset() {
-		let selp = document.getElementById("samplerpresets").value;
-		let found = samplerpresets[selp];
+		document.getElementById("bth_delete_samplerpreset").disabled = true;
+		let p_sel = document.getElementById("samplerpresets");
+		let p_name = p_sel.options[p_sel.selectedIndex].text;
+		let p_value = p_sel.value;
+		let found = samplerpresets.find(p => p.preset === p_name);
 		if (found) {
 			document.getElementById("temperature").value = document.getElementById("temperature_slide").value = found.temp;
 			document.getElementById("presence_penalty").value = found.presence_penalty;
@@ -15497,9 +15520,92 @@ Current version indicated by LITEVER below.
 			document.getElementById("xtc_threshold").value = defaultsettings.xtc_threshold;
 			document.getElementById("adaptivep_target").value = defaultsettings.adaptivep_target;
 			document.getElementById("adaptivep_decay").value = defaultsettings.adaptivep_decay;
+			if (1000 <= p_value && p_value < 9999) {
+				document.getElementById("bth_delete_samplerpreset").disabled = false;
+			}
 		} else {
 			document.getElementById("presetsdesc").innerText = "";
 		}
+	}
+
+	function save_sampler_preset() {
+		let presetname = document.getElementById("sampler_preset_name").value.trim();
+		if (presetname == "") {
+			alert("Preset name cannot be empty." + " TODO: use custom alert box");
+			return;
+		}
+		if (samplerpresets.some((p) => p.preset === presetname)) {
+			msgbox("Preset name already exists. Please choose a different name.", "Error", false); // TODO: use custom message box
+			return;
+		}
+
+		let newpreset = {
+			is_custom: true,
+			preset: presetname,
+			description: document.getElementById("sampler_preset_description").value.trim(),
+			temp: parseFloat(document.getElementById("temperature").value),
+			//max_length: parseInt(document.getElementById("max_length").value, 10), // This one exists in localsettings.max_length. We could save it to our custom presets.
+			dynatemp_range: parseFloat(document.getElementById("dynatemp_range").value),
+			dynatemp_exponent: parseFloat(document.getElementById("dynatemp_exponent").value),
+			smoothing_factor: parseFloat(document.getElementById("smoothing_factor").value),
+			smoothing_curve: parseFloat(document.getElementById("smoothing_curve").value),
+			nsigma: parseFloat(document.getElementById("nsigma").value),
+			top_k: parseInt(document.getElementById("top_k").value, 10),
+			top_p: parseFloat(document.getElementById("top_p").value),
+			min_p: parseFloat(document.getElementById("min_p").value),
+			presence_penalty: parseFloat(document.getElementById("presence_penalty").value),
+			top_a: parseFloat(document.getElementById("top_a").value),
+			typical: parseFloat(document.getElementById("typ_s").value),
+			tfs: parseFloat(document.getElementById("tfs_s").value),
+			rep_pen: parseFloat(document.getElementById("rep_pen").value),
+			rep_pen_range: parseInt(document.getElementById("rep_pen_range").value, 10),
+			rep_pen_slope: parseFloat(document.getElementById("rep_pen_slope").value),
+			sampler_order: document.getElementById("sampler_order").value.split(",").map(x => parseInt(x, 10)),
+
+			miro_type: parseFloat(document.getElementById("miro_type").value),
+			dry_multiplier: parseFloat(document.getElementById("dry_multiplier").value),
+			xtc_probability: parseFloat(document.getElementById("xtc_probability").value),
+			sampler_seed: parseFloat(document.getElementById("sampler_seed").value),
+			miro_tau: parseFloat(document.getElementById("miro_tau").value),
+			miro_eta: parseFloat(document.getElementById("miro_eta").value),
+			dry_base: parseFloat(document.getElementById("dry_base").value),
+			dry_allowed_length: parseFloat(document.getElementById("dry_allowed_length").value),
+			dry_penalty_last_n: parseFloat(document.getElementById("dry_penalty_last_n").value),
+			xtc_threshold: parseFloat(document.getElementById("xtc_threshold").value),
+			adaptivep_target: parseFloat(document.getElementById("adaptivep_target").value),
+			adaptivep_decay: parseFloat(document.getElementById("adaptivep_decay").value),
+		};
+
+		samplerpresets.push(newpreset);
+
+		const options = Array.from(document.getElementById('samplerpresets').options);
+		const custom_option = options.find(o => o.value === "9999");
+		let new_value = 1000;
+		if (custom_option) {
+				const prev = custom_option.previousElementSibling;
+				new_value = (!prev || (prev && parseInt(prev.value) < 1000)) ? 1000 : parseInt(prev.value) + 1;
+		} else if (options.length > 0) {
+				const last = options[options.length - 1];
+				new_value = Math.max(1000, parseInt(last.value) + 1);
+		} else {
+				new_value = 1000;
+		}
+		const new_option = new Option(presetname, new_value, false, true);
+		new_option.title = newpreset.description;
+		if (custom_option) {
+				custom_option.before(new_option);
+		} else {
+				document.getElementById('samplerpresets').add(new_option);
+		}
+
+		document.getElementById("samplerpresets").value = new_value;
+		document.getElementById("presetsdesc").innerText = "[Custom] - " + newpreset.description;
+		document.getElementById("savesamplerpresetcontainer").classList.add("hidden");
+		document.getElementById("bth_delete_samplerpreset").disabled = false;
+	}
+
+	function delete_sampler_preset() {
+		alert("TODO");
 	}
 
 
@@ -28577,10 +28683,13 @@ Current version indicated by LITEVER below.
 						<h3 style="margin-top: 4px;">Sampling Settings</h3>
 						<div class="settinglabel">
 							<div class="justifyleft">Sampler Preset <span class="helpicon">?<span class="helptext">Pick from an easy selection of curated generation presets, or configure your own.</span></span></div>
-							<div class="push-right">
-							<select title="Sampler Preset" class="form-control" id="samplerpresets" style="margin:0px 0 0 auto;" onchange="toggle_preset()">
-								<option value="1" title="Select a Preset">[Default]</option>
-							</select></div>
+							<div class="push-all-right">
+								<select title="Sampler Preset" class="form-control" id="samplerpresets" style="margin:0px 0 0 auto;" onchange="toggle_preset()">
+									<option value="1" title="Select a Preset">[Default]</option>
+								</select>
+								<button type="button" class="btn btn-primary" style="margin: 0px 2px; padding: 3px; font-size: 12px;" id="btn_save_samplerpreset" onclick="show_savesamplerpreset()">Save</button>
+								<button type="button" class="btn btn-primary bg_red" style="margin: 0px; padding: 3px; font-size: 12px;" id="bth_delete_samplerpreset" onclick="delete_sampler_preset()">Delete</button>
+						</div>
 						</div>
 						<div id="presetsdesc" class="settingsdesctxt justifyright"></div>
 					</div>
@@ -30566,6 +30675,29 @@ Current version indicated by LITEVER below.
 				<button type="button" class="btn btn-primary" onclick="hide_popups()">Close</button>
 			</div>
 			</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="savesamplerpresetcontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup flexsizevsmall">
+			<div class="popuptitlebar">
+				<div class="popuptitletext">Save Sampler Preset</div>
+			</div>
+			<div class="inlinelabel">
+				Enter the name and description of the new sampler preset.<br><br>
+			</div>
+			<div class="inlinelabel">
+				<div class="justifyleft" style="padding:4px">Name: <span class="helpicon">?<span class="helptext">Unique name for the preset.</span></span></div>
+				<input title="Sampler Preset Name" class="settinglabel miniinput" type="text" placeholder="(Name)" id="sampler_preset_name">
+			</div>
+			<div class="inlinelabel">
+				<div class="justifyleft" style="padding:4px">Description: <span class="helpicon">?<span class="helptext">Short description.</span></span></div>
+				<input title="Sampler Preset Description" class="settinglabel miniinput" type="text" placeholder="(Description)" value="" id="sampler_preset_description">
+			</div>
+			<div class="popupfooter">
+				 <button type="button" class="btn btn-primary" onclick="save_sampler_preset()">Ok</button>
 			</div>
 		</div>
 	</div>
