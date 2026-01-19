@@ -12201,6 +12201,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("choosesharecontainer").classList.add("hidden");
 		document.getElementById("advancedloadfile").classList.add("hidden");
 		document.getElementById("welcomecontainer").classList.add("hidden");
+		document.getElementById("savesamplerpresetcontainer").classList.add("hidden");
 		document.getElementById("dynatempcontainer").classList.add("hidden");
 		document.getElementById("secondepsamplecontainer").classList.add("hidden");
 		document.getElementById("admincontainer").classList.add("hidden");
@@ -15516,20 +15517,21 @@ Current version indicated by LITEVER below.
 			document.getElementById("presetsdesc").innerText = found.description;
 			document.getElementById("dynatemp_overview").innerText = (document.getElementById("dynatemp_range").value!=0?"ON":"OFF");
 			document.getElementById("second_ep_overview").innerText = (document.getElementById("second_ep_qty").value>0 && document.getElementById("second_ep_url").value!=""?"ON":"OFF");
-			// these don't get set as no samplers use them, just reset to defeault
-			document.getElementById("miro_type").value = 0;
-			document.getElementById("dry_multiplier").value = 0;
-			document.getElementById("xtc_probability").value = 0;
-			document.getElementById("sampler_seed").value = -1;
-			document.getElementById("miro_tau").value = defaultsettings.miro_tau;
-			document.getElementById("miro_eta").value = defaultsettings.miro_eta;
-			document.getElementById("dry_base").value = defaultsettings.dry_base;
-			document.getElementById("dry_allowed_length").value = defaultsettings.dry_allowed_length;
-			document.getElementById("dry_penalty_last_n").value = defaultsettings.dry_penalty_last_n;
-			document.getElementById("xtc_threshold").value = defaultsettings.xtc_threshold;
-			document.getElementById("adaptivep_target").value = defaultsettings.adaptivep_target;
-			document.getElementById("adaptivep_decay").value = defaultsettings.adaptivep_decay;
-			if (1000 <= p_value && p_value < 9999) {
+			// setting these for local/remote Koboldcpp, defaults otherwise (these don't get set as no samplers use them in remote APIs)
+			let is_kccpd = document.getElementById("customapidropdown").value === "1";
+			document.getElementById("miro_type").value = is_kccpd? found.miro_type ?? 0 : 0;
+			document.getElementById("dry_multiplier").value = is_kccpd? found.dry_multiplier ?? 0 : 0;
+			document.getElementById("xtc_probability").value = is_kccpd? found.xtc_probability ?? 0 : 0;
+			document.getElementById("sampler_seed").value = is_kccpd? found.sampler_seed ?? -1 : -1;
+			document.getElementById("miro_tau").value = is_kccpd? found.miro_tau ?? defaultsettings.miro_tau : defaultsettings.miro_tau;
+			document.getElementById("miro_eta").value = is_kccpd? found.miro_eta ?? defaultsettings.miro_eta : defaultsettings.miro_eta;
+			document.getElementById("dry_base").value = is_kccpd? found.dry_base ?? defaultsettings.dry_base : defaultsettings.dry_base;
+			document.getElementById("dry_allowed_length").value = is_kccpd? found.dry_allowed_length ?? defaultsettings.dry_allowed_length : defaultsettings.dry_allowed_length;
+			document.getElementById("dry_penalty_last_n").value = is_kccpd? found.dry_penalty_last_n ?? defaultsettings.dry_penalty_last_n : defaultsettings.dry_penalty_last_n;
+			document.getElementById("xtc_threshold").value = is_kccpd? found.xtc_threshold ?? defaultsettings.xtc_threshold : defaultsettings.xtc_threshold;
+			document.getElementById("adaptivep_target").value = is_kccpd? found.adaptivep_target ?? defaultsettings.adaptivep_target : defaultsettings.adaptivep_target;
+			document.getElementById("adaptivep_decay").value = is_kccpd? found.adaptivep_decay ?? defaultsettings.adaptivep_decay : defaultsettings.adaptivep_decay;
+			if (found.is_custom) {
 				document.getElementById("btn_delete_samplerpreset").disabled = false;
 			}
 		} else {
@@ -15553,11 +15555,11 @@ Current version indicated by LITEVER below.
 	function save_sampler_preset() {
 		let presetname = document.getElementById("sampler_preset_name").value.trim();
 		if (presetname == "") {
-			alert("Preset name cannot be empty." + " TODO: use custom alert box");
+			showToast("A preset name is required.");
 			return;
 		}
 		if (samplerpresets.some((p) => p.preset === presetname)) {
-			msgbox("Preset name already exists. Please choose a different name.", "Error", false); // TODO: use custom message box
+			msgbox("That preset name already exists. Please choose a different name.", "Error", false);
 			return;
 		}
 
@@ -15566,7 +15568,6 @@ Current version indicated by LITEVER below.
 			preset: presetname,
 			description: document.getElementById("sampler_preset_description").value.trim(),
 			temp: parseFloat(document.getElementById("temperature").value),
-			max_length: parseInt(document.getElementById("max_length").value, 10),
 			dynatemp_range: parseFloat(document.getElementById("dynatemp_range").value),
 			dynatemp_exponent: parseFloat(document.getElementById("dynatemp_exponent").value),
 			smoothing_factor: parseFloat(document.getElementById("smoothing_factor").value),
@@ -15706,7 +15707,6 @@ Current version indicated by LITEVER below.
 			document.getElementById("presetsdesc").innerText = found.description;
 			let changed = (document.getElementById("temperature").value != found.temp ||
 			document.getElementById("presence_penalty").value != found.presence_penalty ||
-			document.getElementById("adaptivep_target").value != -1 ||
 			document.getElementById("min_p").value != found.min_p ||
 			document.getElementById("dynatemp_range").value != found.dynatemp_range ||
 			document.getElementById("dynatemp_exponent").value != found.dynatemp_exponent ||
@@ -15718,14 +15718,24 @@ Current version indicated by LITEVER below.
 			document.getElementById("top_a").value != found.top_a ||
 			document.getElementById("typ_s").value != found.typical ||
 			document.getElementById("tfs_s").value != found.tfs ||
-			document.getElementById("miro_type").value != 0 ||
-			document.getElementById("dry_multiplier").value != 0 ||
-			document.getElementById("xtc_probability").value != 0 ||
-			document.getElementById("sampler_seed").value != -1 ||
 			document.getElementById("rep_pen").value != found.rep_pen ||
 			document.getElementById("rep_pen_range").value != found.rep_pen_range ||
 			document.getElementById("rep_pen_slope").value != found.rep_pen_slope ||
-			document.getElementById("sampler_order").value != found.sampler_order.toString());
+			document.getElementById("sampler_order").value != found.sampler_order.toString()) ||
+
+			document.getElementById("miro_type").value != (found.miro_type ?? 0) ||
+			document.getElementById("dry_multiplier").value != (found.dry_multiplier ?? 0) ||
+			document.getElementById("xtc_probability").value != (found.xtc_probability ?? 0) ||
+			document.getElementById("sampler_seed").value != (found.sampler_seed ?? -1) ||
+			document.getElementById("miro_tau").value != (found.miro_tau ?? defaultsettings.miro_tau) ||
+			document.getElementById("miro_eta").value != (found.miro_eta ?? defaultsettings.miro_eta) ||
+			document.getElementById("dry_base").value != (found.dry_base ?? defaultsettings.dry_base) ||
+			document.getElementById("dry_allowed_length").value != (found.dry_allowed_length ?? defaultsettings.dry_allowed_length) ||
+			document.getElementById("dry_penalty_last_n").value != (found.dry_penalty_last_n ?? defaultsettings.dry_penalty_last_n) ||
+			document.getElementById("xtc_threshold").value != (found.xtc_threshold ?? defaultsettings.xtc_threshold) ||
+			document.getElementById("adaptivep_target").value != (found.adaptivep_target ?? defaultsettings.adaptivep_target) ||
+			document.getElementById("adaptivep_decay").value != (found.adaptivep_decay ?? defaultsettings.adaptivep_decay);
+
 			if(changed)
 			{
 				document.getElementById("samplerpresets").value = 9999;
