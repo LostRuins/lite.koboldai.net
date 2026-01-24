@@ -12218,11 +12218,15 @@ Current version indicated by LITEVER below.
 		mainmenu_untab(false);
 	}
 
-	function show_savesamplerpreset()
+	function show_savesamplerpreset(doShow)
 	{
-		document.getElementById("sampler_preset_name").value = "";
-		document.getElementById("sampler_preset_description").value = "";
-		document.getElementById("savesamplerpresetcontainer").classList.remove("hidden");
+		if (doShow) {
+			document.getElementById("sampler_preset_name").value = "";
+			document.getElementById("sampler_preset_description").value = "";
+			document.getElementById("savesamplerpresetcontainer").classList.remove("hidden");
+		} else {
+			document.getElementById("savesamplerpresetcontainer").classList.add("hidden");
+		}
 	}
 
 	function preview_dynatemp(isModifiedRange)
@@ -15358,7 +15362,6 @@ Current version indicated by LITEVER below.
 		npresets += `<option value="9999" title="User Defined Settings">[Custom]</option>`;
 		document.getElementById("samplerpresets").innerHTML = npresets;
 		document.getElementById("samplerpresets").value = localsettings.last_selected_preset;
-		document.getElementById("btn_delete_samplerpreset").disabled = (1000 <= localsettings.last_selected_preset && localsettings.last_selected_preset < 9999) ? false : true;
 
 		//populate instruct presets
 		let inspresets = `<option value="0">[Custom]</option>`;
@@ -15367,6 +15370,7 @@ Current version indicated by LITEVER below.
 			inspresets += `<option value="${i+1}">${instructpresets[i].name}</option>`
 		}
 		document.getElementById("instruct_tag_format").innerHTML = inspresets;
+		update_preset_btns();
 		edit_instruct_tag_format();
 
 		let wbvoices = "";
@@ -15501,7 +15505,6 @@ Current version indicated by LITEVER below.
 	}
 
 	function toggle_preset() {
-		document.getElementById("btn_delete_samplerpreset").disabled = true;
 		let p_select = document.getElementById("samplerpresets");
 		let p_name = p_select.options[p_select.selectedIndex].text;
 		let p_value = p_select.value;
@@ -15540,11 +15543,27 @@ Current version indicated by LITEVER below.
 			document.getElementById("xtc_threshold").value = found.xtc_threshold ? found.xtc_threshold : defaultsettings.xtc_threshold;
 			document.getElementById("adaptivep_target").value = found.adaptivep_target ? found.adaptivep_target : defaultsettings.adaptivep_target;
 			document.getElementById("adaptivep_decay").value = found.adaptivep_decay ? found.adaptivep_decay : defaultsettings.adaptivep_decay;
-			if (found.is_custom) {
-				document.getElementById("btn_delete_samplerpreset").disabled = false;
-			}
 		} else {
 			document.getElementById("presetsdesc").innerText = "";
+		}
+
+		update_preset_btns();
+	}
+
+	function update_preset_btns()
+	{
+		let p_select = document.getElementById("samplerpresets");
+		let p_name = p_select.options[p_select.selectedIndex].text;
+		let found = samplerpresets.find(p => p.preset === p_name);
+		if(found && found.is_custom)
+		{
+			document.getElementById("btn_delete_samplerpreset").classList.remove("hidden");
+			document.getElementById("btn_save_samplerpreset").classList.add("hidden");
+		}
+		else
+		{
+			document.getElementById("btn_delete_samplerpreset").classList.add("hidden");
+			document.getElementById("btn_save_samplerpreset").classList.remove("hidden");
 		}
 	}
 
@@ -15640,8 +15659,8 @@ Current version indicated by LITEVER below.
 
 		document.getElementById("samplerpresets").value = new_value;
 		document.getElementById("presetsdesc").innerText = newpreset.description;
-		document.getElementById("savesamplerpresetcontainer").classList.add("hidden");
-		document.getElementById("btn_delete_samplerpreset").disabled = false;
+		show_savesamplerpreset(false);
+		update_preset_btns();
 	}
 
 	function delete_sampler_preset() {
@@ -15653,12 +15672,12 @@ Current version indicated by LITEVER below.
 			msgboxYesNo(`Are you sure you want to delete the preset '${samplerpresets[found_idx].preset}'?`, "Delete Preset", () => {
 				p_select.removeChild(p_opt);
 				p_select.value = "9999";
-				document.getElementById("btn_delete_samplerpreset").disabled = true;
 				document.getElementById("presetsdesc").innerText = "Custom settings with modified settings.";
 				samplerpresets.splice(found_idx, 1);
 				store_samplerpresets();
 				validate_samplers(true);
 				localsettings.last_selected_preset = document.getElementById("samplerpresets").value;
+				update_preset_btns();
 			}, () => {});
 		} else {
 			alert("Cannot delete a predefined preset.");
@@ -28910,7 +28929,7 @@ Current version indicated by LITEVER below.
 								<select title="Sampler Preset" class="form-control" id="samplerpresets" style="margin:0px 0 0 auto;" onchange="toggle_preset()">
 									<option value="1" title="Select a Preset">[Default]</option>
 								</select>
-								<button type="button" class="btn btn-primary" style="margin: 0px 2px; padding: 3px; font-size: 12px;" id="btn_save_samplerpreset" onclick="show_savesamplerpreset()">Save</button>
+								<button type="button" class="btn btn-primary" style="margin: 0px 2px; padding: 3px; font-size: 12px;" id="btn_save_samplerpreset" onclick="show_savesamplerpreset(true)">Save</button>
 								<button type="button" class="btn btn-primary bg_red" style="margin: 0px; padding: 3px; font-size: 12px;" id="btn_delete_samplerpreset" onclick="delete_sampler_preset()">Delete</button>
 						</div>
 						</div>
@@ -30891,6 +30910,7 @@ Current version indicated by LITEVER below.
 			</div>
 			<div class="popupfooter">
 				 <button type="button" class="btn btn-primary" onclick="save_sampler_preset()">Ok</button>
+				 <button type="button" class="btn btn-primary" onclick="show_savesamplerpreset(false)">Close</button>
 			</div>
 		</div>
 	</div>
