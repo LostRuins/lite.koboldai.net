@@ -16972,6 +16972,8 @@ Current version indicated by LITEVER below.
 		tts_is_processing = false;
 		tts_speak_input_queue = [];
 		tts_speak_output_queue = [];
+		tts_queue_embed = false;
+		tts_queue_download = false;
 		idle_timer = 0;
 		idle_triggered_counter = 0;
 		gametext_arr = [];
@@ -18189,15 +18191,19 @@ Current version indicated by LITEVER below.
 
 	var tts_speak_input_queue = [];
 	var tts_speak_output_queue = [];
+	var tts_queue_embed = false;
+	var tts_queue_download = false;
 	function tts_speak(text, do_download=false, do_embed_tts=false, is_test=false)
 	{
 		let ssval = localsettings.tts_mode;
 		let streamallowed = (ssval==XTTS_ID || ssval==ALLTALK_ID || ssval==OAI_TTS_ID || ssval==KCPP_TTS_ID || ssval==POLLINATIONS_TTS_ID);
-		if(streamallowed && localsettings.tts_stream && !is_test && !do_embed_tts && !do_download)
+		if(streamallowed && localsettings.tts_stream && !is_test)
 		{
 			//split into chunks by newline
 			tts_speak_output_queue = [];
 			tts_speak_input_queue = text.split("\n").map(chunk => chunk.trim()).filter(chunk => chunk.length > 0);
+			tts_queue_embed = do_embed_tts;
+			tts_queue_download = do_download;
 		}
 		else
 		{
@@ -18209,7 +18215,7 @@ Current version indicated by LITEVER below.
 		if(tts_speak_input_queue.length>0 && !tts_is_processing && tts_speak_output_queue.length < 3)
 		{
 			let firstChunk = tts_speak_input_queue.shift();
-			tts_speak_direct(firstChunk,false,false,false,true);
+			tts_speak_direct(firstChunk,tts_queue_download,tts_queue_embed,false,true);
 		}
 		if(tts_speak_output_queue.length > 0 && !tts_is_playing)
 		{
@@ -29381,7 +29387,7 @@ Current version indicated by LITEVER below.
 							<input title="Save Narrations" type="checkbox" id="embed_narrations" class="push-right">
 						</div>
 						<div class="settinglabel" id="narratestreamingdiv">
-							<div class="justifyleft">Narration streaming </div>
+							<div class="justifyleft">Narration streaming <span class="helpicon">?<span class="helptext">Break up the narration into multiple chunks so they can be generated while speaking. Does not work well with TTS embedding or downloading.</span></span></div>
 							<div class="push-right">
 							<input title="Narration Streaming" type="checkbox" id="tts_stream">
 							</div>
