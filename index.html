@@ -3934,7 +3934,7 @@ Current version indicated by LITEVER below.
 	const poll_interval_base_img = 3800;
 	const poll_interval_idle = 1000;
 	const poll_interval_multiplayer = 1000; //every 1s
-	const poll_interval_chunked_tts = 500;
+	const poll_interval_chunked_tts = 300;
 	const max_branches = 6;
 
 	const horde_base_url = "https://aihorde.net"
@@ -16970,6 +16970,8 @@ Current version indicated by LITEVER below.
 	function restart_new_game(save = true, keep_memory = false) {
 		tts_is_playing = false;
 		tts_is_processing = false;
+		tts_speak_input_queue = [];
+		tts_speak_output_queue = [];
 		idle_timer = 0;
 		idle_triggered_counter = 0;
 		gametext_arr = [];
@@ -18185,7 +18187,8 @@ Current version indicated by LITEVER below.
 		reader.readAsDataURL(file);
 	}
 
-	var tts_speak_queue = [];
+	var tts_speak_input_queue = [];
+	var tts_speak_output_queue = [];
 	function tts_speak(text, do_download=false, do_embed_tts=false, is_test=false)
 	{
 		let ssval = localsettings.tts_mode;
@@ -18193,23 +18196,42 @@ Current version indicated by LITEVER below.
 		if(streamallowed && localsettings.tts_stream && !is_test && !do_embed_tts && !do_download)
 		{
 			//split into chunks by newline
-			tts_speak_queue = text.split("\n").map(chunk => chunk.trim()).filter(chunk => chunk.length > 0);
+			tts_speak_output_queue = [];
+			tts_speak_input_queue = text.split("\n").map(chunk => chunk.trim()).filter(chunk => chunk.length > 0);
 		}
 		else
 		{
-			tts_speak_direct(text,do_download,do_embed_tts,is_test);
+			tts_speak_direct(text,do_download,do_embed_tts,is_test,false);
 		}
 	}
 	function poll_chunked_tts()
 	{
-		if(tts_speak_queue.length>0 && !tts_is_playing && !tts_is_processing)
+		if(tts_speak_input_queue.length>0 && !tts_is_processing && tts_speak_output_queue.length < 3)
 		{
-			let firstChunk = tts_speak_queue.shift();
-			tts_speak_direct(firstChunk,false,false,false);
+			let firstChunk = tts_speak_input_queue.shift();
+			tts_speak_direct(firstChunk,false,false,false,true);
+		}
+		if(tts_speak_output_queue.length > 0 && !tts_is_playing)
+		{
+			let firstAudio = tts_speak_output_queue.shift();
+			const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+			const playSound = audioContext.createBufferSource();
+			playSound.buffer = firstAudio;
+			playSound.connect(audioContext.destination);
+			tts_is_playing = true;
+			update_submit_button(false);
+			playSound.start(audioContext.currentTime);
+			playSound.onended = function() {
+				setTimeout(() => {
+					tts_is_playing = false;
+					update_submit_button(false);
+					console.log("Audio finished playing");
+				},100);
+			};
 		}
 	}
 
-	function tts_speak_direct(text, do_download=false, do_embed_tts=false, is_test=false)
+	function tts_speak_direct(text, do_download=false, do_embed_tts=false, is_test=false, append_to_outqueue=false)
 	{
 		if(!text || text=="" || text.trim()=="")
 		{
@@ -18318,20 +18340,27 @@ Current version indicated by LITEVER below.
 					{
 						tts_embed_audio(audiofile_ref);
 					}
-					const playSound = audioContext.createBufferSource();
-					playSound.buffer = decodedData;
-					playSound.connect(audioContext.destination);
 					tts_is_processing = false;
-					tts_is_playing = true;
-					update_submit_button(false);
-					playSound.start(audioContext.currentTime);
-					playSound.onended = function() {
-						setTimeout(() => {
-							tts_is_playing = false;
-							update_submit_button(false);
-							console.log("Audio finished playing");
-						},300);
-					};
+					if(append_to_outqueue)
+					{
+						tts_speak_output_queue.push(decodedData);
+					}
+					else
+					{
+						const playSound = audioContext.createBufferSource();
+						playSound.buffer = decodedData;
+						playSound.connect(audioContext.destination);
+						tts_is_playing = true;
+						update_submit_button(false);
+						playSound.start(audioContext.currentTime);
+						playSound.onended = function() {
+							setTimeout(() => {
+								tts_is_playing = false;
+								update_submit_button(false);
+								console.log("Audio finished playing");
+							},300);
+						};
+					}
 				}).catch((error) => {
 					tts_is_playing = false;
 					tts_is_processing = false;
@@ -18367,20 +18396,27 @@ Current version indicated by LITEVER below.
 					{
 						tts_embed_audio(audiofile_ref);
 					}
-					const playSound = audioContext.createBufferSource();
-					playSound.buffer = decodedData;
-					playSound.connect(audioContext.destination);
 					tts_is_processing = false;
-					tts_is_playing = true;
-					update_submit_button(false);
-					playSound.start(audioContext.currentTime);
-					playSound.onended = function() {
-						setTimeout(() => {
-							tts_is_playing = false;
-							update_submit_button(false);
-							console.log("Audio finished playing");
-						},300);
-					};
+					if(append_to_outqueue)
+					{
+						tts_speak_output_queue.push(decodedData);
+					}
+					else
+					{
+						const playSound = audioContext.createBufferSource();
+						playSound.buffer = decodedData;
+						playSound.connect(audioContext.destination);
+						tts_is_playing = true;
+						update_submit_button(false);
+						playSound.start(audioContext.currentTime);
+						playSound.onended = function() {
+							setTimeout(() => {
+								tts_is_playing = false;
+								update_submit_button(false);
+								console.log("Audio finished playing");
+							},300);
+						};
+					}
 				}).catch((error) => {
 					tts_is_playing = false;
 					tts_is_processing = false;
@@ -18417,20 +18453,27 @@ Current version indicated by LITEVER below.
 						{
 							tts_embed_audio(audiofile_ref);
 						}
-						const playSound = audioContext.createBufferSource();
-						playSound.buffer = decodedData;
-						playSound.connect(audioContext.destination);
 						tts_is_processing = false;
-						tts_is_playing = true;
-						update_submit_button(false);
-						playSound.start(audioContext.currentTime);
-						playSound.onended = function() {
-							setTimeout(() => {
-								tts_is_playing = false;
-								update_submit_button(false);
-								console.log("Audio finished playing");
-							},300);
-						};
+						if(append_to_outqueue)
+						{
+							tts_speak_output_queue.push(decodedData);
+						}
+						else
+						{
+							const playSound = audioContext.createBufferSource();
+							playSound.buffer = decodedData;
+							playSound.connect(audioContext.destination);
+							tts_is_playing = true;
+							update_submit_button(false);
+							playSound.start(audioContext.currentTime);
+							playSound.onended = function() {
+								setTimeout(() => {
+									tts_is_playing = false;
+									update_submit_button(false);
+									console.log("Audio finished playing");
+								},300);
+							};
+						}
 					}).catch((error) => {
 						tts_is_playing = false;
 						tts_is_processing = false;
@@ -18445,20 +18488,27 @@ Current version indicated by LITEVER below.
 
 					let playDecodedAllTalkData = function(decodedData)
 					{
-						const playSound = audioContext.createBufferSource();
-						playSound.buffer = decodedData;
-						playSound.connect(audioContext.destination);
 						tts_is_processing = false;
-						tts_is_playing = true;
-						update_submit_button(false);
-						playSound.start(audioContext.currentTime);
-						playSound.onended = function() {
-							setTimeout(() => {
-								tts_is_playing = false;
-								update_submit_button(false);
-								console.log("Audio finished playing");
-							},300);
-						};
+						if(append_to_outqueue)
+						{
+							tts_speak_output_queue.push(decodedData);
+						}
+						else
+						{
+							const playSound = audioContext.createBufferSource();
+							playSound.buffer = decodedData;
+							playSound.connect(audioContext.destination);
+							tts_is_playing = true;
+							update_submit_button(false);
+							playSound.start(audioContext.currentTime);
+							playSound.onended = function() {
+								setTimeout(() => {
+									tts_is_playing = false;
+									update_submit_button(false);
+									console.log("Audio finished playing");
+								},300);
+							};
+						}
 					}
 
 					if (isAlltalkAltEp) {
