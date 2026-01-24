@@ -18421,20 +18421,23 @@ Current version indicated by LITEVER below.
 		if(tts_speak_output_queue.length > 0 && !tts_is_playing)
 		{
 			let firstAudio = tts_speak_output_queue.shift();
-			const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-			const playSound = audioContext.createBufferSource();
-			playSound.buffer = firstAudio;
-			playSound.connect(audioContext.destination);
-			tts_is_playing = true;
-			update_submit_button(false);
-			playSound.start(audioContext.currentTime);
-			playSound.onended = function() {
-				setTimeout(() => {
-					tts_is_playing = false;
-					update_submit_button(false);
-					console.log("Audio finished playing");
-				},100);
-			};
+			if(firstAudio)
+			{
+				const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+				const playSound = audioContext.createBufferSource();
+				playSound.buffer = firstAudio;
+				playSound.connect(audioContext.destination);
+				update_submit_button(false);
+				playSound.start(audioContext.currentTime);
+				tts_is_playing = true;
+				playSound.onended = function() {
+					setTimeout(() => {
+						tts_is_playing = false;
+						update_submit_button(false);
+						console.log("Audio finished playing");
+					},100);
+				};
+			}
 		}
 	}
 
