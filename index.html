@@ -12170,6 +12170,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("welcomecontainer").classList.contains("hidden") &&
 			document.getElementById("dynatempcontainer").classList.contains("hidden") &&
 			document.getElementById("secondepsamplecontainer").classList.contains("hidden") &&
+			document.getElementById("grammarcontainer").classList.contains("hidden") &&
 			document.getElementById("admincontainer").classList.contains("hidden")
 		);
 	}
@@ -12213,6 +12214,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("savesamplerpresetcontainer").classList.add("hidden");
 		document.getElementById("dynatempcontainer").classList.add("hidden");
 		document.getElementById("secondepsamplecontainer").classList.add("hidden");
+		document.getElementById("grammarcontainer").classList.add("hidden");
 		document.getElementById("admincontainer").classList.add("hidden");
 		stop_webcam();
 		mainmenu_untab(false);
@@ -12295,13 +12297,18 @@ Current version indicated by LITEVER below.
 	}
 
 	var pendinggrammar = "";
-	function selectGrammar()
+	function showGrammar()
 	{
-		inputBox("Enter GBNF Grammar Format to use.\nLeave blank to disable.\n","Set GBNF Grammar Format",pendinggrammar,"",()=>{
-			let userinput = getInputBoxValue().trim();
-			pendinggrammar = userinput;
-			console.log("Saved grammar: " + pendinggrammar);
-		},false,true);
+		document.getElementById("grammarcontainer").classList.remove("hidden");
+		document.getElementById("grammarinputarea").value = pendinggrammar;
+	}
+	function confirmGrammar()
+	{
+		let userinput = document.getElementById("grammarinputarea").value.trim();
+		pendinggrammar = userinput;
+		console.log("Saved grammar: " + pendinggrammar);
+		sampler_setting_tweaked();
+		document.getElementById("grammarcontainer").classList.add("hidden");
 	}
 
 	var pendingsequencebreakers = [];
@@ -12330,7 +12337,7 @@ Current version indicated by LITEVER below.
 
 	function expand_tokens_section(targetid)
 	{
-		let tablist = ["expandregexreplace","expandthinking","expandtokenbans","expandlogitbias","expandplaceholdertags","expandguidance"];
+		let tablist = ["expandstopseq","expandregexreplace","expandthinking","expandtokenbans","expandlogitbias","expandplaceholdertags","expandguidance"];
 
 		for(let i=0;i<tablist.length;++i)
 		{
@@ -15492,7 +15499,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("img_steps").value = localsettings.img_steps;
 		document.getElementById("prompt_for_savename").checked = localsettings.prompt_for_savename;
 		document.getElementById("img_allownsfw").checked = localsettings.img_allownsfw;
-		setting_tweaked();
+		sampler_setting_tweaked();
 	}
 
 	function update_horde_sdmodels()
@@ -15518,10 +15525,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("rep_pen").value = document.getElementById("rep_pen_slide").value = found.rep_pen;
 			document.getElementById("top_p").value = document.getElementById("top_p_slide").value = found.top_p;
 			document.getElementById("top_k").value = document.getElementById("top_k_slide").value = found.top_k;
-			// advanced samplers
-			document.getElementById("eos_ban_mode").value = found.eos_ban_mode || defaultsettings.eos_ban_mode;
-			document.getElementById("token_count_multiplier").value = found.token_count_multiplier || defaultsettings.token_count_multiplier;
-			document.getElementById("sampler_order").value = found.sampler_order.toString();
+			// advanced samplers.  note: most of these samplers are only used in koboldcpp
 			document.getElementById("top_a").value = found.top_a;
 			document.getElementById("typ_s").value = found.typical;
 			document.getElementById("tfs_s").value = found.tfs;
@@ -15532,14 +15536,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("rep_pen_slope").value = found.rep_pen_slope;
 			document.getElementById("smoothing_factor").value = found.smoothing_factor;
 			document.getElementById("smoothing_curve").value = found.smoothing_curve;
-			document.getElementById("dynatemp_range").value = found.dynatemp_range;
-			document.getElementById("dynatemp_exponent").value = found.dynatemp_exponent;
-			document.getElementById("dynatemp_overview").innerText = (document.getElementById("dynatemp_range").value!=0?"ON":"OFF");
-			document.getElementById("second_ep_qty").value = found.second_ep_qty || defaultsettings.second_ep_qty;
-			document.getElementById("second_ep_model").value = found.second_ep_model || defaultsettings.second_ep_model;
-			document.getElementById("second_ep_url").value = found.second_ep_url || defaultsettings.second_ep_url;
-			document.getElementById("second_ep_overview").innerText = (document.getElementById("second_ep_qty").value>0 && document.getElementById("second_ep_url").value!=""?"ON":"OFF");
-			// note: these samplers are only used in koboldcpp
+			document.getElementById("sampler_order").value = found.sampler_order.toString();
 			document.getElementById("miro_type").value = found.miro_type ? found.miro_type : defaultsettings.miro_type;
 			document.getElementById("miro_tau").value = found.miro_tau ? found.miro_tau : defaultsettings.miro_tau;
 			document.getElementById("miro_eta").value = found.miro_eta ? found.miro_eta : defaultsettings.miro_eta;
@@ -15553,7 +15550,14 @@ Current version indicated by LITEVER below.
 			document.getElementById("adaptivep_target").value = found.adaptivep_target ? found.adaptivep_target : defaultsettings.adaptivep_target;
 			document.getElementById("adaptivep_decay").value = found.adaptivep_decay ? found.adaptivep_decay : defaultsettings.adaptivep_decay;
 			document.getElementById("nsigma").value = found.nsigma;
-			pendinggrammar = found.grammar || defaultsettings.grammar
+			pendinggrammar = found.grammar ? found.grammar : defaultsettings.grammar;
+			document.getElementById("dynatemp_range").value = found.dynatemp_range;
+			document.getElementById("dynatemp_exponent").value = found.dynatemp_exponent;
+			document.getElementById("dynatemp_overview").innerText = (document.getElementById("dynatemp_range").value!=0?"ON":"OFF");
+			document.getElementById("second_ep_qty").value = found.second_ep_qty || defaultsettings.second_ep_qty;
+			document.getElementById("second_ep_model").value = found.second_ep_model || defaultsettings.second_ep_model;
+			document.getElementById("second_ep_url").value = found.second_ep_url || defaultsettings.second_ep_url;
+			document.getElementById("second_ep_overview").innerText = (document.getElementById("second_ep_qty").value>0 && document.getElementById("second_ep_url").value!=""?"ON":"OFF");
 		} else {
 			document.getElementById("presetsdesc").innerText = "";
 		}
@@ -15655,9 +15659,6 @@ Current version indicated by LITEVER below.
 			top_p: parseFloat(document.getElementById("top_p").value),
 			top_k: parseInt(document.getElementById("top_k").value, 10),
 
-			eos_ban_mode: document.getElementById("eos_ban_mode").value,
-			token_count_multiplier: document.getElementById("token_count_multiplier").value,
-			sampler_order: document.getElementById("sampler_order").value.split(",").map(x => parseInt(x, 10)),
 			top_a: parseFloat(document.getElementById("top_a").value),
 			typical: parseFloat(document.getElementById("typ_s").value),
 			tfs: parseFloat(document.getElementById("tfs_s").value),
@@ -15668,7 +15669,7 @@ Current version indicated by LITEVER below.
 			rep_pen_slope: parseFloat(document.getElementById("rep_pen_slope").value),
 			smoothing_factor: parseFloat(document.getElementById("smoothing_factor").value),
 			smoothing_curve: parseFloat(document.getElementById("smoothing_curve").value),
-
+			sampler_order: document.getElementById("sampler_order").value.split(",").map(x => parseInt(x, 10)),
 			miro_type: parseFloat(document.getElementById("miro_type").value),
 			miro_tau: parseFloat(document.getElementById("miro_tau").value),
 			miro_eta: parseFloat(document.getElementById("miro_eta").value),
@@ -15788,7 +15789,7 @@ Current version indicated by LITEVER below.
 	}
 
 	//check if any setting is modified from current preset, and set to custom if so
-	function setting_tweaked() {
+	function sampler_setting_tweaked() {
 		var p_select = document.getElementById("samplerpresets");
 		if (p_select.value == 9999) {
 			document.getElementById("presetsdesc").innerText = "Custom settings with modified settings.";
@@ -15802,35 +15803,38 @@ Current version indicated by LITEVER below.
 		if (found) {
 			document.getElementById("presetsdesc").innerText = found.description;
 			let changed = (document.getElementById("temperature").value != found.temp ||
-			document.getElementById("presence_penalty").value != found.presence_penalty ||
-			document.getElementById("min_p").value != found.min_p ||
-			document.getElementById("dynatemp_range").value != found.dynatemp_range ||
-			document.getElementById("dynatemp_exponent").value != found.dynatemp_exponent ||
-			document.getElementById("smoothing_factor").value != found.smoothing_factor ||
-			document.getElementById("smoothing_curve").value != found.smoothing_curve ||
-			document.getElementById("nsigma").value != found.nsigma ||
-			document.getElementById("top_k").value != found.top_k ||
+			document.getElementById("rep_pen").value != found.rep_pen ||
 			document.getElementById("top_p").value != found.top_p ||
+			document.getElementById("top_k").value != found.top_k ||
 			document.getElementById("top_a").value != found.top_a ||
 			document.getElementById("typ_s").value != found.typical ||
 			document.getElementById("tfs_s").value != found.tfs ||
-			document.getElementById("rep_pen").value != found.rep_pen ||
+			document.getElementById("min_p").value != found.min_p ||
+			document.getElementById("presence_penalty").value != found.presence_penalty ||
+			document.getElementById("sampler_seed").value != (found.sampler_seed != null ? found.sampler_seed : defaultsettings.sampler_seed) ||
 			document.getElementById("rep_pen_range").value != found.rep_pen_range ||
 			document.getElementById("rep_pen_slope").value != found.rep_pen_slope ||
+			document.getElementById("smoothing_factor").value != found.smoothing_factor ||
+			document.getElementById("smoothing_curve").value != found.smoothing_curve ||
 			document.getElementById("sampler_order").value != found.sampler_order.toString()) ||
-
 			document.getElementById("miro_type").value != (found.miro_type != null ? found.miro_type : defaultsettings.miro_type) ||
-			document.getElementById("dry_multiplier").value != (found.dry_multiplier != null ? found.dry_multiplier : defaultsettings.dry_multiplier) ||
-			document.getElementById("xtc_probability").value != (found.xtc_probability != null ? found.xtc_probability : defaultsettings.xtc_probability) ||
-			document.getElementById("sampler_seed").value != (found.sampler_seed != null ? found.sampler_seed : defaultsettings.sampler_seed) ||
 			document.getElementById("miro_tau").value != (found.miro_tau != null ? found.miro_tau : defaultsettings.miro_tau) ||
 			document.getElementById("miro_eta").value != (found.miro_eta != null ? found.miro_eta : defaultsettings.miro_eta) ||
+			document.getElementById("dry_multiplier").value != (found.dry_multiplier != null ? found.dry_multiplier : defaultsettings.dry_multiplier) ||
 			document.getElementById("dry_base").value != (found.dry_base != null ? found.dry_base : defaultsettings.dry_base) ||
 			document.getElementById("dry_allowed_length").value != (found.dry_allowed_length != null ? found.dry_allowed_length : defaultsettings.dry_allowed_length) ||
 			document.getElementById("dry_penalty_last_n").value != (found.dry_penalty_last_n != null ? found.dry_penalty_last_n : defaultsettings.dry_penalty_last_n) ||
 			document.getElementById("xtc_threshold").value != (found.xtc_threshold != null ? found.xtc_threshold : defaultsettings.xtc_threshold) ||
+			document.getElementById("xtc_probability").value != (found.xtc_probability != null ? found.xtc_probability : defaultsettings.xtc_probability) ||
 			document.getElementById("adaptivep_target").value != (found.adaptivep_target != null ? found.adaptivep_target : defaultsettings.adaptivep_target) ||
-			document.getElementById("adaptivep_decay").value != (found.adaptivep_decay != null ? found.adaptivep_decay : defaultsettings.adaptivep_decay);
+			document.getElementById("adaptivep_decay").value != (found.adaptivep_decay != null ? found.adaptivep_decay : defaultsettings.adaptivep_decay) ||
+			document.getElementById("nsigma").value != found.nsigma ||
+			pendinggrammar != (found.grammar ? found.grammar : defaultsettings.grammar) ||
+			document.getElementById("dynatemp_range").value != found.dynatemp_range ||
+			document.getElementById("dynatemp_exponent").value != found.dynatemp_exponent ||
+			document.getElementById("second_ep_qty").value != (found.second_ep_qty != null ? found.second_ep_qty : defaultsettings.second_ep_qty) ||
+			document.getElementById("second_ep_model").value != (found.second_ep_model != null? found.second_ep_model : defaultsettings.second_ep_model) ||
+			document.getElementById("second_ep_url").value != (found.second_ep_url != null ? found.second_ep_url : defaultsettings.second_ep_url);
 
 			if(changed)
 			{
@@ -16325,8 +16329,6 @@ Current version indicated by LITEVER below.
 		localsettings.rep_pen = cleannum(localsettings.rep_pen, 0.1, 5);
 		localsettings.top_p = cleannum(localsettings.top_p, 0.002, 1);
 		localsettings.top_k = cleannum(Math.floor(localsettings.top_k), 0, 300);
-		// advanced samplers
-		localsettings.token_count_multiplier = cleannum(localsettings.token_count_multiplier, 70, 130);
 		localsettings.top_a = cleannum(localsettings.top_a, 0, 1);
 		localsettings.typ_s = cleannum(localsettings.typ_s, 0, 1);
 		localsettings.tfs_s = cleannum(localsettings.tfs_s, 0, 1);
@@ -16354,6 +16356,7 @@ Current version indicated by LITEVER below.
 		localsettings.dynatemp_range = ((localsettings.dynatemp_range > localsettings.temperature) ? localsettings.temperature : ((localsettings.dynatemp_range < -localsettings.temperature) ? -localsettings.temperature : localsettings.dynatemp_range));
 		localsettings.dynatemp_exponent = cleannum(localsettings.dynatemp_exponent, 0.0, 10.0);
 		localsettings.second_ep_qty = cleannum(Math.floor(localsettings.second_ep_qty), 0, 1024);
+		localsettings.token_count_multiplier = cleannum(localsettings.token_count_multiplier, 70, 130);
 		toggle_theme_colors();
 		toggle_sidepanel_mode();
 
@@ -28605,7 +28608,7 @@ Current version indicated by LITEVER below.
 
 			<div class="settingsbody">
 				<!-- format settings menu -->
-				<div id="settingsmenugeneral" class="settingsmenu hidden" onchange="setting_tweaked()">
+				<div id="settingsmenugeneral" class="settingsmenu hidden">
 					<div class="settingitem wide">
 						<h3 style="margin-top: 4px;">Usage Mode</h3>
 						<div>
@@ -28835,7 +28838,7 @@ Current version indicated by LITEVER below.
 				</div>
 
 				<!-- GUI appearance menu -->
-				<div id="settingsmenuappearance" class="settingsmenu hidden" onchange="setting_tweaked()">
+				<div id="settingsmenuappearance" class="settingsmenu hidden">
 					<div class="settingitem wide">
 						<h3 style="margin-top: 4px;">Appearance Settings</h3>
 						<div id="uipicker2" class="settinglabel">
@@ -28943,7 +28946,7 @@ Current version indicated by LITEVER below.
 				</div>
 
 				<!-- sampler settings menu-->
-				<div id="settingsmenusamplers" class="settingsmenu hidden" onchange="setting_tweaked()">
+				<div id="settingsmenusamplers" class="settingsmenu hidden" onchange="sampler_setting_tweaked()">
 					<div class="settingitem wide">
 						<h3 style="margin-top: 4px;">Context Settings</h3>
 						<div class="settingsbox flex wide">
@@ -29076,38 +29079,6 @@ Current version indicated by LITEVER below.
 						<div class="settingsbox">
 							<div style="display:flex;width:100%;">
 								<div class="settinglabel settingcell">
-									<div class="justifyleft">EOS Token Ban <span class="helpicon">?<span
-										class="helptext">Allow the End-Of-Stream (EOS) token and potentially other restricted special tokens to be generated.</span></span></div>
-										<select title="EOS Token Banning Behavior" class="form-control push-right" id="eos_ban_mode">
-										<option value="0">Auto</option>
-										<option value="1">Unban</option>
-										<option value="2">Ban</option>
-										<option value="3">Bypass</option>
-									</select>
-								</div>
-								<div class="settinglabel settingcell">
-									<div class="justifyleft">Token Limit Mult. <span class="helpicon">?<span
-										class="helptext">Adds a multiplier to token limit estimations, useful if token counts are inaccurate. Influences text truncation. Higher values increases token allowance.</span></span></div>
-										<select title="Token Limit Multiplier" class="form-control push-right" id="token_count_multiplier">
-										<option value="70">0.7x</option>
-										<option value="80">0.8x</option>
-										<option value="90">0.9x</option>
-										<option value="100">1.0x</option>
-										<option value="110">1.1x</option>
-										<option value="120">1.2x</option>
-										<option value="130">1.3x</option>
-									</select>
-								</div>
-								<div class="settinglabel settingcell">
-									<div title="Sampler Order" class="justifyleft" style="width:100%">Sampler Order <span class="helpicon">?<span class="helptext">
-									The order by which all 7 samplers are applied, separated by commas. 0=top_k, 1=top_a, 2=top_p, 3=tfs, 4=typ, 5=temp, 6=rep_pen</span></span></div>
-									<div class="justifyleft" style="width:100%;">
-									<input title="Sampler Order List" class="settinglabel miniinput" type="text" placeholder="CSV" value="" id="sampler_order" onblur="validate_samplers()"></div>
-								</div>
-							</div>
-
-							<div style="display:flex;width:100%;">
-								<div class="settinglabel settingcell">
 									<div title="Top-A Sampling. 0 to Deactivate. Range 0 to 1." class="justifyleft" style="width:100%">Top-A</div>
 									<div class="justifyleft" style="width:100%">
 									<input title="Top-A Sampling" class="settinglabel miniinput" type="text" inputmode="decimal" placeholder="0" value="0" id="top_a"></div>
@@ -29162,6 +29133,12 @@ Current version indicated by LITEVER below.
 							</div>
 
 							<div style="display:flex;width:100%;">
+								<div class="settinglabel settingcell">
+									<div title="Sampler Order" class="justifyleft" style="width:100%">Sampler Order <span class="helpicon">?<span class="helptext">
+									The order by which all 7 samplers are applied, separated by commas. 0=top_k, 1=top_a, 2=top_p, 3=tfs, 4=typ, 5=temp, 6=rep_pen</span></span></div>
+									<div class="justifyleft" style="width:100%;">
+									<input title="Sampler Order List" class="settinglabel miniinput" type="text" placeholder="CSV" value="" id="sampler_order" onblur="validate_samplers()"></div>
+								</div>
 								<div class="settinglabel settingcell">
 									<div title="Mirostat" class="justifyleft" style="width:100%">Mirostat <span class="helpicon">?<span class="helptext">
 										Replaces your samplers with mirostat, an alternative sampling method. May not be available depending on backend, not supported on Horde.</span></span></div>
@@ -29282,11 +29259,7 @@ Current version indicated by LITEVER below.
 										Grammar Sampling (KCPP) - Allows you to constrain output to fit specific structures. Resets grammar state every generation unless Retain is checked.</span></span></div>
 									<div id="grammarsupporteddiv" style="display:flex;">
 										<div class="justifyleft" style="height: 30px;width:100%;display: flex;">
-										<button title="Set Grammar GBNF" id="setgrammar" type="button" class="btn btn-primary" style="padding:2px 3px;margin-top:2px;font-size:12px;" onclick="selectGrammar()">GBNF</button>
-										<div style="display:flex;">
-										<div style="margin:2px;margin-top:6px;" title="Do not reset grammar on generate. May not work with multiple users.">Retain </div>
-										<input title="Retain Grammar State" type="checkbox" id="grammar_retain_state" style="padding:2px 3px;">
-										</div>
+										<button title="Set Grammar GBNF" id="setgrammar" type="button" class="btn btn-primary" style="padding:2px 3px;margin-top:2px;font-size:12px;" onclick="showGrammar()">GBNF</button>
 									</div>
 									</div>
 									<div id="grammarunsupporteddiv" class="color_red" style="font-weight:bold;padding:3px;font-size:12px">Unsupported</div>
@@ -29311,7 +29284,7 @@ Current version indicated by LITEVER below.
 				</div>
 
 				<!-- media settings menu-->
-				<div id="settingsmenumedia" class="settingsmenu hidden" onchange="setting_tweaked()">
+				<div id="settingsmenumedia" class="settingsmenu hidden">
 					<div class="settingitem wide">
 						<h3 style="margin-top: 4px;">Images</h3>
 						<div class="settinglabel">
@@ -29714,22 +29687,28 @@ Current version indicated by LITEVER below.
 				</div>
 
 				<!--tokens settings menu top-->
-				<div id="settingsmenutokens" class="settingsmenu hidden" onchange="setting_tweaked()">
+				<div id="settingsmenutokens" class="settingsmenu hidden">
 					<div class="settingitem wide">
-						<h3 style="margin-top: 4px;">Token Settings</h3>
-						<div class="settingsbox">
-							<div class="color_red hidden" id="noextrastopseq">Stop Sequences may be unavailable.</div>
-							<div class="settinglabel">
-								<div class="justifyleft" title="Include default stop sequences. Leave enabled if unsure.">Include Default Stop Sequences </div>
-								<input type="checkbox" title="Include default stop sequences." id="includedefaultstops" style="margin:0px 0 0 auto;" checked>
-							</div>
+					<h3 style="margin-top: 4px;">Token Settings</h3>
 
-							<div class="settinglabel" style="display: flex; column-gap: 4px; margin-bottom: 4px;">
-							<div class="justifyleft">Extra Stopping Sequences <span class="helpicon">?<span
-								class="helptext">Triggers the text generator to stop generating early if this sequence appears, in addition to default stop sequences. If you want multiple sequences, separate them with the following delimiter: ||$||</span></span>
-							</div>
-							<input title="Extra Stopping Sequences" class="menuinput_inline" style="width:calc(100% - 84px)" type="text" placeholder="None" value="" id="extrastopseq">
-							<button type="button" class="btn btn-primary" style="width:80px;padding:2px;" onclick="add_stop_seq()">Add New</button>
+					<div class="settinglabel">
+						<div class="justifyleft">Stop Sequences <span class="helpicon">?<span
+							class="helptext">Allows text generation to stop early if any of the specified sequences are hit. Using default stops adds extra sequences for instruct tags and character names.</span></span></div>
+						<button type="button" title="Stop Sequences" class="btn btn-primary push-right" onclick="expand_tokens_section('expandstopseq')">Expand Section</button>
+					</div>
+					<div id="expandstopseq" class="settingsbox hidden">
+						<div class="color_red hidden" id="noextrastopseq">Stop Sequences may be unavailable.</div>
+						<div class="settinglabel">
+							<div class="justifyleft">Include Default Stop Sequences <span class="helpicon">?<span
+								class="helptext">Adds a few default stop sequences from instruct tags and chat names. Leave enabled if unsure.</span></span></div>
+							<input type="checkbox" title="Include default stop sequences." id="includedefaultstops" style="margin:0px 0 0 auto;" checked>
+						</div>
+						<div class="settinglabel" style="display: flex; column-gap: 4px; margin-bottom: 4px;">
+						<div class="justifyleft">Extra Stopping Sequences <span class="helpicon">?<span
+							class="helptext">If you want multiple sequences, separate them with the following delimiter: ||$||</span></span>
+						</div>
+						<input title="Extra Stopping Sequences" class="menuinput_inline" style="width:calc(100% - 84px)" type="text" placeholder="None" value="" id="extrastopseq">
+						<button type="button" class="btn btn-primary" style="width:80px;padding:2px;" onclick="add_stop_seq()">Add New</button>
 						</div>
 					</div>
 
@@ -29738,7 +29717,7 @@ Current version indicated by LITEVER below.
 						class="helptext">Specify a dictionary of token IDs to modify the probability of occuring. Enter OpenAI-formatted logit bias dictionary. Each key is the integer token IDs and their values are the biases (-100.0 to 100.0). Leave blank to disable.</span></span></div>
 					<button type="button" title="Logit Biases" class="btn btn-primary push-right" onclick="expand_tokens_section('expandlogitbias')">Expand Section</button>
 					</div>
-					<div id="expandlogitbias" class="hidden">
+					<div id="expandlogitbias" class="settingsbox hidden">
 						<div class="color_red hidden" id="nologitbias">Logit bias may be unavailable.</div>
 						<div><a href='https://platform.openai.com/docs/api-reference/chat/create#chat-create-logit_bias' target='_blank' class='color_blueurl'>Input is a JSON object, reference here.</a><br></div>
 						<textarea class="menuinput_multiline" style="width:100%;height: 80px;line-height:1.1;padding:4px;" id="logitbiastxtarea" placeholder="" rows="5"></textarea>
@@ -29760,7 +29739,7 @@ Current version indicated by LITEVER below.
 						class="helptext">Prevents specific words or phrases from being generated, either modifying model vocab or by backtracking and regenerating when they appear. If you want multiple sequences, separate them with the following delimiter: ||$||<br>Note: If you're trying to ban a specific token by ID, you should use Logit Bias instead!</span></span></div>
 						<button type="button" title="Phrase / Token Ban (Anti-Slop)" class="btn btn-primary push-right" onclick="expand_tokens_section('expandtokenbans')">Expand Section</button>
 					</div>
-					<div id="expandtokenbans" class="hidden">
+					<div id="expandtokenbans" class="settingsbox hidden">
 						<div class="color_red hidden" id="notokenbans">Phrase banning may be unavailable.</div>
 						<div style="display: flex; column-gap: 4px; margin-bottom: 4px;">
 						<input class="menuinput_inline" type="text" placeholder="None" value="" id="tokenbans">
@@ -29774,7 +29753,7 @@ Current version indicated by LITEVER below.
 					</div>
 					<button type="button" title="Regex Replace" class="btn btn-primary push-right"  onclick="expand_tokens_section('expandregexreplace')">Expand Section</button>
 					</div>
-					<div id="expandregexreplace" class="hidden">
+					<div id="expandregexreplace" class="settingsbox hidden">
 						<table id="regex_replace_table" class="settinglabel" style="border-spacing: 2px; border-collapse: separate; text-align: center;">
 						</table>
 					</div>
@@ -29785,7 +29764,7 @@ Current version indicated by LITEVER below.
 						</div>
 						<button type="button" title="Regex Replace" class="btn btn-primary push-right" onclick="expand_tokens_section('expandthinking')">Expand Section</button>
 					</div>
-					<div id="expandthinking" class="hidden">
+					<div id="expandthinking" class="settingsbox hidden">
 						<div class="settinglabel">
 							<div class="justifyleft">Start Think Tag <span class="helpicon">?<span class="helptext">Think tag to match for start of CoT.</span></span></div>
 							<div class="push-right">
@@ -29844,7 +29823,7 @@ Current version indicated by LITEVER below.
 						</div>
 						<button type="button" title="Placeholder Tags" class="btn btn-primary push-right" onclick="expand_tokens_section('expandplaceholdertags')">Expand Section</button>
 					</div>
-					<div id="expandplaceholdertags" class="hidden">
+					<div id="expandplaceholdertags" class="settingsbox hidden">
 						<div class="settinglabel">
 							<div class="justifyleft">Enable Placeholder Tags <span class="helpicon">?
 								<span class="helptext">If enabled, substitutes placeholders like {{user}} and other custom placeholders here that get swapped on submit.</span>
@@ -29867,7 +29846,7 @@ Current version indicated by LITEVER below.
 						</div>
 						<button type="button" title="Classifier-Free Guidance" class="btn btn-primary push-right" onclick="expand_tokens_section('expandguidance')">Expand Section</button>
 					</div>
-					<div id="expandguidance" class="hidden">
+					<div id="expandguidance" class="settingsbox hidden">
 						<div class="color_red hidden" id="noguidance">Classifier-Free Guidance may be unavailable.</div>
 						<div class="settinglabel">
 							<div class="justifyleft" style="padding:3px">CFG Prompt </div>
@@ -29886,7 +29865,7 @@ Current version indicated by LITEVER below.
 				</div>
 
 				<!--tools settings menu top-->
-				<div id="settingsmenutools" class="settingsmenu hidden" onchange="setting_tweaked()">
+				<div id="settingsmenutools" class="settingsmenu hidden">
 					<div class="settingitem wide">
 						<h3 style="margin-top: 4px;">MCP Tool Calling</h3>
 						<div class="justifyleft color_red hidden" id="nomcp" style="font-weight:bold;font-size:12px">MCP Toolcalling unavailable, requires chat completions.</div>
@@ -29952,7 +29931,7 @@ Current version indicated by LITEVER below.
 				</div>
 
 				<!--advanced settings menu top-->
-				<div id="settingsmenuadvanced" class="settingsmenu hidden" onchange="setting_tweaked()">
+				<div id="settingsmenuadvanced" class="settingsmenu hidden">
 					<div class="settingitem wide">
 						<h3 style="margin-top: 4px;">Save/Load Settings</h3>
 						<div class="settinglabel">
@@ -29993,6 +29972,33 @@ Current version indicated by LITEVER below.
 						</div>
 
 						<h3>Advanced Settings</h3>
+						<div class="settinglabel">
+							<div class="justifyleft">EOS token ban <span class="helpicon">?<span
+							class="helptext">Allow the End-Of-Stream (EOS) token and potentially other restricted special tokens to be generated.</span></span></div>
+							<div class="push-right">
+							<select title="EOS Token Banning Behavior" class="form-control push-right" id="eos_ban_mode">
+							<option value="0">Auto</option>
+							<option value="1">Unban</option>
+							<option value="2">Ban</option>
+							<option value="3">Bypass</option>
+							</select>
+							</div>
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft">Token limit multiplier <span class="helpicon">?<span
+							class="helptext">Adds a multiplier to token limit estimations, useful if token counts are inaccurate. Influences text truncation. Higher values increases token allowance.</span></span></div>
+							<div class="push-right">
+							<select title="Token Limit Multiplier" class="form-control push-right" id="token_count_multiplier">
+							<option value="70">0.7x</option>
+							<option value="80">0.8x</option>
+							<option value="90">0.9x</option>
+							<option value="100">1.0x</option>
+							<option value="110">1.1x</option>
+							<option value="120">1.2x</option>
+							<option value="130">1.3x</option>
+							</select>
+							</div>
+						</div>
 						<div class="settinglabel">
 							<div class="justifyleft">Render special tags <span class="helpicon">?<span
 								class="helptext">If enabled, renders special tags like EOS and padding tokens. Not recommended.</span></span></div>
@@ -30981,7 +30987,7 @@ Current version indicated by LITEVER below.
 		</div>
 	</div>
 
-	<div class="popupcontainer flex hidden" id="dynatempcontainer">
+	<div class="popupcontainer flex hidden" id="dynatempcontainer" onchange="sampler_setting_tweaked()">
 		<div class="popupbg flex"></div>
 		<div class="nspopup high flexsizevsmall">
 			<div class="popuptitlebar">
@@ -31019,9 +31025,9 @@ Current version indicated by LITEVER below.
 		</div>
 	</div>
 
-	<div class="popupcontainer flex hidden" id="secondepsamplecontainer">
+	<div class="popupcontainer flex hidden" id="secondepsamplecontainer" onchange="sampler_setting_tweaked()">
 		<div class="popupbg flex"></div>
-		<div class="nspopup flexsizevsmall">
+		<div class="nspopup high flexsizevsmall">
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Second Endpoint Sampling</div>
 			</div>
@@ -31046,6 +31052,27 @@ Current version indicated by LITEVER below.
 		</div>
 	</div>
 
+	<div class="popupcontainer flex hidden" id="grammarcontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup flexsize higher">
+			<div class="popuptitlebar">
+				<div class="popuptitletext">Set GBNF Grammar Format</div>
+			</div>
+			<div class="menutext">
+				Enter GBNF Grammar Format to use.<br>Leave blank to disable.
+			</div>
+			<textarea class="form-control" style="line-height:1.1; resize:vertical;" id="grammarinputarea" placeholder="(Input Grammar GBNF)" rows="5"></textarea>
+			<div class="menutext" style="text-align: left;">
+				Retain Grammar State <span class="helpicon">?
+					<span class="helptext">Do not reset grammar on generate. May not work with multiple users.</span>
+				</span>
+				<input title="Retain Grammar State" class="smallcheckbox" style="vertical-align: middle;" type="checkbox" id="grammar_retain_state">
+			</div>
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="confirmGrammar()">OK</button>
+			</div>
+		</div>
+	</div>
 
 	<div class="popupcontainer flex hidden" id="addmediacontainer">
 		<div class="popupbg flex"></div>
