@@ -24893,12 +24893,14 @@ Current version indicated by LITEVER below.
 	function repact_instruct_turns_beautify_render(chatunits) //to turn ugly turn calls into nice looking placeholders
 	{
 		toolcall_waiting_approve = null;
+        var tool_name = null;
 		for(let i=0;i<chatunits.length;++i)
 		{
 			if(chatunits[i].tool_calls)
 			{
+                tool_name = chatunits[i].tool_calls[0].function.name;
 				chatunits[i].origmsg = chatunits[i].msg;
-				chatunits[i].msg = `<span class="color_lightgreen" style="font-weight:bold;">Made a tool call to ${chatunits[i].tool_calls[0].function.name}</span>`;
+                chatunits[i].msg = `<span class="color_lightgreen" style="font-weight:bold;">Calling tool ${tool_name}..</span>`;
 				if(!localsettings.tools_auto_exec && (i==chatunits.length-1 || (i==chatunits.length-2 && chatunits[chatunits.length-1].msg=="")))
 				{
 					toolcall_waiting_approve = {"tool_calls":chatunits[i].tool_calls};
@@ -24913,7 +24915,8 @@ Current version indicated by LITEVER below.
 			if(chatunits[i].tool_results)
 			{
 				chatunits[i].origmsg = chatunits[i].msg;
-				chatunits[i].msg = `<span class="color_lightgreen" style="font-weight:bold;">Received tool call results for ${chatunits[i].tool_results.name}</span>`;
+				chatunits[i-1].msg = `<span class="color_lightgreen" style="font-weight:bold;">Got results from tool ${tool_name}</span>`;
+                chatunits.splice(i, 1);
 			}
 		}
 		return chatunits;
