@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 <head>
 	<script id="init-config">
-	const LITEVER = 310;
+	const LITEVER = 311;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -4485,6 +4485,7 @@ Current version indicated by LITEVER below.
 		start_thinking_tag: "<think>",
 		stop_thinking_tag: "</think>",
 		hide_think_stream: false,
+		handle_mismatched_think: true,
 		think_injected: 0, //0=normal, 1=force
 		strip_thinking_mode: 1, //0=no stripping, 1=strip except recent, 2=strip all
 		websearch_enabled: false,
@@ -16325,6 +16326,7 @@ Current version indicated by LITEVER below.
 			localsettings.stop_thinking_tag = defaultsettings.stop_thinking_tag;
 		}
 		localsettings.hide_think_stream = (document.getElementById("hide_think_stream").checked?true:false);
+		localsettings.handle_mismatched_think = (document.getElementById("handle_mismatched_think").checked?true:false);
 
 		localsettings.tts_mode = document.getElementById("ttsselect").value;
 		localsettings.xtts_voice = document.getElementById("xtts_voices").value;
@@ -17518,6 +17520,18 @@ Current version indicated by LITEVER below.
 						}
 					});
 					inputtxt = inputtxt.replace(pat, "%ExpandBtn%");
+				}
+				else
+				{
+					if(localsettings.handle_mismatched_think && !inputtxt.includes(localsettings.start_thinking_tag) && inputtxt.includes(localsettings.stop_thinking_tag))
+					{
+						let chunks = inputtxt.split(localsettings.stop_thinking_tag);
+						if(chunks.length==2) //exactly 2 parts
+						{
+							matches.push(chunks[0]);
+							inputtxt = `%ExpandBtn%${chunks[1]}`;
+						}
+					}
 				}
 			}
 			else //just hide
@@ -24124,80 +24138,408 @@ Current version indicated by LITEVER below.
 		}
 		populate_corpo_leftpanel_topper();
 
-		if (gametext_arr.length == 0 && synchro_pending_stream=="" && pending_response_id=="") {
+		if(localflag && is_using_kcpp_with_admin())
+		{
+			document.getElementById("topbtn_admin").classList.remove("hidden");
+		}
+		else
+		{
+			document.getElementById("topbtn_admin").classList.add("hidden");
+		}
 
-			if (perfdata == null) {
-				if(document.getElementById("connectstatus").innerHTML == "Offline Mode")
-				{
-					document.getElementById("gametext").innerHTML = "Welcome to <span class=\"color_kobotext\">KoboldAI Lite</span>!<br>You are in <span class=\"color_red\">Offline Mode</span>.<br>You will still be able to load and edit stories, but not generate new text."
-				}else{
-					document.getElementById("gametext").innerHTML = "Welcome to <span class=\"color_kobotext\">KoboldAI Lite</span>!<br><span class=\"color_orange\">Attempting to Connect...</span>"
-				}
+		if(!localsettings.sidepanel_mode && (perfdata == null || selected_models.length != 0))
+		{
+			document.getElementById("topbtn_settings").classList.remove("hidden");
+			document.getElementById("btn_actmem").classList.remove("hidden");
+		}else{
+			document.getElementById("topbtn_settings").classList.add("hidden");
+			document.getElementById("btn_actmem").classList.add("hidden");
+		}
+
+		if (perfdata == null) {
+			document.getElementById("topbtn_reconnect").classList.remove("hidden");
+			if(localflag)
+			{
+				document.getElementById("topbtn_customendpt").classList.add("hidden");
+			}else{
+				document.getElementById("topbtn_customendpt").classList.remove("hidden");
+			}
+			if(localsettings.show_endpoint_selector)
+			{
+				document.getElementById("topbtn_ai").classList.remove("hidden");
+			}
+			else
+			{
+				document.getElementById("topbtn_ai").classList.add("hidden");
+			}
+
+			document.getElementById("topbtn_newgame").classList.remove("hidden");
+			document.getElementById("topbtn_save_load").classList.remove("hidden");
+			document.getElementById("topbtn_scenarios").classList.add("hidden");
+			document.getElementById("topbtn_quickplay").classList.add("hidden");
+		} else {
+			document.getElementById("topbtn_reconnect").classList.add("hidden");
+			document.getElementById("topbtn_customendpt").classList.add("hidden");
+
+			if(localflag && !localsettings.show_endpoint_selector)
+			{
+				document.getElementById("topbtn_ai").classList.add("hidden");
+			}else{
+				document.getElementById("topbtn_ai").classList.remove("hidden");
+			}
+
+			if (selected_models.length == 0) {
+				document.getElementById("topbtn_newgame").classList.add("hidden");
+				document.getElementById("topbtn_save_load").classList.add("hidden");
+				document.getElementById("topbtn_scenarios").classList.add("hidden");
+				document.getElementById("topbtn_quickplay").classList.remove("hidden");
 			} else {
-				let whorun = "";
-
-				if (custom_kobold_endpoint != "") {
-					whorun = "<br>You're using the custom KoboldAI endpoint at <span class=\"color_orange\">"+custom_kobold_endpoint+"</span>";
-				}
-				else if(custom_oai_key!="")
-				{
-					whorun = "<br>You're using the OpenAI API";
-				}
-				else if(custom_claude_key!="")
-				{
-					whorun = "<br>You're using the Claude API";
-				}
-				else if(custom_gemini_key!="")
-				{
-					whorun = "<br>You're using the Gemini API";
-				}
-				else if(custom_cohere_key!="")
-				{
-					whorun = "<br>You're using the Cohere API";
-				}
-				else {
-					whorun = `<br>Horde <a class="color_blueurl mainnav" href="#" tabindex="${mainmenu_is_untab?`-1`:`0`}" onclick="get_and_show_workers()">Volunteer(s)</a> are running <span class="color_orange">${selected_models.reduce((s, a) => s + a.count, 0)} threads</span> for selected models with a total queue length of <span class="color_orange">${selected_models.reduce((s, a) => s + a.queued, 0)}</span> tokens`;
-				}
-				let nowmode = (localsettings.opmode==1?"Story Mode":(localsettings.opmode==2?"Adventure Mode":(localsettings.opmode==3?"Chat Mode":"Instruct Mode")));
-				let selmodelstr = "";
-				const maxmodelnames = 7;
-				if(selected_models.length>maxmodelnames)
-				{
-					let shortenedarr = selected_models.slice(0, maxmodelnames-1);
-					selmodelstr = shortenedarr.reduce((s, a) => s + (s == "" ? "" : ", ") + a.name, "") + " and " + (selected_models.length-(maxmodelnames-1)) + " others";
-				}else{
-					selmodelstr = selected_models.reduce((s, a) => s + (s == "" ? "" : ", ") + a.name, "");
-				}
-
-				document.getElementById("gametext").innerHTML = `Welcome to <span class="color_kobotext">KoboldAI Lite</span>!`+
-				`<br>You are using the models <span class="color_lightgreen">${selmodelstr}</span>${(selected_workers.length == 0 ? `` : ` (Pinned to ${selected_workers.length} worker IDs)`)}.`+
-				`${whorun}.`+
-				(multiplayer_active?(!multiplayer_pinged?`<br><br><span class="color_orange">[ Trying to join Multiplayer... ]</span>`:`<br><br><span class="color_green">[ Multiplayer is <b>Active</b>! This session is shared with other server participants.]<br>[ You can leave via exit button in top right corner. ]</span>`):(is_using_kcpp_with_multiplayer()?`<br><br>[ <a href="#" tabindex="${mainmenu_is_untab?`-1`:`0`}" class="color_blueurl mainnav" onclick="join_multiplayer()"><span class="color_lightgreen">Multiplayer Available</span> - Click Here To Join</a> ]`:``))+
-				`<br><br><span class="color_orange bolded">${nowmode} Selected</span> - Enter a prompt below to begin!`+
-				`<br>Or, <a href="#" tabindex="${mainmenu_is_untab?`-1`:`0`}" class="color_blueurl mainnav" onclick="document.getElementById('loadfileinput').click()">load a <b>JSON File</b> or a <b>Character Card</b> here.</a>`+
-				`<br>Or, <a href="#" tabindex="${mainmenu_is_untab?`-1`:`0`}" class="color_blueurl mainnav" onclick="display_scenarios()">select a <b>Quick Start Scenario</b> here.</a>`+
-				`<br>${(welcome!=""?`<br><em>${escape_html(welcome)}</em>`:``)}`;
+				document.getElementById("topbtn_newgame").classList.remove("hidden");
+				document.getElementById("topbtn_save_load").classList.remove("hidden");
+				document.getElementById("topbtn_scenarios").classList.remove("hidden");
+				document.getElementById("topbtn_quickplay").classList.add("hidden");
 			}
+		}
 
-			//kick out of edit mode
-			if (document.getElementById("allowediting").checked) {
-				document.getElementById("allowediting").checked = inEditMode = false;
-				toggle_editable();
+		if(is_using_kcpp_with_multiplayer())
+		{
+			if(multiplayer_active)
+			{
+				document.getElementById("connectstatusmultiplayer").classList.remove("hidden");
+				document.getElementById("topbtn_multiplayer_join").classList.add("hidden");
+				document.getElementById("topbtn_multiplayer_leave").classList.remove("hidden");
+			} else {
+				document.getElementById("connectstatusmultiplayer").classList.add("hidden");
+				document.getElementById("topbtn_multiplayer_join").classList.remove("hidden");
+				document.getElementById("topbtn_multiplayer_leave").classList.add("hidden");
 			}
+		}
+		else
+		{
+			document.getElementById("connectstatusmultiplayer").classList.add("hidden");
+			document.getElementById("topbtn_multiplayer_join").classList.add("hidden");
+			document.getElementById("topbtn_multiplayer_leave").classList.add("hidden");
+		}
 
+		if (selected_models.length == 0) //if no model, disable all first
+		{
+			let disablebtns = true;
+			if (perfdata == null) //allow these in offline mode
+			{
+				disablebtns = false;
+			}
+			document.getElementById("btn_actmem3").disabled = document.getElementById("btn_actmem2").disabled = document.getElementById("btn_actmem").disabled = disablebtns;
+			document.getElementById("btn_actundo3").disabled = document.getElementById("btn_actundo2").disabled = document.getElementById("btn_actundo").disabled = disablebtns;
+			document.getElementById("btn_actredo3").disabled = document.getElementById("btn_actredo2").disabled = document.getElementById("btn_actredo").disabled = disablebtns;
+			document.getElementById("btn_actretry3").disabled = document.getElementById("btn_actretry2").disabled = document.getElementById("btn_actretry").disabled = true;
+			document.getElementById("btn_actbranch3").disabled = document.getElementById("btn_actbranch2").disabled = document.getElementById("btn_actbranch").disabled = disablebtns;
+			document.getElementById("btn_addmedia3").disabled = document.getElementById("btn_addmedia2").disabled = document.getElementById("btn_addmedia").disabled = disablebtns;
+			document.getElementById("btn_editmode").disabled = disablebtns;
+
+		} else {
+			document.getElementById("btn_actmem3").disabled = document.getElementById("btn_actmem2").disabled = document.getElementById("btn_actmem").disabled = false;
+			document.getElementById("btn_actundo3").disabled = document.getElementById("btn_actundo2").disabled = document.getElementById("btn_actundo").disabled = false;
+			document.getElementById("btn_actredo3").disabled = document.getElementById("btn_actredo2").disabled = document.getElementById("btn_actredo").disabled = false;
+			document.getElementById("btn_actretry3").disabled = document.getElementById("btn_actretry2").disabled = document.getElementById("btn_actretry").disabled = false;
+			document.getElementById("btn_actbranch3").disabled = document.getElementById("btn_actbranch2").disabled = document.getElementById("btn_actbranch").disabled = false;
+			document.getElementById("btn_addmedia3").disabled = document.getElementById("btn_addmedia2").disabled = document.getElementById("btn_addmedia").disabled = false;
+			document.getElementById("btn_editmode").disabled = false;
+		}
+
+		if (perfdata == null) {
+			document.getElementById("fvico").href = favivon_normal;
+		}
+		else if (selected_models.length == 0 && selected_workers.length == 0) {
+			let perfinfo = `There are <span class="color_orange">${perfdata.worker_count}</span> total <a class="color_blueurl mainnav" tabindex="${mainmenu_is_untab?`-1`:`0`}" href="#" onclick="get_and_show_workers()">volunteer(s)</a> in the AI Horde, and <span class="color_orange">${perfdata.queued_requests}</span> request(s) in queues.<br>A total of <span class="color_orange">${perfdata.past_minute_tokens}</span> tokens were generated in the last minute.<br><br>`;
+			document.getElementById("gametext").innerHTML = `Welcome to <span class="color_kobotext">KoboldAI Lite</span>!<br><br>${perfinfo}<a href="#" class="color_blueurl" onclick="display_endpoint_container()">Please select an AI service to use!</a><br>`;
+			document.getElementById("fvico").href = favivon_normal;
+		}
+		else if (pending_response_id == "") {
+			document.getElementById("fvico").href = favivon_normal;
 		}
 		else {
+			document.getElementById("fvico").href = favicon_busy;
+		}
 
-			let fulltxt = "";
-			if (inEditMode) {
-				fulltxt = concat_gametext(false, "", "%SpnStg%", "%SpnEtg%",true);
+		// Render onto enhanced chat interface if selected.
+		let isAestheticUiStyle = is_aesthetic_ui(); //coverts both aesthetic and messenger
+		let isCorpoUiStyle = is_corpo_ui();
+
+		document.getElementById("corpo_welcome").classList.add("hidden");
+		if (!inEditMode && isCorpoUiStyle)
+		{
+			if(gametext_arr.length == 0)
+			{
+				document.getElementById("corpo_body").innerHTML = "";
+				document.getElementById("corpo_welcome").classList.remove("hidden");
+				document.getElementById("corpo_welcome").innerHTML = render_corpo_welcome();
+			}
+			else
+			{
+				document.getElementById("corpo_welcome").classList.add("hidden");
+				let textToRender = concat_gametext(false, "", "", "", true);
+				document.getElementById("corpo_body").innerHTML = render_corpo_ui(textToRender);
+				corpoedit_resize_input();
+			}
+
+			document.getElementById("corpointerface").classList.remove("hidden");
+			document.getElementById("enhancedchatinterface").classList.add("hidden");
+			document.getElementById("normalinterface").classList.add("hidden");
+		}
+		else if (!inEditMode && isAestheticUiStyle)
+		{
+			let textToRender = "";
+			let prepToGen = (gametext_arr.length == 0 && synchro_pending_stream == "" && pending_response_id != "");
+			if (gametext_arr.length == 0 && (prepToGen || pending_response_id == "")) {
+				let intro = render_regular_welcome();
+				document.getElementById("chat_msg_body").innerHTML = `<span class='unstarted_block'>${intro}</span>`;
 			} else {
+				textToRender = concat_gametext(false, "", "", "", true);
+				if((localsettings.opmode==3 && localsettings.gui_type_chat==1) ||
+				(localsettings.opmode==4 && localsettings.gui_type_instruct==1))
+				{
+					document.getElementById("chat_msg_body").innerHTML = render_messenger_ui(textToRender);
+				}
+				else
+				{
+					document.getElementById("chat_msg_body").innerHTML = render_aesthetic_ui(textToRender,false);
+				}
+			}
+
+			if ((localsettings.opmode == 3 && localsettings.chatopponent != "")||localsettings.opmode == 4||localsettings.opmode==2) {
+				document.getElementById("cht_inp_bg").classList.add("shorter");
+				if(localsettings.opmode==2)
+				{
+					document.getElementById("chat_btnmode_chat").classList.add("hidden");
+					document.getElementById("chat_btnmode_adventure").classList.remove("hidden");
+					if(localsettings.adventure_switch_mode==0)
+					{
+						document.getElementById("chat_btnmode_adventure").classList.remove("actionmode");
+						document.getElementById("chat_btnmode_adventure").classList.remove("dicemode");
+						document.getElementById("chat_btnmode_adventure").classList.add("storymode");
+					}else if(localsettings.adventure_switch_mode==1){
+						document.getElementById("chat_btnmode_adventure").classList.add("actionmode");
+						document.getElementById("chat_btnmode_adventure").classList.remove("dicemode");
+						document.getElementById("chat_btnmode_adventure").classList.remove("storymode");
+					}else{
+						document.getElementById("chat_btnmode_adventure").classList.remove("actionmode");
+						document.getElementById("chat_btnmode_adventure").classList.remove("storymode");
+						document.getElementById("chat_btnmode_adventure").classList.add("dicemode");
+					}
+				}
+				else
+				{
+					document.getElementById("chat_btnmode_chat").classList.remove("hidden");
+					document.getElementById("chat_btnmode_adventure").classList.add("hidden");
+				}
+
+			} else {
+				document.getElementById("chat_btnmode_chat").classList.add("hidden");
+				document.getElementById("chat_btnmode_adventure").classList.add("hidden");
+				document.getElementById("cht_inp_bg").classList.remove("shorter");
+			}
+
+			// Show the 'AI is typing' message if an answer is pending, and prevent the 'send button' from being clicked again.
+			if (pending_response_id=="") {
+				document.getElementById("chatistyping").classList.add("hidden");
+			}
+			else {
+				let aiName = ((localsettings.opmode==3 && pending_context_preinjection && pending_context_preinjection.includes(":")) ? pending_context_preinjection.split(":")[0] : "The AI");
+				document.getElementById("chataityping").innerText = aiName + " is typing...";
+				document.getElementById("chatistyping").classList.remove("hidden");
+			}
+			document.getElementById("corpo_chat_send_btn").disabled = document.getElementById("chat_msg_send_btn").disabled = document.getElementById("btnsend").disabled;
+
+			document.getElementById("enhancedchatinterface").classList.remove("hidden");
+			document.getElementById("normalinterface").classList.add("hidden");
+			document.getElementById("corpointerface").classList.add("hidden");
+		} else { //classic ui
+			document.getElementById("enhancedchatinterface").classList.add("hidden");
+			document.getElementById("corpointerface").classList.add("hidden");
+			document.getElementById("normalinterface").classList.remove("hidden");
+			document.getElementById("gametext").innerHTML = render_classic_ui(inEditMode);
+		}
+
+		if (inEditMode && isCorpoUiStyle) {
+			document.getElementById("corpoendedit").classList.remove("hidden");
+		} else {
+			document.getElementById("corpoendedit").classList.add("hidden");
+		}
+
+		update_submit_button(true); //full update for submit button, otherwise just text when not generating
+
+		document.getElementById("btnautogenmem").disabled = document.getElementById("btnsend").disabled;
+
+		if (localsettings.persist_session && save) {
+			autosave();
+		}
+
+		handle_autoscroll(force_scroll);
+
+		if(localsettings.printer_view)
+		{
+			document.getElementById("normalinterface").classList.add("fullscroll");
+			document.getElementById("enhancedchatinterface_inner").classList.add("fullscroll");
+		}else
+		{
+			document.getElementById("normalinterface").classList.remove("fullscroll");
+			document.getElementById("enhancedchatinterface_inner").classList.remove("fullscroll");
+		}
+
+		let maincon = document.getElementById("maincontainer");
+		if(is_corpo_ui() || localsettings.viewport_width_mode==3) //unlock
+		{
+			maincon.classList.remove("adaptivecontainer");
+			maincon.classList.remove("clampedcontainer");
+			maincon.classList.remove("bigclampedcontainer");
+			maincon.classList.remove("smallclampedcontainer");
+		}else if(localsettings.viewport_width_mode==1) //clamped
+		{
+			maincon.classList.remove("adaptivecontainer");
+			maincon.classList.add("clampedcontainer");
+			maincon.classList.remove("bigclampedcontainer");
+			maincon.classList.remove("smallclampedcontainer");
+		}
+		else if(localsettings.viewport_width_mode==2) //bigclamp
+		{
+			maincon.classList.remove("adaptivecontainer");
+			maincon.classList.remove("clampedcontainer");
+			maincon.classList.add("bigclampedcontainer");
+			maincon.classList.remove("smallclampedcontainer");
+		}
+		else if(localsettings.viewport_width_mode==4) //smallclamp
+		{
+			maincon.classList.remove("adaptivecontainer");
+			maincon.classList.remove("clampedcontainer");
+			maincon.classList.remove("bigclampedcontainer");
+			maincon.classList.add("smallclampedcontainer");
+		}
+		else //adaptive
+		{
+			maincon.classList.add("adaptivecontainer");
+			maincon.classList.remove("clampedcontainer");
+			maincon.classList.remove("bigclampedcontainer");
+			maincon.classList.remove("smallclampedcontainer");
+		}
+
+		update_genimg_button_visiblility();
+		update_websearch_button_visibility();
+
+		idle_timer = 0;
+		document.getElementById("token-budget").innerText = last_token_budget;
+		if(websearch_in_progress && localsettings.websearch_enabled && is_using_kcpp_with_websearch())
+		{
+			document.getElementById("searchingtxt").classList.remove("hidden");
+		}
+		else
+		{
+			document.getElementById("searchingtxt").classList.add("hidden");
+		}
+
+		if(localsettings.wordsearch_enabled)
+		{
+			document.getElementById("wordsearch_panel").classList.remove("hidden");
+		}else
+		{
+			document.getElementById("wordsearch_panel").classList.add("hidden");
+		}
+	}
+
+	function classic_delete_turn(idx)
+	{
+		edit_chunk_save(idx,"",true);
+	}
+	function classic_edit_turn(idx)
+	{
+		let chatunits = []; //todo: eventually refactor
+		let currctx = concat_gametext(false, "", "", "", false);
+		currctx = replace_instruct_placeholders(currctx);
+		if(localsettings.opmode==3)
+		{
+			chatunits = repack_chat_history(currctx);
+		}
+		else if(localsettings.opmode==2)
+		{
+			chatunits = repack_adventure_history(currctx);
+		}
+		else if(localsettings.opmode==1)
+		{
+			chatunits = repack_story_history(currctx);
+		}
+		else
+		{
+			chatunits = repack_instruct_history(currctx, true);
+		}
+
+		let currmsg = chatunits[idx].msg;
+		currmsg = stash_image_placeholders(currmsg, false);
+
+		inputBoxOkCancel("Quickly edit a previous turn message","Quick Edit Turn",currmsg,"(Delete Turn)",()=>{
+			let userinput = getInputBoxValue();
+			edit_chunk_save(idx,userinput,true);
+		},()=>{
+			//do nothing on cancel
+		},true,true);
+	}
+
+	function classic_click_turn(button,idx,toggleopen = true)
+	{
+		let incomplete_resp = (synchro_pending_stream != "" || pending_response_id != "");
+		if (incomplete_resp) { return; }
+
+		function handleOutsideClickClassicTurn(event) {
+			popupMenu.style.display = 'none';
+			document.removeEventListener('click', handleOutsideClickClassicTurn);
+		}
+
+		const rect = button.getBoundingClientRect();
+		const popupMenu = document.getElementById('classicturnmenu');
+
+		let popcontent = `<button type="button" onclick="classic_edit_turn(${idx})">Edit Turn</button>`;
+		popcontent += `<button type="button" onclick="classic_delete_turn(${idx})">Delete Turn</button>`;
+		popcontent += `<button type="button" onclick="">Cancel</button>`;
+		popupMenu.innerHTML = popcontent;
+
+		popupMenu.style.left = `${rect.left}px`;
+		popupMenu.style.top = `${rect.top - 10}px`;
+		popupMenu.style.transform = 'translateY(-100%)'; // makes it grow upward
+
+		document.removeEventListener('click', handleOutsideClickClassicTurn);
+		popupMenu.style.display = (popupMenu.style.display === 'flex' ? 'none' : 'flex');
+		if (!toggleopen || popupMenu.style.display === 'none') {
+			popupMenu.style.display = 'none';
+			return;
+		}
+		// if menu is open, attach outside click handler
+		if (popupMenu.style.display === 'flex') {
+			setTimeout(() => { // delay so the current button click doesn't immediately close it
+				document.addEventListener('click', handleOutsideClickClassicTurn);
+			}, 50);
+		}
+	}
+
+	function render_classic_ui(inEditMode) //classic ui is also used for all edit modes
+	{
+		if (gametext_arr.length == 0 && synchro_pending_stream=="" && pending_response_id=="")
+		{
+			let fulltxt = render_regular_welcome();
+			return fulltxt;
+		}
+		else
+		{
+			let alreadyShowedStreaming = false; //sometimes, streaming is injected inline to preserve indentation
+			let fulltxt = "";
+
+			if (inEditMode)
+			{
+				fulltxt = concat_gametext(false, "", "%SpnStg%", "%SpnEtg%",true);
+			}
+			else
+			{
 				fulltxt = concat_gametext(false, "", "", "",true);
 				fulltxt = apply_display_only_regex(fulltxt);
 				fulltxt = replace_placeholders(fulltxt,true);
 			}
-
-			let alreadyShowedStreaming = false; //sometimes, streaming is injected inline to preserve indentation
 
 			if(localsettings.opmode==4 && !inEditMode)
 			{
@@ -24401,388 +24743,135 @@ Current version indicated by LITEVER below.
 				}
 				fulltxt = multigroups.join('');
 			}
-			document.getElementById("gametext").innerHTML = fulltxt;
+			return fulltxt;
 		}
 
-		if(localflag && is_using_kcpp_with_admin())
-		{
-			document.getElementById("topbtn_admin").classList.remove("hidden");
-		}
-		else
-		{
-			document.getElementById("topbtn_admin").classList.add("hidden");
-		}
 
-		if(!localsettings.sidepanel_mode && (perfdata == null || selected_models.length != 0))
-		{
-			document.getElementById("topbtn_settings").classList.remove("hidden");
-			document.getElementById("btn_actmem").classList.remove("hidden");
-		}else{
-			document.getElementById("topbtn_settings").classList.add("hidden");
-			document.getElementById("btn_actmem").classList.add("hidden");
-		}
 
+		// if(localsettings.separate_end_tags) {
+		// 	if (get_instruct_starttag_end(true)) {
+		// 		input = replaceAll(input, get_instruct_starttag_end(true), "");
+		// 	}
+		// 	if (get_instruct_endtag_end(true)) {
+		// 		input = replaceAll(input, get_instruct_endtag_end(true), "");
+		// 	}
+		// 	if (get_instruct_systag_end(true)) {
+		// 		input = replaceAll(input, get_instruct_systag_end(true), "");
+		// 	}
+		// }
+
+		// let newbodystr = "";
+		// let chatunits = [];
+		// input = replace_instruct_placeholders(input);
+		// if(localsettings.opmode==3) //chat mode
+		// {
+		// 	chatunits = repack_chat_history(input);
+		// }
+		// else
+		// {
+		// 	chatunits = repack_instruct_history(input);
+		// 	repact_instruct_turns_beautify_render(chatunits);
+		// }
+
+		// let colormap = {}, colidx = 0;
+		// let countmap = new Map();
+		// for(var i=0;i<chatunits.length;++i)
+		// {
+		// 	let curr = chatunits[i];
+		// 	if(curr.msg && curr.msg!="")
+		// 	{
+		// 		curr = repack_postprocess_turn(curr, countmap); //change whole object
+		// 		//convert the msg into images
+		// 		curr.msg = render_all_media_html(curr.msg,false,true);
+		// 	}
+
+		// 	if(curr.myturn)
+		// 	{
+		// 		let namepart = (curr.name?`<span style="font-weight: bolder;color:var(--theme_color_user_name);">${escape_html(curr.name)}</span><br>`:"");
+		// 		newbodystr += `<div class="chat_outgoing_msg"><div class="chat_sent_msg"><p>`+namepart+curr.msg+`</p></div></div>`;
+		// 	}else{
+		// 		let oname = (curr.name?escape_html(curr.name):"");
+		// 		let onametrim = oname.trim();
+		// 		if(colormap[onametrim]==null)
+		// 		{
+		// 			colormap[onametrim] = get_unique_color(colidx);
+		// 			++colidx;
+		// 		}
+		// 		let namepart = (curr.name?`<span class='${colormap[onametrim]}' style="font-weight: bolder;">${oname}</span><br>`:"");
+		// 		newbodystr += `<div class="incoming_msg"><div class="chat_received_msg"><div class="chat_received_withd_msg"><p>`+namepart+curr.msg+`</p></div></div></div>`;
+		// 	}
+
+		// }
+		// if(synchro_pending_stream!="")
+		// {
+		// 	newbodystr += `<div class="incoming_msg"><div class="chat_received_msg"><div class="chat_received_withd_msg"><p><span class="color_pendingtext pending_text">` + escape_html(pending_context_preinjection) + format_streaming_text(escape_html(synchro_pending_stream)) + `</span></p></div></div></div>`;
+		// }
+
+		// return newbodystr;
+	}
+
+	function render_regular_welcome()
+	{
+		let outputhtml = "";
 		if (perfdata == null) {
-			document.getElementById("topbtn_reconnect").classList.remove("hidden");
-			if(localflag)
+			if(document.getElementById("connectstatus").innerHTML == "Offline Mode")
 			{
-				document.getElementById("topbtn_customendpt").classList.add("hidden");
+				outputhtml = "Welcome to <span class=\"color_kobotext\">KoboldAI Lite</span>!<br>You are in <span class=\"color_red\">Offline Mode</span>.<br>You will still be able to load and edit stories, but not generate new text."
 			}else{
-				document.getElementById("topbtn_customendpt").classList.remove("hidden");
+				outputhtml = "Welcome to <span class=\"color_kobotext\">KoboldAI Lite</span>!<br><span class=\"color_orange\">Attempting to Connect...</span>"
 			}
-			if(localsettings.show_endpoint_selector)
-			{
-				document.getElementById("topbtn_ai").classList.remove("hidden");
-			}
-			else
-			{
-				document.getElementById("topbtn_ai").classList.add("hidden");
-			}
-
-			document.getElementById("topbtn_newgame").classList.remove("hidden");
-			document.getElementById("topbtn_save_load").classList.remove("hidden");
-			document.getElementById("topbtn_scenarios").classList.add("hidden");
-			document.getElementById("topbtn_quickplay").classList.add("hidden");
 		} else {
-			document.getElementById("topbtn_reconnect").classList.add("hidden");
-			document.getElementById("topbtn_customendpt").classList.add("hidden");
+			let whorun = "";
 
-			if(localflag && !localsettings.show_endpoint_selector)
+			if (custom_kobold_endpoint != "") {
+				whorun = "<br>You're using the custom KoboldAI endpoint at <span class=\"color_orange\">"+custom_kobold_endpoint+"</span>";
+			}
+			else if(custom_oai_key!="")
 			{
-				document.getElementById("topbtn_ai").classList.add("hidden");
-			}else{
-				document.getElementById("topbtn_ai").classList.remove("hidden");
+				whorun = "<br>You're using the OpenAI API";
 			}
-
-			if (selected_models.length == 0) {
-				document.getElementById("topbtn_newgame").classList.add("hidden");
-				document.getElementById("topbtn_save_load").classList.add("hidden");
-				document.getElementById("topbtn_scenarios").classList.add("hidden");
-				document.getElementById("topbtn_quickplay").classList.remove("hidden");
-			} else {
-				document.getElementById("topbtn_newgame").classList.remove("hidden");
-				document.getElementById("topbtn_save_load").classList.remove("hidden");
-				document.getElementById("topbtn_scenarios").classList.remove("hidden");
-				document.getElementById("topbtn_quickplay").classList.add("hidden");
-			}
-		}
-
-		if(is_using_kcpp_with_multiplayer())
-		{
-			if(multiplayer_active)
+			else if(custom_claude_key!="")
 			{
-				document.getElementById("connectstatusmultiplayer").classList.remove("hidden");
-				document.getElementById("topbtn_multiplayer_join").classList.add("hidden");
-				document.getElementById("topbtn_multiplayer_leave").classList.remove("hidden");
-			} else {
-				document.getElementById("connectstatusmultiplayer").classList.add("hidden");
-				document.getElementById("topbtn_multiplayer_join").classList.remove("hidden");
-				document.getElementById("topbtn_multiplayer_leave").classList.add("hidden");
+				whorun = "<br>You're using the Claude API";
 			}
-		}
-		else
-		{
-			document.getElementById("connectstatusmultiplayer").classList.add("hidden");
-			document.getElementById("topbtn_multiplayer_join").classList.add("hidden");
-			document.getElementById("topbtn_multiplayer_leave").classList.add("hidden");
-		}
-
-		if (selected_models.length == 0) //if no model, disable all first
-		{
-			let disablebtns = true;
-			if (perfdata == null) //allow these in offline mode
+			else if(custom_gemini_key!="")
 			{
-				disablebtns = false;
+				whorun = "<br>You're using the Gemini API";
 			}
-			document.getElementById("btn_actmem3").disabled = document.getElementById("btn_actmem2").disabled = document.getElementById("btn_actmem").disabled = disablebtns;
-			document.getElementById("btn_actundo3").disabled = document.getElementById("btn_actundo2").disabled = document.getElementById("btn_actundo").disabled = disablebtns;
-			document.getElementById("btn_actredo3").disabled = document.getElementById("btn_actredo2").disabled = document.getElementById("btn_actredo").disabled = disablebtns;
-			document.getElementById("btn_actretry3").disabled = document.getElementById("btn_actretry2").disabled = document.getElementById("btn_actretry").disabled = true;
-			document.getElementById("btn_actbranch3").disabled = document.getElementById("btn_actbranch2").disabled = document.getElementById("btn_actbranch").disabled = disablebtns;
-			document.getElementById("btn_addmedia3").disabled = document.getElementById("btn_addmedia2").disabled = document.getElementById("btn_addmedia").disabled = disablebtns;
-			document.getElementById("btn_editmode").disabled = disablebtns;
-
-		} else {
-			document.getElementById("btn_actmem3").disabled = document.getElementById("btn_actmem2").disabled = document.getElementById("btn_actmem").disabled = false;
-			document.getElementById("btn_actundo3").disabled = document.getElementById("btn_actundo2").disabled = document.getElementById("btn_actundo").disabled = false;
-			document.getElementById("btn_actredo3").disabled = document.getElementById("btn_actredo2").disabled = document.getElementById("btn_actredo").disabled = false;
-			document.getElementById("btn_actretry3").disabled = document.getElementById("btn_actretry2").disabled = document.getElementById("btn_actretry").disabled = false;
-			document.getElementById("btn_actbranch3").disabled = document.getElementById("btn_actbranch2").disabled = document.getElementById("btn_actbranch").disabled = false;
-			document.getElementById("btn_addmedia3").disabled = document.getElementById("btn_addmedia2").disabled = document.getElementById("btn_addmedia").disabled = false;
-			document.getElementById("btn_editmode").disabled = false;
-		}
-
-		if (perfdata == null) {
-			document.getElementById("fvico").href = favivon_normal;
-		}
-		else if (selected_models.length == 0 && selected_workers.length == 0) {
-			let perfinfo = `There are <span class="color_orange">${perfdata.worker_count}</span> total <a class="color_blueurl mainnav" tabindex="${mainmenu_is_untab?`-1`:`0`}" href="#" onclick="get_and_show_workers()">volunteer(s)</a> in the AI Horde, and <span class="color_orange">${perfdata.queued_requests}</span> request(s) in queues.<br>A total of <span class="color_orange">${perfdata.past_minute_tokens}</span> tokens were generated in the last minute.<br><br>`;
-			document.getElementById("gametext").innerHTML = `Welcome to <span class="color_kobotext">KoboldAI Lite</span>!<br><br>${perfinfo}<a href="#" class="color_blueurl" onclick="display_endpoint_container()">Please select an AI service to use!</a><br>`;
-			document.getElementById("fvico").href = favivon_normal;
-		}
-		else if (pending_response_id == "") {
-			document.getElementById("fvico").href = favivon_normal;
-		}
-		else {
-			document.getElementById("fvico").href = favicon_busy;
-		}
-
-		// Render onto enhanced chat interface if selected.
-		let isAestheticUiStyle = is_aesthetic_ui();
-		let isCorpoUiStyle = is_corpo_ui();
-
-		document.getElementById("corpo_welcome").classList.add("hidden");
-		if (!inEditMode && isCorpoUiStyle)
-		{
-			if(gametext_arr.length == 0)
+			else if(custom_cohere_key!="")
 			{
-				document.getElementById("corpo_body").innerHTML = "";
-				document.getElementById("corpo_welcome").classList.remove("hidden");
-				document.getElementById("corpo_welcome").innerHTML = render_corpo_welcome();
-			}
-			else
-			{
-				document.getElementById("corpo_welcome").classList.add("hidden");
-				let textToRender = concat_gametext(false, "", "", "", true);
-				document.getElementById("corpo_body").innerHTML = render_corpo_ui(textToRender);
-				corpoedit_resize_input();
-			}
-
-			document.getElementById("corpointerface").classList.remove("hidden");
-			document.getElementById("enhancedchatinterface").classList.add("hidden");
-			document.getElementById("normalinterface").classList.add("hidden");
-		}
-		else if (!inEditMode && isAestheticUiStyle)
-		{
-			let textToRender = "";
-			let prepToGen = (gametext_arr.length == 0 && synchro_pending_stream == "" && pending_response_id != "");
-			if (gametext_arr.length == 0 && (prepToGen || pending_response_id == "")) {
-				let intro = document.getElementById("gametext").innerHTML;
-				document.getElementById("chat_msg_body").innerHTML = `<span class='unstarted_block'>${intro}</span>`;
-			} else {
-				textToRender = concat_gametext(false, "", "", "", true);
-				textToRender = apply_display_only_regex(textToRender);
-				textToRender = replace_placeholders(textToRender,true);
-				if((localsettings.opmode==3 && localsettings.gui_type_chat==1) ||
-				(localsettings.opmode==4 && localsettings.gui_type_instruct==1))
-				{
-					document.getElementById("chat_msg_body").innerHTML = render_messenger_ui(textToRender);
-				}
-				else
-				{
-					document.getElementById("chat_msg_body").innerHTML = render_aesthetic_ui(textToRender,false);
-				}
-			}
-
-			if ((localsettings.opmode == 3 && localsettings.chatopponent != "")||localsettings.opmode == 4||localsettings.opmode==2) {
-				document.getElementById("cht_inp_bg").classList.add("shorter");
-				if(localsettings.opmode==2)
-				{
-					document.getElementById("chat_btnmode_chat").classList.add("hidden");
-					document.getElementById("chat_btnmode_adventure").classList.remove("hidden");
-					if(localsettings.adventure_switch_mode==0)
-					{
-						document.getElementById("chat_btnmode_adventure").classList.remove("actionmode");
-						document.getElementById("chat_btnmode_adventure").classList.remove("dicemode");
-						document.getElementById("chat_btnmode_adventure").classList.add("storymode");
-					}else if(localsettings.adventure_switch_mode==1){
-						document.getElementById("chat_btnmode_adventure").classList.add("actionmode");
-						document.getElementById("chat_btnmode_adventure").classList.remove("dicemode");
-						document.getElementById("chat_btnmode_adventure").classList.remove("storymode");
-					}else{
-						document.getElementById("chat_btnmode_adventure").classList.remove("actionmode");
-						document.getElementById("chat_btnmode_adventure").classList.remove("storymode");
-						document.getElementById("chat_btnmode_adventure").classList.add("dicemode");
-					}
-				}
-				else
-				{
-					document.getElementById("chat_btnmode_chat").classList.remove("hidden");
-					document.getElementById("chat_btnmode_adventure").classList.add("hidden");
-				}
-
-			} else {
-				document.getElementById("chat_btnmode_chat").classList.add("hidden");
-				document.getElementById("chat_btnmode_adventure").classList.add("hidden");
-				document.getElementById("cht_inp_bg").classList.remove("shorter");
-			}
-
-			// Show the 'AI is typing' message if an answer is pending, and prevent the 'send button' from being clicked again.
-			if (pending_response_id=="") {
-				document.getElementById("chatistyping").classList.add("hidden");
+				whorun = "<br>You're using the Cohere API";
 			}
 			else {
-				let aiName = ((localsettings.opmode==3 && pending_context_preinjection && pending_context_preinjection.includes(":")) ? pending_context_preinjection.split(":")[0] : "The AI");
-				document.getElementById("chataityping").innerText = aiName + " is typing...";
-				document.getElementById("chatistyping").classList.remove("hidden");
+				whorun = `<br>Horde <a class="color_blueurl mainnav" href="#" tabindex="${mainmenu_is_untab?`-1`:`0`}" onclick="get_and_show_workers()">Volunteer(s)</a> are running <span class="color_orange">${selected_models.reduce((s, a) => s + a.count, 0)} threads</span> for selected models with a total queue length of <span class="color_orange">${selected_models.reduce((s, a) => s + a.queued, 0)}</span> tokens`;
 			}
-			document.getElementById("corpo_chat_send_btn").disabled = document.getElementById("chat_msg_send_btn").disabled = document.getElementById("btnsend").disabled;
+			let nowmode = (localsettings.opmode==1?"Story Mode":(localsettings.opmode==2?"Adventure Mode":(localsettings.opmode==3?"Chat Mode":"Instruct Mode")));
+			let selmodelstr = "";
+			const maxmodelnames = 7;
+			if(selected_models.length>maxmodelnames)
+			{
+				let shortenedarr = selected_models.slice(0, maxmodelnames-1);
+				selmodelstr = shortenedarr.reduce((s, a) => s + (s == "" ? "" : ", ") + a.name, "") + " and " + (selected_models.length-(maxmodelnames-1)) + " others";
+			}else{
+				selmodelstr = selected_models.reduce((s, a) => s + (s == "" ? "" : ", ") + a.name, "");
+			}
 
-			document.getElementById("enhancedchatinterface").classList.remove("hidden");
-			document.getElementById("normalinterface").classList.add("hidden");
-			document.getElementById("corpointerface").classList.add("hidden");
-		} else {
-			document.getElementById("enhancedchatinterface").classList.add("hidden");
-			document.getElementById("corpointerface").classList.add("hidden");
-			document.getElementById("normalinterface").classList.remove("hidden");
+			outputhtml = `Welcome to <span class="color_kobotext">KoboldAI Lite</span>!`+
+			`<br>You are using the models <span class="color_lightgreen">${selmodelstr}</span>${(selected_workers.length == 0 ? `` : ` (Pinned to ${selected_workers.length} worker IDs)`)}.`+
+			`${whorun}.`+
+			(multiplayer_active?(!multiplayer_pinged?`<br><br><span class="color_orange">[ Trying to join Multiplayer... ]</span>`:`<br><br><span class="color_green">[ Multiplayer is <b>Active</b>! This session is shared with other server participants.]<br>[ You can leave via exit button in top right corner. ]</span>`):(is_using_kcpp_with_multiplayer()?`<br><br>[ <a href="#" tabindex="${mainmenu_is_untab?`-1`:`0`}" class="color_blueurl mainnav" onclick="join_multiplayer()"><span class="color_lightgreen">Multiplayer Available</span> - Click Here To Join</a> ]`:``))+
+			`<br><br><span class="color_orange bolded">${nowmode} Selected</span> - Enter a prompt below to begin!`+
+			`<br>Or, <a href="#" tabindex="${mainmenu_is_untab?`-1`:`0`}" class="color_blueurl mainnav" onclick="document.getElementById('loadfileinput').click()">load a <b>JSON File</b> or a <b>Character Card</b> here.</a>`+
+			`<br>Or, <a href="#" tabindex="${mainmenu_is_untab?`-1`:`0`}" class="color_blueurl mainnav" onclick="display_scenarios()">select a <b>Quick Start Scenario</b> here.</a>`+
+			`<br>${(welcome!=""?`<br><em>${escape_html(welcome)}</em>`:``)}`;
 		}
 
-		if (inEditMode && isCorpoUiStyle) {
-			document.getElementById("corpoendedit").classList.remove("hidden");
-		} else {
-			document.getElementById("corpoendedit").classList.add("hidden");
+		//kick out of edit mode
+		if (document.getElementById("allowediting").checked) {
+			document.getElementById("allowediting").checked = inEditMode = false;
+			toggle_editable();
 		}
-
-		update_submit_button(true); //full update for submit button, otherwise just text when not generating
-
-		document.getElementById("btnautogenmem").disabled = document.getElementById("btnsend").disabled;
-
-		if (localsettings.persist_session && save) {
-			autosave();
-		}
-
-		handle_autoscroll(force_scroll);
-
-		if(localsettings.printer_view)
-		{
-			document.getElementById("normalinterface").classList.add("fullscroll");
-			document.getElementById("enhancedchatinterface_inner").classList.add("fullscroll");
-		}else
-		{
-			document.getElementById("normalinterface").classList.remove("fullscroll");
-			document.getElementById("enhancedchatinterface_inner").classList.remove("fullscroll");
-		}
-
-		let maincon = document.getElementById("maincontainer");
-		if(is_corpo_ui() || localsettings.viewport_width_mode==3) //unlock
-		{
-			maincon.classList.remove("adaptivecontainer");
-			maincon.classList.remove("clampedcontainer");
-			maincon.classList.remove("bigclampedcontainer");
-			maincon.classList.remove("smallclampedcontainer");
-		}else if(localsettings.viewport_width_mode==1) //clamped
-		{
-			maincon.classList.remove("adaptivecontainer");
-			maincon.classList.add("clampedcontainer");
-			maincon.classList.remove("bigclampedcontainer");
-			maincon.classList.remove("smallclampedcontainer");
-		}
-		else if(localsettings.viewport_width_mode==2) //bigclamp
-		{
-			maincon.classList.remove("adaptivecontainer");
-			maincon.classList.remove("clampedcontainer");
-			maincon.classList.add("bigclampedcontainer");
-			maincon.classList.remove("smallclampedcontainer");
-		}
-		else if(localsettings.viewport_width_mode==4) //smallclamp
-		{
-			maincon.classList.remove("adaptivecontainer");
-			maincon.classList.remove("clampedcontainer");
-			maincon.classList.remove("bigclampedcontainer");
-			maincon.classList.add("smallclampedcontainer");
-		}
-		else //adaptive
-		{
-			maincon.classList.add("adaptivecontainer");
-			maincon.classList.remove("clampedcontainer");
-			maincon.classList.remove("bigclampedcontainer");
-			maincon.classList.remove("smallclampedcontainer");
-		}
-
-		update_genimg_button_visiblility();
-		update_websearch_button_visibility();
-
-		idle_timer = 0;
-		document.getElementById("token-budget").innerText = last_token_budget;
-		if(websearch_in_progress && localsettings.websearch_enabled && is_using_kcpp_with_websearch())
-		{
-			document.getElementById("searchingtxt").classList.remove("hidden");
-		}
-		else
-		{
-			document.getElementById("searchingtxt").classList.add("hidden");
-		}
-
-		if(localsettings.wordsearch_enabled)
-		{
-			document.getElementById("wordsearch_panel").classList.remove("hidden");
-		}else
-		{
-			document.getElementById("wordsearch_panel").classList.add("hidden");
-		}
-	}
-
-	function classic_delete_turn(idx)
-	{
-		edit_chunk_save(idx,"",true);
-	}
-	function classic_edit_turn(idx)
-	{
-		let chatunits = []; //todo: eventually refactor
-		let currctx = concat_gametext(false, "", "", "", false);
-		currctx = replace_instruct_placeholders(currctx);
-		if(localsettings.opmode==3)
-		{
-			chatunits = repack_chat_history(currctx);
-		}
-		else if(localsettings.opmode==2)
-		{
-			chatunits = repack_adventure_history(currctx);
-		}
-		else if(localsettings.opmode==1)
-		{
-			chatunits = repack_story_history(currctx);
-		}
-		else
-		{
-			chatunits = repack_instruct_history(currctx, true);
-		}
-
-		let currmsg = chatunits[idx].msg;
-		currmsg = stash_image_placeholders(currmsg, false);
-
-		inputBoxOkCancel("Quickly edit a previous turn message","Quick Edit Turn",currmsg,"(Delete Turn)",()=>{
-			let userinput = getInputBoxValue();
-			edit_chunk_save(idx,userinput,true);
-		},()=>{
-			//do nothing on cancel
-		},true,true);
-	}
-
-	function classic_click_turn(button,idx,toggleopen = true)
-	{
-		let incomplete_resp = (synchro_pending_stream != "" || pending_response_id != "");
-		if (incomplete_resp) { return; }
-
-		function handleOutsideClickClassicTurn(event) {
-			popupMenu.style.display = 'none';
-			document.removeEventListener('click', handleOutsideClickClassicTurn);
-		}
-
-		const rect = button.getBoundingClientRect();
-		const popupMenu = document.getElementById('classicturnmenu');
-
-		let popcontent = `<button type="button" onclick="classic_edit_turn(${idx})">Edit Turn</button>`;
-		popcontent += `<button type="button" onclick="classic_delete_turn(${idx})">Delete Turn</button>`;
-		popcontent += `<button type="button" onclick="">Cancel</button>`;
-		popupMenu.innerHTML = popcontent;
-
-		popupMenu.style.left = `${rect.left}px`;
-		popupMenu.style.top = `${rect.top - 10}px`;
-		popupMenu.style.transform = 'translateY(-100%)'; // makes it grow upward
-
-		document.removeEventListener('click', handleOutsideClickClassicTurn);
-		popupMenu.style.display = (popupMenu.style.display === 'flex' ? 'none' : 'flex');
-		if (!toggleopen || popupMenu.style.display === 'none') {
-			popupMenu.style.display = 'none';
-			return;
-		}
-		// if menu is open, attach outside click handler
-		if (popupMenu.style.display === 'flex') {
-			setTimeout(() => { // delay so the current button click doesn't immediately close it
-				document.addEventListener('click', handleOutsideClickClassicTurn);
-			}, 50);
-		}
+		return outputhtml;
 	}
 
 	function render_corpo_welcome()
@@ -25729,15 +25818,7 @@ Current version indicated by LITEVER below.
 			let curr = chatunits[i];
 			if(curr.msg && curr.msg!="")
 			{
-				if(localsettings.opmode==4)
-				{
-					curr = repack_postprocess_turn(curr, countmap); //change whole object
-				}
-				else
-				{
-					curr.msg = curr.msg.replace(bold_regex,"<b style='opacity:0.7'>$1</b>");
-					curr.msg = curr.msg.replace(italics_regex,"<em style='opacity:0.7'>$1</em>");
-				}
+				curr = repack_postprocess_turn(curr, countmap); //change whole object
 				//convert the msg into images
 				curr.msg = render_all_media_html(curr.msg,false,true);
 			}
@@ -26082,6 +26163,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("start_thinking_tag").value = localsettings.start_thinking_tag;
 		document.getElementById("stop_thinking_tag").value = localsettings.stop_thinking_tag;
 		document.getElementById("hide_think_stream").checked = (localsettings.hide_think_stream?true:false);
+		document.getElementById("handle_mismatched_think").checked = (localsettings.handle_mismatched_think?true:false);
 	}
 
 	function populate_placeholder_tags()
@@ -29901,6 +29983,12 @@ Current version indicated by LITEVER below.
 								<span class="helptext">Hides incomplete thoughts while streaming is in progress.</span>
 							</span> </div>
 							<input title="Hide Streaming Thinking" type="checkbox" id="hide_think_stream" class="push-right">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft">Handle Mismatched Thinking <span class="helpicon">?
+								<span class="helptext">Handles cases where the closing think block exists without the opening. Note that this only visually hides the broken thinking, it will still be treated like normal context.</span>
+							</span> </div>
+							<input title="Handle Mismatched Thinking" type="checkbox" id="handle_mismatched_think" class="push-right">
 						</div>
 					</div>
 
