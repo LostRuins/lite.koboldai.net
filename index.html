@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 <head>
 	<script id="init-config">
-	const LITEVER = 311;
+	const LITEVER = 312;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -24530,111 +24530,9 @@ Current version indicated by LITEVER below.
 			let alreadyShowedStreaming = false; //sometimes, streaming is injected inline to preserve indentation
 			let fulltxt = "";
 
-			if (inEditMode)
+			if (inEditMode) //edit mode only
 			{
 				fulltxt = concat_gametext(false, "", "%SpnStg%", "%SpnEtg%",true);
-			}
-			else
-			{
-				fulltxt = concat_gametext(false, "", "", "",true);
-				fulltxt = apply_display_only_regex(fulltxt);
-				fulltxt = replace_placeholders(fulltxt,true);
-			}
-
-			if(localsettings.opmode==4 && !inEditMode)
-			{
-				//accept all newline formats for backwards compatibility
-				fulltxt = replaceAll(fulltxt, "\n\n"+get_instruct_starttag(true)+"\n\n", `%SpcStg%`);
-				fulltxt = replaceAll(fulltxt, "\n\n"+get_instruct_endtag(true)+"\n\n", `%SpcEtg%`);
-				fulltxt = replaceAll(fulltxt, "\n"+get_instruct_starttag(true)+"\n", `%SpcStg%`);
-				fulltxt = replaceAll(fulltxt, "\n"+get_instruct_endtag(true)+"\n", `%SpcEtg%`);
-				fulltxt = replaceAll(fulltxt, get_instruct_starttag(false), `%SpcStg%`);
-				fulltxt = replaceAll(fulltxt, get_instruct_endtag(false), `%SpcEtg%`);
-				fulltxt = replaceAll(fulltxt, get_instruct_starttag(true), `%SpcStg%`);
-				fulltxt = replaceAll(fulltxt, get_instruct_endtag(true), `%SpcEtg%`);
-				if (localsettings.separate_end_tags) {
-					if (get_instruct_endtag_end(true)) {
-						fulltxt = replaceAll(fulltxt, get_instruct_endtag_end(false), ``);
-						fulltxt = replaceAll(fulltxt, get_instruct_endtag_end(true), ``);
-					}
-					if (get_instruct_starttag_end(true)) {
-						fulltxt = replaceAll(fulltxt, get_instruct_starttag_end(false), ``);
-						fulltxt = replaceAll(fulltxt, get_instruct_starttag_end(true), ``);
-					}
-				}
-
-				let instruct_turns = repack_instruct_turns(fulltxt, `%SpcStg%`,`%SpcEtg%`, true);
-				repact_instruct_turns_beautify_render(instruct_turns);
-				fulltxt = "";
-				for(let i=0;i<instruct_turns.length;++i)
-				{
-					let curr = instruct_turns[i];
-					let currmsg = curr.msg;
-
-					//in some special cases, add streaming text inline
-					let allow_cont_prev_turn = (localsettings.opmode==4 || (localsettings.opmode==3 && localsettings.allow_continue_chat));
-					if(i>0 && (i==instruct_turns.length-1) && curr.myturn==false && currmsg && allow_cont_prev_turn)
-					{
-						let codeblockcount = (currmsg.match(/```/g) || []).length; //only allow continue if not in codeblock
-						if(codeblockcount==0 || codeblockcount%2==0)
-						{
-							//inject into previous turn, only for instruct OR continuechat
-							let pend = escape_html(pending_context_preinjection) + format_streaming_text(escape_html(synchro_pending_stream));
-							if(pend)
-							{
-								currmsg += `<span class="color_pendingtext pending_text">${pend}</span>`;
-								alreadyShowedStreaming = true;
-							}
-						}
-					}
-
-					//apply stylization to time tags
-					if(localsettings.inject_timestamps && localsettings.instruct_has_markdown)
-					{
-						currmsg = currmsg.replace(/(\[\d{1,2}\/\d{1,2}\/\d{4}, \d{1,2}:\d{2} [AP]M\])/g, "$1\n");
-					}
-					if(localsettings.inject_chatnames_instruct && localsettings.instruct_has_markdown)
-					{
-						let m_name = localsettings.chatname + ": ";
-						currmsg = replaceAll(currmsg, m_name, `<b>` + escape_html(m_name) + `</b>`);
-						let m_opps = localsettings.chatopponent.split("||$||");
-						for(let i=0;i<m_opps.length;++i)
-						{
-							if(m_opps[i] && m_opps[i].trim()!="")
-							{
-								let m_opp = m_opps[i] + ": ";
-								currmsg = replaceAll(currmsg, m_opp, `<b>` + escape_html(m_opp) + `</b>`);
-							}
-						}
-					}
-
-					if(localsettings.instruct_has_markdown && (localsettings.render_streaming_markdown||synchro_pending_stream==""||(i+1)<instruct_turns.length))
-					{
-						//if a list has a starttag on the same line, add a newline before it
-						currmsg = currmsg.replace(/(\n[-*] .+?)(%SpcStg%)/g, "$1\n$2");
-						let codeblockcount = (currmsg.match(/```/g) || []).length;
-						if(codeblockcount>0 && codeblockcount%2!=0 )
-						{
-							currmsg += "```"; //force end code block
-						}
-						currmsg = simpleMarkdown(currmsg,localsettings.instruct_has_latex);
-					}
-
-					if(curr.myturn)
-					{
-						fulltxt += `<hr style="margin-top: 12px; margin-bottom: 12px;"><span class="color_kobotext"><span class="humansquare" onclick="classic_click_turn(this,${i})"></span>${currmsg}</span>`;
-					}
-					else
-					{
-						if (i == 0) {
-							fulltxt += `${currmsg}`;
-						} else {
-							fulltxt += `<hr style="margin-top: 12px; margin-bottom: 12px;"><span><span class="nikosquare" onclick="classic_click_turn(this,${i})"></span>${currmsg}</span>`;
-						}
-					}
-				}
-
-			} else {
 				fulltxt = replaceAll(fulltxt, get_instruct_starttag(true), `%SclStg%`+escape_html(get_instruct_starttag(true))+`%SpnEtg%`);
 				fulltxt = replaceAll(fulltxt, get_instruct_endtag(true), `%SclStg%`+escape_html(get_instruct_endtag(true))+`%SpnEtg%`);
 				if (localsettings.separate_end_tags) {
@@ -24661,44 +24559,111 @@ Current version indicated by LITEVER below.
 				}
 				fulltxt = replaceAll(fulltxt, instructsysplaceholder.trim(), `%SclStg%`+instructsysplaceholder.trim()+`%SpnEtg%`);
 				fulltxt = replaceAll(fulltxt, instructsysplaceholder_end.trim(), `%SclStg%`+instructsysplaceholder_end.trim()+`%SpnEtg%`);
+
+				//this is a hacky fix to handle instruct tags that use arrow brackets only
+				fulltxt = replaceAll(fulltxt, `%SpnStg%`, `<span class="txtchunk">`);
+				fulltxt = replaceAll(fulltxt, `%SclStg%`,`<span class="color_muted">`);
+				fulltxt = replaceAll(fulltxt, `%SpnEtg%`, `</span>`);
 			}
-
-			//this is a hacky fix to handle instruct tags that use arrow brackets only
-			fulltxt = replaceAll(fulltxt, `%SpnStg%`, `<span class="txtchunk">`);
-			fulltxt = replaceAll(fulltxt, `%SclStg%`,`<span class="color_muted">`);
-			fulltxt = replaceAll(fulltxt, `%SpnEtg%`, `</span>`);
-
-			if(localsettings.opmode==3)
+			else //non edit mode
 			{
-				if(!document.getElementById("allowediting").checked && !fulltxt.startsWith("\n"))
+				if(localsettings.opmode==4) //instruct mode only, non edit
 				{
-					fulltxt = "\n" + fulltxt;
-				}
+					fulltxt = concat_gametext(false, "", "", "",true);
+					let chatunits = [];
+					fulltxt = replace_instruct_placeholders(fulltxt);
+					chatunits = repack_instruct_history(fulltxt, true);
+					repact_instruct_turns_beautify_render(chatunits);
 
-				//for chat mode, highlight our name in blue and opponent in red
-				let m_name = "\n" + localsettings.chatname + ": ";
-
-				//match anything that is NOT us, ie. opponents
-				var regex = new RegExp("\n(?!" + localsettings.chatname + ").+?\: ", "gi");
-				let colormap = {}, colidx = 0;
-				fulltxt = fulltxt.replace(regex, function (m) {
-					let oname = escape_html(m);
-					let onametrim = oname.trim();
-					if(colormap[onametrim]==null)
+					fulltxt = "";
+					let countmap = new Map();
+					for(let i=0;i<chatunits.length;++i)
 					{
-						colormap[onametrim] = get_unique_color(colidx);
-						++colidx;
-					}
-					return `<span class="`+colormap[onametrim]+`">` + oname + `</span>`;
-				});
-				fulltxt = replaceAll(fulltxt,m_name, `<span class="color_blue">` + escape_html(m_name) + `</span>`);
-			}
+						let curr = chatunits[i];
 
-			//for adventure mode, highlight our actions in the theme's text highlight color
-			if (localsettings.opmode == 2) {
-				fulltxt = fulltxt.replace(/\n\n\> .+?\n/g, function (m) {
-					return `<span class="color_adventure_action">` + m + `</span>`;
-				});
+						//in some special cases, add streaming text inline
+						let allow_cont_prev_turn = (localsettings.opmode==4 || (localsettings.opmode==3 && localsettings.allow_continue_chat));
+						if(i>0 && (i==chatunits.length-1) && curr.myturn==false && curr.msg && allow_cont_prev_turn)
+						{
+							let codeblockcount = (curr.msg.match(/```/g) || []).length; //only allow continue if not in codeblock
+							if(codeblockcount==0 || codeblockcount%2==0)
+							{
+								//inject into previous turn, only for instruct OR continuechat
+								let pend = escape_html(pending_context_preinjection) + format_streaming_text(escape_html(synchro_pending_stream));
+								if(pend)
+								{
+									curr.msg += `<span class="color_pendingtext pending_text">${pend}</span>`;
+									alreadyShowedStreaming = true;
+								}
+							}
+						}
+
+						if(curr.msg && curr.msg!="")
+						{
+							curr = repack_postprocess_turn(curr, countmap, false); //change whole object
+						}
+						let currmsg = curr.msg;
+
+						let namepart = (curr.name?`<span style="font-weight: bolder;">${escape_html(curr.name)} </span><br>`:"");
+						if(localsettings.inject_chatnames_instruct)
+						{
+							currmsg = namepart + currmsg;
+						}
+
+						if(curr.myturn)
+						{
+							fulltxt += `<hr style="margin-top: 12px; margin-bottom: 12px;"><span class="color_kobotext"><span class="humansquare" onclick="classic_click_turn(this,${i})"></span>${currmsg}</span>`;
+						}
+						else
+						{
+							if (i == 0) {
+								fulltxt += `${currmsg}`;
+							} else {
+								fulltxt += `<hr style="margin-top: 12px; margin-bottom: 12px;"><span><span class="nikosquare" onclick="classic_click_turn(this,${i})"></span>${currmsg}</span>`;
+							}
+						}
+					}
+
+				}
+				else //all other modes besides instruct, non-edit
+				{
+					fulltxt = concat_gametext(false, "", "", "",true);
+					fulltxt = apply_display_only_regex(fulltxt);
+					fulltxt = replace_placeholders(fulltxt,true);
+
+					if(localsettings.opmode==3)
+					{
+						if(!inEditMode && !fulltxt.startsWith("\n"))
+						{
+							fulltxt = "\n" + fulltxt;
+						}
+
+						//for chat mode, highlight our name in blue and opponent in red
+						let m_name = "\n" + localsettings.chatname + ": ";
+
+						//match anything that is NOT us, ie. opponents
+						var regex = new RegExp("\n(?!" + localsettings.chatname + ").+?\: ", "gi");
+						let colormap = {}, colidx = 0;
+						fulltxt = fulltxt.replace(regex, function (m) {
+							let oname = escape_html(m);
+							let onametrim = oname.trim();
+							if(colormap[onametrim]==null)
+							{
+								colormap[onametrim] = get_unique_color(colidx);
+								++colidx;
+							}
+							return `<span class="`+colormap[onametrim]+`">` + oname + `</span>`;
+						});
+						fulltxt = replaceAll(fulltxt,m_name, `<span class="color_blue">` + escape_html(m_name) + `</span>`);
+					}
+
+					//for adventure mode, highlight our actions in the theme's text highlight color
+					if (localsettings.opmode == 2) {
+						fulltxt = fulltxt.replace(/\n\n\> .+?\n/g, function (m) {
+							return `<span class="color_adventure_action">` + m + `</span>`;
+						});
+					}
+				}
 			}
 
 			//streaming display for all other cases
@@ -24746,68 +24711,6 @@ Current version indicated by LITEVER below.
 			return fulltxt;
 		}
 
-
-
-		// if(localsettings.separate_end_tags) {
-		// 	if (get_instruct_starttag_end(true)) {
-		// 		input = replaceAll(input, get_instruct_starttag_end(true), "");
-		// 	}
-		// 	if (get_instruct_endtag_end(true)) {
-		// 		input = replaceAll(input, get_instruct_endtag_end(true), "");
-		// 	}
-		// 	if (get_instruct_systag_end(true)) {
-		// 		input = replaceAll(input, get_instruct_systag_end(true), "");
-		// 	}
-		// }
-
-		// let newbodystr = "";
-		// let chatunits = [];
-		// input = replace_instruct_placeholders(input);
-		// if(localsettings.opmode==3) //chat mode
-		// {
-		// 	chatunits = repack_chat_history(input);
-		// }
-		// else
-		// {
-		// 	chatunits = repack_instruct_history(input);
-		// 	repact_instruct_turns_beautify_render(chatunits);
-		// }
-
-		// let colormap = {}, colidx = 0;
-		// let countmap = new Map();
-		// for(var i=0;i<chatunits.length;++i)
-		// {
-		// 	let curr = chatunits[i];
-		// 	if(curr.msg && curr.msg!="")
-		// 	{
-		// 		curr = repack_postprocess_turn(curr, countmap); //change whole object
-		// 		//convert the msg into images
-		// 		curr.msg = render_all_media_html(curr.msg,false,true);
-		// 	}
-
-		// 	if(curr.myturn)
-		// 	{
-		// 		let namepart = (curr.name?`<span style="font-weight: bolder;color:var(--theme_color_user_name);">${escape_html(curr.name)}</span><br>`:"");
-		// 		newbodystr += `<div class="chat_outgoing_msg"><div class="chat_sent_msg"><p>`+namepart+curr.msg+`</p></div></div>`;
-		// 	}else{
-		// 		let oname = (curr.name?escape_html(curr.name):"");
-		// 		let onametrim = oname.trim();
-		// 		if(colormap[onametrim]==null)
-		// 		{
-		// 			colormap[onametrim] = get_unique_color(colidx);
-		// 			++colidx;
-		// 		}
-		// 		let namepart = (curr.name?`<span class='${colormap[onametrim]}' style="font-weight: bolder;">${oname}</span><br>`:"");
-		// 		newbodystr += `<div class="incoming_msg"><div class="chat_received_msg"><div class="chat_received_withd_msg"><p>`+namepart+curr.msg+`</p></div></div></div>`;
-		// 	}
-
-		// }
-		// if(synchro_pending_stream!="")
-		// {
-		// 	newbodystr += `<div class="incoming_msg"><div class="chat_received_msg"><div class="chat_received_withd_msg"><p><span class="color_pendingtext pending_text">` + escape_html(pending_context_preinjection) + format_streaming_text(escape_html(synchro_pending_stream)) + `</span></p></div></div></div>`;
-		// }
-
-		// return newbodystr;
 	}
 
 	function render_regular_welcome()
@@ -25024,7 +24927,7 @@ Current version indicated by LITEVER below.
 		}
 	}
 
-	function repack_postprocess_turn(currchatunit, countmap)
+	function repack_postprocess_turn(currchatunit, countmap, centerimages)
 	{
 		let processed_msg = currchatunit.msg;
 		processed_msg = apply_display_only_regex(processed_msg);
@@ -25042,7 +24945,7 @@ Current version indicated by LITEVER below.
 			}
 
 			//convert the msg into images
-			processed_msg = render_all_media_html(processed_msg,false,true);
+			processed_msg = render_all_media_html(processed_msg,false,centerimages);
 		}
 
 		let namepart = (currchatunit.myturn ? "User" : cosmetic_corpo_ai_nick);
@@ -25509,11 +25412,11 @@ Current version indicated by LITEVER below.
 			let curr = chatunits[i];
 			if(corpo_editing_turn != i)
 			{
-				curr = repack_postprocess_turn(curr, countmap); //change whole object
+				curr = repack_postprocess_turn(curr, countmap, true); //change whole object
 			}
 			else
 			{
-				let reshaped = repack_postprocess_turn(JSON.parse(JSON.stringify(curr)), countmap);
+				let reshaped = repack_postprocess_turn(JSON.parse(JSON.stringify(curr)), countmap, true);
 				curr.name = reshaped.name; //only change name
 			}
 
@@ -25818,7 +25721,7 @@ Current version indicated by LITEVER below.
 			let curr = chatunits[i];
 			if(curr.msg && curr.msg!="")
 			{
-				curr = repack_postprocess_turn(curr, countmap); //change whole object
+				curr = repack_postprocess_turn(curr, countmap, true); //change whole object
 				//convert the msg into images
 				curr.msg = render_all_media_html(curr.msg,false,true);
 			}
@@ -27505,7 +27408,7 @@ Current version indicated by LITEVER below.
 				return temphtmlstash[p];
 			});
 
-			curr = repack_postprocess_turn(curr, countmap);
+			curr = repack_postprocess_turn(curr, countmap, true);
 			if(curr.add_stream_msg)
 			{
 				curr.msg += curr.add_stream_msg; //add it last so it doesnt mess up the pending_text tags
