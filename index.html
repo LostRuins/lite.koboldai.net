@@ -2267,7 +2267,7 @@ Current version indicated by LITEVER below.
 	}
 
 	.chat_received_withd_msg {
-		width: 99%;
+		width: 100%;
 		background: var(--theme_color_ai_msg_bg) none repeat scroll 0 0;
 		border-radius: 0 15px 15px 15px;
 		color: var(--theme_color_ai_msg_fg);
@@ -4457,6 +4457,7 @@ Current version indicated by LITEVER below.
 		darkmode: true,
 		colortheme: 0, // 0=newtheme, 1=oldtheme, 2=fruity, 3=black
 		render_streaming_markdown: true,
+		show_nametags: true,
 		enable_tool_use: false,
 		tools_auto_exec: false,
 		corsproxy_mcp: false,
@@ -15309,6 +15310,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("allow_continue_user_turn").checked = localsettings.allow_continue_user_turn;
 		document.getElementById("proxy_disable_stream").checked = localsettings.proxy_disable_stream;
 		document.getElementById("render_streaming_markdown").checked = localsettings.render_streaming_markdown;
+		document.getElementById("show_nametags").checked = localsettings.show_nametags;
 		document.getElementById("min_p").value = localsettings.min_p;
 		document.getElementById("dynatemp_range").value = localsettings.dynatemp_range;
 		document.getElementById("dynatemp_exponent").value = localsettings.dynatemp_exponent;
@@ -16177,6 +16179,7 @@ Current version indicated by LITEVER below.
 		localsettings.allow_continue_user_turn = (document.getElementById("allow_continue_user_turn").checked ? true : false);
 		localsettings.proxy_disable_stream = (document.getElementById("proxy_disable_stream").checked ? true : false);
 		localsettings.render_streaming_markdown = (document.getElementById("render_streaming_markdown").checked ? true : false);
+		localsettings.show_nametags = (document.getElementById("show_nametags").checked ? true : false);
 		if(document.getElementById("opmode").value==1)
 		{
 			localsettings.gui_type_story = document.getElementById("gui_type").value;
@@ -24605,7 +24608,7 @@ Current version indicated by LITEVER below.
 						let currmsg = curr.msg;
 
 						let namepart = (curr.name?`<span style="font-weight: bolder;">${escape_html(curr.name)} </span><br>`:"");
-						if(localsettings.inject_chatnames_instruct)
+						if(localsettings.inject_chatnames_instruct && localsettings.show_nametags)
 						{
 							currmsg = namepart + currmsg;
 						}
@@ -25454,9 +25457,10 @@ Current version indicated by LITEVER below.
 				newbodystr += `<div style="width:100%">`;
 			}
 			else {
+				let nametag = (localsettings.show_nametags?`<div class="corpostyleitemheading">${curr.name}</div>`:``);
 				newbodystr += `<div><img ${(curr.myturn ? "" : `onclick="corpo_click_avatar()"`)} src="${(curr.myturn ? human_square : niko_square)}" class="corpoavatar"/></div>
 				<div style="width:100%">
-				<div class="corpostyleitemheading">`+ curr.name + `</div>`;
+				${nametag}`;
 			}
 
 			newbodystr += bodypart + chunkbtns + `</div></div>`;
@@ -25474,14 +25478,15 @@ Current version indicated by LITEVER below.
 			if (localsettings.opmode == 1) {
 				newbodystr += `
 				<div>
-				<div class="corpostyleitemcontent"><p><span class="pending_text">`+ futuretext + `</span></p></div>
+				<div class="corpostyleitemcontent"><p><span class="pending_text">${futuretext}</span></p></div>
 				</div>`;
 			}
 			else {
-				newbodystr += `<div><img src="` + niko_square + `" class="corpoavatar"/></div>
+				let nametag = (localsettings.show_nametags?`<div class="corpostyleitemheading">${namepart}</div>`:``);
+				newbodystr += `<div><img src="${niko_square}" class="corpoavatar"/></div>
 				<div>
-				<div class="corpostyleitemheading">`+ namepart +`</div>
-				<div class="corpostyleitemcontent"><p><span class="pending_text">`+ futuretext +`</span></p></div>
+				${nametag}
+				<div class="corpostyleitemcontent"><p><span class="pending_text">${futuretext}</span></p></div>
 				</div>`;
 			}
 			newbodystr += `</div>`;
@@ -25729,6 +25734,10 @@ Current version indicated by LITEVER below.
 			if(curr.myturn)
 			{
 				let namepart = (curr.name?`<span style="font-weight: bolder;color:var(--theme_color_user_name);">${escape_html(curr.name)}</span><br>`:"");
+				if(!localsettings.show_nametags)
+				{
+					namepart = "";
+				}
 				newbodystr += `<div class="chat_outgoing_msg"><div class="chat_sent_msg"><p>`+namepart+curr.msg+`</p></div></div>`;
 			}else{
 				let oname = (curr.name?escape_html(curr.name):"");
@@ -25739,6 +25748,10 @@ Current version indicated by LITEVER below.
 					++colidx;
 				}
 				let namepart = (curr.name?`<span class='${colormap[onametrim]}' style="font-weight: bolder;">${oname}</span><br>`:"");
+				if(!localsettings.show_nametags)
+				{
+					namepart = "";
+				}
 				newbodystr += `<div class="incoming_msg"><div class="chat_received_msg"><div class="chat_received_withd_msg"><p>`+namepart+curr.msg+`</p></div></div></div>`;
 			}
 
@@ -26953,7 +26966,6 @@ Current version indicated by LITEVER below.
 			this.portrait_width_you = 80;
 			this.portrait_ratio_you = 1.0;
 
-			this.show_chat_names = true;
 			this.rounded_bubbles = true;
 			this.match_background = false;
 
@@ -27124,7 +27136,6 @@ Current version indicated by LITEVER below.
 
 		aestheticInstructUISettings.match_background = document.getElementById('aui_match_background').checked;
 		aestheticInstructUISettings.rounded_bubbles = document.getElementById('aui_rounded_bubbles').checked;
-		aestheticInstructUISettings.show_chat_names = document.getElementById('aui_show_chat_names').checked;
 		aestheticInstructUISettings.font_size = document.getElementById('instruct-font-size').value;
 		aestheticInstructUISettings.border_style = document.getElementById('instructBorderStyle').value;
 		aestheticInstructUISettings.portrait_width_AI = document.getElementById('portrait_width_AI').value;
@@ -27176,7 +27187,6 @@ Current version indicated by LITEVER below.
 		// Apply the settings from the json file to the UI.
 		document.getElementById('aui_match_background').checked = aestheticInstructUISettings.match_background;
 		document.getElementById('aui_rounded_bubbles').checked = aestheticInstructUISettings.rounded_bubbles;
-		document.getElementById('aui_show_chat_names').checked = aestheticInstructUISettings.show_chat_names;
 		document.getElementById('instruct-font-size').value = aestheticInstructUISettings.font_size;
 		document.getElementById('instructBorderStyle').value = aestheticInstructUISettings.border_style;
 		document.getElementById('portrait_width_AI').value = aestheticInstructUISettings.portrait_width_AI;
@@ -27419,7 +27429,7 @@ Current version indicated by LITEVER below.
 				continue; //if turn is empty skip it
 			}
 
-			let namepart = (curr.name!="" && as.show_chat_names?`<p class='aui_nametag'>${escape_html(curr.name)}</p>`:"");
+			let namepart = (curr.name!="" && localsettings.show_nametags?`<p class='aui_nametag'>${escape_html(curr.name)}</p>`:"");
 			let showavatar = true;
 
 			//adventure and story has no names or avatars, also handle unlabelled first turns for chat/instruct
@@ -28961,6 +28971,11 @@ Current version indicated by LITEVER below.
 								<input type="checkbox" title="Enable LaTeX (Needs Markdown)" id="instruct_has_latex" class="push-right">
 						</div>
 						<div class="settinglabel">
+							<div class="justifyleft">Show Nametags <span class="helpicon">?<span
+								class="helptext">Controls if user and AI nametags are shown or hidden. Recommended.</span></span></div>
+							<input title="Show Nametags" type="checkbox" id="show_nametags" class="push-right">
+						</div>
+						<div class="settinglabel">
 							<div class="justifyleft">Autoscroll <span class="helpicon">?<span
 								class="helptext">Automatically scrolls the text window down when new text is generated</span></span></div>
 							<input title="Autoscroll Text" type="checkbox" id="autoscroll" class="push-right">
@@ -30249,10 +30264,6 @@ Current version indicated by LITEVER below.
 										<div>						 <span class="rectPortraitMode">Size: </span><input id="portrait_width_AI"  type="number" placeholder="100" value="100" style='width:44px;height:20px;font-size:10px;'/></div>
 										<div>px</div>
 										<div style="margin-left:20px"><span class="rectPortraitMode">A/R: </span><input id="portrait_ratio_AI" type="number" placeholder="1.0" step="0.01" value="1.0" style='width:46px;height:20px;font-size:10px;' class="rectPortraitMode"/></div>
-									</div>
-									<div class="ui-settings-inline" style="font-size: 10px; margin-left: 10px">
-										<div style="padding-top: 2px;">Show Names (Chat Mode): </div>
-										<input id="aui_show_chat_names" type="checkbox" style="height: 10px">
 									</div>
 								</div>
 							</div>
