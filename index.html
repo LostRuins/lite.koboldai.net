@@ -7044,7 +7044,8 @@ Current version indicated by LITEVER below.
 		synchro_pending_stream = "";
 		streaming_was_thinking = false;
 		let logprobs_content_arr = [];
-		let pending_toolcall_obj = null;
+		let pending_toolcall_objs = [];
+		let pending_toolcall_last_obj = null;
 		let reqOpt =
 		{method: 'POST',
 		headers: submit_headers,
@@ -7189,38 +7190,21 @@ Current version indicated by LITEVER below.
 								else if(event.data.choices[0].delta && !event.data.choices[0].delta.content && event.data.choices[0].delta.tool_calls && event.data.choices[0].delta.tool_calls.length>0)
 								{
 									//handle tool calls
-									if(pending_toolcall_obj==null)
-									{
-										pending_toolcall_obj = {};
-									}
 									let itm = event.data.choices[0].delta.tool_calls[0];
 									if(itm.id)
 									{
-										pending_toolcall_obj.id = itm.id;
+										pending_toolcall_last_obj = {"id": itm.id};
+										pending_toolcall_objs.push(pending_toolcall_last_obj);
 									}
 									if(itm.function)
 									{
 										if(itm.function.name)
 										{
-											if(!pending_toolcall_obj.name)
-											{
-												pending_toolcall_obj.name = itm.function.name;
-											}
-											else if(pending_toolcall_obj.name!=itm.function.name)
-											{
-												pending_toolcall_obj.name += itm.function.name;
-											}
+											pending_toolcall_last_obj.name = itm.function.name;
 										}
 										if(itm.function.arguments)
 										{
-											if(!pending_toolcall_obj.arguments)
-											{
-												pending_toolcall_obj.arguments = itm.function.arguments;
-											}
-											else
-											{
-												pending_toolcall_obj.arguments += itm.function.arguments;
-											}
+											pending_toolcall_last_obj.arguments = itm.function.arguments;
 										}
 									}
 								}
@@ -7298,10 +7282,10 @@ Current version indicated by LITEVER below.
 					{
 						synchro_polled_response = cleanup_story_completion(synchro_polled_response);
 					}
-					if(synchro_polled_response=="" && last_stop_reason=="tool_calls" && pending_toolcall_obj!=null)
+					if(synchro_polled_response=="" && last_stop_reason=="tool_calls" && pending_toolcall_objs.length>0)
 					{
 						//a tool call was triggered instead
-						synchro_polled_resptoolcall = pending_toolcall_obj;
+						synchro_polled_resptoolcall = pending_toolcall_objs;
 					}
 					synchro_pending_stream = "";
 					streaming_was_thinking = false;
@@ -8200,14 +8184,25 @@ Current version indicated by LITEVER below.
 					let tgt = replaceStringsInObject(response.content[0],"&quot;","\""); //we must remove existing escaped quotes or things break later
 					callresp.content = JSON.stringify(tgt);
 				}
-				callresptxt += JSON.stringify(callresp) + get_instructendplaceholder();
+				callresptxt += JSON.stringify(callresp);
+				if(toolcall_obj.tool_calls.length<2)
+				{
+					callresptxt += get_instructendplaceholder();
+				}
 				gametext_arr.push(callresptxt);
 				console.log(response);
-				pending_response_id = "";
-				poll_in_progress = false;
-				show_abort_button(false);
-				submit_generation(""); //generate final response or new toolcall
-				render_gametext(false,false);
+				if(toolcall_obj.tool_calls.length>1)
+				{
+					MCPToolCall({"tool_calls":toolcall_obj.tool_calls.slice(1)});
+				}
+				else
+				{
+					pending_response_id = "";
+					poll_in_progress = false;
+					show_abort_button(false);
+					submit_generation(""); //generate final response or new toolcall
+					render_gametext(false,false);
+				}
 			}).catch(function (error) {
 				// Handle errors
 				callresp.content = "{\"error\": \"Tool call failed\"}";
@@ -23400,19 +23395,20 @@ Current version indicated by LITEVER below.
 						render_gametext(true,false); //only scroll to bottom if autoscroll is on
 						sync_multiplayer(false);
 					}
-					if(synchro_polled_resptoolcall && localsettings.cached_mcp_tools)
+					if(synchro_polled_resptoolcall && synchro_polled_resptoolcall.length>0 && localsettings.cached_mcp_tools)
 					{
 						//if valid, execute the tool call and get the result
-						let savedcallobj = {"tool_calls": [
-							{
-							"id": synchro_polled_resptoolcall.id,
-							"type": "function",
-							"function": {
-								"name": synchro_polled_resptoolcall.name,
-								"arguments": synchro_polled_resptoolcall.arguments
-							}
-							}
-						]};
+						let savedcallobj = {"tool_calls": []};
+						for (const toolcall of synchro_polled_resptoolcall) {
+							savedcallobj.tool_calls.push({
+								"id": toolcall.id,
+								"type": "function",
+								"function": {
+									"name": toolcall.name,
+									"arguments": toolcall.arguments
+								}
+							});
+						}
 
 						let calltxt = "";
 						if(!(gametext_arr.length>0 && gametext_arr[gametext_arr.length-1].trim().endsWith("{{[OUTPUT]}}")))
