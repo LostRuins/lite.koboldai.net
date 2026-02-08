@@ -8241,14 +8241,25 @@ Current version indicated by LITEVER below.
 					let tgt = replaceStringsInObject(response.content[0],"&quot;","\""); //we must remove existing escaped quotes or things break later
 					callresp.content = JSON.stringify(tgt);
 				}
-				callresptxt += JSON.stringify(callresp) + get_instructendplaceholder();
+				callresptxt += JSON.stringify(callresp);
+				if(toolcall_obj.tool_calls.length < 2)
+				{
+					callresptxt += get_instructendplaceholder();
+				}
 				gametext_arr.push(callresptxt);
 				console.log(response);
-				pending_response_id = "";
-				poll_in_progress = false;
-				show_abort_button(false);
-				submit_generation(""); //generate final response or new toolcall
-				render_gametext(false,false);
+				if(toolcall_obj.tool_calls.length > 1)
+				{
+					MCPToolCall({"tool_calls":toolcall_obj.tool_calls.slice(1)});
+				}
+				else
+				{
+					pending_response_id = "";
+					poll_in_progress = false;
+					show_abort_button(false);
+					submit_generation(""); //generate final response or new toolcall
+					render_gametext(false,false);
+				}
 			}).catch(function (error) {
 				// Handle errors
 				callresp.content = "{\"error\": \"Tool call failed\"}";
