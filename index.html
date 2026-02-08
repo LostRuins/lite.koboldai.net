@@ -4240,7 +4240,7 @@ Current version indicated by LITEVER below.
 	var uses_cors_proxy = false; //we start off attempting a direct connection. switch to proxy if that fails
 	var synchro_polled_response = null;
 	var synchro_polled_respimg = null; //sometimes a LLM response can also include an image.
-	var synchro_polled_resptoolcall = null; //set if a tool call was triggered
+	var synchro_polled_resptoolcalls = null; //set if a tool call was triggered
 	var last_stop_reason = ""; //update stop reason if known
 	var synchro_pending_stream = ""; //used for storing incomplete streaming text
 	var streaming_was_thinking = false; //used as a switch to determine when thinking ends, to wrap output in tags
@@ -6927,7 +6927,7 @@ Current version indicated by LITEVER below.
 			}else if (custom_gemini_key != "" && data.candidates != null && data.candidates.length>0 && data.candidates[0].content && data.candidates[0].content.parts != null && data.candidates[0].content.parts.length>0) {
 				synchro_polled_response = "";
 				synchro_polled_respimg = null;
-				synchro_polled_resptoolcall = null;
+				synchro_polled_resptoolcalls = null;
 				for(let x=0;x<data.candidates[0].content.parts.length;++x)
 				{
 					if(!synchro_polled_respimg && data.candidates[0].content.parts[x].inlineData && data.candidates[0].content.parts[x].inlineData.data)
@@ -6978,7 +6978,7 @@ Current version indicated by LITEVER below.
 		.then((data) => {
 			console.log("sync finished response: " + JSON.stringify(data));
 			last_response_obj = JSON.parse(JSON.stringify(data));
-			if (custom_oai_key != "" && data.choices != null && data.choices.length > 0) {
+			if ((custom_oai_key != "" || determine_if_mcp_active()) && data.choices != null && data.choices.length > 0) {
 				let dch = data.choices[0];
 				if (dch.text) {
 					synchro_polled_response = dch.text;
@@ -7003,6 +7003,15 @@ Current version indicated by LITEVER below.
 						else
 						{
 							synchro_polled_response = `${localsettings.start_thinking_tag}${reasoningtxt}${localsettings.stop_thinking_tag}${dch.message.content}`;
+						}
+					}
+
+					if(dch.message.tool_calls && dch.message.tool_calls.length>0)
+					{
+						synchro_polled_resptoolcalls = dch.message.tool_calls;
+						if(!synchro_polled_response)
+						{
+							synchro_polled_response = "";
 						}
 					}
 
@@ -7198,21 +7207,40 @@ Current version indicated by LITEVER below.
 								else if(event.data.choices[0].delta && !event.data.choices[0].delta.content && event.data.choices[0].delta.tool_calls && event.data.choices[0].delta.tool_calls.length>0)
 								{
 									//handle tool calls
-									let itm = event.data.choices[0].delta.tool_calls[0];
-									if(itm.id)
+									if(pending_toolcall_last_obj==null)
 									{
-										pending_toolcall_last_obj = {"id": itm.id};
-										pending_toolcall_objs.push(pending_toolcall_last_obj);
+										pending_toolcall_last_obj = {};
 									}
-									if(itm.function)
+
+									for(let x=0;x<event.data.choices[0].delta.tool_calls.length;++x)
 									{
-										if(itm.function.name)
-										{
-											pending_toolcall_last_obj.name = itm.function.name;
+										let itm = event.data.choices[0].delta.tool_calls[x];
+
+										//if the incoming tool chunk has a different id, it's the next tool. stash current tool and proceed
+										if ((pending_toolcall_last_obj.id && itm.id && pending_toolcall_last_obj.id != itm.id)) {
+											pending_toolcall_objs.push(pending_toolcall_last_obj);
+											pending_toolcall_last_obj = {};
 										}
-										if(itm.function.arguments)
-										{
-											pending_toolcall_last_obj.arguments = itm.function.arguments;
+										if (itm.id) {
+											pending_toolcall_last_obj.id = itm.id;
+										}
+										if (itm.function) {
+											if (itm.function.name) {
+												if (!pending_toolcall_last_obj.name) {
+													pending_toolcall_last_obj.name = itm.function.name;
+												}
+												else if (pending_toolcall_last_obj.name != itm.function.name) {
+													pending_toolcall_last_obj.name += itm.function.name;
+												}
+											}
+											if (itm.function.arguments) {
+												if (!pending_toolcall_last_obj.arguments) {
+													pending_toolcall_last_obj.arguments = itm.function.arguments;
+												}
+												else {
+													pending_toolcall_last_obj.arguments += itm.function.arguments;
+												}
+											}
 										}
 									}
 								}
@@ -7290,10 +7318,31 @@ Current version indicated by LITEVER below.
 					{
 						synchro_polled_response = cleanup_story_completion(synchro_polled_response);
 					}
-					if(synchro_polled_response=="" && last_stop_reason=="tool_calls" && pending_toolcall_objs.length>0)
+					//cleanup incomplete tool
+					if(pending_toolcall_last_obj && pending_toolcall_last_obj.id)
+					{
+						pending_toolcall_objs.push(pending_toolcall_last_obj);
+						pending_toolcall_last_obj = null;
+					}
+					if(synchro_polled_response=="" && last_stop_reason=="tool_calls" && pending_toolcall_objs!=null && pending_toolcall_objs.length>0)
 					{
 						//a tool call was triggered instead
-						synchro_polled_resptoolcall = pending_toolcall_objs;
+						synchro_polled_resptoolcalls = [];
+						for(let i=0;i<pending_toolcall_objs.length;++i)
+						{
+							let item = pending_toolcall_objs[i];
+							let tool =
+							{
+								"id": item.id,
+								"type": "function",
+								"function": {
+									"name": item.name,
+									"arguments": item.arguments
+								}
+							};
+							synchro_polled_resptoolcalls.push(tool);
+
+						}
 					}
 					synchro_pending_stream = "";
 					streaming_was_thinking = false;
@@ -8193,13 +8242,13 @@ Current version indicated by LITEVER below.
 					callresp.content = JSON.stringify(tgt);
 				}
 				callresptxt += JSON.stringify(callresp);
-				if(toolcall_obj.tool_calls.length<2)
+				if(toolcall_obj.tool_calls.length < 2)
 				{
 					callresptxt += get_instructendplaceholder();
 				}
 				gametext_arr.push(callresptxt);
 				console.log(response);
-				if(toolcall_obj.tool_calls.length>1)
+				if(toolcall_obj.tool_calls.length > 1)
 				{
 					MCPToolCall({"tool_calls":toolcall_obj.tool_calls.slice(1)});
 				}
@@ -9323,6 +9372,11 @@ Current version indicated by LITEVER below.
 	function determine_if_can_use_mcp()
 	{
 		return (custom_oai_key!="" && document.getElementById("useoaichatcompl").checked) || is_using_kcpp_with_streaming();
+	}
+
+	function determine_if_mcp_active()
+	{
+		return (localsettings.enable_tool_use && determine_if_can_use_mcp() && localsettings.cached_mcp_tools && Object.keys(localsettings.cached_mcp_tools).length>0);
 	}
 
 	//returns true if the current multimodal setup for some media can be used, otherwise false.
@@ -17339,7 +17393,7 @@ Current version indicated by LITEVER below.
 		poll_in_progress = false;
 		synchro_polled_response = null;
 		synchro_polled_respimg = null;
-		synchro_polled_resptoolcall = null;
+		synchro_polled_resptoolcalls = null;
 		last_stop_reason = "";
 		synchro_pending_stream = "";
 		streaming_was_thinking = false;
@@ -17371,7 +17425,7 @@ Current version indicated by LITEVER below.
 		pending_response_id = "";
 		synchro_polled_response = null;
 		synchro_polled_respimg = null;
-		synchro_polled_resptoolcall = null;
+		synchro_polled_resptoolcalls = null;
 		last_stop_reason = "";
 		synchro_pending_stream = "";
 		streaming_was_thinking = false;
@@ -20321,7 +20375,7 @@ Current version indicated by LITEVER below.
 			poll_in_progress = false;
 			synchro_polled_response = null;
 			synchro_polled_respimg = null;
-			synchro_polled_resptoolcall = null;
+			synchro_polled_resptoolcalls = null;
 			last_stop_reason = "";
 			synchro_pending_stream = "";
 			streaming_was_thinking = false;
@@ -20340,7 +20394,7 @@ Current version indicated by LITEVER below.
 				last_response_streamlog = "";
 
 				if(localsettings.opmode==4 &&
-				(is_using_kcpp_with_jinja() || (localsettings.enable_tool_use && determine_if_can_use_mcp() && localsettings.cached_mcp_tools && Object.keys(localsettings.cached_mcp_tools).length>0)))
+				(is_using_kcpp_with_jinja() || determine_if_mcp_active()))
 				{
 					//for tool calling, we hijack the oai endpoint in order to utilize
 					let combinedprompt = submit_payload.prompt;
@@ -20378,7 +20432,7 @@ Current version indicated by LITEVER below.
 						}
 						submit_payload.messages.push(cturn);
 					}
-					if(localsettings.enable_tool_use && determine_if_can_use_mcp() && localsettings.cached_mcp_tools && Object.keys(localsettings.cached_mcp_tools).length>0)
+					if(determine_if_mcp_active())
 					{
 						let senttools = MCPGetAllowedTools();
 						if(senttools.length>0)
@@ -20569,7 +20623,7 @@ Current version indicated by LITEVER below.
 						}
 					}
 
-					if(localsettings.enable_tool_use && determine_if_can_use_mcp() && localsettings.cached_mcp_tools && Object.keys(localsettings.cached_mcp_tools).length>0)
+					if(determine_if_mcp_active())
 					{
 						let senttools = MCPGetAllowedTools();
 						if(senttools.length>0)
@@ -23421,20 +23475,10 @@ Current version indicated by LITEVER below.
 						render_gametext(true,false); //only scroll to bottom if autoscroll is on
 						sync_multiplayer(false);
 					}
-					if(synchro_polled_resptoolcall && synchro_polled_resptoolcall.length>0 && localsettings.cached_mcp_tools)
+					if(synchro_polled_resptoolcalls && synchro_polled_resptoolcalls.length>0 && localsettings.cached_mcp_tools)
 					{
 						//if valid, execute the tool call and get the result
-						let savedcallobj = {"tool_calls": []};
-						for (const toolcall of synchro_polled_resptoolcall) {
-							savedcallobj.tool_calls.push({
-								"id": toolcall.id,
-								"type": "function",
-								"function": {
-									"name": toolcall.name,
-									"arguments": toolcall.arguments
-								}
-							});
-						}
+						let savedcallobj = {"tool_calls": synchro_polled_resptoolcalls};
 
 						let calltxt = "";
 						if(!(gametext_arr.length>0 && gametext_arr[gametext_arr.length-1].trim().endsWith("{{[OUTPUT]}}")))
@@ -23449,7 +23493,7 @@ Current version indicated by LITEVER below.
 							MCPToolCall(savedcallobj);
 						}
 
-						synchro_polled_resptoolcall = null;
+						synchro_polled_resptoolcalls = null;
 						render_gametext(false,false);
 					}
 					if(synchro_polled_respimg)
