@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 <head>
 	<script id="init-config">
-	const LITEVER = 312;
+	const LITEVER = 313;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -7173,6 +7173,14 @@ Current version indicated by LITEVER below.
 									else if(streaming_was_thinking)
 									{
 										streaming_was_thinking = false;
+										//if there is some final reasoning, add it
+										if(event.data.choices[0].delta.reasoning_content!=null&& event.data.choices[0].delta.reasoning_content!="")
+										{
+											synchro_pending_stream += event.data.choices[0].delta.reasoning_content;
+										}else if(event.data.choices[0].delta.reasoning!=null&& event.data.choices[0].delta.reasoning!="")
+										{
+											synchro_pending_stream += event.data.choices[0].delta.reasoning;
+										}
 										synchro_pending_stream = `${localsettings.start_thinking_tag}${synchro_pending_stream}${localsettings.stop_thinking_tag}`;
 									}
 									synchro_pending_stream += cnt;
@@ -12864,11 +12872,29 @@ Current version indicated by LITEVER below.
 			if(coai!="")
 			{
 				coai = coai.toLowerCase();
-				for (var i = 0; i < dropdown.options.length; i++) {
-					if (dropdown.options[i].text.toLowerCase().indexOf(coai) !== -1) {
-						dropdown.selectedIndex = i;
-						break;
+				let findparts = coai.split(" ").filter(x => (x && x != ""));
+				//first search for all matches
+				let foundidx = -1;
+				let bestmatches = 0;
+				for (var i = 0; i < dropdown.options.length; i++)
+				{
+					let matchcount = 0;
+					for(let x=0;x<findparts.length;++x)
+					{
+						let part = findparts[x];
+						if (dropdown.options[i].text.toLowerCase().indexOf(part) !== -1) {
+							++matchcount;
+						}
 					}
+					if (matchcount > bestmatches)
+					{
+						foundidx = i;
+						bestmatches = matchcount;
+					}
+				}
+				if(foundidx>=0)
+				{
+					dropdown.selectedIndex = foundidx;
 				}
 			}
 			oai_model_change(ep_should_always_use_chat_completions());
@@ -20415,7 +20441,7 @@ Current version indicated by LITEVER below.
 						oai_payload.logprobs = 5;
 					}
 				}
-				if(!targetep.toLowerCase().includes("api.x.ai"))
+				if(!targetep.toLowerCase().includes("api.x.ai") && !targetep.toLowerCase().includes("api.perplexity.ai"))
 				{
 					//grok has no support for stop
 					oai_payload.stop = get_stop_sequences().slice(0, 4); //lets try adding stop sequences, limit to first 4
