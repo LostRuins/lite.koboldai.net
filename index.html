@@ -24129,6 +24129,7 @@ Current version indicated by LITEVER below.
 	var suppressScrollEvent = false;
 	var autoscrollTimeout = null;
 	let autoscrollRAF = null;
+	var lastScrollTop = 0;
 	function handle_autoscroll(alwaysscroll = true) {
 		if (!localsettings.autoscroll) return;
 
@@ -24145,8 +24146,7 @@ Current version indicated by LITEVER below.
 			if (!boxes.length) return;
 
 			// ---- READ PHASE (no writes) ----
-			const threshold = autoscrollEnabled ? 210 : 65;
-
+			const threshold = autoscrollEnabled ? 210 : 70;
 			const scrollData = boxes.map(el => {
 				const maxScrollTop = el.scrollHeight - el.clientHeight + 10;
 				const isAtBottom =
@@ -24168,14 +24168,18 @@ Current version indicated by LITEVER below.
 	function attach_scroll_detection(element)
 	{
 		element.addEventListener("scroll", () => {
+			const currentScrollTop = element.scrollTop;
+        	const delta = currentScrollTop - lastScrollTop;
+        	lastScrollTop = currentScrollTop;
 			if (suppressScrollEvent) { return; }
+			if (delta>=0) { return; }
 			autoscrollEnabled = false;
 			if (autoscrollTimeout) {
 				clearTimeout(autoscrollTimeout);
 			}
 			autoscrollTimeout = setTimeout(() => {
 				autoscrollEnabled = true;
-			}, 140);
+			}, 160);
 		});
 	}
 
