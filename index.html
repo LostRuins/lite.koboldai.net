@@ -4317,6 +4317,7 @@ Current version indicated by LITEVER below.
 	var websearch_in_progress = false;
 	var kcpp_tts_json = "";
 	var avoidwelcome = false;
+	var voicecloneb64 = "";
 
 	var localsettings = {
 		my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
@@ -5480,8 +5481,9 @@ Current version indicated by LITEVER below.
 		indexeddb_load("savedcustomcss",""),
 		indexeddb_load("savedusermod",""),
 		indexeddb_load("usermodprops",""),
-		indexeddb_load("samplerpresets","")
-	]).then(([loadedsettingsjson, loadedstorycompressed, loadedbackgroundimg, currcss, currmod, modpropsstr, loadedsamplerpresetsjson]) => {
+		indexeddb_load("samplerpresets",""),
+		indexeddb_load("voiceclone","")
+	]).then(([loadedsettingsjson, loadedstorycompressed, loadedbackgroundimg, currcss, currmod, modpropsstr, loadedsamplerpresetsjson, loadedvoiceclone]) => {
 	try
 	{
 		if (loadedsettingsjson != null && loadedsettingsjson != "" && loadedstorycompressed != null && loadedstorycompressed != "") {
@@ -5528,6 +5530,10 @@ Current version indicated by LITEVER below.
 				document.getElementById("gamescreen").classList.add("translucentbg");
 				document.getElementById("enhancedchatinterface").classList.add("transparentbg");
 				document.getElementById("enhancedchatinterface_inner").classList.add("transparentbg");
+			}
+			if(loadedvoiceclone && loadedvoiceclone!="")
+			{
+				voicecloneb64 = loadedvoiceclone;
 			}
 			loadok = true;
 		} else {
@@ -17364,9 +17370,9 @@ Current version indicated by LITEVER below.
 		}
 	}
 
-	function set_voice_clone()
+	function set_voice_json()
 	{
-		inputBoxOkCancel("Set the Voice Clone JSON to clone an existing voice.<br><br><a href='https://github.com/LostRuins/koboldcpp/tree/concedo/examples/outetts/speakers' target='_blank'>You can download existing voice clone JSONs, or make your own.</span><br>","Apply Voice Clone JSON",kcpp_tts_json,"Paste JSON Here",()=>{
+		inputBoxOkCancel("OuteTTS ONLY - Set the OuteTTS Voice JSON to copy an existing voice.<br><br><a href='https://github.com/LostRuins/koboldcpp/tree/concedo/examples/outetts/speakers' target='_blank'>You can download existing voice JSONs, or make your own.</span><br>","Apply OuteTTS Voice JSON",kcpp_tts_json,"Paste JSON Here",()=>{
 		let userinput = getInputBoxValue().trim();
 		try
 		{
@@ -17383,6 +17389,35 @@ Current version indicated by LITEVER below.
 		()=>{
 			//do nothing on cancel
 		},true,true);
+	}
+
+	function set_voice_clone()
+	{
+		let finput = document.getElementById('addimgfileinput');
+		finput.click();
+		finput.onchange = (event) => {
+			if (event.target.files.length > 0 && event.target.files[0]) {
+				const file = event.target.files[0];
+				const fname = file.name;
+				const reader = new FileReader();
+				reader.onload = function(audio) {
+					let origAudio = audio.target.result;
+					convertAudioToCompressedBase64(origAudio,(newAudio,duration)=>{
+						indexeddb_save("voiceclone", newAudio);
+						voicecloneb64 = newAudio;
+						adjust_kcpptts_controls();
+					},64);
+				}
+				reader.readAsDataURL(file);
+			}
+			finput.value = "";
+		};
+	}
+	function clear_voice_clone()
+	{
+		indexeddb_save("voiceclone", "");
+		voicecloneb64 = "";
+		adjust_kcpptts_controls();
 	}
 
 	function restore_retried_text()
@@ -17517,6 +17552,8 @@ Current version indicated by LITEVER below.
 			indexeddb_save("savedusermod","");
 			indexeddb_save("usermodprops","");
 			indexeddb_save("savedcustomcss", "");
+			indexeddb_save("voiceclone", "");
+			voicecloneb64 = "";
 			let styleElement = document.getElementById('custom_css');
 			styleElement.innerHTML = "";
 			show_welcome_panel();
@@ -18593,10 +18630,23 @@ Current version indicated by LITEVER below.
 		} else {
 			document.getElementById("kcpp_tts_voice_custom").classList.add("hidden");
 		}
-		if (document.getElementById("kcpp_tts_voice").value == "voiceclone") {
-			document.getElementById("kcpp_tts_voice_clone").classList.remove("hidden");
+		if (document.getElementById("kcpp_tts_voice").value == "voicejson") {
+			document.getElementById("kcpp_tts_voice_json").classList.remove("hidden");
 		} else {
-			document.getElementById("kcpp_tts_voice_clone").classList.add("hidden");
+			document.getElementById("kcpp_tts_voice_json").classList.add("hidden");
+		}
+
+		document.getElementById("kcpp_tts_voice_clone").classList.add("hidden");
+		document.getElementById("kcpp_tts_voice_clone_clear").classList.add("hidden");
+		if (document.getElementById("kcpp_tts_voice").value == "voiceclone") {
+			if(voicecloneb64=="")
+			{
+				document.getElementById("kcpp_tts_voice_clone").classList.remove("hidden");
+			}
+			else
+			{
+				document.getElementById("kcpp_tts_voice_clone_clear").classList.remove("hidden");
+			}
 		}
 
 	}
@@ -18779,6 +18829,7 @@ Current version indicated by LITEVER below.
 					};
 				} else {
 					sub_endpt = apply_proxy_url(custom_kobold_endpoint + koboldcpp_tts_endpoint);
+					let is_voicejson = (document.getElementById("kcpp_tts_voice").value == "voicejson");
 					let is_voiceclone = (document.getElementById("kcpp_tts_voice").value == "voiceclone");
 					let is_custom = (document.getElementById("kcpp_tts_voice").value == "custom");
 					payload =
@@ -18786,9 +18837,13 @@ Current version indicated by LITEVER below.
 						"input": text,
 						"voice": (is_custom)?document.getElementById("kcpp_tts_voice_custom").value:document.getElementById("kcpp_tts_voice").value
 					};
-					if(is_voiceclone && vcjson)
+					if(is_voicejson && vcjson)
 					{
 						payload.speaker_json = vcjson;
+					}
+					if(is_voiceclone && voicecloneb64!="")
+					{
+						payload.reference_audio = voicecloneb64;
 					}
 					ttsheaders = get_kobold_header();
 				}
@@ -22887,7 +22942,7 @@ Current version indicated by LITEVER below.
 
 	// AUDIO MANIPULATION FUNCTIONS
 	//convert any audio to a webm blob (high compression)
-	function convertAudioToCompressedBase64(inputBase64, onDone) {
+	function convertAudioToCompressedBase64(inputBase64, onDone, audio_quality=40) { //quality is kbps
 		// Step 1: Convert base64 string to Blob
 		const matches = inputBase64.match(/^data:(audio\/[a-zA-Z0-9-]+);base64,(.+)$/);
 		if (!matches) {
@@ -22927,7 +22982,7 @@ Current version indicated by LITEVER below.
 				}
 
 				const durationInSeconds = buffer.duration;
-				const mp3encoder = new lamejs.Mp3Encoder(1, samplefreq, 40); // mono, 16kHz, 40kbps
+				const mp3encoder = new lamejs.Mp3Encoder(1, samplefreq, audio_quality); // mono, 16kHz, 40kbps
 				const sampleBlockSize = 1152; //can be anything but make it a multiple of 576 to make encoders life easier
 				let mp3Data = [];
 				for (let i = 0; i < samples.length; i += sampleBlockSize) {
@@ -29793,12 +29848,15 @@ Current version indicated by LITEVER below.
 								<option value="shouty">shouty</option>
 								<option value="chatty">chatty</option>
 								<option value="custom">custom</option>
+								<option value="voicejson">voicejson</option>
 								<option value="voiceclone">voiceclone</option>
 								</select>
 							</div>
 							<div>
 							<input type="text" value="" placeholder="(Name)" id="kcpp_tts_voice_custom" style="margin-left:3px; width:56px;">
-							<button id="kcpp_tts_voice_clone" type="button" class="btn btn-primary" style="margin-left:3px; width:56px;" onclick="set_voice_clone()">Setup</button>
+							<button id="kcpp_tts_voice_json" type="button" class="btn btn-primary" style="margin-left:3px; width:56px;" onclick="set_voice_json()">Setup</button>
+							<button id="kcpp_tts_voice_clone" type="button" class="btn btn-primary" style="margin-left:3px; width:56px;" onclick="set_voice_clone()">Load</button>
+							<button id="kcpp_tts_voice_clone_clear" type="button" class="btn btn-primary bg_red" style="margin-left:3px; width:56px;" onclick="clear_voice_clone()">Clear</button>
 							</div>
 							</div>
 						</div>
