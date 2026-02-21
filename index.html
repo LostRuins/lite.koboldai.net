@@ -4090,6 +4090,7 @@ Current version indicated by LITEVER below.
 	const koboldcpp_savedata_save_endpoint = "/api/extra/data/save";
 	const koboldcpp_savedata_load_endpoint = "/api/extra/data/load";
 	const koboldcpp_mcp_endpoint = "/mcp";
+	const koboldcpp_voices_endpoint = "/speakers_list";
 
 	const oai_models_endpoint = "/models";
 	const oai_submit_endpoint = "/completions";
@@ -7870,6 +7871,10 @@ Current version indicated by LITEVER below.
 		if(localsettings.tts_mode==XTTS_ID || localsettings.tts_mode==ALLTALK_ID)
 		{
 			fetch_xtts_voices(true,localsettings.tts_mode==XTTS_ID);
+		}
+		else if(localsettings.tts_mode==KCPP_TTS_ID)
+		{
+			fetch_kcpp_voices();
 		}
 		if(localsettings.generate_images_mode==2)
 		{
@@ -18438,6 +18443,28 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	function fetch_kcpp_voices()
+	{
+		    fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_voices_endpoint), {
+			method: 'GET', // or 'PUT'
+			headers: get_kobold_header(),
+			})
+			.then(x => x.json())
+			.then(data => {
+				console.log(data);
+				let dropdown = document.getElementById("kcpp_tts_voice");
+					let selectionhtml = ``;
+					for (var i = 0; i < data.length; ++i) {
+						// Check for XTTS voices if set
+						let sel = (localsettings.kcpp_tts_voice!=""&&localsettings.kcpp_tts_voice==data[i]);
+						selectionhtml += `<option value="` + data[i] + `"`+(sel?" selected":"")+`>`+data[i]+`</option>`;
+					}
+					selectionhtml += `<option value="custom">custom</option><option value="voicejson">voicejson</option>`;
+					dropdown.innerHTML = selectionhtml;
+			}).catch((error) => {
+			});
+	}
+
 	function manual_tts()
 	{
 		let ssval = localsettings.tts_mode;
@@ -18478,7 +18505,7 @@ Current version indicated by LITEVER below.
 			if (userinput != null && userinput!="" && ssval > 0) {
 				tts_speak(userinput,downloadtts,embedtts,false);
 			}
-		},true);
+		},true,true);
 	}
 
 	function test_tts()
@@ -18531,6 +18558,7 @@ Current version indicated by LITEVER below.
 		}
 		else if(selectedTTS == KCPP_TTS_ID) {
 			document.getElementById("kcpp_tts_container").classList.remove("hidden");
+			fetch_kcpp_voices();
 			if(is_using_kcpp_with_tts())
 			{
 				document.getElementById("nokcpptts").classList.add("hidden");
