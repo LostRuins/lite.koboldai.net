@@ -5819,6 +5819,16 @@ Current version indicated by LITEVER below.
 		const safeStop = escapeRegExp(localsettings.stop_thinking_tag);
 		return `${safeStart}([\\s\\S]*?)${safeStop}`;
 	}
+	function get_orphaned_thinking_regex()
+	{
+		if(!localsettings.start_thinking_tag || !localsettings.stop_thinking_tag)
+		{
+			return "";
+		}
+		const safeStart = escapeRegExp(get_instructendplaceholder());
+		const safeStop = escapeRegExp(localsettings.stop_thinking_tag);
+		return `${safeStart}([\\s\\S]*?)${safeStop}`;
+	}
 
 	function remove_all_instruct_tags(text)
 	{
@@ -19498,6 +19508,14 @@ Current version indicated by LITEVER below.
 				{
 					let pat = new RegExp(get_thinking_regex(), "gm");
 					truncated_context = truncated_context.replace(pat, "");
+
+					//fallback, check for orphaned think tags and remove those as well
+					if(localsettings.opmode==4 && localsettings.stop_thinking_tag && truncated_context.includes(localsettings.stop_thinking_tag))
+					{
+						let endmatcher = get_instructendplaceholder();
+						let pat = new RegExp(get_orphaned_thinking_regex(), "gm");
+						truncated_context = truncated_context.replace(pat, endmatcher);
+					}
 				}
 				else if(localsettings.strip_thinking_mode==1) //strip except recent
 				{
@@ -19508,6 +19526,14 @@ Current version indicated by LITEVER below.
 						let afterPart = truncated_context.slice(lastInstructIdx);
 						let pat = new RegExp(get_thinking_regex(), "gm");	// Remove all thinking before splitpoint
 						beforePart = beforePart.replace(pat, "");
+
+						//fallback, check for orphaned think tags and remove those as well
+						if(localsettings.opmode==4 && localsettings.stop_thinking_tag && beforePart.includes(localsettings.stop_thinking_tag))
+						{
+							let pat = new RegExp(get_orphaned_thinking_regex(), "gm");
+							beforePart = beforePart.replace(pat, endmatcher);
+						}
+
 						truncated_context = beforePart + afterPart; // Combine and done
 					}
 				}
