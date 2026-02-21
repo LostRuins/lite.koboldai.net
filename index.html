@@ -4317,7 +4317,6 @@ Current version indicated by LITEVER below.
 	var websearch_in_progress = false;
 	var kcpp_tts_json = "";
 	var avoidwelcome = false;
-	var voicecloneb64 = "";
 
 	var localsettings = {
 		my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
@@ -5481,9 +5480,8 @@ Current version indicated by LITEVER below.
 		indexeddb_load("savedcustomcss",""),
 		indexeddb_load("savedusermod",""),
 		indexeddb_load("usermodprops",""),
-		indexeddb_load("samplerpresets",""),
-		indexeddb_load("voiceclone","")
-	]).then(([loadedsettingsjson, loadedstorycompressed, loadedbackgroundimg, currcss, currmod, modpropsstr, loadedsamplerpresetsjson, loadedvoiceclone]) => {
+		indexeddb_load("samplerpresets","")
+	]).then(([loadedsettingsjson, loadedstorycompressed, loadedbackgroundimg, currcss, currmod, modpropsstr, loadedsamplerpresetsjson]) => {
 	try
 	{
 		if (loadedsettingsjson != null && loadedsettingsjson != "" && loadedstorycompressed != null && loadedstorycompressed != "") {
@@ -5530,10 +5528,6 @@ Current version indicated by LITEVER below.
 				document.getElementById("gamescreen").classList.add("translucentbg");
 				document.getElementById("enhancedchatinterface").classList.add("transparentbg");
 				document.getElementById("enhancedchatinterface_inner").classList.add("transparentbg");
-			}
-			if(loadedvoiceclone && loadedvoiceclone!="")
-			{
-				voicecloneb64 = loadedvoiceclone;
 			}
 			loadok = true;
 		} else {
@@ -17391,35 +17385,6 @@ Current version indicated by LITEVER below.
 		},true,true);
 	}
 
-	function set_voice_clone()
-	{
-		let finput = document.getElementById('addimgfileinput');
-		finput.click();
-		finput.onchange = (event) => {
-			if (event.target.files.length > 0 && event.target.files[0]) {
-				const file = event.target.files[0];
-				const fname = file.name;
-				const reader = new FileReader();
-				reader.onload = function(audio) {
-					let origAudio = audio.target.result;
-					convertAudioToCompressedBase64(origAudio,(newAudio,duration)=>{
-						indexeddb_save("voiceclone", newAudio);
-						voicecloneb64 = newAudio;
-						adjust_kcpptts_controls();
-					},64);
-				}
-				reader.readAsDataURL(file);
-			}
-			finput.value = "";
-		};
-	}
-	function clear_voice_clone()
-	{
-		indexeddb_save("voiceclone", "");
-		voicecloneb64 = "";
-		adjust_kcpptts_controls();
-	}
-
 	function restore_retried_text()
 	{
 		if(retry_in_progress)
@@ -17552,8 +17517,6 @@ Current version indicated by LITEVER below.
 			indexeddb_save("savedusermod","");
 			indexeddb_save("usermodprops","");
 			indexeddb_save("savedcustomcss", "");
-			indexeddb_save("voiceclone", "");
-			voicecloneb64 = "";
 			let styleElement = document.getElementById('custom_css');
 			styleElement.innerHTML = "";
 			show_welcome_panel();
@@ -18636,19 +18599,6 @@ Current version indicated by LITEVER below.
 			document.getElementById("kcpp_tts_voice_json").classList.add("hidden");
 		}
 
-		document.getElementById("kcpp_tts_voice_clone").classList.add("hidden");
-		document.getElementById("kcpp_tts_voice_clone_clear").classList.add("hidden");
-		if (document.getElementById("kcpp_tts_voice").value == "voiceclone") {
-			if(voicecloneb64=="")
-			{
-				document.getElementById("kcpp_tts_voice_clone").classList.remove("hidden");
-			}
-			else
-			{
-				document.getElementById("kcpp_tts_voice_clone_clear").classList.remove("hidden");
-			}
-		}
-
 	}
 
 	// Update set_xtts_url to use the new fetch_rvc_voices function
@@ -18830,7 +18780,6 @@ Current version indicated by LITEVER below.
 				} else {
 					sub_endpt = apply_proxy_url(custom_kobold_endpoint + koboldcpp_tts_endpoint);
 					let is_voicejson = (document.getElementById("kcpp_tts_voice").value == "voicejson");
-					let is_voiceclone = (document.getElementById("kcpp_tts_voice").value == "voiceclone");
 					let is_custom = (document.getElementById("kcpp_tts_voice").value == "custom");
 					payload =
 					{
@@ -18840,10 +18789,6 @@ Current version indicated by LITEVER below.
 					if(is_voicejson && vcjson)
 					{
 						payload.speaker_json = vcjson;
-					}
-					if(is_voiceclone && voicecloneb64!="")
-					{
-						payload.reference_audio = voicecloneb64;
 					}
 					ttsheaders = get_kobold_header();
 				}
@@ -29849,14 +29794,11 @@ Current version indicated by LITEVER below.
 								<option value="chatty">chatty</option>
 								<option value="custom">custom</option>
 								<option value="voicejson">voicejson</option>
-								<option value="voiceclone">voiceclone</option>
 								</select>
 							</div>
 							<div>
 							<input type="text" value="" placeholder="(Name)" id="kcpp_tts_voice_custom" style="margin-left:3px; width:56px;">
 							<button id="kcpp_tts_voice_json" type="button" class="btn btn-primary" style="margin-left:3px; width:56px;" onclick="set_voice_json()">Setup</button>
-							<button id="kcpp_tts_voice_clone" type="button" class="btn btn-primary" style="margin-left:3px; width:56px;" onclick="set_voice_clone()">Load</button>
-							<button id="kcpp_tts_voice_clone_clear" type="button" class="btn btn-primary bg_red" style="margin-left:3px; width:56px;" onclick="clear_voice_clone()">Clear</button>
 							</div>
 							</div>
 						</div>
