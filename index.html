@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 <head>
 	<script id="init-config">
-	const LITEVER = 316;
+	const LITEVER = 317;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -4291,7 +4291,6 @@ Current version indicated by LITEVER below.
 	var passed_ai_warning_local = false;
 	var welcome = "";
 	var personal_notes = "";
-	var voice_typing_mode = 0; //0=off, 1=on, 2=ptt, 3=ttt
 	var koboldcpp_has_whisper = false; //does backend support voice typing
 	var voice_is_recording = false; //currently recording voice?
 	var voice_is_processing = false; //currently processing voice?
@@ -4407,6 +4406,7 @@ Current version indicated by LITEVER below.
 		tts_stream: false,
 		voice_end_delay: 300,
 		voice_suppress_nonspeech: false,
+		voice_typing_mode: 0,  //0=off, 1=on, 2=ptt, 3=ttt
 		voice_langcode: "auto",
 		tts_speed: 1.0,
 		image_styles: "",
@@ -15645,6 +15645,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("tts_speed").value = localsettings.tts_speed;
 		document.getElementById("voice_end_delay").value = localsettings.voice_end_delay;
 		document.getElementById("voice_suppress_nonspeech").checked = localsettings.voice_suppress_nonspeech;
+		document.getElementById("voice_typing_mode").value = localsettings.voice_typing_mode;
 		document.getElementById("voice_langcode").value = localsettings.voice_langcode;
 		toggle_opmode();
 
@@ -16484,6 +16485,7 @@ Current version indicated by LITEVER below.
 		localsettings.tts_speed = document.getElementById("tts_speed").value;
 		localsettings.voice_end_delay = document.getElementById("voice_end_delay").value;
 		localsettings.voice_suppress_nonspeech = (document.getElementById("voice_suppress_nonspeech").checked?true:false);
+		localsettings.voice_typing_mode = document.getElementById("voice_typing_mode").value;
 		localsettings.voice_langcode = document.getElementById("voice_langcode").value;
 		localsettings.auto_ctxlen = (document.getElementById("auto_ctxlen").checked ? true : false);
 		localsettings.auto_genamt = (document.getElementById("auto_genamt").checked ? true : false);
@@ -16586,8 +16588,8 @@ Current version indicated by LITEVER below.
 		toggle_theme_colors();
 		toggle_sidepanel_mode();
 
-		voice_typing_mode = document.getElementById("voice_typing_mode").value;
-		if(voice_typing_mode>0 && is_using_kcpp_with_whisper())
+		localsettings.voice_typing_mode = document.getElementById("voice_typing_mode").value;
+		if(localsettings.voice_typing_mode>0 && is_using_kcpp_with_whisper())
 		{
 			init_voice_typing();
 		}
@@ -19197,13 +19199,13 @@ Current version indicated by LITEVER below.
 	var recent_voice_duration = 0;
 	function ptt_start()
 	{
-		if(voice_typing_mode==3 && voice_is_speaking)
+		if(localsettings.voice_typing_mode==3 && voice_is_speaking)
 		{
 			//stop toggle to talk
 			ptt_end(true);
 			return;
 		}
-		if(voice_typing_mode>0)
+		if(localsettings.voice_typing_mode>0)
 		{
 			voice_is_speaking = true;
 			++voice_speaking_counter;
@@ -19219,16 +19221,21 @@ Current version indicated by LITEVER below.
 				update_submit_button(false);
 				ptt_start_timestamp = performance.now();
 			}
+			else if(!isVoiceInputConfigured)
+			{
+				//trigger popup for audio permissions
+				init_voice_typing();
+			}
 		}
 	}
 	function ptt_end(force=false)
 	{
-		if(voice_typing_mode==3 && !force)
+		if(localsettings.voice_typing_mode==3 && !force)
 		{
 			return; //do nothing for toggle to talk unless forced
 		}
 		var voice_end_delay = localsettings.voice_end_delay;
-		if(voice_typing_mode>0)
+		if(localsettings.voice_typing_mode>0)
 		{
 			voice_is_speaking = false;
 			let check_speak_counter = voice_speaking_counter;
@@ -19236,7 +19243,7 @@ Current version indicated by LITEVER below.
 				if (voice_is_recording && !voice_is_speaking && voice_speaking_counter == check_speak_counter) {
 					//generate prerecorder blobs (prebuffer 1sec)
 					preaudioblobs = [];
-					if(voice_typing_mode==1)
+					if(localsettings.voice_typing_mode==1)
 					{
 						for(let i=0;i<preaudiobuffers.length;++i)
 						{
@@ -19266,7 +19273,7 @@ Current version indicated by LITEVER below.
 	}
 	function submit_generation_button(aesthetic_ui)
 	{
-		if(voice_typing_mode==0) //only when voice is off
+		if(localsettings.voice_typing_mode==0) //only when voice is off
 		{
 			if(aesthetic_ui)
 			{
@@ -22933,7 +22940,7 @@ Current version indicated by LITEVER below.
 		if ('speechSynthesis' in window) {
 			currentlySpeaking = window.speechSynthesis.speaking;
 		}
-		return (voice_typing_mode>0 && is_using_kcpp_with_whisper()
+		return (localsettings.voice_typing_mode>0 && is_using_kcpp_with_whisper()
 			&& !document.getElementById("btnsend").disabled
 			&& !voice_is_processing && !voice_is_recording && isVoiceInputConfigured
 			&& !currentlySpeaking && !tts_is_playing && !is_popup_open());
@@ -23125,7 +23132,7 @@ Current version indicated by LITEVER below.
 		if(navigator.mediaDevices==null)
 		{
 			msgbox("Cannot initialize microphone. If you're using a non-localhost URL, it needs to be served over HTTPS!","Error Starting Microphone");
-			voice_typing_mode = document.getElementById("voice_typing_mode").checked = 0;
+			localsettings.voice_typing_mode = document.getElementById("voice_typing_mode").checked = 0;
 			return;
 		}
 		if (isVoiceInputConfigured) {
@@ -23193,7 +23200,7 @@ Current version indicated by LITEVER below.
 				if (voiceprerecorder.state !== "inactive") {
 					voiceprerecorder.stop();
 				}
-				if(ready_to_record() && voice_typing_mode==1){ //only voice detect needs it
+				if(ready_to_record() && localsettings.voice_typing_mode==1){ //only voice detect needs it
 					voiceprerecorder.start();
 				}
 			}, 500);
@@ -23206,14 +23213,14 @@ Current version indicated by LITEVER below.
 			let options = {
 				source: source,
 				voice_stop: function () {
-					if(voice_typing_mode==1)
+					if(localsettings.voice_typing_mode==1)
 					{
 						console.log("speech stopped");
 						ptt_end();
 					}
 				},
 				voice_start: function () {
-					if(voice_typing_mode==1)
+					if(localsettings.voice_typing_mode==1)
 					{
 						console.log("speech started");
 						ptt_start();
@@ -24171,7 +24178,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("chat_msg_send_btn").classList.remove("showmic");
 			document.getElementById("chat_msg_send_btn").classList.remove("showmiclive");
 			document.getElementById("chat_msg_send_btn").classList.remove("showmicoff");
-			if(voice_typing_mode>0 && is_using_kcpp_with_whisper())
+			if(localsettings.voice_typing_mode>0 && is_using_kcpp_with_whisper())
 			{
 				if (voice_is_processing) {
 					document.getElementById("chat_msg_send_btn").classList.add("showmicoff");
@@ -24181,10 +24188,18 @@ Current version indicated by LITEVER below.
 					document.getElementById("btnsend").innerHTML = "<div class='showmiclivebig'></div><span style='font-size:12px'>Record</span>";
 				} else if (ready_to_record()) {
 					document.getElementById("chat_msg_send_btn").classList.add("showmic");
-					document.getElementById("btnsend").innerHTML = "<div class='showmicbig'></div><span style='font-size:12px'>"+(voice_typing_mode==1?"Standby":(voice_typing_mode==2?"PTT":"TTT"))+"</span>";
+					document.getElementById("btnsend").innerHTML = "<div class='showmicbig'></div><span style='font-size:12px'>"+(localsettings.voice_typing_mode==1?"Standby":(localsettings.voice_typing_mode==2?"PTT":"TTT"))+"</span>";
 				} else {
-					document.getElementById("chat_msg_send_btn").classList.add("showmicoff");
-					document.getElementById("btnsend").innerHTML = "<div class='showmicoffbig'></div><span style='font-size:12px'>Busy</span>";
+					if(isVoiceInputConfigured)
+					{
+						document.getElementById("chat_msg_send_btn").classList.add("showmicoff");
+						document.getElementById("btnsend").innerHTML = "<div class='showmicoffbig'></div><span style='font-size:12px'>Busy</span>";
+					}
+					else
+					{
+						document.getElementById("chat_msg_send_btn").classList.add("showmicoff");
+						document.getElementById("btnsend").innerHTML = "<div class='showmicoffbig'></div><span>Need<br>Access</span>";
+					}
 				}
 			}
 		}
