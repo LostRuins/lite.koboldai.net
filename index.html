@@ -4163,6 +4163,7 @@ Current version indicated by LITEVER below.
 	const default_xtts_base = " http://localhost:8020";
 	const default_alltalk_base = "http://localhost:7851";
 	const default_comfy_base = "http://localhost:8188";
+	const default_comfy_bearer_token = "";
 
 	const WEBBROWSER_TTS_ID = 1;
 	const KCPP_TTS_ID = 2;
@@ -4355,6 +4356,7 @@ Current version indicated by LITEVER below.
 		saved_oai_role: 3, //0=user,1=assistant,2=system, 3=auto
 		saved_a1111_url: default_a1111_base,
 		saved_comfy_url: default_comfy_base,
+                saved_comfy_bearer_token: default_comfy_bearer_token,
 		saved_xtts_url: default_xtts_base,
 		saved_alltalk_url: default_alltalk_base,
 		saved_mcp_urls: "",
@@ -8670,8 +8672,23 @@ Current version indicated by LITEVER below.
 	{
 		console.log("Attempt ComfyUI Connection...");
 		//establish initial connection to a1111 api
-		fetch(localsettings.saved_comfy_url + comfy_models_endpoint)
-		.then(x => x.json())
+                headers = {}
+                if (localsettings.saved_comfy_bearer_token != "") {
+                     headers['Authorization'] = 'Bearer '+localsettings.saved_comfy_bearer_token
+		}
+		fetch(localsettings.saved_comfy_url + comfy_models_endpoint, {
+			headers: headers
+		})
+		.then(x => {
+                      if (!silent && !x.ok) {
+                          msg = "Connection returned "+x.status
+                          if (x.status == 401) {
+                             msg +=". Check Bearer Token."
+                          }
+                          msgbox(msg)
+                      }
+                      return x.json()
+                    })
 		.then(modelsdata => {
 
 			if (modelsdata == null || modelsdata.length == 0) {
@@ -8690,7 +8707,7 @@ Current version indicated by LITEVER below.
 		}).catch((error) => {
 			if(!silent)
 			{
-				msgbox("ComfyUI Connect Error: " + error+"\nPlease make sure ComfyUI is running at "+localsettings.saved_comfy_url+" and properly configured!\n\nIt must be launched with the flags --listen --enable-cors-header '*' to enable API access\n");
+				msgbox("ComfyUI Connect Error: " + error+"\nPlease make sure ComfyUI is running at "+localsettings.saved_comfy_url+" and properly configured!\n\nIt must be launched with the flags --listen --enable-cors-header '*' to enable API access. If using ComfyUI-Login, the Bearer Token must match.\n");
 			}
 			comfyui_is_connected = false;
 		});
@@ -8874,11 +8891,13 @@ Current version indicated by LITEVER below.
 		image_db[imgid].type = 0; //0=image, 1=audio
 
 		uploadBase64ImgToComfy(req_payload["source_image"],comfyimg2imgname).then(() => {
+		headers = {'Content-Type': 'application/json'}
+		if (localsettings.saved_comfy_bearer_token != "") {
+			headers['Authorization'] = 'Bearer '+localsettings.saved_comfy_bearer_token
+		}
 		fetch(gen_endpoint, {
 			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-			},
+			headers: headers,
 			body: JSON.stringify(genimg_payload),
 		})
 		.then(x => x.json())
@@ -9075,7 +9094,7 @@ Current version indicated by LITEVER below.
 		image_db[imgid].type = 0; //0=image, 1=audio
 
 		fetch(gen_endpoint, {
-			method: 'GET',
+			method: 'GET', 
 		})
 		.then((response) => {
 			return response.blob(); // Convert the response into a Blob
@@ -9835,6 +9854,7 @@ Current version indicated by LITEVER below.
 			new_save_storyobj.savedsettings.saved_kai_key = "";
 			new_save_storyobj.savedsettings.saved_a1111_url = "";
 			new_save_storyobj.savedsettings.saved_comfy_url = "";
+			new_save_storyobj.savedsettings.saved_comfy_bearer_token = "";
 			new_save_storyobj.savedsettings.saved_xtts_url = "";
 			new_save_storyobj.savedsettings.saved_mcp_urls = "";
 
@@ -10270,6 +10290,7 @@ Current version indicated by LITEVER below.
 					let tmp_kai2 = localsettings.saved_kai_key;
 					let tmp_a1111 = localsettings.saved_a1111_url;
 					let tmp_comfy = localsettings.saved_comfy_url;
+					let tmp_comfy_bearer_token = localsettings.saved_comfy_bearer_token;
 					let tmp_xtts = localsettings.saved_xtts_url;
 					let tmp_imggen = localsettings.generate_images_mode;
 					let tmp_mcp = localsettings.saved_mcp_urls;
@@ -10327,6 +10348,7 @@ Current version indicated by LITEVER below.
 					localsettings.saved_kai_key = tmp_kai2;
 					localsettings.saved_a1111_url = tmp_a1111;
 					localsettings.saved_comfy_url = tmp_comfy;
+					localsettings.saved_comfy_bearer_token = tmp_comfy_bearer_token;
 					localsettings.saved_xtts_url = tmp_xtts;
 					localsettings.generate_images_mode = tmp_imggen;
 					localsettings.saved_mcp_urls = tmp_mcp;
@@ -15580,7 +15602,8 @@ Current version indicated by LITEVER below.
 			document.getElementById("auto_ctxlen_panel").classList.remove("hidden");
 			document.getElementById("auto_genamt_panel").classList.remove("hidden");
 		}
-
+		
+		document.getElementById("bearertokeninput").value = localsettings.saved_comfy_bearer_token;
 		document.getElementById("imagestyleinput").value = localsettings.image_styles;
 		document.getElementById("negpromptinput").value = localsettings.image_negprompt;
 		pendinggrammar = localsettings.grammar;
@@ -16491,6 +16514,7 @@ Current version indicated by LITEVER below.
 		localsettings.auto_genamt = (document.getElementById("auto_genamt").checked ? true : false);
 		localsettings.wordsearch_enabled = (document.getElementById("wordsearch_toggle").checked ? true : false);
 
+		localsettings.saved_comfy_bearer_token = document.getElementById("bearertokeninput").value;
 		localsettings.image_styles = document.getElementById("imagestyleinput").value;
 		localsettings.image_negprompt = document.getElementById("negpromptinput").value;
 		localsettings.grammar = pendinggrammar;
@@ -22656,11 +22680,15 @@ Current version indicated by LITEVER below.
 				if(comfyid && comfyid!="")
 				{
 					//comfyui polling
+					json_headers = {'Content-Type': 'application/json'}
+					headers={}
+					if (localsettings.saved_comfy_bearer_token != "") {
+						headers['Authorization'] = 'Bearer '+localsettings.saved_comfy_bearer_token
+						json_headers['Authorization'] = 'Bearer '+localsettings.saved_comfy_bearer_token
+					}
 					fetch(localsettings.saved_comfy_url + comfy_history_endpoint + "/" + comfyid, {
 						method: 'GET',
-						headers: {
-							'Content-Type': 'application/json',
-						}
+						headers: json_headers, 
 					})
 					.then(x => x.json())
 					.then(resp2 => {
@@ -22670,7 +22698,7 @@ Current version indicated by LITEVER below.
 							img.done = true;
 							let finalfilename = resp2[comfyid].outputs["9"].images[0].filename;
 							//fetch final image
-							fetch(localsettings.saved_comfy_url + comfy_results_endpoint + finalfilename)
+							fetch(localsettings.saved_comfy_url + comfy_results_endpoint + finalfilename, {headers: headers}) 
 							.then((response) => {
 								return response.blob(); // Convert the response into a Blob
 							})
@@ -29627,6 +29655,11 @@ Current version indicated by LITEVER below.
 								<option value="" disabled selected>No Lora Found</option>
 							</select>
 							</div>
+							<div class="settinglabel" style="display: flex; width: 100%">
+							<div class="justifyleft">Bearer Token</div>
+							<input class="push-right" title="Token" type="text" placeholder="(Auth Bearer Token from ComfyUI-Login)" style="width: calc(100% - 140px);" value="" id="bearertokeninput" onchange="localsettings.saved_comfy_bearer_token=this.value">
+                                                        </div>
+
 						</div>
 
 						<div id="generate_images_dalle_container" class="settinglabel hidden settingsbox">
