@@ -9976,6 +9976,22 @@ Current version indicated by LITEVER below.
 						console.log("Unzip failed: " + error);
 					}
 
+					//try JSONL
+					try
+					{
+						const lines = text.split('\n');
+						let temparrs = lines.filter(line => line.trim()).map(line => JSON.parse(line));
+						if(temparrs && temparrs.length>1 && temparrs[temparrs.length-1].mes && temparrs[temparrs.length-1].name)
+						{
+							load_tavern_jsonl(temparrs);
+							return;
+						}
+					}
+					catch(error)
+					{
+						console.log("JSONL import failed: " + error);
+					}
+
 					// 5. Fallback to plaintext if .txt
 					if (selectedFilename.endsWith(".txt")) {
 						msgboxYesNo(
@@ -10614,6 +10630,68 @@ Current version indicated by LITEVER below.
 		return false;
 	}
 
+	function load_tavern_jsonl(obj)
+	{
+		if(localsettings.opmode!=3 && localsettings.opmode!=4)
+		{
+			//force into instruct
+			localsettings.opmode = 4;
+		}
+		gametext_arr = [];
+		if(localsettings.opmode==3) //import as chat
+		{
+			if(localsettings.gui_type_chat!=3)
+			{
+				localsettings.gui_type_chat = 2;
+			}
+			for(let i=0;i<obj.length;++i)
+			{
+				let curr = obj[i];
+				if(curr.mes)
+				{
+					if(curr.name)
+					{
+						if(curr.is_user)
+						{
+							localsettings.chatname = curr.name;
+						}else{
+							localsettings.chatopponent = curr.name;
+						}
+					}
+					gametext_arr.push("\n"+curr.name+": "+curr.mes);
+				}
+			}
+		}
+		else //import as instruct
+		{
+			localsettings.gui_type_instruct = 2;
+			localsettings.inject_chatnames_instruct = true;
+			for(let i=0;i<obj.length;++i)
+			{
+				let curr = obj[i];
+				if(curr.mes)
+				{
+					if(curr.is_user)
+					{
+						if(curr.name)
+						{
+							localsettings.chatname = curr.name;
+						}
+						gametext_arr.push(get_instructstartplaceholder()+curr.name+": "+curr.mes);
+					}else{
+						if(curr.name)
+						{
+							localsettings.chatopponent = curr.name;
+						}
+						gametext_arr.push(get_instructendplaceholder()+curr.name+": "+curr.mes);
+					}
+				}
+			}
+		}
+		update_for_sidepanel();
+		render_gametext(true);
+		sync_multiplayer(true);
+	}
 	function load_tavern_obj(obj)
 	{
 		let selectedgreeting = "";
