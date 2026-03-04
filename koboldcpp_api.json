@@ -234,11 +234,11 @@
 						"minimum": 0,
 						"type": "number"
 					},
-                     "dry_penalty_last_n": {
-                        "description": "KoboldCpp ONLY. DRY last n tokens penalized value.",
-                        "minimum": 0,
-                        "type": "number"
-                     },
+					"dry_penalty_last_n": {
+						"description": "KoboldCpp ONLY. DRY last n tokens penalized value.",
+						"minimum": 0,
+						"type": "number"
+					},
 					"dry_sequence_breakers": {
 						"description": "An array of string sequence breakers for DRY.",
 						"items": {
@@ -1785,6 +1785,143 @@
 				}
 			}
 		},
+		"/api/extra/music/prepare": {
+			"post": {
+				"summary": "Creates song generation parameters such as caption, lyrics, BPM and duration",
+				"description": "Creates song generation parameters such as caption, lyrics, BPM and duration. This should be called to produce the generation input for /api/extra/music/generate",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"example": {
+								"caption": "An emotional rap song about the kobold war."
+							},
+							"schema": {
+								"properties": {
+									"caption": {
+										"type": "string",
+										"description": "A short description of the song to create"
+									}
+								},
+								"type": "object"
+							}
+						}
+					},
+					"required": true
+				},
+				"tags": [
+					"api/extra"
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"example": {
+									"caption": "A melancholic and narrative-driven rap track built around a heavy beat",
+									"lyrics": "\n[Verse 1]\nKobold is love, yeah, kobold is life\nKobold is the only way we survive\nShe said okay, yo, keep it that way\nIn kobold we trust, just kobold today\n\n[Chorus]\nKobold, kobold, we carry on now\nKobold, kobold, each way and how\nKobold, kobold, right here we go\nKobold, kobold, all that I know.\n\n[Outro]",
+									"bpm": 120,
+									"duration": 64.0,
+									"keyscale": "G minor",
+									"timesignature": "2",
+									"vocal_language": "en",
+									"task_type": "text2music",
+									"seed": 622315,
+									"thinking": false,
+									"lm_temperature": 0.85,
+									"lm_cfg_scale": 2.0,
+									"lm_top_p": 0.9,
+									"lm_negative_prompt": "",
+									"inference_steps": 8,
+									"guidance_scale": 1.0,
+									"shift": 3.0,
+									"audio_codes": ""
+								},
+								"schema": {
+									"properties": {},
+									"type": "object"
+								}
+							}
+						},
+						"description": "Successful request"
+					}
+				}
+			}
+		},
+		"/api/extra/music/generate": {
+			"post": {
+				"summary": "Generates music based on provided captions, lyrics and configurations",
+				"description": "Generates music based on provided captions, lyrics and configurations. The config can be generated using /api/extra/music/prepare or crafted manually",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"example": {
+								"caption": "A melancholic and narrative-driven rap track built around a heavy beat",
+								"lyrics": "\n[Verse 1]\nKobold is love, yeah, kobold is life\nKobold is the only way we survive\nShe said okay, yo, keep it that way\nIn kobold we trust, just kobold today\n\n[Chorus]\nKobold, kobold, we carry on now\nKobold, kobold, each way and how\nKobold, kobold, right here we go\nKobold, kobold, all that I know.\n\n[Outro]",
+								"bpm": 120,
+								"duration": 64.0,
+								"keyscale": "G minor",
+								"timesignature": "2",
+								"vocal_language": "en",
+								"inference_steps": 8
+							},
+							"schema": {
+								"properties": {
+									"caption": {
+										"type": "string",
+										"description": "A short description of the song to create"
+									},
+									"lyrics": {
+										"type": "string",
+										"description": "The full lyrics of the song to generate"
+									},
+									"bpm": {
+										"type": "number",
+										"description": "The song Beats Per Minute"
+									},
+									"duration": {
+										"type": "number",
+										"description": "The length of the song, in seconds."
+									},
+									"keyscale": {
+										"type": "string",
+										"description": "The musical key of the song."
+									},
+									"timesignature": {
+										"type": "string",
+										"description": "The musical time signature of the song."
+									},
+									"vocal_language": {
+										"type": "string",
+										"description": "The language of the song lyrics."
+									},
+									"inference_steps": {
+										"type": "number",
+										"description": "How many diffusion steps to use."
+									}
+								},
+								"type": "object"
+							}
+						}
+					},
+					"required": true
+				},
+				"tags": [
+					"api/extra"
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"audio/wav": {
+								"schema": {
+									"type": "string",
+									"format": "binary"
+								}
+							}
+						},
+						"description": "Successful request"
+					}
+				}
+			}
+		},
 		"/api/extra/json_to_grammar": {
 			"post": {
 				"summary": "Converts a provided JSON schema into GBNF grammar.",
@@ -2535,7 +2672,7 @@
 								"height": 512,
 								"seed": -1,
 								"clip_skip": -1,
-								"sampler_name": "Euler a"
+								"sampler_name": "Euler"
 							},
 							"schema": {
 								"properties": {
@@ -2633,7 +2770,7 @@
 								"height": 512,
 								"seed": -1,
 								"clip_skip": -1,
-								"sampler_name": "Euler a",
+								"sampler_name": "Euler",
 								"denoising_strength": 0.6,
 								"init_images": [],
 								"mask": "",
@@ -2783,6 +2920,64 @@
 					}
 				},
 				"summary": "Generates a short text caption describing an image",
+				"tags": [
+					"sdapi/v1"
+				]
+			}
+		},
+		"/sdapi/v1/upscale": {
+			"post": {
+				"description": "Upscales an image with ESRGAN, increasing its resolution.",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"example": {
+								"image": "base64_image_data",
+								"upscaling_resize": 2
+							},
+							"schema": {
+								"properties": {
+									"image": {
+										"type": "string",
+										"description": "A base64 string containing the encoded PNG of the image."
+									},
+									"upscaling_resize": {
+										"type": "integer",
+										"description": "Integer upscale factor. Defaults to 2."
+									}
+								},
+								"type": "object"
+							}
+						}
+					},
+					"required": false
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"example": {
+									"html_info": "string",
+									"image": "base64_image_data"
+								},
+								"schema": {
+									"properties": {
+										"html_info": {
+											"type": "string",
+											"description": "Not important."
+										},
+										"image": {
+											"type": "string",
+											"description": "Base64 encoded image data"
+										}
+									}
+								}
+							}
+						},
+						"description": "Successful request"
+					}
+				},
+				"summary": "Upscales an image with ESRGAN, increasing its resolution.",
 				"tags": [
 					"sdapi/v1"
 				]
