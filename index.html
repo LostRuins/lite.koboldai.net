@@ -4163,7 +4163,6 @@ Current version indicated by LITEVER below.
 	const default_xtts_base = " http://localhost:8020";
 	const default_alltalk_base = "http://localhost:7851";
 	const default_comfy_base = "http://localhost:8188";
-	const default_comfy_bearer_token = "";
 
 	const WEBBROWSER_TTS_ID = 1;
 	const KCPP_TTS_ID = 2;
@@ -4356,7 +4355,7 @@ Current version indicated by LITEVER below.
 		saved_oai_role: 3, //0=user,1=assistant,2=system, 3=auto
 		saved_a1111_url: default_a1111_base,
 		saved_comfy_url: default_comfy_base,
-		saved_comfy_bearer_token: default_comfy_bearer_token,
+		saved_comfy_bearer_token: "",
 		saved_xtts_url: default_xtts_base,
 		saved_alltalk_url: default_alltalk_base,
 		saved_mcp_urls: "",
@@ -8672,7 +8671,7 @@ Current version indicated by LITEVER below.
 	{
 		console.log("Attempt ComfyUI Connection...");
 		//establish initial connection to a1111 api
-		headers = {}
+		let headers = {};
 		if (localsettings.saved_comfy_bearer_token != "") {
 			headers['Authorization'] = 'Bearer '+localsettings.saved_comfy_bearer_token
 		}
@@ -8680,15 +8679,15 @@ Current version indicated by LITEVER below.
 			headers: headers
 		})
 		.then(x => {
-                      if (!silent && !x.ok) {
-                          msg = "Connection returned "+x.status
-                          if (x.status == 401) {
-                             msg +=". Check Bearer Token."
-                          }
-                          msgbox(msg)
-                      }
-                      return x.json()
-                    })
+			if (!silent && !x.ok) {
+				msg = "Connection returned "+x.status
+				if (x.status == 401) {
+					msg +=". Check Bearer Token."
+				}
+				msgbox(msg)
+			}
+			return x.json()
+		})
 		.then(modelsdata => {
 
 			if (modelsdata == null || modelsdata.length == 0) {
@@ -8712,7 +8711,7 @@ Current version indicated by LITEVER below.
 			comfyui_is_connected = false;
 		});
 
-		fetch(localsettings.saved_comfy_url + comfy_loras_endpoint, {headers:headers}) 
+		fetch(localsettings.saved_comfy_url + comfy_loras_endpoint, {headers:headers})
         .then(x => x.json())
         .then(lorasdata => {
             //repopulate our lora list
@@ -8752,7 +8751,7 @@ Current version indicated by LITEVER below.
 		const formData = new FormData();
 		formData.append('image', blob, filename);
 		formData.append('overwrite',1);
-		headers = {}
+		let headers = {};
 		if (localsettings.saved_comfy_bearer_token != "") {
 			headers['Authorization'] = 'Bearer '+localsettings.saved_comfy_bearer_token
 		}
@@ -9055,6 +9054,15 @@ Current version indicated by LITEVER below.
 				connect_to_comfyui(false);
 			}
 		},false);
+	}
+
+	function set_comfy_key()
+	{
+		inputBox("Enter ComfyUI API Auth Bearer Token","ComfyUI API Key",localsettings.saved_comfy_bearer_token,"Input ComfyUI API Key", ()=>{
+			let userinput = getInputBoxValue();
+			userinput = userinput.trim();
+			localsettings.saved_comfy_bearer_token = userinput.trim();
+		},true);
 	}
 
 	function generate_pollinations_image(req_payload, autoappend)
@@ -15685,8 +15693,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("auto_ctxlen_panel").classList.remove("hidden");
 			document.getElementById("auto_genamt_panel").classList.remove("hidden");
 		}
-		
-		document.getElementById("bearertokeninput").value = localsettings.saved_comfy_bearer_token;
+
 		document.getElementById("imagestyleinput").value = localsettings.image_styles;
 		document.getElementById("negpromptinput").value = localsettings.image_negprompt;
 		pendinggrammar = localsettings.grammar;
@@ -16597,7 +16604,6 @@ Current version indicated by LITEVER below.
 		localsettings.auto_genamt = (document.getElementById("auto_genamt").checked ? true : false);
 		localsettings.wordsearch_enabled = (document.getElementById("wordsearch_toggle").checked ? true : false);
 
-		localsettings.saved_comfy_bearer_token = document.getElementById("bearertokeninput").value;
 		localsettings.image_styles = document.getElementById("imagestyleinput").value;
 		localsettings.image_negprompt = document.getElementById("negpromptinput").value;
 		localsettings.grammar = pendinggrammar;
@@ -22763,15 +22769,15 @@ Current version indicated by LITEVER below.
 				if(comfyid && comfyid!="")
 				{
 					//comfyui polling
-					json_headers = {'Content-Type': 'application/json'}
-					headers={}
+					let json_headers = {'Content-Type': 'application/json'};
+					let headers={};
 					if (localsettings.saved_comfy_bearer_token != "") {
-						headers['Authorization'] = 'Bearer '+localsettings.saved_comfy_bearer_token
-						json_headers['Authorization'] = 'Bearer '+localsettings.saved_comfy_bearer_token
+						headers['Authorization'] = 'Bearer '+localsettings.saved_comfy_bearer_token;
+						json_headers['Authorization'] = 'Bearer '+localsettings.saved_comfy_bearer_token;
 					}
 					fetch(localsettings.saved_comfy_url + comfy_history_endpoint + "/" + comfyid, {
 						method: 'GET',
-						headers: json_headers, 
+						headers: json_headers,
 					})
 					.then(x => x.json())
 					.then(resp2 => {
@@ -22781,7 +22787,7 @@ Current version indicated by LITEVER below.
 							img.done = true;
 							let finalfilename = resp2[comfyid].outputs["9"].images[0].filename;
 							//fetch final image
-							fetch(localsettings.saved_comfy_url + comfy_results_endpoint + finalfilename, {headers: headers}) 
+							fetch(localsettings.saved_comfy_url + comfy_results_endpoint + finalfilename, {headers: headers})
 							.then((response) => {
 								return response.blob(); // Convert the response into a Blob
 							})
@@ -29727,10 +29733,11 @@ Current version indicated by LITEVER below.
 						<div id="generate_images_comfy_container" class="settinglabel hidden settingsbox">
 							<div class="settinglabel" style="display: flex; width: 100%">
 							<div class="justifyleft">Model</div>
-							<select title="Select Image Model" class="form-control push-right" id="generate_images_comfy_model" style="width:calc(100% - 58px)">
+							<select title="Select Image Model" class="form-control push-right" id="generate_images_comfy_model" style="width:calc(100% - 170px)">
 								<option value="">[None]</option>
 							</select>
 							<button type="button" class="btn btn-primary" onclick="set_comfy_endpoint()" style="width:52px; padding: 2px 2px; margin-left: 3px; font-size:12px;">Set URL</button>
+							<button type="button" class="btn btn-primary" onclick="set_comfy_key()" style="width:52px; padding: 2px 2px; margin-left: 3px; font-size:12px;">Set Key</button>
 							</div>
 							<div class="settinglabel" style="display: flex; width: 100%">
 							<div class="justifyleft">LoRA</div>
@@ -29738,11 +29745,6 @@ Current version indicated by LITEVER below.
 								<option value="" disabled selected>No Lora Found</option>
 							</select>
 							</div>
-							<div class="settinglabel" style="display: flex; width: 100%">
-							<div class="justifyleft">Bearer Token</div>
-							<input class="push-right" title="Token" type="text" placeholder="(Auth Bearer Token from ComfyUI-Login)" style="width: calc(100% - 140px);" value="" id="bearertokeninput" onchange="localsettings.saved_comfy_bearer_token=this.value">
-                                                        </div>
-
 						</div>
 
 						<div id="generate_images_dalle_container" class="settinglabel hidden settingsbox">
