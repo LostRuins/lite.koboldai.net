@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 <head>
 	<script id="init-config">
-	const LITEVER = 317;
+	const LITEVER = 318;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -8415,6 +8415,17 @@ Current version indicated by LITEVER below.
 		}
 
 		toolscontainer.innerHTML = finalHtml;
+	}
+	function toggle_enabletools()
+	{
+		if(document.getElementById("enable_tool_use").checked)
+		{
+			let numtools = Object.keys(pending_cached_mcp_tools).length;
+			if(numtools==0)
+			{
+				Fetch_MCP_Tools();
+			}
+		}
 	}
 
 	//read any parameters passed in from the URL, and load content if found
@@ -23614,6 +23625,12 @@ Current version indicated by LITEVER below.
 						//still waiting, do nothing until next poll
 						console.log("sync request: still awaiting reply");
 						let polledstreaming = (waiting_for_summarycall==0 && localsettings.tokenstreammode==1 && is_using_kcpp_with_streaming());
+						//polled streaming cannot be used with tool calls
+						if(localsettings.opmode==4 && (is_using_kcpp_with_jinja() || determine_if_mcp_active()))
+						{
+							polledstreaming = false;
+						}
+
 						//only check once every 2 ticks if remote
 						if (polledstreaming && (localflag?true:(poll_ticks_passed%2==0)))
 						{
@@ -29135,7 +29152,7 @@ Current version indicated by LITEVER below.
 						<h3>Responses</h3>
 						<div class="settinglabel">
 							<div class="justifyleft" id="tokenstreaminglabel">Token streaming <span class="helpicon">?<span
-								class="helptext">Use token streaming for partial responses. SSE is smoother but less well-supported. Poll is chunkier but more reliable. Not available on Horde.</span></span></div>
+								class="helptext">Use token streaming for partial responses. SSE is recommended.</span></span></div>
 							<div class="push-right">
 								<select title="Token Streaming" class="form-control" id="tokenstreammode">
 								<option value="0">Off</option>
@@ -30279,7 +30296,7 @@ Current version indicated by LITEVER below.
 						<div class="settinglabel">
 							<div class="justifyleft">Enable Toolcalling <span class="helpicon">?<span
 								class="helptext">Allow tool calling and MCP server usage. Require Chat Completions endpoint (KoboldCpp will auto switch).</span></span></div>
-							<input title="Enable MCP Tools" type="checkbox" id="enable_tool_use" class="push-right">
+							<input title="Enable MCP Tools" type="checkbox" id="enable_tool_use" class="push-right" onchange="toggle_enabletools()">
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft">Automatically Execute Tools <span class="helpicon">?<span
