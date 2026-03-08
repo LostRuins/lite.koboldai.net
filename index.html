@@ -4168,7 +4168,6 @@ Current version indicated by LITEVER below.
 	const XTTS_ID = 3;
 	const ALLTALK_ID = 4;
 	const OAI_TTS_ID = 5;
-	const POLLINATIONS_TTS_ID = 6;
 
 	const HD_RES_PX = 768;
 	const VHD_RES_PX = 960;
@@ -15452,6 +15451,10 @@ Current version indicated by LITEVER below.
 		mainmenu_untab(true);
 		document.getElementById("settingscontainer").classList.remove("hidden");
 		display_settings_tab(current_settings_tab_idx);
+
+		if(localsettings.generate_images_mode>=5){localsettings.generate_images_mode=0;} //todo: temp hack to remove pollinations images
+		if(localsettings.tts_mode>=6){localsettings.tts_mode=0;} //todo: temp hack to remove pollinations tts
+
 		document.getElementById("max_context_length").value = document.getElementById("max_context_length_slide").value = localsettings.max_context_length;
 		document.getElementById("max_length").value = document.getElementById("max_length_slide").value = localsettings.max_length;
 		document.getElementById("temperature").value = document.getElementById("temperature_slide").value = localsettings.temperature;
@@ -15605,7 +15608,6 @@ Current version indicated by LITEVER below.
 			document.getElementById("tokenstreaminglabel").classList.remove("color_red");
 		}
 		document.getElementById("generate_images_model").value = localsettings.generate_images_model;
-		if(localsettings.generate_images_mode>=5){localsettings.generate_images_mode=0;} //todo: temp hack to remove pollinations images
 		if(document.getElementById("generate_images_mode").value == 0 || document.getElementById("generate_images_mode").value != localsettings.generate_images_mode) {
 			document.getElementById("generate_images_mode").value = localsettings.generate_images_mode;
 			toggle_generate_images_mode(true);
@@ -18564,7 +18566,7 @@ Current version indicated by LITEVER below.
 		}
 		let speakprompt = "Enter phrase to speak. Currently selected TTS will be used.";
 
-		if(ssval==XTTS_ID || ssval==ALLTALK_ID || ssval==OAI_TTS_ID || ssval==KCPP_TTS_ID || ssval==POLLINATIONS_TTS_ID)
+		if(ssval==XTTS_ID || ssval==ALLTALK_ID || ssval==OAI_TTS_ID || ssval==KCPP_TTS_ID)
 		{
 			speakprompt = `Enter phrase to speak. Currently selected TTS will be used.<br>
 			<div style="display: inline-flex;">
@@ -18600,7 +18602,6 @@ Current version indicated by LITEVER below.
 	{
 		document.getElementById("xtts_container").classList.add("hidden");
 		document.getElementById("oai_tts_container").classList.add("hidden");
-		document.getElementById("pollinations_tts_container").classList.add("hidden");
 		document.getElementById("alltalk_specific_controls").classList.add("hidden");
 		document.getElementById("kcpp_tts_container").classList.add("hidden");
 		document.getElementById("webbrowser_tts_container").classList.add("hidden");
@@ -18631,11 +18632,6 @@ Current version indicated by LITEVER below.
 		}
 		else if(selectedTTS == OAI_TTS_ID) {
 			document.getElementById("oai_tts_container").classList.remove("hidden");
-			document.getElementById("savenarrationsdiv").classList.remove("hidden");
-			document.getElementById("narratestreamingdiv").classList.remove("hidden");
-		}else if(selectedTTS == POLLINATIONS_TTS_ID)
-		{
-			document.getElementById("pollinations_tts_container").classList.remove("hidden");
 			document.getElementById("savenarrationsdiv").classList.remove("hidden");
 			document.getElementById("narratestreamingdiv").classList.remove("hidden");
 		}
@@ -18770,7 +18766,7 @@ Current version indicated by LITEVER below.
 	function tts_speak(text, do_download=false, do_embed_tts=false, is_test=false)
 	{
 		let ssval = localsettings.tts_mode;
-		let streamallowed = (ssval==XTTS_ID || ssval==ALLTALK_ID || ssval==OAI_TTS_ID || ssval==KCPP_TTS_ID || ssval==POLLINATIONS_TTS_ID);
+		let streamallowed = (ssval==XTTS_ID || ssval==ALLTALK_ID || ssval==OAI_TTS_ID || ssval==KCPP_TTS_ID);
 		if(streamallowed && localsettings.tts_stream && !is_test)
 		{
 			//split into chunks by newline
@@ -18859,12 +18855,11 @@ Current version indicated by LITEVER below.
 		}
 
 
-		if(ssval==XTTS_ID || ssval==ALLTALK_ID || ssval==OAI_TTS_ID || ssval==KCPP_TTS_ID || ssval==POLLINATIONS_TTS_ID) //xtts api server
+		if(ssval==XTTS_ID || ssval==ALLTALK_ID || ssval==OAI_TTS_ID || ssval==KCPP_TTS_ID) //xtts api server
 		{
 			let is_xtts = (ssval==XTTS_ID);
 			let is_oai_tts = (ssval==OAI_TTS_ID);
 			let is_kcpp_tts = (ssval==KCPP_TTS_ID);
-			let is_pollinations_tts = (ssval==POLLINATIONS_TTS_ID);
 			const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 			let audiofile_ref = null;
 
@@ -18948,62 +18943,6 @@ Current version indicated by LITEVER below.
 					tts_is_playing = false;
 					tts_is_processing = false;
 					console.log("XTTS Speak Error: " + error);
-				});
-			}
-			else if(is_pollinations_tts)
-			{
-				const pollinations_params = new URLSearchParams({
-					model:"openai-audio",
-					voice:document.getElementById("pollinations_voices").value,
-					private: true,
-					referrer: "koboldai"
-				});
-				const speechprompt = `Please narrate the following text:\n\n${text}`;
-
-				let gen_endpoint = `${pollinations_text_endpoint}/${encodeURIComponent(speechprompt)}?${pollinations_params.toString()}`;
-
-				fetch(gen_endpoint, {
-					method: 'GET',
-				})
-				.then(response => response.arrayBuffer())
-				.then(data => {
-					audiofile_ref = data.slice(0);
-					return audioContext.decodeAudioData(data);
-				})
-				.then(decodedData => {
-					if(do_download)
-					{
-						tts_download(audiofile_ref);
-					}
-					if(do_embed_tts)
-					{
-						tts_embed_audio(audiofile_ref);
-					}
-					tts_is_processing = false;
-					if(append_to_outqueue)
-					{
-						tts_speak_output_queue.push(decodedData);
-					}
-					else
-					{
-						const playSound = audioContext.createBufferSource();
-						playSound.buffer = decodedData;
-						playSound.connect(audioContext.destination);
-						tts_is_playing = true;
-						update_submit_button(false);
-						playSound.start(audioContext.currentTime);
-						playSound.onended = function() {
-							setTimeout(() => {
-								tts_is_playing = false;
-								update_submit_button(false);
-								console.log("Audio finished playing");
-							},300);
-						};
-					}
-				}).catch((error) => {
-					tts_is_playing = false;
-					tts_is_processing = false;
-					console.log("Pollinations Speak Error: " + error);
 				});
 			}
 			else if(xtts_is_connected)
@@ -29815,7 +29754,6 @@ Current version indicated by LITEVER below.
 								<option value="3">XTTS API Server</option>
 								<option value="4">AllTalk API Server</option>
 								<option value="5">OpenAI-Compat. API Server</option>
-								<option value="6">PollinationsAI TTS API</option>
 							</select>
 							</div>
 							<button id="manual_tts" type="button" class="bg_green btn btn-primary" style="margin-left: 2px;" onclick="test_tts()">Test</button>
@@ -29883,25 +29821,6 @@ Current version indicated by LITEVER below.
 								<div class="justifyleft">TTS voice </div>
 								<div class="push-right">
 									<input type="text" value="alloy" id="oai_tts_voice">
-								</div>
-							</div>
-						</div>
-						<div id="pollinations_tts_container" class="hidden">
-							<div class="settinglabel">
-								<div class="justifyleft">Voice </div>
-								<div class="push-right">
-									<select class="form-control" id="pollinations_voices" style="margin:0px 0 0;">
-									<option value="alloy">alloy</option>
-									<option value="ash">ash</option>
-									<option value="ballad">ballad</option>
-									<option value="coral">coral</option>
-									<option value="echo">echo</option>
-									<option value="fable">fable</option>
-									<option value="nova" selected>nova</option>
-									<option value="onyx">onyx</option>
-									<option value="sage">sage</option>
-									<option value="shimmer">shimmer</option>
-									</select>
 								</div>
 							</div>
 						</div>
@@ -30902,13 +30821,7 @@ Current version indicated by LITEVER below.
 					<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
 				</select>
 				<select title="Pollinations AI Model Selection" style="padding:4px;display:inline;width:calc(100% - 200px)" class="form-control hidden" id="custom_pollinations_model" onchange="oai_model_change(true)">
-					<option value="bidara">bidara</option>
-					<option value="chickytutor">chickytutor</option>
-					<option value="gemini">gemini</option>
-					<option value="midijourney">midijourney</option>
-					<option value="mistral">mistral</option>
-					<option value="openai">openai</option>
-					<option value="openai-fast">openai-fast</option>
+					<option value="openai-fast" selected>openai-fast</option>
 					<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
 				</select>
 				<select title="Nvidia NIM AI Model Selection" style="padding:4px;display:inline;width:calc(100% - 200px)" class="form-control hidden" id="custom_nvidianim_model" onchange="oai_model_change(true)">
