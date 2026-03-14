@@ -4138,6 +4138,7 @@ Current version indicated by LITEVER below.
 	const alltalk_voices_endpoint = "/api/voices";
 	const alltalk_rvc_voices_endpoint = "/api/rvcvoices";
 
+	const pollinations_img_endpoint = "https://gen.pollinations.ai/image";
 	const pollinations_text_endpoint = "https://text.pollinations.ai/openai";
 	const dummy_api_key = "kobo";
 
@@ -9072,6 +9073,72 @@ Current version indicated by LITEVER below.
 			userinput = userinput.trim();
 			localsettings.saved_comfy_bearer_token = userinput.trim();
 		},true);
+	}
+
+	function generate_pollinations_image(req_payload, autoappend)
+	{
+		let splits = req_payload.prompt.split("###");
+		let prompt = splits[0].trim();
+		let negprompt = (splits.length > 1 ? splits[1] : "");
+
+		const pollinations_params = new URLSearchParams({
+			model:req_payload.models[0],
+			seed:Math.floor(Math.random() * 99999999),
+			width: req_payload.params.width,
+			height: req_payload.params.height,
+			nologo: true,
+			private: true,
+			referrer: "koboldai",
+			key: localsettings.saved_dalle_key
+		});
+
+		let gen_endpoint = `${pollinations_img_endpoint}/${encodeURIComponent(prompt)}?${pollinations_params.toString()}`;
+
+		console.log(gen_endpoint);
+		let imgid = "PollAIimg"+(Math.floor(10000 + Math.random() * 90000)).toString();
+		let nimgtag = "[<|p|" + imgid + "|p|>]";
+		if (localsettings.img_newturn) {
+			if(localsettings.opmode == 4)
+			{
+				nimgtag = wrap_newgen_instruct_format(nimgtag,false);
+			}
+			else if(localsettings.opmode == 3)
+			{
+				nimgtag = wrap_newgen_chat_format(nimgtag);
+			}
+		}
+		if(autoappend)
+		{
+			gametext_arr.push(nimgtag);
+		}
+		image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:prompt, poll_category:0 };
+		image_db[imgid].aspect = (req_payload.params.width>=req_payload.params.height*2?5:(req_payload.params.height>=req_payload.params.width*2?4:(req_payload.params.width>req_payload.params.height?2:(req_payload.params.width<req_payload.params.height?1:0))));
+		image_db[imgid].imsource = 0; //0=generated,1=uploaded
+		image_db[imgid].imrefid = "";
+		image_db[imgid].type = 0; //0=image, 1=audio
+
+		fetch(gen_endpoint, {
+			method: 'GET',
+		})
+		.then((response) => {
+			return response.blob(); // Convert the response into a Blob
+		})
+		.then((finalimg) => {
+			const reader = new FileReader();
+			reader.onloadend = () => {
+				let origImg = reader.result;
+				let imgres = localsettings.img_allowhd?VHD_RES_PX:NO_HD_RES_PX;
+				compressImage(origImg, (newDataUri) => {
+					image_db[imgid].done = true;
+					image_db[imgid].result = newDataUri;
+				}, false, imgres);
+			};
+			reader.readAsDataURL(finalimg);
+		}).catch((error) => {
+			console.log("Generation Error: " + error);
+			msgbox("Image Generation Failed!\n\nCould not generate image with Pollinations.ai, maybe you are rate limited. Try again later.\n");
+		});
+		return imgid;
 	}
 
 	function set_horde_key()
@@ -21548,6 +21615,12 @@ Current version indicated by LITEVER below.
 			if(localsettings.saved_dalle_key=="" || localsettings.saved_dalle_url=="")
 			{
 				msgbox("Error: A valid OpenAI Compatible Image URL and Key is required to generate images with DALL-E.\nThis is usually the same as your OpenAI API key, but can be customized in settings.","Invalid OpenAI Compatible Image Key");
+			}
+			else if(localsettings.saved_dalle_url.toLowerCase().includes("pollinations.ai"))
+			{
+				let desired_model = localsettings.saved_dalle_model;
+				genimg_payload.models = [desired_model];
+				imgid = generate_pollinations_image(genimg_payload, autoappend);
 			}
 			else
 			{
