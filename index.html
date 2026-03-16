@@ -4269,6 +4269,7 @@ Current version indicated by LITEVER below.
 	var koboldcpp_has_embeddings = false;
 	var koboldcpp_has_txt2img = false;
 	var koboldcpp_admin_type = 0; //0 = no admin, 1=has admin, 2=protected admin
+	var koboldcpp_force_allow_endpoint_selector = false; //if we were sent from kcpp mode, provide a way back
 	var lastSearchQuery = "";
 	var lastSearchResults = [];
 	var recentSearchQueries = [];
@@ -4303,6 +4304,7 @@ Current version indicated by LITEVER below.
 	var koboldcpp_has_jinja = false;
 	var koboldcpp_has_mcp = false;
 	var koboldcpp_has_musicgen = false;
+	var koboldcpp_has_routermode = false;
 	var no_escape_html = false;
 	var timetaken_timestamp = performance.now();
 	var bg_silence = null;
@@ -9418,6 +9420,10 @@ Current version indicated by LITEVER below.
     {
         return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.108") >= 0 && koboldcpp_has_musicgen);
     }
+	function is_using_kcpp_with_routermode()
+	{
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.110") >= 0 && koboldcpp_has_routermode);
+	}
 	function is_using_web_lite()
 	{
 		return (window.location.hostname.includes("koboldai.net") || window.location.hostname.includes("lostruins.github.io"));
@@ -13843,6 +13849,7 @@ Current version indicated by LITEVER below.
                                     koboldcpp_has_jinja = (data.jinja ? true : false);
 									koboldcpp_has_mcp = (data.mcp ? true : false);
 									koboldcpp_has_musicgen = (data.music ? true : false);
+									koboldcpp_has_routermode = (data.router ? true:false);
 									let has_password = (data.protected?true:false);
 									koboldcpp_has_txt2img = (data.txt2img?true:false);
 									let no_txt_model = (mdlname=="inactive");
@@ -13979,6 +13986,18 @@ Current version indicated by LITEVER below.
 											document.getElementById("customapidropdown").value = "1";
 											render_gametext(false);
 											display_endpoint_container();
+											koboldcpp_force_allow_endpoint_selector = true;
+										},()=>{},true);
+									}
+									else if(localflag && is_using_kcpp_with_admin() && is_using_kcpp_with_routermode())
+									{
+										msgboxYesNo("This KoboldCpp instance appears to be running in router mode.<br><br>Would you like to connect in OpenAI Chat Completions mode to allow for model hotswap?<br><br>You can switch back in the 'AI' menu later.","Router Mode Detected",
+										()=>{
+											document.getElementById("customapidropdown").value = "2";
+											render_gametext(false);
+											display_endpoint_container();
+											oai_fetch_models();
+											koboldcpp_force_allow_endpoint_selector = true;
 										},()=>{},true);
 									}
 
@@ -24476,7 +24495,7 @@ Current version indicated by LITEVER below.
 			}else{
 				document.getElementById("topbtn_customendpt").classList.remove("hidden");
 			}
-			if(localsettings.show_endpoint_selector)
+			if(localsettings.show_endpoint_selector || koboldcpp_force_allow_endpoint_selector)
 			{
 				document.getElementById("topbtn_ai").classList.remove("hidden");
 			}
@@ -24493,7 +24512,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("topbtn_reconnect").classList.add("hidden");
 			document.getElementById("topbtn_customendpt").classList.add("hidden");
 
-			if(localflag && !localsettings.show_endpoint_selector)
+			if(localflag && !localsettings.show_endpoint_selector && !koboldcpp_force_allow_endpoint_selector)
 			{
 				document.getElementById("topbtn_ai").classList.add("hidden");
 			}else{
