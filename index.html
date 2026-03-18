@@ -6664,6 +6664,19 @@ Current version indicated by LITEVER below.
 		}
 		return header;
 	}
+	function get_oai_header(apikey)
+	{
+		let oaiheaders = {'Content-Type': 'application/json'};
+
+		if (apikey!="" && apikey!=dummy_api_key) {
+			oaiheaders['Authorization'] = 'Bearer ' + apikey;
+		}
+		if(uses_cors_proxy && localsettings.proxy_disable_stream)
+		{
+			oaiheaders['nostream'] = true;
+		}
+		return oaiheaders;
+	}
 
 	//synchronous and SSE kai and openAI requests
 	function trigger_abort_controller() //triggers an abort of an in-progress gen http request
@@ -13333,20 +13346,14 @@ Current version indicated by LITEVER below.
 		let desired_oai_ep = document.getElementById("custom_oai_endpoint").value.trim();
 		desired_oai_ep = transform_oai_ep(desired_oai_ep);
 
-		let oaiheaders = {};
-		if(desired_oai_key!="" && desired_oai_key!=dummy_api_key){
-			oaiheaders["Authorization"] = "Bearer " + desired_oai_key;
-		};
+		let oaiheaders = get_oai_header(desired_oai_key);
+
 		if (desired_oai_ep.toLowerCase().includes("api.mistral.ai") || desired_oai_ep.toLowerCase().includes("api.x.ai")) {
 			if(desired_oai_key=="" || desired_oai_key==dummy_api_key)
 			{
 				msgbox("This API requires an API key to fetch model list!");
 				return;
 			}
-		}
-		if(uses_cors_proxy && localsettings.proxy_disable_stream)
-		{
-			oaiheaders['nostream'] = true;
 		}
 
 		autofetch_attempt_dict[desired_oai_ep] = true;
@@ -13438,11 +13445,7 @@ Current version indicated by LITEVER below.
 	function fetch_openrouter_balance()
 	{
 		let desired_oai_key = document.getElementById("custom_oai_key").value.trim();
-
-		let oaiheaders = {};
-		if(desired_oai_key!="" && desired_oai_key!=dummy_api_key){
-			oaiheaders["Authorization"] = "Bearer " + desired_oai_key;
-		};
+		let oaiheaders = get_oai_header(desired_oai_key);
 
 		let fetchurl = default_openrouter_base + openrouter_credits_endpoint;
 
@@ -20896,18 +20899,7 @@ Current version indicated by LITEVER below.
 				last_request_timestamp = get_current_timestamp();
 				last_response_obj = null;
 				last_response_streamlog = "";
-				let oaiheaders = {
-					'Content-Type': 'application/json'
-				};
-
-				if (custom_oai_key!="" && custom_oai_key!=dummy_api_key) {
-                    oaiheaders['Authorization'] = 'Bearer ' + custom_oai_key;
-                }
-
-				if(uses_cors_proxy && localsettings.proxy_disable_stream)
-				{
-					oaiheaders['nostream'] = true;
-				}
+				let oaiheaders = get_oai_header(custom_oai_key);
 
 				if(targetep.toLowerCase().includes("api.novita.ai"))
 				{
@@ -28477,12 +28469,7 @@ Current version indicated by LITEVER below.
 	//queries the decensoring prefix from a second OAI compatible endpoint and returns a string to add to our main request
 	const FetchDecensoredPrefix = asyncRunner(function* (submit_payload, endpoint_url, modelused, num_tokens)
 	{
-		let oaiheaders = {
-			'Content-Type': 'application/json'
-		};
-		if (custom_oai_key!="" && custom_oai_key!=dummy_api_key) {
-			oaiheaders['Authorization'] = 'Bearer ' + custom_oai_key;
-		}
+		let oaiheaders = get_oai_header(custom_oai_key);
 
 		let scaled_rep_pen = 0;
 		if(submit_payload.params.presence_penalty > 0)
