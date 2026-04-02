@@ -4476,6 +4476,7 @@ Current version indicated by LITEVER below.
 		kcpp_mcp_bridge: true,
 		cached_mcp_tools: {}, //key is url, value is tools array
 		disabled_mcp_tools: [], //maintain a list of unwanted tools that was deselected
+		max_display_chars: 0, //unlimited. otherwise, char limit for rendering
 
 		raw_instruct_tags: false, //experimental flags
 		show_endpoint_selector: false,
@@ -15747,6 +15748,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("auto_ctxlen").checked = localsettings.auto_ctxlen;
 		document.getElementById("auto_genamt").checked = localsettings.auto_genamt;
 		document.getElementById("wordsearch_toggle").checked = localsettings.wordsearch_enabled;
+		document.getElementById("max_display_chars").value = localsettings.max_display_chars;
 		if(localflag)
 		{
 			document.getElementById("auto_ctxlen_panel").classList.add("hidden");
@@ -16527,6 +16529,7 @@ Current version indicated by LITEVER below.
 		localsettings.instruct_has_latex = (document.getElementById("instruct_has_latex").checked ? true : false);
 		localsettings.placeholder_tags = (document.getElementById("placeholder_tags").checked ? true : false);
 		localsettings.inject_randomness_seed = document.getElementById("inject_randomness_seed").value;
+		localsettings.max_display_chars = parseInt(document.getElementById("max_display_chars").value);
 		run_in_background = (document.getElementById("run_in_background").checked ? true : false);
 		background_audio_loop(run_in_background);
 		localsettings.generate_images_model = document.getElementById("generate_images_model").value;
@@ -24899,10 +24902,10 @@ Current version indicated by LITEVER below.
 			}
 			else //non edit mode
 			{
+				fulltxt = concat_gametext(false, "", "", "",true);
+
 				if(localsettings.opmode==4) //instruct mode only, non edit
 				{
-					fulltxt = concat_gametext(false, "", "", "",true);
-
 					//accept all newline formats for backwards compatibility
 					fulltxt = replaceAll(fulltxt, "\n\n"+get_instruct_starttag(false)+"\n\n", get_instruct_starttag(false));
 					fulltxt = replaceAll(fulltxt, "\n\n"+get_instruct_endtag(false)+"\n\n", get_instruct_endtag(false));
@@ -24916,9 +24919,14 @@ Current version indicated by LITEVER below.
 
 					fulltxt = "";
 					let countmap = new Map();
+					let turnsincluded = count_visible_turns(chatunits);
 					for(let i=0;i<chatunits.length;++i)
 					{
 						let curr = chatunits[i];
+						if(localsettings.max_display_chars>0 && i<(chatunits.length-turnsincluded))
+						{
+							continue;
+						}
 
 						//in some special cases, add streaming text inline
 						let allow_cont_prev_turn = (localsettings.opmode==4 || (localsettings.opmode==3 && localsettings.allow_continue_chat));
@@ -24966,7 +24974,11 @@ Current version indicated by LITEVER below.
 				}
 				else //all other modes besides instruct, non-edit
 				{
-					fulltxt = concat_gametext(false, "", "", "",true);
+					if(localsettings.max_display_chars>0)
+					{
+						fulltxt = fulltxt.length > localsettings.max_display_chars ? fulltxt.slice(-localsettings.max_display_chars) : fulltxt; //truncated
+					}
+
 					fulltxt = apply_display_only_regex(fulltxt);
 					fulltxt = replace_placeholders(fulltxt,true);
 
@@ -25114,6 +25126,26 @@ Current version indicated by LITEVER below.
 			toggle_editable();
 		}
 		return outputhtml;
+	}
+
+	function count_visible_turns(chatunits)
+	{
+		let turnsincluded = 0;
+		if(localsettings.max_display_chars>0)
+		{
+			let budget = localsettings.max_display_chars;
+			for(let i=chatunits.length-1;i>=0;--i)
+			{
+				let curr = chatunits[i];
+				budget -= (chatunits[i].msg?chatunits[i].msg.length:0);
+				turnsincluded += 1;
+				if(budget<=0)
+				{
+					break;
+				}
+			}
+		}
+		return turnsincluded;
 	}
 
 	function render_corpo_welcome()
@@ -25746,9 +25778,14 @@ Current version indicated by LITEVER below.
 		let incomplete_resp = (synchro_pending_stream!="" || pending_response_id!="");
 
 		let countmap = new Map();
+		let turnsincluded = count_visible_turns(chatunits);
 		for(var i=0;i<chatunits.length;++i)
 		{
 			let curr = chatunits[i];
+			if(localsettings.max_display_chars>0 && i<(chatunits.length-turnsincluded))
+			{
+				continue;
+			}
 			if(corpo_editing_turn != i)
 			{
 				curr = repack_postprocess_turn(curr, countmap, true); //change whole object
@@ -26057,9 +26094,14 @@ Current version indicated by LITEVER below.
 
 		let colormap = {}, colidx = 0;
 		let countmap = new Map();
+		let turnsincluded = count_visible_turns(chatunits);
 		for(var i=0;i<chatunits.length;++i)
 		{
 			let curr = chatunits[i];
+			if(localsettings.max_display_chars>0 && i<(chatunits.length-turnsincluded))
+			{
+				continue;
+			}
 			if(curr.msg && curr.msg!="")
 			{
 				curr = repack_postprocess_turn(curr, countmap, true); //change whole object
@@ -27731,9 +27773,15 @@ Current version indicated by LITEVER below.
 				chatunits.push({"msg":"","add_stream_msg":`<span class='pending_text'>${pendstream}</span>`,"myturn":false,"unlabelled_name":true, "unlabelled_img":false});
 			}
 		}
+		let turnsincluded = count_visible_turns(chatunits);
 		for(var i=0;i<chatunits.length;++i)
 		{
 			let curr = chatunits[i];
+
+			if(localsettings.max_display_chars>0 && i<(chatunits.length-turnsincluded))
+			{
+				continue;
+			}
 
 			//for aesthetic mode, use fancy quotes, but we must exclude anything in codeblocks, and html tags
 			let temphtmlstash = [];
@@ -29333,6 +29381,11 @@ Current version indicated by LITEVER below.
 							<div class="justifyleft">Unlock scroll height <span class="helpicon">?<span
 								class="helptext">Unlocks the text viewport, allowing for infinite height without scrolling</span></span></div>
 							<input title="Unlock Scroll Height" type="checkbox" id="printer_view" class="push-right">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft">Max Displayed Text Characters&nbsp;<span class="helpicon">?<span
+								class="helptext">If set above 0, will limit the number of text characters rendered to display (any earlier text will still be submitted but stay hidden).</span></span></div>
+							<input class="push-right" title="Max Displayed Text Characters" type="text" inputmode="decimal" value="0" style="width:10ch" id="max_display_chars">
 						</div>
 						<div class="settinglabel">
 							<input type="file" id="loadbgimg" accept="image/*" onchange="load_bg_img(event)" style="display:none;">
