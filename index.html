@@ -4327,6 +4327,7 @@ Current version indicated by LITEVER below.
 	var websearch_in_progress = false;
 	var kcpp_tts_json = "";
 	var avoidwelcome = false;
+	var undisplayed_editing_text = "";
 
 	var localsettings = {
 		my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
@@ -17960,6 +17961,23 @@ Current version indicated by LITEVER below.
 		}
 	}
 
+	//for display trimming
+	function splitAtWhitespaceFromEnd(str, maxLength)
+	{
+		if (str.length <= maxLength) {
+			return ["", str];
+		}
+		const sliceStart = str.length - maxLength;
+		const visiblePart = str.slice(sliceStart);
+		const match = visiblePart.match(/[\s\n]/);
+		if (match) {
+			const splitIndex = match.index;
+			return [ str.slice(0, sliceStart + splitIndex + 1), visiblePart.slice(splitIndex + 1) ];
+		}
+
+		return [str.slice(0, sliceStart), visiblePart];
+	}
+
 	//Prioritizes truncating example messages in memory
 	function truncate_memory(current_memory, max_mem_len, to_boundary)
 	{
@@ -23953,6 +23971,7 @@ Current version indicated by LITEVER below.
 			let oldInnerText = concat_gametext(false, "","","");
 			let gametext_elem = document.getElementById("gametext");
 			let editedmatcher = unstash_image_placeholders(gametext_elem.innerText);
+			editedmatcher = undisplayed_editing_text + editedmatcher;
 
 			if (oldInnerText != editedmatcher) {
 				gametext_arr = [];
@@ -23982,7 +24001,7 @@ Current version indicated by LITEVER below.
 				gametext_elem.innerHTML = htmlstr;
 
 				//rather than dump it all into one history, let's split it into paragraphs
-				let fullmergedstory = gametext_elem.innerText;
+				let fullmergedstory = undisplayed_editing_text + gametext_elem.innerText;
 
 				let newestChunk = "";
 
@@ -24427,6 +24446,7 @@ Current version indicated by LITEVER below.
 	{
 		document.getElementById("gametext").contentEditable = (document.getElementById("allowediting").checked && pending_response_id=="");
 		let inEditMode = (document.getElementById("allowediting").checked ? true : false);
+		undisplayed_editing_text = "";
 
 		if(is_corpo_ui())
 		{
@@ -24865,6 +24885,15 @@ Current version indicated by LITEVER below.
 			if (inEditMode) //edit mode only
 			{
 				fulltxt = concat_gametext(false, "", "%SpnStg%", "%SpnEtg%",true);
+				if(localsettings.max_display_chars>0 && fulltxt.length > localsettings.max_display_chars)
+				{
+					let splitted = splitAtWhitespaceFromEnd(fulltxt,localsettings.max_display_chars);
+					undisplayed_editing_text = unescape_html(splitted[0]);
+					undisplayed_editing_text = replaceAll(undisplayed_editing_text, `%SpnStg%`, ``);
+					undisplayed_editing_text = replaceAll(undisplayed_editing_text, `%SclStg%`,``);
+					undisplayed_editing_text = replaceAll(undisplayed_editing_text, `%SpnEtg%`, ``);
+					fulltxt = splitted[1];
+				}
 				fulltxt = replaceAll(fulltxt, get_instruct_starttag(true), `%SclStg%`+escape_html(get_instruct_starttag(true))+`%SpnEtg%`);
 				fulltxt = replaceAll(fulltxt, get_instruct_endtag(true), `%SclStg%`+escape_html(get_instruct_endtag(true))+`%SpnEtg%`);
 				if (localsettings.separate_end_tags) {
@@ -24971,9 +25000,10 @@ Current version indicated by LITEVER below.
 				}
 				else //all other modes besides instruct, non-edit
 				{
-					if(localsettings.max_display_chars>0)
+					if(localsettings.max_display_chars>0 && fulltxt.length > localsettings.max_display_chars)
 					{
-						fulltxt = fulltxt.length > localsettings.max_display_chars ? fulltxt.slice(-localsettings.max_display_chars) : fulltxt; //truncated
+						let splitted = splitAtWhitespaceFromEnd(fulltxt,localsettings.max_display_chars);
+						fulltxt = splitted[1];
 					}
 
 					fulltxt = apply_display_only_regex(fulltxt);
