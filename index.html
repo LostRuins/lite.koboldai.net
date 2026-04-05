@@ -4397,6 +4397,7 @@ Current version indicated by LITEVER below.
 		instruct_endtag_end: "",
 		instruct_systag_end: "",
 		instruct_sysprompt: "",
+		instruct_gentag: "",
 		instruct_has_markdown: true,
 		instruct_has_latex: true,
 		placeholder_tags: true,
@@ -4655,7 +4656,7 @@ Current version indicated by LITEVER below.
 		"assistant_end":"<end_of_turn>\\n",
 	},
 	{
-		"name":"Gemma 4 E2B & E4B",
+		"name":"Gemma 4 E2B & E4B NoThink",
 		"system_start":"<|turn>system\\n",
 		"system_end":"<turn|>\\n",
 		"user_start":"<|turn>user\\n",
@@ -4664,13 +4665,23 @@ Current version indicated by LITEVER below.
 		"assistant_end":"<turn|>\\n",
 	},
 	{
-		"name":"Gemma 4 26B & 31B",
+		"name":"Gemma 4 26B & 31B NoThink",
 		"system_start":"<|turn>system\\n",
 		"system_end":"<turn|>\\n",
 		"user_start":"<|turn>user\\n",
 		"user_end":"<turn|>\\n",
 		"assistant_start":"<|turn>model\\n",
 		"assistant_gen": "<|turn>model\\n<|channel>thought\\n<channel|>",
+		"assistant_end":"<turn|>\\n",
+	},
+	{
+		"name":"Gemma 4 Thinking",
+		"system_start":"<|turn>system\\n",
+		"system_end":"<turn|>\\n",
+		"user_start":"<|turn>user\\n",
+		"user_end":"<turn|>\\n",
+		"assistant_start":"<|turn>model\\n",
+		"assistant_gen": "<|turn>model\\n<|think|><|channel>thought",
 		"assistant_end":"<turn|>\\n",
 	},
 	{
@@ -4929,6 +4940,11 @@ Current version indicated by LITEVER below.
 	function replaceAll(str, find, replace, caseInsensitive=false) //replace all occurances in string with string
 	{
 		return str.replace(new RegExp(escapeRegExp(find), (caseInsensitive?'gi':'g')), replace);
+	}
+	function replaceLast(str, search, replace) {
+		const index = str.lastIndexOf(search);
+		if (index === -1) return str;
+		return str.slice(0, index) + replace + str.slice(index + search.length);
 	}
 	function literalReplace(str, search, replacement) {
 		// Handle edge cases
@@ -6020,6 +6036,76 @@ Current version indicated by LITEVER below.
 			inputtxt = replace_noninstruct_placeholders(inputtxt,escape,isgametext,null);
 		}
 		return inputtxt;
+	}
+
+	// this function repairs the (assist_end)(user_start) for the very first user tag.
+	// if ete is found and ete's index preceeds both st and et's index, remove that ete. otherwise, do nothing
+	function repair_post_placeholders_fix(memory, prompt)
+	{
+		let st = get_instruct_starttag(false);
+		let et = get_instruct_endtag(false);
+		let syst = get_instruct_systag(false);
+		let ste = get_instruct_starttag_end(false);
+		let ete = get_instruct_endtag_end(false);
+
+		let foundpreset = find_matching_instruct_preset(st,et);
+		if(foundpreset && !ete && foundpreset.assistant_end)
+		{
+			ete = replaceAll(foundpreset.assistant_end, "\\n", "\n");
+			st = st.replace(ete,"");
+		}
+		if(foundpreset && !ste && foundpreset.user_end)
+		{
+			ste = replaceAll(foundpreset.user_end, "\\n", "\n");
+			et = et.replace(ste,"");
+		}
+		let skip = (!ete || st.trim()=="{{[INPUT]}}");
+
+		if(!skip)
+		{
+			let memoryStIndex = memory.indexOf(st);
+			let memorySysIndex = memory.indexOf(syst);
+			let promptStIndex = prompt.indexOf(st);
+			let promptSysIndex = prompt.indexOf(syst);
+
+			let replaceDone = false;
+			if(memory && memorySysIndex==-1 && memoryStIndex!=-1) //remove unwanted tag from memory
+			{
+				let lastEteBeforeSt = memory.lastIndexOf(ete, memoryStIndex);
+				if (lastEteBeforeSt !== -1)
+				{
+					replaceDone = true;
+					memory = memory.replace(ete,"");
+				}
+			}
+
+			if(!replaceDone && prompt && promptSysIndex==-1 && promptStIndex!=-1) //remove unwanted tag from prompt
+			{
+				let lastEteBeforeSt = prompt.lastIndexOf(ete, promptStIndex);
+				if (lastEteBeforeSt !== -1)
+				{
+					replaceDone = true;
+					prompt = prompt.replace(ete,"");
+				}
+			}
+
+			// now fix final assist tag with an assist gen tag if applicable
+			replaceDone = false;
+			let memoryEtIndex = memory.lastIndexOf(et);
+			let promptEtIndex = prompt.lastIndexOf(et);
+			if(prompt && promptEtIndex!=-1 && localsettings.instruct_gentag)
+			{
+				prompt = replaceLast(prompt,et,localsettings.instruct_gentag);
+				replaceDone = true;
+			}
+			if(!replaceDone && memory && memoryEtIndex!=-1 && localsettings.instruct_gentag)
+			{
+				memory = replaceLast(memory,et,localsettings.instruct_gentag);
+				replaceDone = true;
+			}
+		}
+
+		return {"memory":memory,"prompt":prompt};
 	}
 
 	//saving and loading functionality
@@ -15628,6 +15714,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("instruct_starttag_end").value = localsettings.instruct_starttag_end;
 		document.getElementById("instruct_systag_end").value = localsettings.instruct_systag_end;
 		document.getElementById("instruct_endtag_end").value = localsettings.instruct_endtag_end;
+		document.getElementById("instruct_gentag").value = localsettings.instruct_gentag;
 		document.getElementById("raw_instruct_tags").checked = localsettings.raw_instruct_tags;
 		document.getElementById("show_endpoint_selector").checked = localsettings.show_endpoint_selector;
 		document.getElementById("no_warn_unsaved").checked = localsettings.no_warn_unsaved;
@@ -16476,6 +16563,7 @@ Current version indicated by LITEVER below.
 		localsettings.instruct_starttag_end = document.getElementById("instruct_starttag_end").value;
 		localsettings.instruct_endtag_end = document.getElementById("instruct_endtag_end").value;
 		localsettings.instruct_systag_end = document.getElementById("instruct_systag_end").value;
+		localsettings.instruct_gentag = document.getElementById("instruct_gentag").value;
 	}
 
 	function confirm_settings() {
@@ -16861,6 +16949,20 @@ Current version indicated by LITEVER below.
 			}
 			document.getElementById('instruct_gentag').value = itags.assistant_gen?itags.assistant_gen:"";
 		}
+	}
+	function find_matching_instruct_preset(starttag, endtag)
+	{
+		for(let i=0;i<instructpresets.length;++i)
+		{
+			let curr = get_preset_instruct_tag_format(i+1);
+			let curr_st = replaceAll(curr.user_start, "\\n", "\n");
+			let curr_et = replaceAll(curr.assistant_start, "\\n", "\n");
+			if(starttag.includes(curr_st) && endtag.includes(curr_et))
+			{
+				return curr;
+			}
+		}
+		return null;
 	}
 	function edit_instruct_tag_format()
 	{
@@ -20247,6 +20349,18 @@ Current version indicated by LITEVER below.
 			}
 
 			truncated_context = replace_placeholders(truncated_context,false,false,true);
+
+			if(is_using_kcpp_with_added_memory())
+			{
+				let tmp = repair_post_placeholders_fix(truncated_memory, truncated_context);
+				truncated_memory = tmp.memory;
+				truncated_context = tmp.prompt;
+			}
+			else
+			{
+				let tmp = repair_post_placeholders_fix("", truncated_context);
+				truncated_context = tmp.prompt;
+			}
 
 			if(is_using_kcpp_with_added_memory())
 			{
