@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 <head>
 	<script id="init-config">
-	const LITEVER = 326;
+	const LITEVER = 327;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -3558,6 +3558,7 @@ Current version indicated by LITEVER below.
 	// whitelisted auto selected horde model names
 	const defaultmodels = ["gpt4all","supercot","pygmalion-6","pygmalion-v8","pygmalion-2","hermes","airoboros","chrono","wizard","mantis","vicuna","manticore","alpaca","myth","xwin","spicyboros","mlewd","mxlewd","westlake","anubis","skyfall","llama2","llama3","llama-2","llama-3-","llama-3.","mistral","maid","mixtral","estopia","fighter","fimbul","euryale","nemo","gemma","lunaris","stheno","magnum","cydonia","qwen2.5-32b","behemoth","exaone","glm4","glm-4","tutu","deepseek","tlacuilo","rocinante","-14B","-32B","-27B","-35B"];
 	const ignoredmodels = ["tinyllama","debug-","-1b","-270m"]; //blacklisted model names
+	const hardcoded_think_closers = ["</think>","<channel|>"];
 
 	const instructstartplaceholder = "\n{{[INPUT]}}\n";
 	const instructendplaceholder = "\n{{[OUTPUT]}}\n";
@@ -5868,14 +5869,14 @@ Current version indicated by LITEVER below.
 		const safeStop = escapeRegExp(localsettings.stop_thinking_tag);
 		return `${safeStart}([\\s\\S]*?)${safeStop}`;
 	}
-	function get_orphaned_thinking_regex()
+	function get_orphaned_thinking_regex(tag)
 	{
-		if(!localsettings.start_thinking_tag || !localsettings.stop_thinking_tag)
+		if(!tag)
 		{
 			return "";
 		}
 		const safeStart = escapeRegExp(get_instructendplaceholder());
-		const safeStop = escapeRegExp(localsettings.stop_thinking_tag);
+		const safeStop = escapeRegExp(tag);
 		return `${safeStart}([\\s\\S]*?)${safeStop}`;
 	}
 
@@ -7475,7 +7476,7 @@ Current version indicated by LITEVER below.
 						pending_toolcall_objs.push(pending_toolcall_last_obj);
 						pending_toolcall_last_obj = null;
 					}
-					if((synchro_polled_response=="" || (synchro_polled_response.includes("<think>") && synchro_polled_response.includes("</think>"))) && last_stop_reason=="tool_calls" && pending_toolcall_objs!=null && pending_toolcall_objs.length>0)
+					if(last_stop_reason=="tool_calls" && pending_toolcall_objs!=null && pending_toolcall_objs.length>0)
 					{
 						//a tool call was triggered instead
 						synchro_polled_resptoolcalls = [];
@@ -9569,10 +9570,7 @@ Current version indicated by LITEVER below.
 		}
 
 		if (localsettings.eos_ban_mode == 0) {
-			if (localsettings.opmode == 1) {
-				return true; //story mode always ban
-			}
-			else if (localsettings.opmode == 3 && !localsettings.allow_continue_chat) {
+			if (localsettings.opmode == 3 && !localsettings.allow_continue_chat) {
 				return false; //chat mode always unban unless cont allowed
 			}
 			else if (!input_was_empty) //if user input is not empty, ALWAYS unban EOS.
@@ -17979,13 +17977,23 @@ Current version indicated by LITEVER below.
 				}
 				else
 				{
-					if(localsettings.handle_mismatched_think && !inputtxt.includes(localsettings.start_thinking_tag) && inputtxt.includes(localsettings.stop_thinking_tag))
+					if(localsettings.handle_mismatched_think && !inputtxt.includes(localsettings.start_thinking_tag))
 					{
-						let chunks = inputtxt.split(localsettings.stop_thinking_tag);
-						if(chunks.length==2) //exactly 2 parts
+						let orphans = hardcoded_think_closers.slice();
+						orphans.push(localsettings.stop_thinking_tag);
+						for(let t=0;t<orphans.length;++t)
 						{
-							matches.push(chunks[0]);
-							inputtxt = `%ExpandBtn%${chunks[1]}`;
+							let currtag = orphans[t];
+							if(currtag && inputtxt.includes(currtag))
+							{
+								let chunks = inputtxt.split(currtag);
+								if(chunks.length==2) //exactly 2 parts
+								{
+									matches.push(chunks[0]);
+									inputtxt = `%ExpandBtn%${chunks[1]}`;
+									break;
+								}
+							}
 						}
 					}
 				}
@@ -18001,7 +18009,9 @@ Current version indicated by LITEVER below.
 				let matchiter = 0;
 				inputtxt = inputtxt.replace(/%ExpandBtn%(?:\n{0,2})?/g, function (m) {
 					let curr = matches[matchiter];
-					let expandedhtml = `<span><button type="button" title="Show Thoughts" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="toggle_hide_thinking(this)">Show Thoughts (${curr.length} characters)</button><span class="color_lightgreen hidden"><br>${escape_html(curr)}\n</span><br></span>`;
+					curr = escape_html(curr);
+					curr = unescape_html_alternate(curr);
+					let expandedhtml = `<span><button type="button" title="Show Thoughts" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="toggle_hide_thinking(this)">Show Thoughts (${curr.length} characters)</button><span class="color_lightgreen hidden"><br>${(curr)}\n</span><br></span>`;
 					if(!curr || curr.trim()=="" || curr.trim()=="/nothink" || curr.trim()==`${localsettings.start_thinking_tag}${localsettings.stop_thinking_tag}`)
 					{
 						expandedhtml = `<span><button type="button" title="No Thoughts" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="">No Thoughts</button><br></span>`;
@@ -19840,11 +19850,17 @@ Current version indicated by LITEVER below.
 					truncated_context = truncated_context.replace(pat, "");
 
 					//fallback, check for orphaned think tags and remove those as well
-					if(localsettings.opmode==4 && localsettings.stop_thinking_tag && truncated_context.includes(localsettings.stop_thinking_tag))
+					let orphans = hardcoded_think_closers.slice();
+					orphans.push(localsettings.stop_thinking_tag);
+					for(let t=0;t<orphans.length;++t)
 					{
-						let endmatcher = get_instructendplaceholder();
-						let pat = new RegExp(get_orphaned_thinking_regex(), "gm");
-						truncated_context = truncated_context.replace(pat, endmatcher);
+						let currtag = orphans[t];
+						if(localsettings.opmode==4 && currtag && truncated_context.includes(currtag))
+						{
+							let endmatcher = get_instructendplaceholder();
+							let pat = new RegExp(get_orphaned_thinking_regex(currtag), "gm");
+							truncated_context = truncated_context.replace(pat, endmatcher);
+						}
 					}
 				}
 				else if(localsettings.strip_thinking_mode==1) //strip except recent
@@ -19858,10 +19874,16 @@ Current version indicated by LITEVER below.
 						beforePart = beforePart.replace(pat, "");
 
 						//fallback, check for orphaned think tags and remove those as well
-						if(localsettings.opmode==4 && localsettings.stop_thinking_tag && beforePart.includes(localsettings.stop_thinking_tag))
+						let orphans = hardcoded_think_closers.slice();
+						orphans.push(localsettings.stop_thinking_tag);
+						for(let t=0;t<orphans.length;++t)
 						{
-							let pat = new RegExp(get_orphaned_thinking_regex(), "gm");
-							beforePart = beforePart.replace(pat, endmatcher);
+							let currtag = orphans[t];
+							if(localsettings.opmode==4 && currtag && beforePart.includes(currtag))
+							{
+								let pat = new RegExp(get_orphaned_thinking_regex(currtag), "gm");
+								beforePart = beforePart.replace(pat, endmatcher);
+							}
 						}
 
 						truncated_context = beforePart + afterPart; // Combine and done
@@ -20963,6 +20985,14 @@ Current version indicated by LITEVER below.
 						{
 							mhistory[0].msg += "\n"+mhistory[1].msg;
 							mhistory.splice(1, 1);
+						}
+
+						//if the final turn is the assistant chatname only, we shift that into the user turn, that helps support models that reject prefills
+						if(mhistory.length>2 && !mhistory[mhistory.length-1].myturn && mhistory[mhistory.length-2].myturn &&
+						mhistory[mhistory.length-2].msg && mhistory[mhistory.length-1].msg == `${localsettings.chatopponent}:`)
+						{
+							mhistory[mhistory.length-2].msg += `\n(Continue ${localsettings.chatopponent}'s reply')`;
+							mhistory.pop();
 						}
 
 						if(mhistory.length>0 && mainoaibody.length>1 && mainoaibody[1].type && mainoaibody[1].type!="text")
@@ -22466,7 +22496,7 @@ Current version indicated by LITEVER below.
 
 		//allow trim incomplete sentences
 		//do not trim if instruct mode AND stop token reached
-		let donottrim = ((localsettings.opmode == 4||localsettings.opmode == 3) && last_stop_reason=="stop");
+		let donottrim = (last_stop_reason=="stop");
 		if (!donottrim && localsettings.trimsentences == true) {
 			//also, to prevent a trim from bisecting a chat name, if a response contains a chatname, do not trim
 			donottrim = false;
@@ -22718,11 +22748,11 @@ Current version indicated by LITEVER below.
 						gentxt = gentxt.slice(et2.length);
 						found = gentxt.indexOf(et2);
 					}
-					if (found != -1) //if found, truncate to it
-					{
-						splitresponse = gentxt.split(et2);
-						gentxt = splitresponse[0];
-					}
+					// if (found != -1) //if found, truncate to it
+					// {
+					// 	splitresponse = gentxt.split(et2);
+					// 	gentxt = splitresponse[0];
+					// }
 				}
 			}
 		}
@@ -31436,8 +31466,8 @@ Current version indicated by LITEVER below.
 				<div>
 					<div style="vertical-align: middle;">
 						<div>
-							<span class="color_red">Also Reset Memory and World Info? </span>
-							<input type="checkbox" id="new_session_erase_memory" style="vertical-align: top;">
+							<span class="color_red"><b>Also Reset Memory and World Info? </b></span>
+							<input type="checkbox" id="new_session_erase_memory" style="vertical-align: text-bottom;">
 						</div>
 					</div>
 				</div>
