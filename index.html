@@ -17977,7 +17977,7 @@ Current version indicated by LITEVER below.
 				}
 				else
 				{
-					if(localsettings.handle_mismatched_think && !inputtxt.includes(localsettings.start_thinking_tag))
+					if(localsettings.opmode==4 && localsettings.handle_mismatched_think && !inputtxt.includes(localsettings.start_thinking_tag))
 					{
 						let orphans = hardcoded_think_closers.slice();
 						orphans.push(localsettings.stop_thinking_tag);
@@ -19850,16 +19850,20 @@ Current version indicated by LITEVER below.
 					truncated_context = truncated_context.replace(pat, "");
 
 					//fallback, check for orphaned think tags and remove those as well
-					let orphans = hardcoded_think_closers.slice();
-					orphans.push(localsettings.stop_thinking_tag);
-					for(let t=0;t<orphans.length;++t)
+					if(localsettings.opmode==4)
 					{
-						let currtag = orphans[t];
-						if(localsettings.opmode==4 && currtag && truncated_context.includes(currtag))
+						let orphans = hardcoded_think_closers.slice();
+						orphans.push(localsettings.stop_thinking_tag);
+						for(let t=0;t<orphans.length;++t)
 						{
-							let endmatcher = get_instructendplaceholder();
-							let pat = new RegExp(get_orphaned_thinking_regex(currtag), "gm");
-							truncated_context = truncated_context.replace(pat, endmatcher);
+							let currtag = orphans[t];
+							if(localsettings.opmode==4 && currtag && truncated_context.includes(currtag))
+							{
+								let endmatcher = get_instructendplaceholder();
+								let pat = new RegExp(get_orphaned_thinking_regex(currtag), "gm");
+								truncated_context = truncated_context.replace(pat, endmatcher);
+								break;
+							}
 						}
 					}
 				}
@@ -19873,16 +19877,20 @@ Current version indicated by LITEVER below.
 						let pat = new RegExp(get_thinking_regex(), "gm");	// Remove all thinking before splitpoint
 						beforePart = beforePart.replace(pat, "");
 
-						//fallback, check for orphaned think tags and remove those as well
-						let orphans = hardcoded_think_closers.slice();
-						orphans.push(localsettings.stop_thinking_tag);
-						for(let t=0;t<orphans.length;++t)
+						if(localsettings.opmode==4)
 						{
-							let currtag = orphans[t];
-							if(localsettings.opmode==4 && currtag && beforePart.includes(currtag))
+							//fallback, check for orphaned think tags and remove those as well
+							let orphans = hardcoded_think_closers.slice();
+							orphans.push(localsettings.stop_thinking_tag);
+							for(let t=0;t<orphans.length;++t)
 							{
-								let pat = new RegExp(get_orphaned_thinking_regex(currtag), "gm");
-								beforePart = beforePart.replace(pat, endmatcher);
+								let currtag = orphans[t];
+								if(localsettings.opmode==4 && currtag && beforePart.includes(currtag))
+								{
+									let pat = new RegExp(get_orphaned_thinking_regex(currtag), "gm");
+									beforePart = beforePart.replace(pat, endmatcher);
+									break;
+								}
 							}
 						}
 
