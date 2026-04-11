@@ -7464,6 +7464,11 @@ Current version indicated by LITEVER below.
 					}
 				},
 				close() { //end of stream
+					if(streaming_was_thinking && synchro_pending_stream && (last_stop_reason=="stop" || last_stop_reason=="tool_calls")) //wrap up if we stopped properly
+					{
+						synchro_pending_stream = `${localsettings.start_thinking_tag}${synchro_pending_stream}${localsettings.stop_thinking_tag}`;
+					}
+					streaming_was_thinking = false;
 					synchro_polled_response = synchro_pending_stream;
 					let need_clean_output = (synchro_polled_response!="" && localsettings.opmode==1 && gametext_arr.length>0 && document.getElementById("useoaichatcompl").checked);
 					if(need_clean_output)
@@ -7497,7 +7502,6 @@ Current version indicated by LITEVER below.
 						}
 					}
 					synchro_pending_stream = "";
-					streaming_was_thinking = false;
 					if (logprobs_content_arr.length>0 && last_response_obj==null) {
 						//fake a last response obj
 						let fakedresponse = {
