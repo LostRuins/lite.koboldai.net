@@ -17849,6 +17849,16 @@ Current version indicated by LITEVER below.
 			new_randomness_seed();
 			localsettings.inject_randomness_seed = document.getElementById("inject_randomness_seed").value;
 		}
+		if ('speechSynthesis' in window) {
+			window.speechSynthesis.cancel();
+		}
+		if(ttsAudioContext)
+		{
+		    ttsMasterGain.disconnect();
+			ttsMasterGain = ttsAudioContext.createGain();
+			ttsMasterGain.connect(ttsAudioContext.destination);
+			tts_speak_output_queue.clear();
+		}
 		warn_unsaved = false;
 		last_used_saveslot = -1;
 		show_corpo_leftpanel(false);
@@ -19057,6 +19067,9 @@ Current version indicated by LITEVER below.
 	var tts_speak_output_queue = [];
 	var tts_queue_embed = false;
 	var tts_queue_download = false;
+	var ttsAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+	var ttsMasterGain = ttsAudioContext.createGain();
+	ttsMasterGain.connect(ttsAudioContext.destination);
 	function tts_speak(text, do_download=false, do_embed_tts=false, is_test=false)
 	{
 		let ssval = localsettings.tts_mode;
@@ -19087,12 +19100,14 @@ Current version indicated by LITEVER below.
 			let firstAudio = tts_speak_output_queue.shift();
 			if(firstAudio)
 			{
-				const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-				const playSound = audioContext.createBufferSource();
+				ttsMasterGain.disconnect();
+				ttsMasterGain = ttsAudioContext.createGain();
+				ttsMasterGain.connect(ttsAudioContext.destination);
+				const playSound = ttsAudioContext.createBufferSource();
 				playSound.buffer = firstAudio;
-				playSound.connect(audioContext.destination);
+				playSound.connect(ttsMasterGain);
 				update_submit_button(false);
-				playSound.start(audioContext.currentTime);
+				playSound.start(ttsAudioContext.currentTime);
 				tts_is_playing = true;
 				playSound.onended = function() {
 					setTimeout(() => {
@@ -19156,11 +19171,8 @@ Current version indicated by LITEVER below.
 			let is_xtts = (ssval==XTTS_ID);
 			let is_oai_tts = (ssval==OAI_TTS_ID);
 			let is_kcpp_tts = (ssval==KCPP_TTS_ID);
-			const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 			let audiofile_ref = null;
-
 			tts_is_processing = true;
-
 			if(is_oai_tts || is_kcpp_tts)
 			{
 				let payload = {};
@@ -19203,7 +19215,7 @@ Current version indicated by LITEVER below.
 				.then(response => response.arrayBuffer())
 				.then(data => {
 					audiofile_ref = data.slice(0);
-					return audioContext.decodeAudioData(data);
+					return ttsAudioContext.decodeAudioData(data);
 				})
 				.then(decodedData => {
 					if(do_download)
@@ -19221,12 +19233,15 @@ Current version indicated by LITEVER below.
 					}
 					else
 					{
-						const playSound = audioContext.createBufferSource();
+						ttsMasterGain.disconnect();
+						ttsMasterGain = ttsAudioContext.createGain();
+						ttsMasterGain.connect(ttsAudioContext.destination);
+						const playSound = ttsAudioContext.createBufferSource();
 						playSound.buffer = decodedData;
-						playSound.connect(audioContext.destination);
+						playSound.connect(ttsMasterGain);
 						tts_is_playing = true;
 						update_submit_button(false);
-						playSound.start(audioContext.currentTime);
+						playSound.start(ttsAudioContext.currentTime);
 						playSound.onended = function() {
 							setTimeout(() => {
 								tts_is_playing = false;
@@ -19260,7 +19275,7 @@ Current version indicated by LITEVER below.
 					.then(response => response.arrayBuffer())
 					.then(data => {
 						audiofile_ref = data.slice(0);
-						return audioContext.decodeAudioData(data);
+						return ttsAudioContext.decodeAudioData(data);
 					})
 					.then(decodedData => {
 						if(do_download)
@@ -19278,12 +19293,15 @@ Current version indicated by LITEVER below.
 						}
 						else
 						{
-							const playSound = audioContext.createBufferSource();
+							ttsMasterGain.disconnect();
+							ttsMasterGain = ttsAudioContext.createGain();
+							ttsMasterGain.connect(ttsAudioContext.destination);
+							const playSound = ttsAudioContext.createBufferSource();
 							playSound.buffer = decodedData;
-							playSound.connect(audioContext.destination);
+							playSound.connect(ttsMasterGain);
 							tts_is_playing = true;
 							update_submit_button(false);
-							playSound.start(audioContext.currentTime);
+							playSound.start(ttsAudioContext.currentTime);
 							playSound.onended = function() {
 								setTimeout(() => {
 									tts_is_playing = false;
@@ -19313,12 +19331,15 @@ Current version indicated by LITEVER below.
 						}
 						else
 						{
-							const playSound = audioContext.createBufferSource();
+							ttsMasterGain.disconnect();
+							ttsMasterGain = ttsAudioContext.createGain();
+							ttsMasterGain.connect(ttsAudioContext.destination);
+							const playSound = ttsAudioContext.createBufferSource();
 							playSound.buffer = decodedData;
-							playSound.connect(audioContext.destination);
+							playSound.connect(ttsMasterGain);
 							tts_is_playing = true;
 							update_submit_button(false);
-							playSound.start(audioContext.currentTime);
+							playSound.start(ttsAudioContext.currentTime);
 							playSound.onended = function() {
 								setTimeout(() => {
 									tts_is_playing = false;
@@ -19344,7 +19365,7 @@ Current version indicated by LITEVER below.
 						.then(response => response.arrayBuffer())
 						.then(data => {
 							audiofile_ref = data.slice(0);
-							return audioContext.decodeAudioData(data);
+							return ttsAudioContext.decodeAudioData(data);
 						})
 						.then(decodedData => {
 							if(do_download)
@@ -19400,7 +19421,7 @@ Current version indicated by LITEVER below.
 										.then(response => response.arrayBuffer())
 										.then(data => {
 											audiofile_ref = data.slice(0);
-											return audioContext.decodeAudioData(data);
+											return ttsAudioContext.decodeAudioData(data);
 										})
 										.then(decodedData => {
 											if(do_download)
@@ -19437,7 +19458,7 @@ Current version indicated by LITEVER below.
 							{
 								return response.arrayBuffer().then(data => {
 									audiofile_ref = data.slice(0);
-									return audioContext.decodeAudioData(data);
+									return ttsAudioContext.decodeAudioData(data);
 								})
 								.then(decodedData => {
 									if(do_download)
@@ -19477,6 +19498,7 @@ Current version indicated by LITEVER below.
 				let utterance = new window.SpeechSynthesisUtterance(text);
 				utterance.voice = voicelist[pickedwebvoice];
 				utterance.rate = ssrate;
+				window.speechSynthesis.cancel();
 				window.speechSynthesis.speak(utterance);
 				utterance.onend = function(event) {
 					update_submit_button(false);
