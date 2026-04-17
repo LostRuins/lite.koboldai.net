@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 <head>
 	<script id="init-config">
-	const LITEVER = 328;
+	const LITEVER = 329;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -5138,20 +5138,69 @@ Current version indicated by LITEVER below.
 	function format_streaming_text(input)
 	{
 		let inEditMode = (document.getElementById("allowediting").checked ? true : false);
+		const thinkstartpl = "!%%THINK_START%%!";
+		const thinkendpl = "!%%THINK_END%%!";
+		const thinkpat = new RegExp(`${thinkstartpl}([\\s\\S]*?)${thinkendpl}`, "gmi");
+		if(!inEditMode) //swap with non-html sensitive placeholders first
+		{
+			input = unescape_html(input);
+			input = input.replaceAll(localsettings.start_thinking_tag,thinkstartpl);
+			input = input.replaceAll(localsettings.stop_thinking_tag,`${thinkendpl}`);
+			let orphans = hardcoded_think_closers.slice();
+			for(let t=0;t<orphans.length;++t)
+			{
+				let currtag = orphans[t];
+				input = input.replaceAll(currtag,`${thinkendpl}`);
+			}
+			input = input.replaceAll(`${thinkendpl}`,`\n${thinkendpl}\n`);
+			input = escape_html(input);
+		}
 		if(!inEditMode && localsettings.hide_think_stream)
 		{
-			let pat = new RegExp(get_thinking_regex(), "gmi");
-			input = unescape_html(input);
-			input = input.replace(pat, '[Thinking...]');
-			if(input.startsWith(localsettings.start_thinking_tag) && !input.includes(localsettings.end_thinking_tag))
+			input = input.replace(thinkpat, '[Thinking Hidden]\n');
+			if(input.startsWith(thinkstartpl) && !input.includes(thinkendpl))
 			{
-				input = "[Thinking...]";
+				input = "[Thinking...]\n";
 			}
-			input = escape_html(input);
+			else if(!input.includes(thinkstartpl) && input.includes(thinkendpl))
+			{
+				input = "[Thinking Hidden]\n" + input.substring(input.lastIndexOf(thinkendpl) + thinkendpl.length);
+			}
 		}
 		if(localsettings.opmode==4 && localsettings.render_streaming_markdown && localsettings.instruct_has_markdown && !inEditMode)
 		{
 			input = simpleMarkdown(input, localsettings.instruct_has_latex);
+		}
+		if(!inEditMode && !localsettings.hide_think_stream)
+		{
+			//try to segment out thinking
+			const indexA = input.indexOf(thinkstartpl);
+			const indexB = input.lastIndexOf(thinkendpl);
+			let before = '';
+			let middle = '';
+			let after = '';
+			if (indexB === -1) {
+				before = input; // no splitB, everything is "before"
+			} else if (indexA === -1 || indexA > indexB) {// only splitB (or splitA comes after splitB, ignore it)
+				before = '';
+				middle = input.slice(0, indexB);
+				after = input.slice(indexB + thinkendpl.length);
+			} else { // normal case: splitA ... splitB
+				before = input.slice(0, indexA);
+				middle = input.slice(indexA + thinkstartpl.length, indexB);
+				after = input.slice(indexB + thinkendpl.length);
+			}
+
+			input = "";
+			if (before) {
+				input += `${before}`;
+			}
+			if (middle) {
+				input += `<span class="color_lightgreen">${middle}</span>`;
+			}
+			if (after) {
+				input += `${after}`;
+			}
 		}
 		input = replaceAll(input,"\n","<br>",false);
 		return input;
