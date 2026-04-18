@@ -4361,7 +4361,6 @@ Current version indicated by LITEVER below.
 		saved_palm_jailbreak:"", //gemini system prompt
 		saved_palm_jailbreak2:"", //gemini postfix
 		saved_openrouter_provider:"", //for overriding provider
-		saved_oai_reasoning:"", //if set, reasoning level "none,minimal,low,medium,high", else default
 		saved_oai_custommodel: "", //customized oai custom model
 		saved_oai_role: 3, //0=user,1=assistant,2=system, 3=auto
 		saved_a1111_url: default_a1111_base,
@@ -4505,6 +4504,7 @@ Current version indicated by LITEVER below.
 		handle_mismatched_think: true,
 		think_injected: 0, //0=normal, 1=force
 		strip_thinking_mode: 1, //0=no stripping, 1=strip except recent, 2=strip all
+		reasoning_effort: "", //if set, reasoning level "none,minimal,low,medium,high", else default empty string
 		websearch_enabled: false,
 		websearch_multipass: false,
 		websearch_retain: false,
@@ -13693,7 +13693,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("oaidesc").classList.add("hidden");
 			document.getElementById("pollinationsdesc").classList.add("hidden");
 			document.getElementById("openrouterproviderbox").classList.add("hidden");
-			document.getElementById("oaireasoningeffort").value = localsettings.saved_oai_reasoning;
+			document.getElementById("oaireasoningeffort").value = localsettings.reasoning_effort;
 			if(epchoice==2)
 			{
 				document.getElementById("oaidesc").classList.remove("hidden");
@@ -14312,7 +14312,7 @@ Current version indicated by LITEVER below.
 					localsettings.saved_openrouter_key = custom_oai_key;
 					localsettings.saved_openrouter_provider = document.getElementById("openrouterproviders").value;
 				}
-				localsettings.saved_oai_reasoning = document.getElementById("oaireasoningeffort").value;
+				localsettings.reasoning_effort = document.getElementById("oaireasoningeffort").value;
 				localsettings.saved_oai_jailbreak = document.getElementById("jailbreakprompttext").value;
 				if(localsettings.saved_oai_jailbreak=="")
 				{
@@ -16817,6 +16817,7 @@ Current version indicated by LITEVER below.
 		}
 		localsettings.hide_think_stream = (document.getElementById("hide_think_stream").checked?true:false);
 		localsettings.handle_mismatched_think = (document.getElementById("handle_mismatched_think").checked?true:false);
+		localsettings.reasoning_effort = document.getElementById("reasoningeffort").value;
 
 		localsettings.tts_mode = document.getElementById("ttsselect").value;
 		localsettings.xtts_voice = document.getElementById("xtts_voices").value;
@@ -20741,6 +20742,7 @@ Current version indicated by LITEVER below.
 			submit_payload.params.banned_tokens = get_token_bans();
 			submit_payload.params.render_special = localsettings.render_special_tags;
 			submit_payload.params.logprobs = localsettings.request_logprobs;
+			submit_payload.params.reasoning_effort = localsettings.reasoning_effort;
 			let st = get_instruct_starttag(true);
 			let et = get_instruct_endtag(true);
 			if(st=="{{[INPUT]}}" || et=="{{[OUTPUT]}}")
@@ -21055,10 +21057,20 @@ Current version indicated by LITEVER below.
 
 				if (document.getElementById("useoaichatcompl").checked)
 				{
-					let cannotreason = (targetep.toLowerCase().includes("text.pollinations.ai") || targetep.toLowerCase().includes("api.nvidia.com"));
+					let cannotreason = (targetep.toLowerCase().includes("text.pollinations.ai"));
 					if(!cannotreason)
 					{
-						let reasoneffort = document.getElementById("oaireasoningeffort").value;
+						let reasoneffort = localsettings.reasoning_effort;
+						if (targetep.toLowerCase().includes("api.nvidia.com")) {
+							if (reasoneffort=="minimal")
+							{
+								reasoneffort = "low";
+							}
+							if (reasoneffort != "low" && reasoneffort != "medium" && reasoneffort != "high") //only accepts low, medium and high
+							{
+								reasoneffort = "";
+							}
+						}
 						if(reasoneffort && reasoneffort!="")
 						{
 							oai_payload.reasoning_effort = reasoneffort;
@@ -26774,6 +26786,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("stop_thinking_tag").value = localsettings.stop_thinking_tag;
 		document.getElementById("hide_think_stream").checked = (localsettings.hide_think_stream?true:false);
 		document.getElementById("handle_mismatched_think").checked = (localsettings.handle_mismatched_think?true:false);
+		document.getElementById("reasoningeffort").value = localsettings.reasoning_effort;
 	}
 
 	function populate_placeholder_tags()
@@ -30586,6 +30599,19 @@ Current version indicated by LITEVER below.
 								<span class="helptext">Handles cases where the closing think block exists without the opening. Note that this only visually hides the broken thinking, it will still be treated like normal context.</span>
 							</span> </div>
 							<input title="Handle Mismatched Thinking" type="checkbox" id="handle_mismatched_think" class="push-right">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft">Reasoning Effort <span class="helpicon">?<span class="helptext">If set, restricts thinking length to this many tokens before forcing a reply.</span></span></div>
+							<div class="push-right">
+								<select title="Reasoning Effort" class="form-control" style="display:inline;" id="reasoningeffort">
+									<option value="" selected>Reasoning: Default</option>
+									<option value="none">Reasoning: None</option>
+									<option value="minimal">Reasoning: Minimal</option>
+									<option value="low">Reasoning: Low</option>
+									<option value="medium">Reasoning: Medium</option>
+									<option value="high">Reasoning: High</option>
+								</select>
+							</div>
 						</div>
 					</div>
 
