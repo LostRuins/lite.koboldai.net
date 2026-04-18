@@ -9295,18 +9295,23 @@ Current version indicated by LITEVER below.
 		let prompt = splits[0].trim();
 		let negprompt = (splits.length > 1 ? splits[1] : "");
 
-		const pollinations_params = new URLSearchParams({
+		let pollinations_params = new URLSearchParams({
 			model:req_payload.models[0],
 			seed:Math.floor(Math.random() * 99999999),
 			width: req_payload.params.width,
 			height: req_payload.params.height,
 			nologo: true,
 			private: true,
-			referrer: "koboldai",
-			// key: localsettings.saved_dalle_key
+			referrer: "koboldai"
 		});
 
 		let gen_endpoint = `${pollinations_img_endpoint}/${encodeURIComponent(prompt)}?${pollinations_params.toString()}`;
+		if(localsettings.saved_dalle_url.toLowerCase().includes("gen.pollinations.ai"))
+		{
+			let gen_prefix = "https://gen.pollinations.ai/image";
+			pollinations_params.append('key', localsettings.saved_dalle_key);
+			gen_endpoint = `${gen_prefix}/${encodeURIComponent(prompt)}?${pollinations_params.toString()}`;
+		}
 
 		console.log(gen_endpoint);
 		let imgid = "PollAIimg"+(Math.floor(10000 + Math.random() * 90000)).toString();
