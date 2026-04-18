@@ -4370,7 +4370,7 @@ Current version indicated by LITEVER below.
 		saved_alltalk_url: default_alltalk_base,
 		saved_mcp_urls: "",
 		prev_custom_endpoint_type: 0, //show a reconnect box to custom endpoint if needed. 0 is horde, otherwise its dropdown value+1
-		prev_custom_endpoint_model: "", //we may not be able to match, but set it if we do
+		prev_custom_endpoint_model_dict: {}, //we may not be able to match, but set it if we do
 		prev_custom_endpoint_ischatcmpl: true,
 		generate_images_mode: (localflag?0:1), //0=off, 1=horde, 2=a1111, 3=dalle, 4=comfy, 5=pollinations
 
@@ -5595,7 +5595,7 @@ Current version indicated by LITEVER below.
 
 				//offer to reconnect
 				let pending_eptype = localsettings.prev_custom_endpoint_type;
-				let pending_custmodel = localsettings.prev_custom_endpoint_model;
+				let pending_custmodel = (localsettings.prev_custom_endpoint_model_dict?(localsettings.prev_custom_endpoint_model_dict[pending_eptype] || ""):"");
 				let pending_ischatcmpl = localsettings.prev_custom_endpoint_ischatcmpl;
 				if((!localflag && pending_eptype>0) || (localflag && pending_eptype==2))
 				{
@@ -8111,7 +8111,7 @@ Current version indicated by LITEVER below.
 			if(data.data && data.data.length > 0)
 			{
 				let dropdown = get_custom_ep_model_dropdown("2");
-				update_oai_model_list(data,dropdown);
+				update_oai_model_list(data,dropdown,2);
 				onDone(data.data); //probe success
 			}
 			else
@@ -13491,7 +13491,7 @@ Current version indicated by LITEVER below.
 			});
 		});
 	}
-	function update_oai_model_list(data, dropdown)
+	function update_oai_model_list(data, dropdown, epchoice)
 	{
 		var lastOption = dropdown.lastElementChild;
 		for (var i = dropdown.options.length - 1; i >= 0; i--) {
@@ -13505,12 +13505,13 @@ Current version indicated by LITEVER below.
 			sortedarr.push(opt.id);
 		}
 		sortedarr.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+		let pending_custmodel = (localsettings.prev_custom_endpoint_model_dict?(localsettings.prev_custom_endpoint_model_dict[epchoice] || ""):"");
 		for(var i=0;i<sortedarr.length;++i)
 		{
 			var el = document.createElement("option");
 			el.textContent = sortedarr[i];
 			el.value = sortedarr[i];
-			if(localsettings.prev_custom_endpoint_model && sortedarr[i]==localsettings.prev_custom_endpoint_model)
+			if(pending_custmodel && sortedarr[i]==pending_custmodel)
 			{
 				selidx = i;
 				document.getElementById("useoaichatcompl").checked = localsettings.prev_custom_endpoint_ischatcmpl;
@@ -13566,7 +13567,7 @@ Current version indicated by LITEVER below.
 
 			if (!data.error && data.data && data.data.length > 0)
 			{
-				update_oai_model_list(data,dropdown);
+				update_oai_model_list(data,dropdown,epchoice);
 			}
 			else
 			{
@@ -26575,7 +26576,10 @@ Current version indicated by LITEVER below.
 	function update_prev_custom_endpoint_type()
 	{
 		localsettings.prev_custom_endpoint_type = 0;
-		localsettings.prev_custom_endpoint_model = "";
+		if(!localsettings.prev_custom_endpoint_model_dict)
+		{
+			localsettings.prev_custom_endpoint_model_dict = {};
+		}
 		localsettings.prev_custom_endpoint_ischatcmpl = true;
 		if (custom_kobold_endpoint != "") {
 			localsettings.prev_custom_endpoint_type = 1;
@@ -26621,7 +26625,7 @@ Current version indicated by LITEVER below.
 			let dropdown = get_custom_ep_model_dropdown(localsettings.prev_custom_endpoint_type);
 			if(dropdown && dropdown.value)
 			{
-				localsettings.prev_custom_endpoint_model = dropdown.value;
+				localsettings.prev_custom_endpoint_model_dict[localsettings.prev_custom_endpoint_type] = dropdown.value;
 				localsettings.prev_custom_endpoint_ischatcmpl = document.getElementById("useoaichatcompl").checked?true:false;
 			}
 		}
