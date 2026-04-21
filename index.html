@@ -4103,6 +4103,7 @@ Current version indicated by LITEVER below.
 	var koboldcpp_voices_endpoint = "/speakers_list";
 
 	var oai_models_endpoint = "/models";
+	var inworld_models_endpoint = "/llm/v1alpha/models";
 	var oai_submit_endpoint = "/completions";
 	var oai_submit_endpoint_chat = "/chat/completions";
 
@@ -4118,6 +4119,7 @@ Current version indicated by LITEVER below.
 	var default_mistralai_base = "https://api.mistral.ai/v1";
 	var default_featherless_base = "https://api.featherless.ai/v1";
 	var default_nvidianim_base = "https://integrate.api.nvidia.com/v1";
+	var default_inworld_base = "https://api.inworld.ai";
 	var default_grok_base = "https://api.x.ai/v1";
 	var default_oai_base = "https://api.openai.com/v1";
 	var default_claude_base = "https://api.anthropic.com";
@@ -4348,6 +4350,7 @@ Current version indicated by LITEVER below.
 		saved_nvidianim_key: "",
 		saved_pollinations_key: "", //this is a dummy key and isnt needed
 		saved_grok_key:"",
+		saved_inworld_key: "", //expects the Basic auth base64 signature
 		saved_claude_key: "", //do not ever share this in save files!
 		saved_claude_addr: default_claude_base, //do not ever share this in save files!
 		saved_palm_key: "", //do not ever share this in save files!
@@ -6832,12 +6835,59 @@ Current version indicated by LITEVER below.
 		}
 		return header;
 	}
-	function get_oai_header(apikey)
+	function is_inworld_oai_endpoint(targetep)
+	{
+		return (targetep && targetep.toLowerCase().includes("api.inworld.ai"));
+	}
+	function get_inworld_models_fetch_url(desired_oai_ep)
+	{
+		let inworld_base = desired_oai_ep;
+		if(inworld_base && inworld_base.toLowerCase().endsWith("/v1"))
+		{
+			inworld_base = inworld_base.slice(0, -3);
+		}
+		return inworld_base + inworld_models_endpoint;
+	}
+	function normalize_oai_model_list_data(data, desired_oai_ep)
+	{
+		//hack for together.xyz
+		if(data!=null && data.data==null && data.length>0 && data[0] && data[0].id && data[0].id!="")
+		{
+			console.log("together.xyz workaround hack");
+			return { "data": data };
+		}
+
+		if(is_inworld_oai_endpoint(desired_oai_ep) && data && data.data==null && data.models && data.models.length>0)
+		{
+			let normalized = [];
+			let known_models = {};
+			normalized.push({"id":"auto"});
+			known_models["auto"] = true;
+			for(let i=0;i<data.models.length;++i)
+			{
+				let opt = data.models[i];
+				if(!opt || !opt.model || opt.isSupported===false)
+				{
+					continue;
+				}
+				if(known_models[opt.model])
+				{
+					continue;
+				}
+				known_models[opt.model] = true;
+				normalized.push({"id":opt.model});
+			}
+			return { "data": normalized };
+		}
+
+		return data;
+	}
+	function get_oai_header(apikey, targetep="")
 	{
 		let oaiheaders = {'Content-Type': 'application/json'};
 
 		if (apikey!="" && apikey!=dummy_api_key) {
-			oaiheaders['Authorization'] = 'Bearer ' + apikey;
+			oaiheaders['Authorization'] = (is_inworld_oai_endpoint(targetep)?'Basic ':'Bearer ') + apikey;
 		}
 		if(uses_cors_proxy && localsettings.proxy_disable_stream)
 		{
@@ -10091,6 +10141,7 @@ Current version indicated by LITEVER below.
 			new_save_storyobj.savedsettings.saved_nvidianim_key = "";
 			new_save_storyobj.savedsettings.saved_pollinations_key = "";
 			new_save_storyobj.savedsettings.saved_grok_key = "";
+			new_save_storyobj.savedsettings.saved_inworld_key = "";
 			new_save_storyobj.savedsettings.saved_claude_key = "";
 			new_save_storyobj.savedsettings.saved_claude_addr = "";
 			new_save_storyobj.savedsettings.saved_palm_key = "";
@@ -10543,6 +10594,7 @@ Current version indicated by LITEVER below.
 					let tmp_nvai = localsettings.saved_nvidianim_key;
 					let tmp_pol = localsettings.saved_pollinations_key;
 					let tmp_grok = localsettings.saved_grok_key;
+					let tmp_inworld = localsettings.saved_inworld_key;
 					let tmp_claude1 = localsettings.saved_claude_key;
 					let tmp_claude2 = localsettings.saved_claude_addr;
 					let tmp_palm1 = localsettings.saved_palm_key;
@@ -10601,6 +10653,7 @@ Current version indicated by LITEVER below.
 					localsettings.saved_nvidianim_key = tmp_nvai;
 					localsettings.saved_pollinations_key = tmp_pol;
 					localsettings.saved_grok_key = tmp_grok;
+					localsettings.saved_inworld_key = tmp_inworld;
 					localsettings.saved_claude_key = tmp_claude1;
 					localsettings.saved_claude_addr = tmp_claude2;
 					localsettings.saved_palm_key = tmp_palm1;
@@ -13278,6 +13331,8 @@ Current version indicated by LITEVER below.
 				return document.getElementById("custom_pollinations_model");
 			case "11":
 				return document.getElementById("custom_nvidianim_model");
+			case "12":
+				return document.getElementById("custom_inworld_model");
 			default:
 				return document.getElementById("custom_oai_model"); //just return oai
 		}
@@ -13285,7 +13340,21 @@ Current version indicated by LITEVER below.
 	function ep_should_always_use_chat_completions()
 	{
 		let epchoice = document.getElementById("customapidropdown").value;
-		return (epchoice==7 || epchoice==10 || epchoice==11);
+		return (epchoice==7 || epchoice==10 || epchoice==11 || epchoice==12 || (epchoice==2 && is_inworld_oai_endpoint(document.getElementById("custom_oai_endpoint").value)));
+	}
+	function get_oai_connect_status_label(epchoice)
+	{
+		switch((epchoice?epchoice.toString():""))
+		{
+			case "3": return "OpenRouter Endpoint";
+			case "7": return "MistralAI Endpoint";
+			case "8": return "Featherless Endpoint";
+			case "9": return "Grok Endpoint";
+			case "10": return "Pollinations Endpoint";
+			case "11": return "Nvidia NIM Endpoint";
+			case "12": return "Inworld Endpoint";
+			default: return "OpenAI Endpoint";
+		}
 	}
 
 	function find_oai_model()
@@ -13528,8 +13597,9 @@ Current version indicated by LITEVER below.
 		let desired_oai_key = document.getElementById("custom_oai_key").value.trim();
 		let desired_oai_ep = document.getElementById("custom_oai_endpoint").value.trim();
 		desired_oai_ep = transform_oai_ep(desired_oai_ep);
+		let epchoice = document.getElementById("customapidropdown").value;
 
-		let oaiheaders = get_oai_header(desired_oai_key);
+		let oaiheaders = get_oai_header(desired_oai_key, desired_oai_ep);
 
 		if (desired_oai_ep.toLowerCase().includes("api.mistral.ai") || desired_oai_ep.toLowerCase().includes("api.x.ai")) {
 			if(desired_oai_key=="" || desired_oai_key==dummy_api_key)
@@ -13538,12 +13608,15 @@ Current version indicated by LITEVER below.
 				return;
 			}
 		}
+		if (is_inworld_oai_endpoint(desired_oai_ep) && desired_oai_key=="") {
+			msgbox("Inworld requires a Basic (Base64) API key to fetch model list!");
+			return;
+		}
 
 		autofetch_attempt_dict[desired_oai_ep] = true;
 
 		let dropdown = get_custom_ep_model_dropdown();
-		let fetchurl = desired_oai_ep + oai_models_endpoint;
-		let epchoice = document.getElementById("customapidropdown").value;
+		let fetchurl = (is_inworld_oai_endpoint(desired_oai_ep)?get_inworld_models_fetch_url(desired_oai_ep):(desired_oai_ep + oai_models_endpoint));
 
 		if((epchoice==2 && !is_local_url(desired_oai_ep) && document.getElementById("corsproxy_oai").checked) || fetchurl.toLowerCase().includes("api.nvidia.com"))
 		{
@@ -13558,13 +13631,7 @@ Current version indicated by LITEVER below.
 		.then((response) => response.json())
 		.then((data) => {
 			console.log(data);
-
-			//hack for together.xyz
-			if(data!=null && data.data==null && data.length>0 && data[0] && data[0].id && data[0].id!="")
-			{
-				console.log("together.xyz workaround hack");
-				data = { "data": data }; //fix for their bad format
-			}
+			data = normalize_oai_model_list_data(data, desired_oai_ep);
 
 			if (!data.error && data.data && data.data.length > 0)
 			{
@@ -13628,7 +13695,7 @@ Current version indicated by LITEVER below.
 	function fetch_openrouter_balance()
 	{
 		let desired_oai_key = document.getElementById("custom_oai_key").value.trim();
-		let oaiheaders = get_oai_header(desired_oai_key);
+		let oaiheaders = get_oai_header(desired_oai_key, default_openrouter_base);
 
 		let fetchurl = default_openrouter_base + openrouter_credits_endpoint;
 
@@ -13671,6 +13738,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("custom_nvidianim_model").classList.add("hidden");
 		document.getElementById("custom_grok_model").classList.add("hidden");
 		document.getElementById("custom_pollinations_model").classList.add("hidden");
+		document.getElementById("custom_inworld_model").classList.add("hidden");
 		document.getElementById("hordeloadmodelcontainer").classList.add("hidden");
 		document.getElementById("coherecustom").classList.add("hidden");
 
@@ -13688,7 +13756,7 @@ Current version indicated by LITEVER below.
 				document.getElementById("customkoboldkey").value = localsettings.saved_kai_key;
 			}
 		}
-		else if(epchoice==2 || epchoice==3 || epchoice==7 || epchoice==8 || epchoice==9 || epchoice==10 || epchoice==11)
+		else if(epchoice==2 || epchoice==3 || epchoice==7 || epchoice==8 || epchoice==9 || epchoice==10 || epchoice==11 || epchoice==12)
 		{
 			document.getElementById("oaicustom").classList.remove("hidden");
 			document.getElementById("custom_oai_endpoint").classList.add("hidden");
@@ -13700,7 +13768,10 @@ Current version indicated by LITEVER below.
 			document.getElementById("grokdesc").classList.add("hidden");
 			document.getElementById("oaidesc").classList.add("hidden");
 			document.getElementById("pollinationsdesc").classList.add("hidden");
+			document.getElementById("inworlddesc").classList.add("hidden");
 			document.getElementById("openrouterproviderbox").classList.add("hidden");
+			document.getElementById("oaiaddversion").disabled = false;
+			document.getElementById("custom_oai_key").placeholder = "API Key (Required)";
 			document.getElementById("oaireasoningeffort").value = localsettings.reasoning_effort;
 			if(epchoice==2)
 			{
@@ -13762,6 +13833,16 @@ Current version indicated by LITEVER below.
 				document.getElementById("custom_oai_key").value = (localsettings.saved_nvidianim_key==dummy_api_key?"":localsettings.saved_nvidianim_key);
 				document.getElementById("custom_oai_endpoint").value = default_nvidianim_base;
 				try_fetch_oai_models_auto();
+			}
+			else if(epchoice==12)
+			{
+				document.getElementById("custom_inworld_model").classList.remove("hidden");
+				document.getElementById("inworlddesc").classList.remove("hidden");
+				document.getElementById("custom_oai_key").value = localsettings.saved_inworld_key;
+				document.getElementById("custom_oai_key").placeholder = "Inworld Basic (Base64) Key";
+				document.getElementById("custom_oai_endpoint").value = default_inworld_base;
+				document.getElementById("oaiaddversion").checked = true;
+				document.getElementById("oaiaddversion").disabled = true;
 			}
 			oai_model_change(ep_should_always_use_chat_completions() || force_autotoggle_chatcompl);
 			toggleoaichatcompl();
@@ -14250,14 +14331,14 @@ Current version indicated by LITEVER below.
 				});
 			}
 		}
-		else if(epchoice==2 || epchoice==3 || epchoice==7 || epchoice==8 || epchoice==9 || epchoice==10 || epchoice==11) //connect to OAI / OpenRouter / MistralAI / Featherless / Grok Endpoint / NvidiaNim
+		else if(epchoice==2 || epchoice==3 || epchoice==7 || epchoice==8 || epchoice==9 || epchoice==10 || epchoice==11 || epchoice==12) //connect to OAI / OpenRouter / MistralAI / Featherless / Grok Endpoint / NvidiaNim / Inworld
 		{
 			let desired_oai_key = document.getElementById("custom_oai_key").value.trim();
 			let desired_oai_ep = document.getElementById("custom_oai_endpoint").value.trim();
 
 			if(desired_oai_ep=="")
 			{
-				desired_oai_ep = document.getElementById("custom_oai_endpoint").value = default_oai_base;
+				desired_oai_ep = document.getElementById("custom_oai_endpoint").value = (epchoice==12 ? default_inworld_base : default_oai_base);
 			}
 
 			desired_oai_ep = transform_oai_ep(desired_oai_ep);
@@ -14315,6 +14396,10 @@ Current version indicated by LITEVER below.
 					localsettings.saved_nvidianim_key = custom_oai_key;
 					uses_cors_proxy = true;
 				}
+				else if(epchoice==12)
+				{
+					localsettings.saved_inworld_key = custom_oai_key;
+				}
 				else
 				{
 					localsettings.saved_openrouter_key = custom_oai_key;
@@ -14348,7 +14433,7 @@ Current version indicated by LITEVER below.
 					document.body.classList.add("connected");
 					document.getElementById("connectstatus").classList.add("color_connected");
 				}
-				document.getElementById("connectstatus").innerHTML = "OpenAI Endpoint";
+				document.getElementById("connectstatus").innerHTML = get_oai_connect_status_label(epchoice);
 				render_gametext(true);
 
 				if(uses_cors_proxy && !is_local_url(desired_oai_ep))
@@ -21235,7 +21320,7 @@ Current version indicated by LITEVER below.
 				last_request_timestamp = get_current_timestamp();
 				last_response_obj = null;
 				last_response_streamlog = "";
-				let oaiheaders = get_oai_header(custom_oai_key);
+				let oaiheaders = get_oai_header(custom_oai_key, custom_oai_endpoint);
 
 				if(targetep.toLowerCase().includes("api.novita.ai"))
 				{
@@ -26628,6 +26713,9 @@ Current version indicated by LITEVER below.
 			}else if(custom_oai_endpoint.toLowerCase().includes("api.nvidia.com"))
 			{
 				localsettings.prev_custom_endpoint_type = 11;
+			}else if(custom_oai_endpoint.toLowerCase().includes("api.inworld.ai"))
+			{
+				localsettings.prev_custom_endpoint_type = 12;
 			}
 		}
 		else if(custom_claude_key!="")
@@ -28901,7 +28989,7 @@ Current version indicated by LITEVER below.
 	//queries the decensoring prefix from a second OAI compatible endpoint and returns a string to add to our main request
 	const FetchDecensoredPrefix = asyncRunner(function* (submit_payload, endpoint_url, modelused, num_tokens)
 	{
-		let oaiheaders = get_oai_header(custom_oai_key);
+		let oaiheaders = get_oai_header(custom_oai_key, endpoint_url);
 
 		let scaled_rep_pen = 0;
 		if(submit_payload.params.presence_penalty > 0)
@@ -31238,6 +31326,7 @@ Current version indicated by LITEVER below.
 				<option value="9">Grok API</option>
 				<option value="10">PollinationsAI API</option>
 				<option value="11">Nvidia NIM API</option>
+				<option value="12">Inworld API</option>
 			</select>
 			</div>
 
@@ -31334,6 +31423,11 @@ Current version indicated by LITEVER below.
 				You are responsibile for your own usage. <span class="color_red">Due to CORS restrictions, your connection WILL be proxied.</span><br>Only Temperature, Top-P and Repetition Penalty samplers are used.<br><br>
 				<span class="color_green" style="font-weight: bold;">Please input Nvidia NIM Key.</span><br><br>
 				</div>
+				<div id="inworlddesc" class="hidden">
+				Entering your <a class="color_blueurl" target="_blank" href="https://platform.inworld.ai/api-keys">Inworld Basic (Base64) API key</a> will allow you to use KoboldAI Lite with their API.<br><br>
+				Use the Basic authorization signature copied from the Inworld portal. Requests are sent to <span class="color_orange" style="font-weight: bold;">https://api.inworld.ai</span> and use Chat Completions only.<br><br>
+				<span class="color_green" style="font-weight: bold;">Please input the Inworld Basic (Base64) Key.</span><br><br>
+				</div>
 
 				<input class="form-control" name="username" autocomplete="username" type="text" id="custom_oai_endpoint" placeholder="OpenAI API URL" value="" onblur="">
 				<input class="form-control" name="password" autocomplete="current-password" type="password" id="custom_oai_key" placeholder="API Key (Required)" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
@@ -31427,6 +31521,10 @@ Current version indicated by LITEVER below.
 					<option value="nvidia/llama-3.3-nemotron-super-49b-v1">nvidia/llama-3.3-nemotron-super-49b-v1</option>
 					<option value="qwen/qwen3-235b-a22b">qwen/qwen3-235b-a22b</option>
 					<option value="z-ai/glm4.7">z-ai/glm4.7</option>
+					<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
+				</select>
+				<select title="Inworld AI Model Selection" style="padding:4px;display:inline;width:calc(100% - 200px)" class="form-control hidden" id="custom_inworld_model" onchange="oai_model_change(true)">
+					<option value="auto" selected>auto</option>
 					<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
 				</select>
 				<button type="button" class="btn btn-primary" style="display:inline;width:42px;height:34px;vertical-align: top;" id="oaifindmodel" onclick="find_oai_model()">🔎</button>
