@@ -21050,6 +21050,15 @@ Current version indicated by LITEVER below.
 					"temperature": submit_payload.params.temperature,
 					"top_p": submit_payload.params.top_p
 				}
+				if(document.getElementById("useoainonstandard").checked)
+				{
+					//send ALL non standard params
+					if(submit_payload.params.sampler_seed>=1)
+					{
+						oai_payload.seed = submit_payload.params.sampler_seed;
+					}
+					Object.assign(oai_payload, submit_payload.params);
+				}
 				Object.assign(oai_payload, localsettings.custom_sampler_fields);
 				if(localsettings.request_logprobs && !targetep.toLowerCase().includes("api.x.ai") && !targetep.toLowerCase().includes("api.mistral.ai"))
 				{
@@ -21081,17 +21090,6 @@ Current version indicated by LITEVER below.
 					{
 						oai_payload.presence_penalty = scaled_rep_pen;
 					}
-				}
-				if(document.getElementById("useoainonstandard").checked)
-				{
-					//featherless api supports additional fields, include them
-					oai_payload.top_k = (submit_payload.params.top_k<1?300:submit_payload.params.top_k);
-					oai_payload.min_p = localsettings.min_p;
-					if(submit_payload.params.sampler_seed>=1)
-					{
-						oai_payload.seed = submit_payload.params.sampler_seed;
-					}
-					oai_payload.top_a = localsettings.top_a;
 				}
 				if(submit_payload.params.logit_bias && JSON.stringify(submit_payload.params.logit_bias) != '{}')
 				{
@@ -31500,7 +31498,7 @@ Current version indicated by LITEVER below.
 					<div><input type="checkbox" id="useoaichatcompl" title="Use ChatCompletions API" onchange="toggleoaichatcompl()">
 					<div class="box-label">Chat-Completions API</div></div>
 					<div><input type="checkbox" id="useoainonstandard" title="Send Non-Standard Fields">
-					<div class="box-label">Non-Standard Fields <span class="helpicon">?<span class="helptext">Send extra non-standard samplers like Min-P, Top-K and Top-A.</span></span></div></div>
+					<div class="box-label">Non-Standard Fields <span class="helpicon">?<span class="helptext">Send all extra non-standard samplers (e.g Min-P, Top-K, Top-A, TFS). May be rejected by many endpoints.</span></span></div></div>
 				</div>
 				<div id="useoaichatcomplbox" class="hidden" onload="toggleoaichatcompl();">
 					<div style="display: inline-block;">
