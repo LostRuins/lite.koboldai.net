@@ -7778,22 +7778,60 @@ Current version indicated by LITEVER below.
 		function stashLatex(text) { //this function preserves the contents of multiline latex blocks so they don't get corrupted by markdown
 			const latexBlocks = [];
 			let counter = 0;
+
+			const stash = (match) => {
+				const key = `%%LATEXBLK${counter++}%%`;
+				latexBlocks.push({ key, value: match });
+				return key;
+			};
+
+			// 1. Blockquote-wrapped $$ blocks (existing)
 			text = text.replace(/(^> \$\$\n([\s\S]*?)\n\$\$)/gm, (match) => {
 				const key = `%%LATEXBLK${counter++}%%`;
 				latexBlocks.push({ key, value: match.slice(2) });
 				return key;
 			});
-			text = text.replace(/(^ {0,6}\\\[\n([\s\S]*?)\n {0,6}\\\] {0,2}$|^\$\$\n([\s\S]*?)\n\$\$$|^ {2}\$\$\n {2}([\s\S]*?)\n {2}\$\$$|\$\$([^\n]+?)\$\$|\\\(([^\n]+?)\\\)|\\\[([^\n]+?)\\\])/gm, (match, p1, p2, p3, p4, p5, p6, p7) => {
+
+			// 2. All block-level latex (existing)
+			text = text.replace(/(^ {0,6}\\\[\n([\s\S]*?)\n {0,6}\\\] {0,2}$|^\$\$\n([\s\S]*?)\n\$\$$|^ {2}\$\$\n {2}([\s\S]*?)\n {2}\$\$$|\$\$([^\n]+?)\$\$|\\\(([^\n]+?)\\\)|\\\[([^\n]+?)\\\])/gm,
+				(match) => stash(match)
+			);
+
+			// 3. Inline: $word$ or $letter$ — mirrors replaceLatex patterns
+			text = text.replace(/(^|[^\\])\$(\S[^$\n]*?\S)\$(?!\w)/g, (match, prefix, inner) => {
+				if (inner.startsWith('$')) return match; // buggy match guard
+				if (inner.replace(/\s+/g, '').match(/^\$+$/)) return match; // only dollar signs
 				const key = `%%LATEXBLK${counter++}%%`;
-				latexBlocks.push({ key, value: match });
-				return key;
+				latexBlocks.push({ key, value: `$${inner}$` });
+				return prefix + key;
 			});
-			return { "text":text, "blocks":latexBlocks };
+
+			// 4. Inline: single letter/number $x$
+			text = text.replace(/(^|[^\\])\$([A-Za-z0-9])\$(?!\d)/g, (match, prefix, inner) => {
+				const key = `%%LATEXBLK${counter++}%%`;
+				latexBlocks.push({ key, value: `$${inner}$` });
+				return prefix + key;
+			});
+
+			// 5. Inline: $ content $ (space-padded variant)
+			text = text.replace(/(^|[^\\])\$ (\S[^$\n]*?) \$(?!\d)/g, (match, prefix, inner) => {
+				if (inner.replace(/\s+/g, '').match(/^\$+$/)) return match;
+				const key = `%%LATEXBLK${counter++}%%`;
+				latexBlocks.push({ key, value: `$ ${inner} $` });
+				return prefix + key;
+			});
+
+			return { text, blocks: latexBlocks };
 		}
-		function unstashLatex(text, latexBlocks) {
+		function unstashLatex(text, latexBlocks, render) {
 			for(let i=0;i<latexBlocks.length;++i)
 			{
-				text = literalReplace(text,latexBlocks[i].key,latexBlocks[i].value);
+				let val = latexBlocks[i].value;
+				if(render)
+				{
+					val = replaceLatex(val);
+				}
+				text = literalReplace(text,latexBlocks[i].key,val);
 			}
 			return text;
 		}
@@ -8010,16 +8048,16 @@ Current version indicated by LITEVER below.
 			md = md.replace(/<\/code\><\/pre\>\n<pre\><code\>/g, "\n");
 			if(renderLatex)
 			{
-				if(stashLatexRes!=null)
-				{
-					md = unstashLatex(md,stashLatexRes.blocks);
-				}
 				//to aid the latex renderer, we temporarily add newlines between some blocks
 				md = md.replace(/<\/li><li>/gm, "</li>\n<li>");
 				md = md.replace(/<\/tr><tr class/gm, "</tr>\n<tr class");
-				md = replaceLatex(md);
+				md = replaceLatex(md); //catch all the latex that wasn't stashed
 				md = md.replace(/<\/li>\n<li>/gm, "</li><li>");
 				md = md.replace(/<\/tr>\n<tr class/gm, "</tr><tr class");
+				if(stashLatexRes!=null)
+				{
+					md = unstashLatex(md,stashLatexRes.blocks,true); //for each stashed block, render it
+				}
 			}
 			md = md.replace(/<\/ul>\n/gm, "</ul>").replace(/<\/ol>\n/gm, "</ol>");
 			md = md.replace(/\\([`_~\*\+\-\.\^\\\<\>\(\)\[\]])/gm, "$1");
