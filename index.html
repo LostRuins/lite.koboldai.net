@@ -4443,6 +4443,7 @@ Current version indicated by LITEVER below.
 		img_clipskip: -1,
 		img_steps: 20,
 		img_sampler: "Euler",
+		img_scheduler: "default",
 		img_aspect:0, //0=square,1=portrait,2=landscape,3=bigsquare,4=portrait_long,5=landscape_long
 		save_images: true,
 		save_remote_images: false,
@@ -9098,8 +9099,8 @@ Current version indicated by LITEVER below.
 						"model": use_lora ? ["11", 0] : ["4", 0],
 						"negative": ["7", 0],
 						"positive": ["6", 0],
-						"sampler_name": "euler",
-						"scheduler": "normal",
+						"sampler_name": req_payload.params.sampler_name,
+						"scheduler": (req_payload.params.scheduler?req_payload.params.scheduler:"normal"),
 						"seed": Math.floor(Math.random() * 99999999),
 						"steps": req_payload.params.steps
 					}
@@ -9278,6 +9279,11 @@ Current version indicated by LITEVER below.
 				"initial_noise_multiplier": 1.0,
 				"comma_padding_backtrack": 20.0
 			}
+		}
+
+		if(req_payload.params.scheduler)
+		{
+			a1111_t2i_payload["scheduler"] = req_payload.params.scheduler;
 		}
 
 		let ep = a1111_txt2img_endpoint;
@@ -16143,6 +16149,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("img_clipskip").value = localsettings.img_clipskip;
 		document.getElementById("img_aspect").value = localsettings.img_aspect;
 		document.getElementById("img_sampler").value = localsettings.img_sampler;
+		document.getElementById("img_scheduler").value = localsettings.img_scheduler;
 		document.getElementById("img_steps").value = localsettings.img_steps;
 		document.getElementById("prompt_for_savename").checked = localsettings.prompt_for_savename;
 		document.getElementById("img_allownsfw").checked = localsettings.img_allownsfw;
@@ -16953,6 +16960,7 @@ Current version indicated by LITEVER below.
 		localsettings.img_clipskip = parseInt(document.getElementById("img_clipskip").value);
 		localsettings.img_aspect = parseInt(document.getElementById("img_aspect").value);
 		localsettings.img_sampler = document.getElementById("img_sampler").value;
+		localsettings.img_scheduler = document.getElementById("img_scheduler").value;
 		localsettings.img_steps = parseInt(document.getElementById("img_steps").value);
 		if(isNaN(localsettings.img_steps))
 		{
@@ -21889,10 +21897,16 @@ Current version indicated by LITEVER below.
 		sentence = sentence.replace(/###/gm, "");
 
 		let usedsampler = localsettings.img_sampler;
+		let usedscheduler = localsettings.img_scheduler;
+		if(usedscheduler=="default")
+		{
+			usedscheduler = null; // not set by default
+		}
 
-		if (localsettings.generate_images_mode==1) {
+		if (localsettings.generate_images_mode==1) { //horde
 			sentence = sanitize_horde_image_prompt(sentence);
-			switch(usedsampler)
+			usedscheduler = null; //horde does not use schedulers
+			switch(usedsampler) //these names are used for horde only
 			{
 				case "Euler a":
 					usedsampler = "k_euler_a";
@@ -21912,11 +21926,43 @@ Current version indicated by LITEVER below.
 				case "DDIM":
 					usedsampler = "DDIM";
 					break;
+				case "LCM":
+					usedsampler = "lcm";
+					break;
 				default:
 					usedsampler = "k_euler";
 					break;
 			}
-
+		}
+		else if(localsettings.generate_images_mode==4)
+		{
+			switch(usedsampler) //these names are used for comfyui only
+			{
+				case "Euler a":
+					usedsampler = "euler_ancestral";
+					break;
+				case "Euler":
+					usedsampler = "euler";
+					break;
+				case "Heun":
+					usedsampler = "heun";
+					break;
+				case "DPM2":
+					usedsampler = "dpm_2";
+					break;
+				case "DPM++ 2M":
+					usedsampler = "dpmpp_2m";
+					break;
+				case "DDIM":
+					usedsampler = "ddim";
+					break;
+				case "LCM":
+					usedsampler = "lcm";
+					break;
+				default:
+					usedsampler = "euler";
+					break;
+			}
 		}
 
 		console.log("Generating image for: " + sentence);
@@ -21982,6 +22028,12 @@ Current version indicated by LITEVER below.
 			"replacement_filter": true,
 			"r2": false
 		}
+
+		if(usedscheduler) //only assign scheduler if its set
+		{
+			genimg_payload["params"]["scheduler"] = usedscheduler;
+		}
+
 		if(base64img!=null && base64img!="")
 		{
 			genimg_payload["source_image"] = base64img;
@@ -30382,14 +30434,26 @@ Current version indicated by LITEVER below.
 							<div class="settinglabel">
 								<div class="justifyleft">Image sampler <span class="helpicon">?<span class="helptext">What sampler to use for image generation. Euler is recommended.</span></span></div>
 								<div class="push-right">
-									<select title="Image Sampler" class="form-control" id="img_sampler">
+									<select title="Image sampler" class="form-control" id="img_sampler">
 										<option value="Euler">Euler</option>
 										<option value="Euler a">Euler A</option>
 										<option value="Heun">Heun</option>
 										<option value="DPM2">DPM2</option>
-										<option value="LCM">LCM</option>
-										<option value="DDIM">DDIM</option>
 										<option value="DPM++ 2M">DPM++ 2M</option>
+										<option value="DDIM">DDIM</option>
+										<option value="LCM">LCM</option>
+									</select>
+								</div>
+							</div>
+							<div class="settinglabel">
+								<div class="justifyleft">Image scheduler <span class="helpicon">?<span class="helptext">What scheduler to use for image generation.</span></span></div>
+								<div class="push-right">
+									<select title="Image scheduler" class="form-control" id="img_scheduler">
+										<option value="default">default</option>
+										<option value="simple">simple</option>
+										<option value="karras">karras</option>
+										<option value="exponential">exponential</option>
+										<option value="sgm_uniform">sgm_uniform</option>
 									</select>
 								</div>
 							</div>
