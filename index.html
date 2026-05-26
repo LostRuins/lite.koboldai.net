@@ -11771,6 +11771,7 @@ Current version indicated by LITEVER below.
 	 * @type {{
 	 * 		name: string;
 	 * 		urlParam: string;
+	 *      matchers: string[];
 	 *		inputBox: {
 	 *			text: string;
 	 *			placeholder: string;
@@ -11784,6 +11785,7 @@ Current version indicated by LITEVER below.
 		{
 			name: "prompts.forthisfeel.club",
 			urlParam: "aether",
+			matchers: ["forthisfeel.club/"],
 			inputBox: {
 				text: "Enter prompts.forthisfeel.club prompt URL, or 4-digit prompt number",
 				placeholder: "https://prompts.forthisfeel.club/1234"
@@ -11852,6 +11854,7 @@ Current version indicated by LITEVER below.
 		{
 			name: "chub.ai / characterhub.org",
 			urlParam: "chub",
+			matchers: ["chub.ai/","characterhub.org/"],
 			inputBox: {
 				text: "Enter chub.ai or characterhub.org card URL",
 				placeholder: "https://chub.ai/characters/Anonymous/example-character"
@@ -11936,6 +11939,7 @@ Current version indicated by LITEVER below.
 		{
 			name: "pygmalion.chat",
 			urlParam: "pyg",
+			matchers: ["pygmalion.chat/"],
 			inputBox: {
 				text: "Enter pygmalion.chat character UUID",
 				placeholder: "d7950ca8-c241-4725-8de1-42866e389ebf",
@@ -12008,6 +12012,7 @@ Current version indicated by LITEVER below.
 		{
 			name: "aicharactercards.com",
 			urlParam: "aicc",
+			matchers: ["aicharactercards.com/"],
 			inputBox: {
 				text: "Enter aicharactercards.com card URL",
 				placeholder: "https://aicharactercards.com/character-cards/work-jobs/deffcolony/lara-lightland",
@@ -12096,6 +12101,7 @@ Current version indicated by LITEVER below.
 		{
 			name: "character-tavern.com",
 			urlParam: "aicc",
+			matchers: ["character-tavern.com/"],
 			inputBox: {
 				text: "Enter character-tavern.com card URL",
 				placeholder: "https://character-tavern.com/character/yousef/Shinku",
@@ -12146,6 +12152,138 @@ Current version indicated by LITEVER below.
 				};
 
 				finalurl = apply_proxy_url(userInput,true);
+				//try to obtain the full portrait image
+				return fetch(finalurl, {
+					method: 'GET',
+					redirect: 'follow',
+					referrerPolicy: 'no-referrer',
+					})
+					.then(rb => {
+						if(rb.ok)
+						{
+							return rb.blob();
+						}else{
+							throw new Error('Cannot fetch tavern image');
+						}
+					})
+					.then(blob => {
+						preview_temp_scenario();
+
+						readTavernPngFromBlob(blob,(obj)=>{
+							load_temp_scenario_from_tavernobj(obj);
+						});
+
+						const objectURL = URL.createObjectURL(blob);
+						const compressedImg = compressImage(objectURL, (compressedImageURI, aspectratio)=>{
+							temp_scenario.image = compressedImageURI;
+							temp_scenario.image_aspect = aspectratio;
+							preview_temp_scenario();
+						}, true, AVATAR_PX);
+					})
+					.catch(error => {
+						throw new Error("Selected scenario is invalid.");
+						console.error(error);
+					});
+			}
+		},
+		//botbooru
+		{
+			name: "botbooru.com",
+			urlParam: "botbooru",
+			matchers: ["botbooru.com/"],
+			inputBox: {
+				text: "Enter botbooru.com card URL",
+				placeholder: "https://botbooru.com/download/png/32104",
+			},
+			extraction: (userInput) => {
+				if (userInput.match(/character\//i))
+				{
+					userInput = userInput.split("#")[0].split("?")[0];
+					userInput = userInput.endsWith('/') ? userInput.slice(0, -1) : userInput;
+					let tmp = userInput.split("character/")[1];
+					return `https://botbooru.com/download/png/${tmp}`;
+				}
+				else
+				{
+					userInput = userInput.split("#")[0].split("?")[0];
+					userInput = userInput.endsWith('/') ? userInput.slice(0, -1) : userInput;
+					return userInput;
+				}
+			},
+			fetch: (userInput) => {
+				temp_scenario = {
+					"title":"",
+					"desc": "",
+					"opmode":3,
+					"chatopponent": "",
+					"gui_type":1,
+					"prompt":"",
+					"memory": "",
+					"authorsnote": "",
+					"worldinfo": [],
+				};
+
+				finalurl = apply_proxy_url(userInput,true);
+				//try to obtain the full portrait image
+				return fetch(finalurl, {
+					method: 'GET',
+					redirect: 'follow',
+					referrerPolicy: 'no-referrer',
+					})
+					.then(rb => {
+						if(rb.ok)
+						{
+							return rb.blob();
+						}else{
+							throw new Error('Cannot fetch tavern image');
+						}
+					})
+					.then(blob => {
+						preview_temp_scenario();
+
+						readTavernPngFromBlob(blob,(obj)=>{
+							load_temp_scenario_from_tavernobj(obj);
+						});
+
+						const objectURL = URL.createObjectURL(blob);
+						const compressedImg = compressImage(objectURL, (compressedImageURI, aspectratio)=>{
+							temp_scenario.image = compressedImageURI;
+							temp_scenario.image_aspect = aspectratio;
+							preview_temp_scenario();
+						}, true, AVATAR_PX);
+					})
+					.catch(error => {
+						throw new Error("Selected scenario is invalid.");
+						console.error(error);
+					});
+			}
+		},
+		//raw png URL download
+		{
+			name: "Raw URL",
+			urlParam: "rawurl",
+			matchers: ["/"],
+			inputBox: {
+				text: "Enter the direct URL to the character card file",
+				placeholder: "https://example.com/file.png",
+			},
+			extraction: (userInput) => {
+				return userInput;
+			},
+			fetch: (userInput) => {
+				temp_scenario = {
+					"title":"",
+					"desc": "",
+					"opmode":3,
+					"chatopponent": "",
+					"gui_type":1,
+					"prompt":"",
+					"memory": "",
+					"authorsnote": "",
+					"worldinfo": [],
+				};
+
+				finalurl = apply_proxy_url(userInput,false);
 				//try to obtain the full portrait image
 				return fetch(finalurl, {
 					method: 'GET',
@@ -12308,13 +12446,64 @@ Current version indicated by LITEVER below.
 		else inputBox(
 			scenario_source.inputBox.text,
 			"Import from " + scenario_source.name,
-			"",
+			getInputBoxValue(),
 			scenario_source.inputBox.placeholder,
 			(value) => {
 				const input = getInputBoxValue().trim();
 				loadScenario(input);
 			}
 		);
+	}
+
+	function import_scenario_unified_dropdown()
+	{
+		let dropdown = document.getElementById("importscenariounifieddropdown");
+		if(dropdown)
+		{
+			let picked = dropdown.value;
+			if(picked!="-1")
+			{
+				import_scenario(scenario_sources[picked]);
+			}
+		}
+	}
+	function import_scenario_unified() //a single button entry point to import from any source
+	{
+		let combined_txt = "Please enter the full URL of the character card to import, or pick a specific website.";
+		let selbox = `Source: <select style="padding:4px; display: inline; width: 200px; padding: 6px 3px;" class="form-control" id="importscenariounifieddropdown" onchange="import_scenario_unified_dropdown()">`;
+		selbox += `<option value="-1">Automatic</option>`;
+		for(let i=0;i<scenario_sources.length;++i)
+		{
+			selbox += `<option value="${i}">${scenario_sources[i].name}</option>`;
+		}
+		selbox += "</select>";
+		combined_txt += "<br>" + selbox;
+
+		inputBox(combined_txt,"Import character card from URL","","Enter full URL to character card",
+		(value) => {
+			const input = getInputBoxValue().trim();
+			let found = -1;
+			for(let i=0;i<scenario_sources.length;++i)
+			{
+				for(let j=0;j<scenario_sources[i].matchers.length;++j)
+				{
+					let curr = scenario_sources[i].matchers[j].toLowerCase();
+					if(curr && input.toLowerCase().includes(curr))
+					{
+						found = i;
+						break;
+					}
+				}
+				if(found!=-1)
+				{
+					break;
+				}
+			}
+			if(found!=-1)
+			{
+				import_scenario(scenario_sources[found],input);
+			}
+		},true);
 	}
 
 	function display_scenarios()
@@ -12327,10 +12516,7 @@ Current version indicated by LITEVER below.
 		scenarios += `<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="hide_popups();document.getElementById('loadfileinput').click()">Load Character Card or JSON File</button>`;
 		scenarios += `<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="hide_popups();display_scenariolibrary();">Load or Save Custom Scenario</button>`;
 		scenarios += `<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="character_creator()">New Character Creator</button>`;
-
-		for(let i=0;i<scenario_sources.length;++i) {
-			scenarios += `<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="import_scenario(scenario_sources[${i}])">${scenario_sources[i].name}</button>`
-		}
+		scenarios += `<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="import_scenario_unified()">Import from URL</button>`
 
 		for(let i=0;i<scenario_db.length;++i)
 		{
