@@ -21613,9 +21613,9 @@ Current version indicated by LITEVER below.
 				|| custom_claude_model.toLowerCase().includes("claude-haiku-4")
 				|| custom_claude_model.toLowerCase().includes("claude-opus-4"));
 
-				let claude_is_v4_5 = (custom_claude_model.toLowerCase().includes("claude-sonnet-4-5")
-				|| custom_claude_model.toLowerCase().includes("claude-haiku-4-5")
-				|| custom_claude_model.toLowerCase().includes("claude-opus-4-1"));
+				let claude_is_v4_x = (custom_claude_model.toLowerCase().includes("claude-sonnet-4-")
+				|| custom_claude_model.toLowerCase().includes("claude-haiku-4-")
+				|| custom_claude_model.toLowerCase().includes("claude-opus-4-"));
 
 				if(claudethinking && claude_is_v4)
 				{
@@ -21626,23 +21626,23 @@ Current version indicated by LITEVER below.
 					claude_payload.max_tokens += 1024;
 					claude_payload.temperature = 1;
 				}
-				else
+
+				if(!claudethinking)
 				{
 					//unsupported with thinking
-					claude_payload.top_k = (submit_payload.params.top_k<1?300:submit_payload.params.top_k);
 					claude_payload.top_p = submit_payload.params.top_p;
+				}
 
-					//for claude 4.5, if temperature is not 1, do not send top p
-					if(claude_is_v4_5)
+				//for claude 4.5, if temperature is not 1, do not send top p
+				if(claude_is_v4_x)
+				{
+					if(claude_payload.temperature == 1)
 					{
-						if(claude_payload.temperature == 1)
-						{
-							delete claude_payload["temperature"];
-						}
-						else
-						{
-							delete claude_payload["top_p"];
-						}
+						delete claude_payload["temperature"];
+					}
+					else
+					{
+						delete claude_payload["top_p"];
 					}
 				}
 
