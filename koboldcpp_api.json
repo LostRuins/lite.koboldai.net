@@ -3207,6 +3207,135 @@
 					}
 				}
 			}
+		},
+		"/v1/messages": {
+			"post": {
+				"summary": "Creates a message using the Anthropic Messages API format",
+				"description": "Given a structured list of input messages, a system prompt, and required tokens parameter, the model will return a response. This follows the native Anthropic Messages payload style.",
+				"tags": [
+					"v1"
+				],
+				"parameters": [
+					{
+						"name": "x-api-key",
+						"in": "header",
+						"required": false,
+						"description": "Anthropic API Key used for authentication.",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "anthropic-version",
+						"in": "header",
+						"required": false,
+						"description": "Anthropic API version. Currently, '2023-06-01' is expected.",
+						"schema": {
+							"type": "string",
+							"default": "2023-06-01"
+						}
+					}
+				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"example": {
+								"model": "claude-3-5-sonnet-20241022",
+								"max_tokens": 1024,
+								"system": "You are a helpful assistant.",
+								"messages": [
+									{
+										"role": "user",
+										"content": "Tell me a joke about Kobolds."
+									}
+								],
+								"temperature": 0.7
+							},
+							"schema": {
+								"type": "object",
+								"required": [
+									"model",
+									"messages",
+									"max_tokens"
+								],
+								"properties": {
+									"model": {
+										"type": "string",
+										"description": "The model that will handle the request."
+									},
+									"messages": {
+										"type": "array",
+										"description": "Input messages. Roles must alternate between user and assistant.",
+										"items": {
+											"type": "object",
+											"required": [
+												"role",
+												"content"
+											],
+											"properties": {
+												"role": {
+													"type": "string",
+													"enum": [
+														"user",
+														"assistant"
+													]
+												},
+												"content": {
+													"oneOf": [
+														{
+															"type": "string"
+														},
+														{
+															"type": "array",
+															"items": {
+																"type": "object",
+																"properties": {
+																	"type": {
+																		"type": "string",
+																		"enum": [
+																			"text",
+																			"image"
+																		]
+																	},
+																	"text": {
+																		"type": "string"
+																	}
+																}
+															}
+														}
+													]
+												}
+											}
+										}
+									},
+									"system": {
+										"type": "string",
+										"description": "System prompt to define the behavior and tone of the model."
+									},
+									"max_tokens": {
+										"type": "integer",
+										"description": "The maximum number of tokens to generate."
+									},
+									"temperature": {
+										"type": "number",
+										"minimum": 0.0,
+										"maximum": 1.0
+									},
+									"stream": {
+										"type": "boolean"
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"default": {
+						"description": ""
+					}
+				}
+			}
 		}
 	},
 	"servers": [
