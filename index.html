@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 <head>
 	<script id="init-config">
-	const LITEVER = 335;
+	const LITEVER = 336;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -20942,38 +20942,95 @@ Current version indicated by LITEVER below.
 		return submit_payload;
 	}
 
-	function oai_append_media(mainoaibody)
-	{
-		for(let i=0;i<insertAIVisionImages.length;++i)
-		{
-			let oaiimg = {
-				"type": "image_url",
-				"image_url": {
-					"url": insertAIVisionImages[i]
-				}
-			};
-			mainoaibody.push(oaiimg);
+	//inject actual media into turns that contain media placeholders
+	function oai_append_media(oai_messages) {
+		var insert_image_idx = 0;
+		var insert_audio_idx = 0;
+		var regex = /\n?\(Attached (Image|Audio) \d+\)\n?/g;
+		function makeImagePart(url) {
+			return { type: "image_url", image_url: { url: url } };
 		}
-		for(let i=0;i<insertAIAudioSounds.length;++i)
-		{
-			let curr = insertAIAudioSounds[i];
-			let format = "wav";
-			if(curr.includes("base64,"))
-			{
-				let parts = curr.split("base64,");
-				curr = parts[1];
-				format = (parts[0].includes("mp3")||parts[0].includes("mpeg"))?"mp3":"wav";
+
+		function makeAudioPart(src) {
+			var curr = String(src || "");
+			var format = "wav";
+			if (curr.indexOf("base64,") !== -1) {
+				var parts = curr.split("base64,");
+				var header = parts[0];
+				curr = parts.slice(1).join("base64,");
+				format = header.indexOf("mp3") !== -1 || header.indexOf("mpeg") !== -1 ? "mp3" : "wav";
 			}
-			let oaiimg = {
-				"type": "input_audio",
-				"input_audio": {
-					"data": curr,
-					"format": format
-				}
-			};
-			mainoaibody.push(oaiimg);
+			return { type: "input_audio", input_audio: { data: curr, format: format } };
 		}
-		return mainoaibody;
+
+		function appendMediaFromText(text, out) {
+			var matches = text.match(regex);
+			if (!matches) return text;
+
+			for (var i = 0; i < matches.length; ++i) {
+				var m = matches[i];
+				if (m.indexOf("Image") !== -1) {
+					if (insert_image_idx < insertAIVisionImages.length) {
+						out.push(makeImagePart(insertAIVisionImages[insert_image_idx]));
+						insert_image_idx++;
+					}
+				}
+				else if (m.indexOf("Audio") !== -1) {
+					if (insert_audio_idx < insertAIAudioSounds.length) {
+						out.push(makeAudioPart(insertAIAudioSounds[insert_audio_idx]));
+						insert_audio_idx++;
+					}
+				}
+			}
+
+			return text.replace(regex, "");
+		}
+
+		for (var i = 0; i < oai_messages.length; ++i) {
+			var msg = oai_messages[i];
+			if (!msg || typeof msg !== "object") continue;
+
+			var content = msg.content;
+
+			if (typeof content === "string") {
+				var mediaParts = [];
+				var cleanedText = appendMediaFromText(content, mediaParts);
+
+				if (mediaParts.length > 0) {
+					msg.content = mediaParts;
+					if (cleanedText.length > 0) {
+						msg.content.push({
+							type: "text",
+							text: cleanedText
+						});
+					}
+				} else {
+					msg.content = cleanedText;
+				}
+			}
+			else if (Array.isArray(content)) {
+				var newContent = [];
+				var combinedText = "";
+
+				for (var j = 0; j < content.length; ++j) {
+					var part = content[j];
+
+					if (part && part.type === "text" && typeof part.text === "string") {
+						combinedText += appendMediaFromText(part.text, newContent);
+					} else {
+						newContent.push(part);
+					}
+				}
+
+				if (combinedText.length > 0) {
+					newContent.push({ type: "text", text: combinedText });
+				}
+
+				msg.content = newContent;
+			}
+		}
+
+		return oai_messages;
 	}
 
 	function dispatch_submit_generation(submit_payload, input_was_empty) //if input is not empty, always unban eos
@@ -21023,53 +21080,7 @@ Current version indicated by LITEVER below.
 					submit_payload.messages = [];
 					submit_payload.continue_assistant_turn = true;
 					let mhistory = repack_instruct_history(combinedprompt);
-					let oaiimgs = [];
-					oaiimgs = oai_append_media(oaiimgs);
-					if(mhistory.length>0 && oaiimgs.length>0)
-					{
-						//do we have the same number of images as placeholders? if so, assign each image to the right turns
-						let placeholder_count = 0;
-						const regex = /\n\(Attached (Image|Audio) \d+\)\n/g;
-						for(let i=0;i<mhistory.length;++i)
-						{
-							const matches = mhistory[i].msg.match(regex);
-							const count = matches ? matches.length : 0;
-							placeholder_count += count;
-						}
-						if(placeholder_count==oaiimgs.length)
-						{
-							//exactly same number, so we can put images into matching turns
-							let mediaidx = 0;//for each occurance of the regex in this turn, insert mediaidx from oaiimgs and increment it
-							for (let i = 0; i < mhistory.length; ++i)
-							{
-								let msg = mhistory[i].msg;
-								const matches = msg.match(regex);
-								const count = matches ? matches.length : 0;
-								if(count>0)
-								{
-									msg = msg.replace(regex, '');
-									let newMsg = [{ type: 'text', text: msg }];
-									for (let j = 0; j < count; ++j)
-									{
-										if (mediaidx < oaiimgs.length)
-										{
-											newMsg.push(oaiimgs[mediaidx]);
-											mediaidx++;
-										}
-									}
-									mhistory[i].msg = newMsg;
-								}
-							}
-						}
-						else
-						{
-							mhistory[0].msg = [{type: 'text', text: mhistory[0].msg}];
-							for(let i=0;i<oaiimgs.length;++i)
-							{
-								mhistory[0].msg.push(oaiimgs[i]);
-							}
-						}
-					}
+
 					for(let i=0;i<mhistory.length;++i)
 					{
 						let cturn = { "role": (mhistory[i].myturn?"user":(mhistory[i].issystem?"system":"assistant")), "content": mhistory[i].msg };
@@ -21084,6 +21095,9 @@ Current version indicated by LITEVER below.
 						}
 						submit_payload.messages.push(cturn);
 					}
+
+					submit_payload.messages = oai_append_media(submit_payload.messages);
+
 					if(determine_if_mcp_active())
 					{
 						let senttools = MCPGetAllowedTools();
@@ -21228,7 +21242,6 @@ Current version indicated by LITEVER below.
 								"text": mainoaibody
 							}
 						];
-						mainoaibody = oai_append_media(mainoaibody);
 					}
 
 					oai_payload.messages = [];
@@ -21302,6 +21315,8 @@ Current version indicated by LITEVER below.
 							oai_payload.messages.push(cturn);
 						}
 					}
+
+					oai_payload.messages = oai_append_media(oai_payload.messages);
 
 					if(determine_if_mcp_active())
 					{
