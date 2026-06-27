@@ -27716,34 +27716,60 @@ Current version indicated by LITEVER below.
 	function show_groupchat_select()
 	{
 		document.getElementById("groupselectcontainer").classList.remove("hidden");
+		let selectable_groupchat = (localsettings.opmode==3 || (localsettings.opmode==4 && localsettings.inject_chatnames_instruct));
+		let has_chatopponents = (localsettings.chatopponent!="");
+		let grouplist = has_chatopponents ? localsettings.chatopponent.split("||$||") : [defaultchatopponent];
+		let myname = localsettings.chatname ? localsettings.chatname : "User";
 		let gs = ``;
-		if(localsettings.opmode==3)
+
+		if(selectable_groupchat && grouplist.length>1)
 		{
-			if (localsettings.chatopponent != "" && localsettings.chatopponent.includes("||$||")) {
-				gs = `Selected participants will reply randomly, unless you address them directly by name.`
-				+`<br><br>Unselected participants will not reply in group chats.<br>`
-				+`<table style="width:90%; margin:8px auto;">`;
-				let grouplist = localsettings.chatopponent.split("||$||");
-				for (let i = 0; i < grouplist.length; ++i) {
-					let show = !groupchat_removals.includes(grouplist[i]);
-					gs += `<tr><td width='184px'><span style="vertical-align: middle;">` + grouplist[i] + `</span></td>`
-						+`<td width='24px'><button type="button" class="btn btn-primary widelbtn" id="widel0" onclick="impersonate_message(`+i+`)">+</button></td>`
-						+`<td width='24px'><input type="checkbox" id="groupselectitem_` + i + `" style=" vertical-align: top;" ` + (show ? "checked" : "") + `></td></tr>`;
-				}
-				gs += `</table>`;
-			}
-			else if(localsettings.chatopponent != "")
-			{
-				gs = `You're having a one-on-one chat with <b>`+localsettings.chatopponent+`</b>.<br><br>`
-				+`<a href='#' class='color_blueurl' onclick='hide_popups();display_settings();display_settings_tab(0);'>Turn it into a <b>group chat</b> by <b>adding more AI characters</b> (one per line)</a>.<br><br>`
-				+ `<a href='#' class='color_blueurl' onclick='impersonate_message(0)'>Impersonate `+localsettings.chatopponent+` speaking as them</a>`;
-			}
-		}else{
-			gs = `You're in Instruct Mode.<br><br>`
-				+ `<a href='#' class='color_blueurl' onclick='impersonate_message(0)'>Impersonate the AI Assistant</a>`;
+			gs = `Selected participants will reply randomly, unless you address them directly by name.`
+			+`<br><br>Unselected participants will not reply in group chats.<br>`;
+		}
+		else if(localsettings.opmode==4 && !localsettings.inject_chatnames_instruct)
+		{
+			gs = `You're in Instruct Mode.<br><br>`;
 		}
 
-		gs += `<br><a href='#' class='color_blueurl' onclick='impersonate_user()'>Make the AI write a response as me (for 1 turn)</a>`;
+		gs += `<table style="width:90%; margin:8px auto;">`
+			+`<thead><tr>`
+			+`<th style="text-align:left;">Participant</th>`
+			+`<th width='128px' style="text-align:center;">Speak</th>`
+			+`<th width='42px' style="text-align:center;">Reply</th>`
+			+`</tr></thead><tbody>`;
+
+		gs += `<tr><td><span style="vertical-align: middle;">`+escape_html(myname)+`</span></td>`
+			+`<td style="text-align:center;"><button title="Make the AI write a response as me" type="button" class="btn btn-primary widelbtn" onclick="impersonate_user()">AI speaks as me</button></td>`
+			+`<td style="text-align:center;"><input title="Your own name is always available" type="checkbox" style="vertical-align: top;" checked disabled></td></tr>`;
+
+		for (let i = 0; i < grouplist.length; ++i) {
+			let show = !groupchat_removals.includes(grouplist[i]);
+			let participant_name = grouplist[i] ? grouplist[i] : defaultchatopponent;
+			let can_impersonate = (localsettings.opmode!=3 || has_chatopponents);
+			let impersonate_title = (localsettings.opmode==3 ? "Impersonate this participant" : "Impersonate the AI Assistant");
+			let impersonate_button = can_impersonate
+				? `<button title="${impersonate_title}" type="button" class="btn btn-primary widelbtn" onclick="impersonate_message(`+i+`)">Impersonate</button>`
+				: `<button title="Set an AI name first" type="button" class="btn btn-primary widelbtn" disabled>Impersonate</button>`;
+			let checkbox = ``;
+			if(has_chatopponents && selectable_groupchat)
+			{
+				checkbox = `<input type="checkbox" id="groupselectitem_` + i + `" style="vertical-align: top;" ` + (show ? "checked" : "") + `>`;
+			}
+			else
+			{
+				checkbox = `<input type="checkbox" style="vertical-align: top;" checked disabled>`;
+			}
+			gs += `<tr><td><span style="vertical-align: middle;">` + escape_html(participant_name) + `</span></td>`
+				+`<td style="text-align:center;">`+impersonate_button+`</td>`
+				+`<td style="text-align:center;">`+checkbox+`</td></tr>`;
+		}
+		gs += `</tbody></table>`;
+
+		if(selectable_groupchat)
+		{
+			gs += `<br><a href='#' class='color_blueurl' onclick='hide_popups();display_settings();display_settings_tab(0);'>Add more AI characters in Chat Settings</a>`;
+		}
 
 		document.getElementById("groupselectitems").innerHTML = gs;
 	}
