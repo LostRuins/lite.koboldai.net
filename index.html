@@ -7181,6 +7181,7 @@ Current version indicated by LITEVER below.
 				else if (dch.message) {
 					synchro_polled_response = dch.message.content;
 					let reasoningtxt = "";
+					let has_called_tools = (dch.message.tool_calls && dch.message.tool_calls.length>0);
 					if(dch.message.reasoning_content!=null && dch.message.reasoning_content!="") //vllm compat
 					{
 						reasoningtxt = dch.message.reasoning_content;
@@ -7191,17 +7192,17 @@ Current version indicated by LITEVER below.
 					}
 					if(reasoningtxt!="")
 					{
-						if(dch.message.content==null)
+						if(dch.message.content==null && !has_called_tools)
 						{
 							synchro_polled_response = reasoningtxt;
 						}
 						else
 						{
-							synchro_polled_response = `${localsettings.start_thinking_tag}${reasoningtxt}${localsettings.stop_thinking_tag}${dch.message.content}`;
+							synchro_polled_response = `${localsettings.start_thinking_tag}${reasoningtxt}${localsettings.stop_thinking_tag}${dch.message.content?dch.message.content:''}`;
 						}
 					}
 
-					if(dch.message.tool_calls && dch.message.tool_calls.length>0)
+					if(has_called_tools)
 					{
 						synchro_polled_resptoolcalls = dch.message.tool_calls;
 						if(!synchro_polled_response)
