@@ -2624,9 +2624,10 @@ Current version indicated by LITEVER below.
 	.instruct-settings-input input { width:44px; height:20px; }
 	#code-block-background-colorselector, #code-block-foreground-colorselector { text-align: center; margin: 0px 5px; }
 	#you-text-colorselector, #you-speech-colorselector, #you-action-colorselector, #AI-text-colorselector, #AI-speech-colorselector, #AI-action-colorselector { text-align: center; margin: 0px 5px; }
-	#you-bubble-colorselector, #AI-bubble-colorselector, #you-portrait, #AI-portrait, #groupchat-portrait { text-align: center; margin: 0px 10px; border-radius: 1rem; padding: 1px 6px; }
-	#groupchat-portrait { cursor: pointer; }
-	#groupchat_aesthetic_avatar {
+	#you-bubble-colorselector, #AI-bubble-colorselector, #you-portrait, #AI-portrait, #groupchat-portrait, #groupchat-add-portrait { text-align: center; margin: 0px 10px; border-radius: 1rem; padding: 1px 6px; }
+	#groupchat-portrait, #groupchat-add-portrait { cursor: pointer; }
+	#groupchat_aesthetic_avatar,
+	#groupchat_add_avatar {
 		width: 64px;
 		height: 64px;
 		margin: 0px auto 8px auto;
@@ -27920,23 +27921,29 @@ Current version indicated by LITEVER below.
 	{
 		localsettings.chatopponent = names.join("||$||");
 	}
-	function add_groupchat_bot_participant(name)
+	function add_groupchat_bot_participant(name, rowdata={})
 	{
 		name = sanitize_groupchat_participant_name(name);
 		if(name=="")
 		{
 			return false;
 		}
+		rowdata = (rowdata && typeof rowdata=="object" && !Array.isArray(rowdata)) ? rowdata : {};
 		let selected_rows = snapshot_groupchat_selection();
 		let names = groupchat_bot_names();
 		if(names.length==0)
 		{
 			names.push(name);
+			if(Object.keys(rowdata).length>0)
+			{
+				localsettings.groupchat_data[1] = rowdata;
+			}
+			selected_rows[1] = true;
 		}
 		else
 		{
 			names.push(name);
-			localsettings.groupchat_data.push({});
+			localsettings.groupchat_data.push(rowdata);
 			selected_rows.push(true);
 		}
 		set_groupchat_bot_names(names);
@@ -28115,6 +28122,57 @@ Current version indicated by LITEVER below.
 			show_groupchat_select();
 		},false,true);
 	}
+	var pending_groupchat_add_data = null;
+	function groupchat_add_participant_html()
+	{
+		return `Add a new AI participant.<br><br>`
+			+`<div id="groupchat_add_avatar"></div>`
+			+`<div class="ui-settings-inline" style="justify-content:center; margin-bottom:8px;">`
+			+`<div style="margin-right: 20px">Portrait: </div>`
+			+`<div id="groupchat-add-portrait" onclick="select_groupchat_add_avatar()">🖼️ Set Portrait</div>`
+			+`<div style="margin-left: 10px;"><a href="#" class="color_blueurl" onclick="reset_groupchat_add_avatar(); return false;">(Reset Image)</a></div>`
+			+`</div>`
+			+`<div style="text-align:left; margin-top:8px;">Character context</div>`
+			+`<textarea id="groupchat_add_context" placeholder="Optional participant context" style="width:100%; min-height:90px; resize:vertical; color: var(--theme_color_input_fg); background-color: var(--theme_color_input_bg); border:1px solid var(--theme_color_border); border-radius:5px; padding:4px;"></textarea>`;
+	}
+	function select_groupchat_add_avatar()
+	{
+		if(!pending_groupchat_add_data)
+		{
+			pending_groupchat_add_data = {};
+		}
+		let finput = document.getElementById('portraitFileInput');
+		finput.click();
+		finput.onchange = (event) => {
+			if (event.target.files.length > 0 && event.target.files[0]) {
+				const file = event.target.files[0];
+				const reader = new FileReader();
+				reader.onload = function(img) {
+					compressImage(img.target.result, (compressedImageURI, aspectratio) => {
+						if(!pending_groupchat_add_data)
+						{
+							return;
+						}
+						pending_groupchat_add_data.portrait = compressedImageURI;
+						pending_groupchat_add_data.portrait_ratio = aspectratio.toFixed(2);
+						document.getElementById("groupchat_add_avatar").style.backgroundImage = `url(` + compressedImageURI + `)`;
+					}, true, AVATAR_PX);
+				}
+				reader.readAsDataURL(file);
+			}
+			finput.value = "";
+		};
+	}
+	function reset_groupchat_add_avatar()
+	{
+		if(!pending_groupchat_add_data)
+		{
+			pending_groupchat_add_data = {};
+		}
+		delete pending_groupchat_add_data.portrait;
+		delete pending_groupchat_add_data.portrait_ratio;
+		document.getElementById("groupchat_add_avatar").style.backgroundImage = "none";
+	}
 	var current_groupchat_aesthetic_index = 0;
 	var temp_groupchat_aesthetic_data = null;
 	function populate_groupchat_aesthetics_form(participant)
@@ -28259,14 +28317,21 @@ Current version indicated by LITEVER below.
 	}
 	function add_another_participant(apply_immediately=false)
 	{
-		inputBoxOkCancel("Add a new AI participant.\n\nInput name of additional character:","Add AI Participant","","[Enter Character Name]", ()=>{
+		pending_groupchat_add_data = apply_immediately ? {} : null;
+		inputBoxOkCancel(apply_immediately ? groupchat_add_participant_html() : "Add a new AI participant.\n\nInput name of additional character:","Add AI Participant","","[Enter Character Name]", ()=>{
 			let userinput = getInputBoxValue();
 			userinput = sanitize_groupchat_participant_name(userinput);
 			if(userinput!="")
 			{
 				if(apply_immediately)
 				{
-					add_groupchat_bot_participant(userinput);
+					let rowdata = JSON.parse(JSON.stringify(pending_groupchat_add_data ? pending_groupchat_add_data : {}));
+					let context = document.getElementById("groupchat_add_context");
+					if(context && context.value!="")
+					{
+						rowdata.char_context = context.value;
+					}
+					add_groupchat_bot_participant(userinput, rowdata);
 				}
 				else
 				{
@@ -28276,7 +28341,10 @@ Current version indicated by LITEVER below.
 					handle_bot_name_onchange();
 				}
 			}
-		},()=>{},false);
+			pending_groupchat_add_data = null;
+		},()=>{
+			pending_groupchat_add_data = null;
+		},apply_immediately);
 	}
 	function confirm_groupchat_select()
 	{
