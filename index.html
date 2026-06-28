@@ -16722,9 +16722,11 @@ Current version indicated by LITEVER below.
 		let newopps = replaceAll(document.getElementById("chatopponent").value,"\n","||$||");
 		if(localsettings.chatopponent!=newopps)
 		{
-			groupchat_removals = [];
+			groupchat_participants = [];
+			groupchat_participants_chatopponent = "";
 		}
 		localsettings.chatopponent = newopps;
+		sync_groupchat_participants();
 		localsettings.instruct_starttag = document.getElementById("instruct_starttag").value;
 		localsettings.instruct_systag = document.getElementById("instruct_systag").value;
 		localsettings.instruct_sysprompt = document.getElementById("instruct_sysprompt").value;
@@ -17218,6 +17220,10 @@ Current version indicated by LITEVER below.
 		let numberOfLineBreaks = (textarea.value.match(/\n/g) || []).length;
 		numberOfLineBreaks = numberOfLineBreaks>8?8:numberOfLineBreaks;
 		textarea.rows = numberOfLineBreaks+1;
+		if(replaceAll(textarea.value,"\n","||$||")==localsettings.chatopponent)
+		{
+			sync_groupchat_participants();
+		}
 	}
 
 	function toggle_generate_images_mode(silent=false)
@@ -17996,7 +18002,8 @@ Current version indicated by LITEVER below.
 		prev_hl_chunk = null;
 		gametext_focused = false;
 		last_token_budget = "";
-		groupchat_removals = [];
+		groupchat_participants = [];
+		groupchat_participants_chatopponent = "";
 		welcome = "";
 		is_impersonate_user = false;
 		voice_is_processing = false;
@@ -20149,9 +20156,9 @@ Current version indicated by LITEVER below.
 				let hasMulti = false;
 				if(!is_impersonate_user && co.includes("||$||"))
 				{
+					sync_groupchat_participants();
 					let coarr = co.split("||$||");
-					coarr = coarr.filter(x=>(x&&x!=""));
-					coarr = coarr.filter(x=>(!groupchat_removals.includes(x)));
+					coarr = coarr.filter((x,i)=>(x&&x!=""&&groupchat_participants[i+1]&&groupchat_participants[i+1].selected));
 					coarr = coarr.map(x=>x.trim());
 					co = coarr[Math.floor(Math.random()*coarr.length)];
 
@@ -20279,9 +20286,9 @@ Current version indicated by LITEVER below.
 							if (localsettings.inject_timestamps) {
 								pending_context_preinjection += " ";
 							}
+							sync_groupchat_participants();
 							let coarr = localsettings.chatopponent.split("||$||");
-							coarr = coarr.filter(x=>(x&&x!=""));
-							coarr = coarr.filter(x=>(!groupchat_removals.includes(x)));
+							coarr = coarr.filter((x,i)=>(x&&x!=""&&groupchat_participants[i+1]&&groupchat_participants[i+1].selected));
 							coarr = coarr.map(x=>x.trim());
 							let co = coarr[Math.floor(Math.random()*coarr.length)];
 							pending_context_preinjection += co + ":";
@@ -27712,13 +27719,28 @@ Current version indicated by LITEVER below.
 		}, null);
 	}
 
-	var groupchat_removals = []; //list of names removed from groupchat
+	var groupchat_participants = []; //row-aligned with groupchat selector; first row is the user
+	var groupchat_participants_chatopponent = "";
+	function sync_groupchat_participants(chatopponent=localsettings.chatopponent)
+	{
+		let grouplist = chatopponent ? chatopponent.split("||$||") : [defaultchatopponent];
+		let reset_selected = (groupchat_participants_chatopponent!=chatopponent);
+		let synced_participants = [];
+		for(let i=0;i<grouplist.length+1;++i)
+		{
+			let prev = groupchat_participants[i];
+			synced_participants.push({"selected":(i==0 || reset_selected || !prev) ? true : prev.selected});
+		}
+		groupchat_participants = synced_participants;
+		groupchat_participants_chatopponent = chatopponent;
+		return grouplist;
+	}
 	function show_groupchat_select()
 	{
 		document.getElementById("groupselectcontainer").classList.remove("hidden");
 		let selectable_groupchat = (localsettings.opmode==3 || (localsettings.opmode==4 && localsettings.inject_chatnames_instruct));
 		let has_chatopponents = (localsettings.chatopponent!="");
-		let grouplist = has_chatopponents ? localsettings.chatopponent.split("||$||") : [defaultchatopponent];
+		let grouplist = sync_groupchat_participants();
 		let myname = localsettings.chatname ? localsettings.chatname : "User";
 		let gs = ``;
 
@@ -27741,10 +27763,11 @@ Current version indicated by LITEVER below.
 
 		gs += `<tr><td><span style="vertical-align: middle;">`+escape_html(myname)+`</span></td>`
 			+`<td style="text-align:center;"><button title="Make the AI write a response as me" type="button" class="btn btn-primary widelbtn" onclick="impersonate_user()">AI speaks as me</button></td>`
-			+`<td style="text-align:center;"><input title="Your own name is always available" type="checkbox" style="vertical-align: top;" checked disabled></td></tr>`;
+			+`<td style="text-align:center;"><input title="Your own name is always available" type="checkbox" id="groupselectitem_0" style="vertical-align: top;" checked disabled></td></tr>`;
 
 		for (let i = 0; i < grouplist.length; ++i) {
-			let show = !groupchat_removals.includes(grouplist[i]);
+			let participant_index = i+1;
+			let show = groupchat_participants[participant_index] ? groupchat_participants[participant_index].selected : true;
 			let participant_name = grouplist[i] ? grouplist[i] : defaultchatopponent;
 			let can_impersonate = (localsettings.opmode!=3 || has_chatopponents);
 			let impersonate_title = (localsettings.opmode==3 ? "Impersonate this participant" : "Impersonate the AI Assistant");
@@ -27754,7 +27777,7 @@ Current version indicated by LITEVER below.
 			let checkbox = ``;
 			if(has_chatopponents && selectable_groupchat)
 			{
-				checkbox = `<input type="checkbox" id="groupselectitem_` + i + `" style="vertical-align: top;" ` + (show ? "checked" : "") + `>`;
+				checkbox = `<input type="checkbox" id="groupselectitem_` + participant_index + `" style="vertical-align: top;" ` + (show ? "checked" : "") + `>`;
 			}
 			else
 			{
@@ -27850,23 +27873,28 @@ Current version indicated by LITEVER below.
 	}
 	function confirm_groupchat_select()
 	{
-		groupchat_removals = [];
+		sync_groupchat_participants();
 		if(localsettings.chatopponent!="")
 		{
 			let grouplist = localsettings.chatopponent.split("||$||");
 			for(let i=0;i<grouplist.length;++i)
 			{
-				let sel = document.getElementById("groupselectitem_"+i);
-				if(sel && !sel.checked)
+				let participant_index = i+1;
+				let sel = document.getElementById("groupselectitem_"+participant_index);
+				if(sel && groupchat_participants[participant_index])
 				{
-					groupchat_removals.push(grouplist[i]);
+					groupchat_participants[participant_index].selected = sel.checked;
 				}
 			}
 			hide_popups();
-			if(groupchat_removals.length==grouplist.length)
+			let selected_participants = groupchat_participants.slice(1).filter(x=>(x.selected));
+			if(selected_participants.length==0)
 			{
 				msgbox("You need to select at least one group chat participant!");
-				groupchat_removals = [];
+				for(let i=1;i<groupchat_participants.length;++i)
+				{
+					groupchat_participants[i].selected = true;
+				}
 			}
 		}
 		else
