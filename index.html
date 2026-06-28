@@ -6053,6 +6053,16 @@ Current version indicated by LITEVER below.
 				inputtxt = replaceAll(inputtxt,localsettings.placeholder_tags_data[i].p,localsettings.placeholder_tags_data[i].r);
 			}
 		}
+		sync_groupchat_participants();
+		for(let i=0;i<groupchat_participants.length;++i)
+		{
+			let curr = groupchat_participants[i];
+			if(curr.name && curr.data && curr.data.char_context)
+			{
+				let contexttxt = escape ? escape_html(curr.data.char_context) : curr.data.char_context;
+				inputtxt = replaceAll(inputtxt,"{{"+curr.name+"_context}}",contexttxt,true);
+			}
+		}
 
 		if(localsettings.inject_randomness_seed>0)
 		{
@@ -27729,6 +27739,7 @@ Current version indicated by LITEVER below.
 		{
 			localsettings.groupchat_data = [];
 		}
+		// Supported rowdata fields: portrait, portrait_ratio, portrait_width, bubbleColor, text_tcolor, speech_tcolor, action_tcolor, char_context.
 		let synced_participants = [];
 		let synced_groupchat_data = [];
 		for(let i=0;i<grouplist.length+1;++i)
@@ -27739,6 +27750,7 @@ Current version indicated by LITEVER below.
 			synced_groupchat_data.push(rowdata);
 			synced_participants.push({
 				"data": rowdata,
+				"index": i,
 				"name": (i==0 ? (localsettings.chatname ? localsettings.chatname : "User") : (grouplist[i-1] ? grouplist[i-1] : defaultchatopponent)),
 				"selected":(i==0 || groupchat_participants_chatopponent!=chatopponent || !prev || prev.selected==true),
 				"is_bot":(i!=0)
@@ -27748,6 +27760,17 @@ Current version indicated by LITEVER below.
 		groupchat_participants = synced_participants;
 		groupchat_participants_chatopponent = chatopponent;
 		return grouplist;
+	}
+	function get_groupchat_participant_for_name(name, is_bot)
+	{
+		sync_groupchat_participants();
+		if(!is_bot)
+		{
+			return groupchat_participants[0];
+		}
+		// Name-based transcript matching cannot disambiguate duplicate names; the first matching bot row wins for compatibility.
+		let matched = groupchat_participants.find(x=>(x.is_bot && x.name==name));
+		return matched ? matched : groupchat_participants.find(x=>(x.is_bot));
 	}
 	function show_groupchat_select()
 	{
@@ -28263,25 +28286,48 @@ Current version indicated by LITEVER below.
 
 	function render_aesthetic_ui(input, isPreview) //class suffix string used to prevent defined styles from leaking into global scope
 	{
-		const avatarImage = function(for_ai) { //todo: this is still bad code, but will keep it for now
-			if((for_ai && !as.AI_portrait) || (!for_ai && !as.you_portrait) || as.border_style == 'None')
+		const participantDataValue = function(participant, field, fallback)
+		{
+			let data = participant && participant.data ? participant.data : {};
+			if(data[field] != null && data[field] !== "")
+			{
+				return data[field];
+			}
+			return fallback;
+		}
+		const participantStyle = function(participant)
+		{
+			let is_bot = participant ? participant.is_bot : true;
+			let portrait = participantDataValue(participant, "portrait", is_bot ? as.AI_portrait : as.you_portrait);
+			portrait = (is_bot && portrait=="default") ? niko_square : portrait;
+			portrait = (!is_bot && portrait=="default") ? null : portrait;
+			let portrait_width = cleannum(parseFloat(participantDataValue(participant, "portrait_width", is_bot ? as.portrait_width_AI : as.portrait_width_you)), 10, 250);
+			let portrait_ratio = cleannum(parseFloat(participantDataValue(participant, "portrait_ratio", is_bot ? as.portrait_ratio_AI : as.portrait_ratio_you)), 0.01, 3);
+			return {
+				"portrait": portrait,
+				"portrait_width": portrait_width,
+				"portrait_ratio": portrait_ratio,
+				"bubbleColor": participantDataValue(participant, "bubbleColor", is_bot ? as.bubbleColor_AI : as.bubbleColor_you),
+				"text_tcolor": participantDataValue(participant, "text_tcolor", is_bot ? as.text_tcolor_AI : as.text_tcolor_you),
+				"speech_tcolor": participantDataValue(participant, "speech_tcolor", is_bot ? as.speech_tcolor_AI : as.speech_tcolor_you),
+				"action_tcolor": participantDataValue(participant, "action_tcolor", is_bot ? as.action_tcolor_AI : as.action_tcolor_you)
+			};
+		}
+		const participantClassName = function(participant)
+		{
+			return `aui_participant_${participant ? participant.index : 0}${classSuffixStr}`;
+		}
+		const avatarImage = function(participant) {
+			let pstyle = participantStyle(participant);
+			if(!pstyle.portrait || as.border_style == 'None')
 			{
 				return ''; //for no portrait
 			}
 			let reinvertcolor = localsettings.invert_colors?" invert_colors":"";
 			let radius = (as.border_style == 'Circle' ? '1000rem' : (as.border_style == 'Rounded' ? '1.6rem' : '0.1rem'));
-			let width, height;
-			let imgclassname = "";
-			if (!for_ai) {
-				width = as.portrait_width_you;
-				height = (as.border_style == 'Circle' ? as.portrait_width_you : as.portrait_width_you / as.portrait_ratio_you);
-				imgclassname = "you-portrait-image";
-			} else {
-				width = as.portrait_width_AI;
-				height = (as.border_style == 'Circle' ? as.portrait_width_AI : as.portrait_width_AI / as.portrait_ratio_AI);
-				imgclassname = "AI-portrait-image";
-			}
-			return `<div class='${imgclassname}${classSuffixStr}${reinvertcolor}' style='width:${width}px; height:${height}px; border-radius: ${radius}'></div>`;
+			let width = pstyle.portrait_width;
+			let height = (as.border_style == 'Circle' ? width : width / pstyle.portrait_ratio);
+			return `<div class='aui-portrait-image${classSuffixStr}${reinvertcolor}' style='margin: 6px 6px; background:url(${escape_html(pstyle.portrait)}); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none; width:${width}px; height:${height}px; border-radius: ${radius}'></div>`;
 		}
 
 		if(localsettings.separate_end_tags) {
@@ -28308,10 +28354,26 @@ Current version indicated by LITEVER below.
 		}
 		let as = aestheticInstructUISettings;
 		let classSuffixStr = isPreview ? "prv" : "";
-		let portraitsStyling = // Also, implement portraits as css classes. Now chat entries can reuse them instead of recreating them.
+		sync_groupchat_participants();
+		let participantStyling = groupchat_participants.map((participant)=>{
+			let pstyle = participantStyle(participant);
+			let participantClass = participantClassName(participant);
+			return `.${participantClass}{
+					color: ${pstyle.text_tcolor};
+					background-color:${pstyle.bubbleColor};
+				}
+				.${participantClass} em, .${participantClass} b :not(code){
+					color: ${pstyle.action_tcolor};
+					font-style: italic;
+					font-weight: normal;
+				}
+				.${participantClass} .quotespn {
+					color: ${pstyle.speech_tcolor};
+					font-weight: normal;
+				}`;
+		}).join("\n");
+		let portraitsStyling = // Turn-specific styles are generated from the participant interface.
 		`<style>
-			.you-portrait-image${classSuffixStr} {margin: 6px 6px; background:url(${as.you_portrait}); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
-			.AI-portrait-image${classSuffixStr} {margin: 6px 6px; background:url(${(as.AI_portrait!="default"?as.AI_portrait:niko_square)}); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
 			#chat_msg_body code, #aesthetic_text_preview code
 			{
 				color: ${as.code_block_foreground};
@@ -28351,6 +28413,7 @@ Current version indicated by LITEVER below.
 				color: ${as.speech_tcolor_AI};
 				font-weight: normal;
 			}
+			${participantStyling}
 			#chat_msg_body blockquote, #aesthetic_text_preview blockquote
 			{
 				font-size: ${as.font_size}px;
@@ -28450,6 +28513,8 @@ Current version indicated by LITEVER below.
 			}
 
 			let namepart = (curr.name!="" && localsettings.show_nametags?`<p class='aui_nametag'>${escape_html(curr.name)}</p>`:"");
+			let participant = get_groupchat_participant_for_name(curr.name, !curr.myturn);
+			let turnParticipantClass = participantClassName(participant);
 			let showavatar = true;
 
 			//adventure and story has no names or avatars, also handle unlabelled first turns for chat/instruct
@@ -28471,13 +28536,13 @@ Current version indicated by LITEVER below.
 			newbodystr += `<div style='display:flex; align-items:stretch; flex-direction: row;'>`;
 			if(curr.myturn)
 			{
-				newbodystr += `${(showavatar?avatarImage(false):"")}
-				<div class='aui_myturn_block'`;
+				newbodystr += `${(showavatar?avatarImage(participant):"")}
+				<div class='aui_myturn_block ${turnParticipantClass}'`;
 			}
 			else
 			{
-				newbodystr += `${(showavatar?avatarImage(true):"")}
-				<div class='aui_aiturn_block'`;
+				newbodystr += `${(showavatar?avatarImage(participant):"")}
+				<div class='aui_aiturn_block ${turnParticipantClass}'`;
 			}
 			newbodystr += ` style='flex: 1; display:flex; padding: ${as.padding()}; margin: ${as.margin()}; min-height:${as.background_minHeight}px;`
 			+ ` font-size: ${as.font_size}px; flex-direction:column; align-items: ${as.centerHorizontally ? 'center' : 'flex-start'};`
