@@ -1698,7 +1698,14 @@ Current version indicated by LITEVER below.
 	.groupchatselect-table td:first-child {
 		max-width: 260px;
 		overflow-wrap: anywhere;
-		text-align: left;
+		text-align: center;
+	}
+	.groupchat-inline-action {
+		max-width: 260px;
+		margin: 0px auto;
+		cursor: pointer;
+		justify-content: center;
+		overflow-wrap: anywhere;
 	}
 	#groupchataestheticcontainer {
 		justify-content: center;
@@ -27860,6 +27867,131 @@ Current version indicated by LITEVER below.
 		}
 		return "#000000";
 	}
+	function sanitize_groupchat_participant_name(name)
+	{
+		name = name == null ? "" : String(name);
+		return replaceAll(name,"||$||"," ").replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+	}
+	function groupchat_bot_names()
+	{
+		return localsettings.chatopponent ? localsettings.chatopponent.split("||$||") : [];
+	}
+	function sync_groupchat_chatopponent_input()
+	{
+		let textarea = document.getElementById("chatopponent");
+		if(textarea)
+		{
+			textarea.value = replaceAll(localsettings.chatopponent,"||$||","\n");
+			handle_bot_name_input();
+		}
+	}
+	function sync_groupchat_chatname_input()
+	{
+		let textarea = document.getElementById("chatname");
+		if(textarea)
+		{
+			textarea.value = localsettings.chatname ? localsettings.chatname : "";
+		}
+	}
+	function snapshot_groupchat_selection()
+	{
+		sync_groupchat_participants();
+		sync_groupchat_table_selection();
+		return groupchat_participants.map(x=>x.selected);
+	}
+	function finish_groupchat_source_update(selected_rows)
+	{
+		sync_groupchat_chatopponent_input();
+		sync_groupchat_chatname_input();
+		sync_groupchat_participants();
+		for(let i=1;i<groupchat_participants.length;++i)
+		{
+			if(selected_rows[i] != null)
+			{
+				groupchat_participants[i].selected = selected_rows[i];
+			}
+		}
+		if(!document.getElementById("groupselectcontainer").classList.contains("hidden"))
+		{
+			show_groupchat_select();
+		}
+	}
+	function set_groupchat_bot_names(names)
+	{
+		localsettings.chatopponent = names.join("||$||");
+	}
+	function add_groupchat_bot_participant(name)
+	{
+		name = sanitize_groupchat_participant_name(name);
+		if(name=="")
+		{
+			return false;
+		}
+		let selected_rows = snapshot_groupchat_selection();
+		let names = groupchat_bot_names();
+		if(names.length==0)
+		{
+			names.push(name);
+		}
+		else
+		{
+			names.push(name);
+			localsettings.groupchat_data.push({});
+			selected_rows.push(true);
+		}
+		set_groupchat_bot_names(names);
+		finish_groupchat_source_update(selected_rows);
+		return true;
+	}
+	function delete_groupchat_bot_participant(index)
+	{
+		let names = groupchat_bot_names();
+		if(index<=0 || names.length<=1)
+		{
+			msgbox("You need to keep at least one AI participant.");
+			return false;
+		}
+		let selected_rows = snapshot_groupchat_selection();
+		names.splice(index-1, 1);
+		localsettings.groupchat_data.splice(index, 1);
+		selected_rows.splice(index, 1);
+		set_groupchat_bot_names(names);
+		finish_groupchat_source_update(selected_rows);
+		return true;
+	}
+	function rename_groupchat_participant(index, name)
+	{
+		name = sanitize_groupchat_participant_name(name);
+		if(index==0)
+		{
+			if(name=="")
+			{
+				msgbox("Your own participant row cannot be deleted.");
+				return false;
+			}
+			let selected_rows = snapshot_groupchat_selection();
+			localsettings.chatname = name;
+			finish_groupchat_source_update(selected_rows);
+			return true;
+		}
+		if(name=="")
+		{
+			return delete_groupchat_bot_participant(index);
+		}
+		let selected_rows = snapshot_groupchat_selection();
+		let names = groupchat_bot_names();
+		if(names.length==0)
+		{
+			names.push(name);
+		}
+		else
+		{
+			names[index-1] = name;
+		}
+		set_groupchat_bot_names(names);
+		finish_groupchat_source_update(selected_rows);
+		return true;
+	}
 	function show_groupchat_select()
 	{
 		document.getElementById("groupselectcontainer").classList.remove("hidden");
@@ -27880,24 +28012,23 @@ Current version indicated by LITEVER below.
 
 		gs += `<table class="groupchatselect-table">`
 			+`<thead><tr>`
-			+`<th style="text-align:left;">Participant</th>`
+			+`<th style="text-align:center;">Participant</th>`
 			+`<th width='96px' style="text-align:center;">Avatar</th>`
 			+`<th width='64px' style="text-align:center;">Context</th>`
 			+`<th width='128px' style="text-align:center;">Speak</th>`
 			+`<th width='42px' style="text-align:center;">Reply</th>`
 			+`</tr></thead><tbody>`;
 
-		gs += `<tr><td><span style="vertical-align: middle;">`+escape_html(groupchat_participants[0].name)+`</span></td>`
+		gs += `<tr><td>`+render_groupchat_participant_name_cell(groupchat_participants[0])+`</td>`
 			+`<td style="text-align:center;">`+render_groupchat_avatar_cell(groupchat_participants[0])+`</td>`
 			+`<td style="text-align:center;"><button title="Set participant context" type="button" class="btn btn-primary" style="height:24px;min-width:24px;padding:1px 6px;margin:2px;font-weight:bolder;" onclick="edit_groupchat_context(0)">+</button></td>`
-			+`<td style="text-align:center;"><button title="Make the AI write a response as me" type="button" class="btn btn-primary widelbtn" onclick="impersonate_user()">AI speaks as me</button></td>`
+			+`<td style="text-align:center;"><button title="Make the AI write a response as me" type="button" class="btn btn-primary widelbtn" onclick="impersonate_user()">Let AI impersonate</button></td>`
 			+`<td style="text-align:center;"><input title="Your own name is always available" type="checkbox" id="groupselectitem_0" style="vertical-align: top;" checked disabled></td></tr>`;
 
 		for (let i = 0; i < grouplist.length; ++i) {
 			let participant_index = i+1;
 			let participant = groupchat_participants[participant_index];
 			let show = participant ? participant.selected : true;
-			let participant_name = participant ? participant.name : defaultchatopponent;
 			let can_impersonate = (localsettings.opmode!=3 || has_chatopponents);
 			let impersonate_title = (localsettings.opmode==3 ? "Impersonate this participant" : "Impersonate the AI Assistant");
 			let impersonate_button = can_impersonate
@@ -27912,7 +28043,7 @@ Current version indicated by LITEVER below.
 			{
 				checkbox = `<input type="checkbox" style="vertical-align: top;" checked disabled>`;
 			}
-			gs += `<tr><td><span style="vertical-align: middle;">` + escape_html(participant_name) + `</span></td>`
+			gs += `<tr><td>`+render_groupchat_participant_name_cell(participant)+`</td>`
 				+`<td style="text-align:center;">`+render_groupchat_avatar_cell(participant)+`</td>`
 				+`<td style="text-align:center;"><button title="Set participant context" type="button" class="btn btn-primary" style="height:24px;min-width:24px;padding:1px 6px;margin:2px;font-weight:bolder;" onclick="edit_groupchat_context(`+participant_index+`)">+</button></td>`
 				+`<td style="text-align:center;">`+impersonate_button+`</td>`
@@ -27920,12 +28051,13 @@ Current version indicated by LITEVER below.
 		}
 		gs += `</tbody></table>`;
 
-		if(selectable_groupchat)
-		{
-			gs += `<br><a href='#' class='color_blueurl' onclick='hide_popups();display_settings();display_settings_tab(0);'>Add more AI characters in Chat Settings</a>`;
-		}
+		gs += `<br><div class="ui-settings-inline color_blueurl groupchat-inline-action" onclick="add_another_participant(true)">Add AI Participant</div>`;
 
 		document.getElementById("groupselectitems").innerHTML = gs;
+	}
+	function render_groupchat_participant_name_cell(participant)
+	{
+		return `<div title="Edit participant name" class="ui-settings-inline color_blueurl groupchat-inline-action" onclick="edit_groupchat_participant_name(`+participant.index+`)">`+escape_html(participant.name)+`</div>`;
 	}
 	function render_groupchat_avatar_cell(participant)
 	{
@@ -27951,6 +28083,22 @@ Current version indicated by LITEVER below.
 			}
 		}
 	}
+	function edit_groupchat_participant_name(index)
+	{
+		sync_groupchat_participants();
+		sync_groupchat_table_selection();
+		let participant = groupchat_participants[index];
+		if(!participant)
+		{
+			return;
+		}
+		let text = participant.is_bot
+			? "Edit this AI participant name.\n\nLeave this field blank and press OK to delete this participant. The final AI participant cannot be deleted."
+			: "Edit your participant name.\n\nYour own participant row cannot be deleted.";
+		inputBoxOkCancel(text,"Rename or Delete Participant",participant.name,"[Enter Participant Name]",()=>{
+			rename_groupchat_participant(index, getInputBoxValue());
+		},()=>{},false);
+	}
 	function edit_groupchat_context(index)
 	{
 		sync_groupchat_participants();
@@ -27960,7 +28108,7 @@ Current version indicated by LITEVER below.
 		{
 			return;
 		}
-		inputBox("Set context for "+participant.name+".\n\nUse {{"+participant.name+"_context}} in prompts, memory, author notes, or other placeholder-enabled text to insert this value.","Participant Context",participant.data.char_context?participant.data.char_context:"","Enter participant context",()=>{
+		inputBox("Set character context for "+participant.name+".\n\nWhen placeholder tags are enabled, you can use {{"+participant.name+"_context}} in prompts, memory, author notes, or other placeholder-enabled text to insert this value.","Participant Context",participant.data.char_context?participant.data.char_context:"","Enter participant context",()=>{
 			let userinput = getInputBoxValue();
 			localsettings.groupchat_data[index].char_context = userinput;
 			sync_groupchat_participants();
@@ -28109,22 +28257,26 @@ Current version indicated by LITEVER below.
 			},false);
 		}
 	}
-	function add_another_participant()
+	function add_another_participant(apply_immediately=false)
 	{
-		inputBox("Turn it into a group chat by adding more AI characters.\n\nInput name of additional character:","Add Another Participant","","[Enter Character Name]", ()=>{
+		inputBoxOkCancel("Add a new AI participant.\n\nInput name of additional character:","Add AI Participant","","[Enter Character Name]", ()=>{
 			let userinput = getInputBoxValue();
-			userinput = userinput.trim();
+			userinput = sanitize_groupchat_participant_name(userinput);
 			if(userinput!="")
 			{
-				if(document.getElementById("chatopponent").value=="")
+				if(apply_immediately)
 				{
-					document.getElementById("chatopponent").value = userinput;
-				}else{
-					document.getElementById("chatopponent").value += "||$||"+userinput;
+					add_groupchat_bot_participant(userinput);
+				}
+				else
+				{
+					let textarea = document.getElementById("chatopponent");
+					textarea.value = replaceAll(textarea.value,"||$||","\n").trim();
+					textarea.value = textarea.value ? textarea.value + "\n" + userinput : userinput;
 					handle_bot_name_onchange();
 				}
 			}
-		},false);
+		},()=>{},false);
 	}
 	function confirm_groupchat_select()
 	{
