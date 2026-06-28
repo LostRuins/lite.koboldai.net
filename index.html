@@ -4393,6 +4393,7 @@ Current version indicated by LITEVER below.
 		chat_context_mod: true, //extra injection for chat mode
 		chatname: "User", //name to use in chat
 		chatopponent: defaultchatopponent,
+		groupchat_data: [], //persistent metadata for groupchat selector rows
 		instruct_starttag: "{{[INPUT]}}",
 		instruct_endtag: "{{[OUTPUT]}}",
 		instruct_systag: "{{[SYSTEM]}}",
@@ -27724,13 +27725,26 @@ Current version indicated by LITEVER below.
 	function sync_groupchat_participants(chatopponent=localsettings.chatopponent)
 	{
 		let grouplist = chatopponent ? chatopponent.split("||$||") : [defaultchatopponent];
-		let reset_selected = (groupchat_participants_chatopponent!=chatopponent);
+		if(!Array.isArray(localsettings.groupchat_data))
+		{
+			localsettings.groupchat_data = [];
+		}
 		let synced_participants = [];
+		let synced_groupchat_data = [];
 		for(let i=0;i<grouplist.length+1;++i)
 		{
 			let prev = groupchat_participants[i];
-			synced_participants.push({"selected":(i==0 || reset_selected || !prev) ? true : prev.selected});
+			let rowdata = localsettings.groupchat_data[i];
+			rowdata = (rowdata && typeof rowdata=="object" && !Array.isArray(rowdata)) ? rowdata : {};
+			synced_groupchat_data.push(rowdata);
+			synced_participants.push({
+				"data": rowdata,
+				"name": (i==0 ? (localsettings.chatname ? localsettings.chatname : "User") : (grouplist[i-1] ? grouplist[i-1] : defaultchatopponent)),
+				"selected":(i==0 || groupchat_participants_chatopponent!=chatopponent || !prev || prev.selected==true),
+				"is_bot":(i!=0)
+			});
 		}
+		localsettings.groupchat_data = synced_groupchat_data;
 		groupchat_participants = synced_participants;
 		groupchat_participants_chatopponent = chatopponent;
 		return grouplist;
@@ -27741,7 +27755,6 @@ Current version indicated by LITEVER below.
 		let selectable_groupchat = (localsettings.opmode==3 || (localsettings.opmode==4 && localsettings.inject_chatnames_instruct));
 		let has_chatopponents = (localsettings.chatopponent!="");
 		let grouplist = sync_groupchat_participants();
-		let myname = localsettings.chatname ? localsettings.chatname : "User";
 		let gs = ``;
 
 		if(selectable_groupchat && grouplist.length>1)
@@ -27761,14 +27774,15 @@ Current version indicated by LITEVER below.
 			+`<th width='42px' style="text-align:center;">Reply</th>`
 			+`</tr></thead><tbody>`;
 
-		gs += `<tr><td><span style="vertical-align: middle;">`+escape_html(myname)+`</span></td>`
+		gs += `<tr><td><span style="vertical-align: middle;">`+escape_html(groupchat_participants[0].name)+`</span></td>`
 			+`<td style="text-align:center;"><button title="Make the AI write a response as me" type="button" class="btn btn-primary widelbtn" onclick="impersonate_user()">AI speaks as me</button></td>`
 			+`<td style="text-align:center;"><input title="Your own name is always available" type="checkbox" id="groupselectitem_0" style="vertical-align: top;" checked disabled></td></tr>`;
 
 		for (let i = 0; i < grouplist.length; ++i) {
 			let participant_index = i+1;
-			let show = groupchat_participants[participant_index] ? groupchat_participants[participant_index].selected : true;
-			let participant_name = grouplist[i] ? grouplist[i] : defaultchatopponent;
+			let participant = groupchat_participants[participant_index];
+			let show = participant ? participant.selected : true;
+			let participant_name = participant ? participant.name : defaultchatopponent;
 			let can_impersonate = (localsettings.opmode!=3 || has_chatopponents);
 			let impersonate_title = (localsettings.opmode==3 ? "Impersonate this participant" : "Impersonate the AI Assistant");
 			let impersonate_button = can_impersonate
