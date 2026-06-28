@@ -1676,6 +1676,46 @@ Current version indicated by LITEVER below.
 		left:unset;
 		right:0px;
 	}
+	.nspopup.groupchatselectpopup {
+		width: fit-content;
+		min-width: min(380px, calc(100vw - 32px));
+		max-width: calc(100vw - 32px);
+	}
+	#groupselectcontainer .menutext {
+		overflow-x: auto;
+		padding-left: 10px;
+		padding-right: 10px;
+	}
+	.groupchatselect-table {
+		width: max-content;
+		min-width: 100%;
+		margin: 8px auto;
+	}
+	.groupchatselect-table th,
+	.groupchatselect-table td {
+		padding: 2px 6px;
+	}
+	.groupchatselect-table td:first-child {
+		max-width: 260px;
+		overflow-wrap: anywhere;
+		text-align: left;
+	}
+	#groupchataestheticcontainer {
+		justify-content: center;
+	}
+	.nspopup.groupchataestheticpopup {
+		width: fit-content;
+		min-width: min(270px, calc(100vw - 32px));
+		max-width: calc(100vw - 32px);
+		margin-top: 0px;
+	}
+	#groupchataestheticcontainer .menutext {
+		text-align: left;
+		padding: 10px 14px 4px 14px;
+	}
+	#groupchataestheticcontainer .settinglabel {
+		min-width: min(250px, calc(100vw - 60px));
+	}
 	.popupbg {
 		position: fixed;
 		top: 0;
@@ -2577,7 +2617,17 @@ Current version indicated by LITEVER below.
 	.instruct-settings-input input { width:44px; height:20px; }
 	#code-block-background-colorselector, #code-block-foreground-colorselector { text-align: center; margin: 0px 5px; }
 	#you-text-colorselector, #you-speech-colorselector, #you-action-colorselector, #AI-text-colorselector, #AI-speech-colorselector, #AI-action-colorselector { text-align: center; margin: 0px 5px; }
-	#you-bubble-colorselector, #AI-bubble-colorselector, #you-portrait, #AI-portrait { text-align: center; margin: 0px 10px; border-radius: 1rem; padding: 1px 6px; }
+	#you-bubble-colorselector, #AI-bubble-colorselector, #you-portrait, #AI-portrait, #groupchat-portrait { text-align: center; margin: 0px 10px; border-radius: 1rem; padding: 1px 6px; }
+	#groupchat-portrait { cursor: pointer; }
+	#groupchat_aesthetic_avatar {
+		width: 64px;
+		height: 64px;
+		margin: 0px auto 8px auto;
+		background-size: cover;
+		background-position: center;
+		border: 1px solid var(--theme_color_border);
+		border-radius: 6px;
+	}
 	@media screen and (max-width: 780px) {
 		#aesthetic_text_preview_panel { display: none; }
 	}
@@ -12954,6 +13004,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("charactercreator").classList.add("hidden");
 		document.getElementById("zoomedimgcontainer").classList.add("hidden");
 		document.getElementById("groupselectcontainer").classList.add("hidden");
+		document.getElementById("groupchataestheticcontainer").classList.add("hidden");
 		document.getElementById("addmediacontainer").classList.add("hidden");
 		document.getElementById("pasteimgcontainer").classList.add("hidden");
 		document.getElementById("webcamcontainer").classList.add("hidden");
@@ -25854,7 +25905,10 @@ Current version indicated by LITEVER below.
 		processed_msg = apply_display_only_regex(processed_msg);
 		if(processed_msg && processed_msg!="")
 		{
-			processed_msg = replace_noninstruct_placeholders(processed_msg,true,true,countmap);
+			if(localsettings.placeholder_tags)
+			{
+				processed_msg = replace_noninstruct_placeholders(processed_msg,true,true,countmap);
+			}
 			let codeblockcount = (processed_msg.match(/```/g) || []).length;
 			if(codeblockcount>0 && codeblockcount%2!=0)
 			{
@@ -27772,6 +27826,40 @@ Current version indicated by LITEVER below.
 		let matched = groupchat_participants.find(x=>(x.is_bot && x.name==name));
 		return matched ? matched : groupchat_participants.find(x=>(x.is_bot));
 	}
+	function groupchat_participant_style_value(participant, field, fallback)
+	{
+		let data = participant && participant.data ? participant.data : {};
+		return (data[field] != null && data[field] !== "") ? data[field] : fallback;
+	}
+	function groupchat_participant_effective_portrait(participant)
+	{
+		let fallback = participant.is_bot ? aestheticInstructUISettings.AI_portrait : aestheticInstructUISettings.you_portrait;
+		let portrait = groupchat_participant_style_value(participant, "portrait", fallback);
+		portrait = (participant.is_bot && portrait=="default") ? niko_square : portrait;
+		portrait = (!participant.is_bot && portrait=="default") ? null : portrait;
+		return portrait;
+	}
+	function groupchat_participant_effective_color(participant, field)
+	{
+		let fallback = aestheticInstructUISettings[(participant.is_bot ? field+"_AI" : field+"_you")];
+		return groupchat_participant_style_value(participant, field, fallback);
+	}
+	function groupchat_color_input_value(color)
+	{
+		if(!color)
+		{
+			return "#000000";
+		}
+		if(color.startsWith("#"))
+		{
+			return color;
+		}
+		if(color.startsWith("rgb"))
+		{
+			return rgb_to_hex(color);
+		}
+		return "#000000";
+	}
 	function show_groupchat_select()
 	{
 		document.getElementById("groupselectcontainer").classList.remove("hidden");
@@ -27790,14 +27878,18 @@ Current version indicated by LITEVER below.
 			gs = `You're in Instruct Mode.<br><br>`;
 		}
 
-		gs += `<table style="width:90%; margin:8px auto;">`
+		gs += `<table class="groupchatselect-table">`
 			+`<thead><tr>`
 			+`<th style="text-align:left;">Participant</th>`
+			+`<th width='96px' style="text-align:center;">Avatar</th>`
+			+`<th width='64px' style="text-align:center;">Context</th>`
 			+`<th width='128px' style="text-align:center;">Speak</th>`
 			+`<th width='42px' style="text-align:center;">Reply</th>`
 			+`</tr></thead><tbody>`;
 
 		gs += `<tr><td><span style="vertical-align: middle;">`+escape_html(groupchat_participants[0].name)+`</span></td>`
+			+`<td style="text-align:center;">`+render_groupchat_avatar_cell(groupchat_participants[0])+`</td>`
+			+`<td style="text-align:center;"><button title="Set participant context" type="button" class="btn btn-primary" style="height:24px;min-width:24px;padding:1px 6px;margin:2px;font-weight:bolder;" onclick="edit_groupchat_context(0)">+</button></td>`
 			+`<td style="text-align:center;"><button title="Make the AI write a response as me" type="button" class="btn btn-primary widelbtn" onclick="impersonate_user()">AI speaks as me</button></td>`
 			+`<td style="text-align:center;"><input title="Your own name is always available" type="checkbox" id="groupselectitem_0" style="vertical-align: top;" checked disabled></td></tr>`;
 
@@ -27821,6 +27913,8 @@ Current version indicated by LITEVER below.
 				checkbox = `<input type="checkbox" style="vertical-align: top;" checked disabled>`;
 			}
 			gs += `<tr><td><span style="vertical-align: middle;">` + escape_html(participant_name) + `</span></td>`
+				+`<td style="text-align:center;">`+render_groupchat_avatar_cell(participant)+`</td>`
+				+`<td style="text-align:center;"><button title="Set participant context" type="button" class="btn btn-primary" style="height:24px;min-width:24px;padding:1px 6px;margin:2px;font-weight:bolder;" onclick="edit_groupchat_context(`+participant_index+`)">+</button></td>`
 				+`<td style="text-align:center;">`+impersonate_button+`</td>`
 				+`<td style="text-align:center;">`+checkbox+`</td></tr>`;
 		}
@@ -27832,6 +27926,130 @@ Current version indicated by LITEVER below.
 		}
 
 		document.getElementById("groupselectitems").innerHTML = gs;
+	}
+	function render_groupchat_avatar_cell(participant)
+	{
+		let data = participant && participant.data ? participant.data : {};
+		if(data.portrait)
+		{
+			let portrait = data.portrait=="default" ? groupchat_participant_effective_portrait(participant) : data.portrait;
+			if(portrait)
+			{
+				return `<button title="Set participant aesthetics" type="button" class="btn btn-primary" style="padding:1px;" onclick="open_groupchat_aesthetics(`+participant.index+`)"><span style="display:block;width:36px;height:36px;background-image:url(`+escape_html(portrait)+`);background-size:cover;background-position:center;border-radius:4px;"></span></button>`;
+			}
+		}
+		return `<button title="Set participant aesthetics" type="button" class="btn btn-primary widelbtn" onclick="open_groupchat_aesthetics(`+participant.index+`)">Set Aesthetics</button>`;
+	}
+	function sync_groupchat_table_selection()
+	{
+		for(let i=1;i<groupchat_participants.length;++i)
+		{
+			let sel = document.getElementById("groupselectitem_"+i);
+			if(sel && groupchat_participants[i])
+			{
+				groupchat_participants[i].selected = sel.checked;
+			}
+		}
+	}
+	function edit_groupchat_context(index)
+	{
+		sync_groupchat_participants();
+		sync_groupchat_table_selection();
+		let participant = groupchat_participants[index];
+		if(!participant)
+		{
+			return;
+		}
+		inputBox("Set context for "+participant.name+".\n\nUse {{"+participant.name+"_context}} in prompts, memory, author notes, or other placeholder-enabled text to insert this value.","Participant Context",participant.data.char_context?participant.data.char_context:"","Enter participant context",()=>{
+			let userinput = getInputBoxValue();
+			localsettings.groupchat_data[index].char_context = userinput;
+			sync_groupchat_participants();
+			show_groupchat_select();
+		},false,true);
+	}
+	var current_groupchat_aesthetic_index = 0;
+	var temp_groupchat_aesthetic_data = null;
+	function populate_groupchat_aesthetics_form(participant)
+	{
+		document.getElementById("groupchataesthetictitle").innerText = "Participant Aesthetics - " + participant.name;
+		let portrait = groupchat_participant_effective_portrait(participant);
+		document.getElementById("groupchat_aesthetic_avatar").style.backgroundImage = portrait ? `url(` + portrait + `)` : "none";
+		document.getElementById("groupchat_portrait_width").value = groupchat_participant_style_value(participant, "portrait_width", participant.is_bot ? aestheticInstructUISettings.portrait_width_AI : aestheticInstructUISettings.portrait_width_you);
+		document.getElementById("groupchat_portrait_ratio").value = groupchat_participant_style_value(participant, "portrait_ratio", participant.is_bot ? aestheticInstructUISettings.portrait_ratio_AI : aestheticInstructUISettings.portrait_ratio_you);
+		document.getElementById("groupchat_bubbleColor").value = groupchat_color_input_value(groupchat_participant_effective_color(participant, "bubbleColor"));
+		document.getElementById("groupchat_text_tcolor").value = groupchat_color_input_value(groupchat_participant_effective_color(participant, "text_tcolor"));
+		document.getElementById("groupchat_speech_tcolor").value = groupchat_color_input_value(groupchat_participant_effective_color(participant, "speech_tcolor"));
+		document.getElementById("groupchat_action_tcolor").value = groupchat_color_input_value(groupchat_participant_effective_color(participant, "action_tcolor"));
+	}
+	function open_groupchat_aesthetics(index)
+	{
+		sync_groupchat_participants();
+		sync_groupchat_table_selection();
+		let participant = groupchat_participants[index];
+		if(!participant)
+		{
+			return;
+		}
+		current_groupchat_aesthetic_index = index;
+		temp_groupchat_aesthetic_data = JSON.parse(JSON.stringify(localsettings.groupchat_data[index]));
+		document.getElementById("groupchataestheticcontainer").classList.remove("hidden");
+		populate_groupchat_aesthetics_form(participant);
+	}
+	function select_groupchat_avatar()
+	{
+		let finput = document.getElementById('portraitFileInput');
+		finput.click();
+		finput.onchange = (event) => {
+			if (event.target.files.length > 0 && event.target.files[0]) {
+				const file = event.target.files[0];
+				const reader = new FileReader();
+				reader.onload = function(img) {
+					compressImage(img.target.result, (compressedImageURI, aspectratio) => {
+						let rowdata = localsettings.groupchat_data[current_groupchat_aesthetic_index];
+						rowdata.portrait = compressedImageURI;
+						rowdata.portrait_ratio = aspectratio.toFixed(2);
+						document.getElementById("groupchat_aesthetic_avatar").style.backgroundImage = `url(` + compressedImageURI + `)`;
+						document.getElementById("groupchat_portrait_ratio").value = aspectratio.toFixed(2);
+					}, true, AVATAR_PX);
+				}
+				reader.readAsDataURL(file);
+			}
+			finput.value = "";
+		};
+	}
+	function reset_groupchat_avatar()
+	{
+		let rowdata = localsettings.groupchat_data[current_groupchat_aesthetic_index];
+		delete rowdata.portrait;
+		delete rowdata.portrait_ratio;
+		sync_groupchat_participants();
+		populate_groupchat_aesthetics_form(groupchat_participants[current_groupchat_aesthetic_index]);
+	}
+	function confirm_groupchat_aesthetics()
+	{
+		let rowdata = localsettings.groupchat_data[current_groupchat_aesthetic_index];
+		rowdata.portrait_width = document.getElementById("groupchat_portrait_width").value;
+		rowdata.portrait_ratio = document.getElementById("groupchat_portrait_ratio").value;
+		rowdata.bubbleColor = document.getElementById("groupchat_bubbleColor").value;
+		rowdata.text_tcolor = document.getElementById("groupchat_text_tcolor").value;
+		rowdata.speech_tcolor = document.getElementById("groupchat_speech_tcolor").value;
+		rowdata.action_tcolor = document.getElementById("groupchat_action_tcolor").value;
+		temp_groupchat_aesthetic_data = null;
+		document.getElementById("groupchataestheticcontainer").classList.add("hidden");
+		sync_groupchat_participants();
+		show_groupchat_select();
+		render_gametext();
+	}
+	function cancel_groupchat_aesthetics()
+	{
+		if(temp_groupchat_aesthetic_data)
+		{
+			localsettings.groupchat_data[current_groupchat_aesthetic_index] = temp_groupchat_aesthetic_data;
+		}
+		temp_groupchat_aesthetic_data = null;
+		document.getElementById("groupchataestheticcontainer").classList.add("hidden");
+		sync_groupchat_participants();
+		show_groupchat_select();
 	}
 	var is_impersonate_user = false;
 	function impersonate_user()
@@ -27913,16 +28131,7 @@ Current version indicated by LITEVER below.
 		sync_groupchat_participants();
 		if(localsettings.chatopponent!="")
 		{
-			let grouplist = localsettings.chatopponent.split("||$||");
-			for(let i=0;i<grouplist.length;++i)
-			{
-				let participant_index = i+1;
-				let sel = document.getElementById("groupselectitem_"+participant_index);
-				if(sel && groupchat_participants[participant_index])
-				{
-					groupchat_participants[participant_index].selected = sel.checked;
-				}
-			}
+			sync_groupchat_table_selection();
 			hide_popups();
 			let selected_participants = groupchat_participants.slice(1).filter(x=>(x.selected));
 			if(selected_participants.length==0)
@@ -32372,7 +32581,7 @@ Current version indicated by LITEVER below.
 
 	<div class="popupcontainer flex hidden" id="groupselectcontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup flexsizevsmall">
+		<div class="nspopup groupchatselectpopup">
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Chat Selectors</div>
 			</div>
@@ -32383,6 +32592,51 @@ Current version indicated by LITEVER below.
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="confirm_groupchat_select()">Ok</button>
 				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="groupchataestheticcontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup groupchataestheticpopup">
+			<div class="popuptitlebar">
+				<div class="popuptitletext" id="groupchataesthetictitle">Participant Aesthetics</div>
+			</div>
+			<div class="menutext">
+				<div id="groupchat_aesthetic_avatar"></div>
+				<div class="ui-settings-inline" style="justify-content:center; margin-bottom:8px;">
+					<div style="margin-right: 20px">Portrait: </div>
+					<div id="groupchat-portrait" onclick="select_groupchat_avatar()">🖼️ Set Portrait</div>
+					<div style="margin-left: 10px;"><a href="#" class="color_blueurl" onclick="reset_groupchat_avatar(); return false;">(Reset Image)</a></div>
+				</div>
+				<div class="settinglabel">
+					<div class="justifyleft">Portrait Size</div>
+					<input class="push-right" title="Portrait Size" type="number" min="10" max="250" id="groupchat_portrait_width" style="width:70px">
+				</div>
+				<div class="settinglabel">
+					<div class="justifyleft">Portrait Ratio</div>
+					<input class="push-right" title="Portrait Ratio" type="number" min="0.01" max="3" step="0.01" id="groupchat_portrait_ratio" style="width:70px">
+				</div>
+				<div class="settinglabel">
+					<div class="justifyleft">Bubble Color</div>
+					<input class="push-right" title="Bubble Color" type="color" id="groupchat_bubbleColor">
+				</div>
+				<div class="settinglabel">
+					<div class="justifyleft">Text Color</div>
+					<input class="push-right" title="Text Color" type="color" id="groupchat_text_tcolor">
+				</div>
+				<div class="settinglabel">
+					<div class="justifyleft">Speech Color</div>
+					<input class="push-right" title="Speech Color" type="color" id="groupchat_speech_tcolor">
+				</div>
+				<div class="settinglabel">
+					<div class="justifyleft">Action Color</div>
+					<input class="push-right" title="Action Color" type="color" id="groupchat_action_tcolor">
+				</div>
+			</div>
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="confirm_groupchat_aesthetics()">OK</button>
+				<button type="button" class="btn btn-primary" onclick="cancel_groupchat_aesthetics()">Cancel</button>
 			</div>
 		</div>
 	</div>
