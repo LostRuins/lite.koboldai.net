@@ -28862,6 +28862,10 @@ Current version indicated by LITEVER below.
 		{
 			return `aui_participant_${participant ? participant.index : 0}${classSuffixStr}`;
 		}
+		const participantPortraitVariableName = function(participant)
+		{
+			return `--aui-participant-${participant ? participant.index : 0}${isPreview ? "-preview" : ""}-portrait`;
+		}
 		const avatarImage = function(participant) {
 			let pstyle = participantStyle(participant);
 			if(!pstyle.portrait || as.border_style == 'None')
@@ -28872,7 +28876,7 @@ Current version indicated by LITEVER below.
 			let radius = (as.border_style == 'Circle' ? '1000rem' : (as.border_style == 'Rounded' ? '1.6rem' : '0.1rem'));
 			let width = pstyle.portrait_width;
 			let height = (as.border_style == 'Circle' ? width : width / pstyle.portrait_ratio);
-			return `<div class='aui-portrait-image${classSuffixStr}${reinvertcolor}' style='margin: 6px 6px; background:url(${escape_html(pstyle.portrait)}); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none; width:${width}px; height:${height}px; border-radius: ${radius}'></div>`;
+			return `<div class='aui-portrait-image${classSuffixStr}${reinvertcolor}' style='margin: 6px 6px; background:var(${participantPortraitVariableName(participant)}, none); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none; width:${width}px; height:${height}px; border-radius: ${radius}'></div>`;
 		}
 
 		if(localsettings.separate_end_tags) {
@@ -28900,9 +28904,11 @@ Current version indicated by LITEVER below.
 		let as = aestheticInstructUISettings;
 		let classSuffixStr = isPreview ? "prv" : "";
 		sync_groupchat_participants();
+		let participantPortraitVars = "";
 		let participantStyling = groupchat_participants.map((participant)=>{
 			let pstyle = participantStyle(participant);
 			let participantClass = participantClassName(participant);
+			participantPortraitVars += `${participantPortraitVariableName(participant)}:${pstyle.portrait ? `url(${escape_html(pstyle.portrait)})` : "none"};`;
 			return `.${participantClass}{
 					color: ${pstyle.text_tcolor};
 					background-color:${pstyle.bubbleColor};
@@ -29095,7 +29101,7 @@ Current version indicated by LITEVER below.
 			+ `<div>${namepart}${curr.msg}</div></div></div>`;
 		}
 
-		return portraitsStyling + newbodystr.replaceAll(/(\r\n|\r|\n)/g,'<br>'); // Finally, convert newlines to HTML format and return the stylized string.
+		return portraitsStyling + `<div style='${participantPortraitVars}'>` + newbodystr.replaceAll(/(\r\n|\r|\n)/g,'<br>') + `</div>`; // Finally, convert newlines to HTML format and return the stylized string.
 	}
 	// end of aesthetic ui
 
