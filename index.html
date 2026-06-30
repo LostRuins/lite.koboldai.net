@@ -6099,18 +6099,124 @@ Current version indicated by LITEVER below.
 		}
 		return inputtxt;
 	}
-	function replace_noninstruct_placeholders(inputtxt,escape=false,isgametext=true,persistent_countmap=null)
+	function replace_context_placeholders(inputtxt,escape=false,active_speaker=null)
+	{
+		if(active_speaker==null)
+		{
+			return inputtxt;
+		}
+		let participant = active_speaker;
+		if(typeof active_speaker=="string")
+		{
+			sync_groupchat_participants();
+			participant = groupchat_participants.find(x=>(x.name==active_speaker));
+		}
+		if(!participant || !participant.data)
+		{
+			return inputtxt;
+		}
+		let contexttxt = participant.data.char_context ? participant.data.char_context : "";
+		contexttxt = escape ? escape_html(contexttxt) : contexttxt;
+		return replaceAll(inputtxt,"{{context}}",contexttxt,true);
+	}
+	function get_groupchat_line_speaker(line, fallback=null)
 	{
 		sync_groupchat_participants();
-		for(let i=0;i<groupchat_participants.length;++i)
+		let trimmed = line.trimStart();
+		if(localsettings.inject_timestamps)
 		{
-			let curr = groupchat_participants[i];
-			if(curr.name && curr.data && curr.data.char_context)
+			trimmed = trimmed.replace(/^\[\d{1,2}\/\d{1,2}\/\d{4}, \d{1,2}:\d{2} [AP]M\]\s*/g, "");
+		}
+		let sorted = groupchat_participants.slice().sort((a,b)=>((b.name?b.name.length:0)-(a.name?a.name.length:0)));
+		for(let i=0;i<sorted.length;++i)
+		{
+			let participant = sorted[i];
+			if(participant.name && trimmed.startsWith(participant.name+":"))
 			{
-				let contexttxt = escape ? escape_html(curr.data.char_context) : curr.data.char_context;
-				inputtxt = replaceAll(inputtxt,"{{"+curr.name+"_context}}",contexttxt,true);
+				return participant;
 			}
 		}
+		return fallback;
+	}
+	function replace_context_placeholders_in_speaker_text(inputtxt, escape=false, active_speaker=null)
+	{
+		let lines = inputtxt.split("\n");
+		for(let i=0;i<lines.length;++i)
+		{
+			active_speaker = get_groupchat_line_speaker(lines[i], active_speaker);
+			lines[i] = replace_context_placeholders(lines[i], escape, active_speaker);
+		}
+		return {"text":lines.join("\n"), "active_speaker":active_speaker};
+	}
+	function get_context_placeholder_tags()
+	{
+		let tags = [
+			{"tag":instructstartplaceholder, "speaker":"user"},
+			{"tag":get_instruct_starttag(false), "speaker":"user"},
+			{"tag":instructendplaceholder, "speaker":"assistant"},
+			{"tag":get_instruct_endtag(false), "speaker":"assistant"},
+			{"tag":instructsysplaceholder, "speaker":"system"},
+			{"tag":get_instruct_systag(false), "speaker":"system"}
+		];
+		let seen = new Set();
+		return tags.filter(x=>{
+			if(!x.tag || seen.has(x.tag))
+			{
+				return false;
+			}
+			seen.add(x.tag);
+			return true;
+		});
+	}
+	function find_next_context_placeholder_tag(inputtxt, start_index, tags)
+	{
+		let next = null;
+		for(let i=0;i<tags.length;++i)
+		{
+			let idx = inputtxt.indexOf(tags[i].tag, start_index);
+			if(idx>=0 && (next==null || idx<next.index))
+			{
+				next = {"index":idx, "tag":tags[i].tag, "speaker":tags[i].speaker};
+			}
+		}
+		return next;
+	}
+	function replace_context_placeholders_in_history(inputtxt, escape=false)
+	{
+		if(!inputtxt || !inputtxt.includes("{{context}}"))
+		{
+			return inputtxt;
+		}
+		sync_groupchat_participants();
+		if(localsettings.opmode==3)
+		{
+			return replace_context_placeholders_in_speaker_text(inputtxt, escape, null).text;
+		}
+		if(localsettings.opmode!=4)
+		{
+			return inputtxt;
+		}
+		let user_speaker = groupchat_participants[0];
+		let ai_speaker = groupchat_participants.find(x=>x.is_bot);
+		let active_speaker = ai_speaker;
+		let tags = get_context_placeholder_tags();
+		let output = "";
+		let cursor = 0;
+		let next = find_next_context_placeholder_tag(inputtxt, cursor, tags);
+		while(next)
+		{
+			let replaced = replace_context_placeholders_in_speaker_text(inputtxt.slice(cursor, next.index), escape, active_speaker);
+			output += replaced.text + next.tag;
+			active_speaker = next.speaker=="user" ? user_speaker : (next.speaker=="assistant" ? ai_speaker : null);
+			cursor = next.index + next.tag.length;
+			next = find_next_context_placeholder_tag(inputtxt, cursor, tags);
+		}
+		output += replace_context_placeholders_in_speaker_text(inputtxt.slice(cursor), escape, active_speaker).text;
+		return output;
+	}
+	function replace_noninstruct_placeholders(inputtxt,escape=false,isgametext=true,persistent_countmap=null,active_speaker=null)
+	{
+		inputtxt = replace_context_placeholders(inputtxt,escape,active_speaker);
 		inputtxt = replace_chat_name_placeholders(inputtxt,escape);
 		inputtxt = replaceAll(inputtxt,"{{original}}","",true); //redundant in Lite; use sysprompt or assistant jailbreak instead
 
@@ -6201,12 +6307,12 @@ Current version indicated by LITEVER below.
 	}
 	//if alwaysreplace, then settings are not considered, otherwise checks settings
 	//if isgametext is true, then keeping the random values stable will be prioritized
-	function replace_placeholders(inputtxt, escape=false, alwaysreplace=false, isgametext=true)
+	function replace_placeholders(inputtxt, escape=false, alwaysreplace=false, isgametext=true, active_speaker=null)
 	{
 		inputtxt = replace_instruct_placeholders(inputtxt);
 		if(alwaysreplace || localsettings.placeholder_tags)
 		{
-			inputtxt = replace_noninstruct_placeholders(inputtxt,escape,isgametext,null);
+			inputtxt = replace_noninstruct_placeholders(inputtxt,escape,isgametext,null,active_speaker);
 		}
 		return inputtxt;
 	}
@@ -20145,6 +20251,10 @@ Current version indicated by LITEVER below.
 
 			let truncated_context = concat_gametext(true, "","","",false,true); //no need to truncate if memory is empty
 			truncated_context = truncated_context.replace(/\xA0/g,' '); //replace non breaking space nbsp
+			if(localsettings.placeholder_tags)
+			{
+				truncated_context = replace_context_placeholders_in_history(truncated_context,false);
+			}
 
 			//remove past thoughts
 			if(get_thinking_regex()!="") //removal of cot
@@ -25919,7 +26029,9 @@ Current version indicated by LITEVER below.
 		{
 			if(localsettings.placeholder_tags)
 			{
-				processed_msg = replace_noninstruct_placeholders(processed_msg,true,true,countmap);
+				let active_speaker = (currchatunit.name || currchatunit.myturn) ? get_groupchat_participant_for_name(currchatunit.name, !currchatunit.myturn) : null;
+				active_speaker = get_groupchat_line_speaker(processed_msg, active_speaker);
+				processed_msg = replace_noninstruct_placeholders(processed_msg,true,true,countmap,active_speaker);
 			}
 			let codeblockcount = (processed_msg.match(/```/g) || []).length;
 			if(codeblockcount>0 && codeblockcount%2!=0)
@@ -28119,7 +28231,7 @@ Current version indicated by LITEVER below.
 		{
 			return;
 		}
-		inputBox("Set character context for "+participant.name+".\n\nWhen placeholder tags are enabled, you can use {{"+participant.name+"_context}} in prompts, memory, author notes, or other placeholder-enabled text to insert this value.","Participant Context",participant.data.char_context?participant.data.char_context:"","Enter participant context",()=>{
+		inputBox("Set character context for "+participant.name+".\n\nWhen placeholder tags are enabled, you can use {{context}} in prompts, memory, author notes, or other placeholder-enabled text to insert this value for the active speaker.","Participant Context",participant.data.char_context?participant.data.char_context:"","Enter participant context",()=>{
 			let userinput = getInputBoxValue();
 			localsettings.groupchat_data[index].char_context = userinput;
 			sync_groupchat_participants();
@@ -28136,7 +28248,7 @@ Current version indicated by LITEVER below.
 			+`<div id="groupchat-add-portrait" onclick="select_groupchat_add_avatar()">🖼️ Set Portrait</div>`
 			+`<div style="margin-left: 10px;"><a href="#" class="color_blueurl" onclick="reset_groupchat_add_avatar(); return false;">(Reset Image)</a></div>`
 			+`</div>`
-			+`<div style="text-align:left; margin-top:8px;">Character context</div>`
+			+`<div style="text-align:left; margin-top:8px;">Character context (available as {{context}})</div>`
 			+`<textarea id="groupchat_add_context" placeholder="Optional participant context" style="width:100%; min-height:90px; resize:vertical; color: var(--theme_color_input_fg); background-color: var(--theme_color_input_bg); border:1px solid var(--theme_color_border); border-radius:5px; padding:4px;"></textarea>`;
 	}
 	function select_groupchat_add_avatar()
