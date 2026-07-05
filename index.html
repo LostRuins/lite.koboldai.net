@@ -1676,6 +1676,50 @@ Current version indicated by LITEVER below.
 		left:unset;
 		right:0px;
 	}
+
+	#groupselectcontainer .menutext {
+		overflow-x: auto;
+		padding-left: 10px;
+		padding-right: 10px;
+	}
+	.groupchatselect-table {
+		width: max-content;
+		min-width: 100%;
+		margin: 8px auto;
+	}
+	.groupchatselect-table th,
+	.groupchatselect-table td {
+		padding: 2px 6px;
+	}
+	.groupchatselect-table td:first-child {
+		max-width: 260px;
+		overflow-wrap: anywhere;
+		text-align: center;
+	}
+	.groupchat-inline-action {
+		max-width: 260px;
+		margin: 0px auto;
+		cursor: pointer;
+		justify-content: center;
+		overflow-wrap: anywhere;
+	}
+	#groupchataestheticcontainer {
+		justify-content: center;
+	}
+	.nspopup.groupchataestheticpopup {
+		width: fit-content;
+		min-width: min(270px, calc(100vw - 32px));
+		max-width: calc(100vw - 32px);
+		margin-top: 0px;
+	}
+	#groupchataestheticcontainer .menutext {
+		text-align: left;
+		padding: 10px 14px 4px 14px;
+	}
+	#groupchataestheticcontainer .settinglabel {
+		min-width: min(250px, calc(100vw - 60px));
+	}
+
 	.popupbg {
 		position: fixed;
 		top: 0;
@@ -2577,7 +2621,17 @@ Current version indicated by LITEVER below.
 	.instruct-settings-input input { width:44px; height:20px; }
 	#code-block-background-colorselector, #code-block-foreground-colorselector { text-align: center; margin: 0px 5px; }
 	#you-text-colorselector, #you-speech-colorselector, #you-action-colorselector, #AI-text-colorselector, #AI-speech-colorselector, #AI-action-colorselector { text-align: center; margin: 0px 5px; }
-	#you-bubble-colorselector, #AI-bubble-colorselector, #you-portrait, #AI-portrait { text-align: center; margin: 0px 10px; border-radius: 1rem; padding: 1px 6px; }
+	#you-bubble-colorselector, #AI-bubble-colorselector, #you-portrait, #AI-portrait, #groupchat-portrait { text-align: center; margin: 0px 10px; border-radius: 1rem; padding: 1px 6px; }
+	#groupchat-portrait { cursor: pointer; }
+	#groupchat_aesthetic_avatar {
+		width: 64px;
+		height: 64px;
+		margin: 0px auto 8px auto;
+		background-size: cover;
+		background-position: center;
+		border: 1px solid var(--theme_color_border);
+		border-radius: 6px;
+	}
 	@media screen and (max-width: 780px) {
 		#aesthetic_text_preview_panel { display: none; }
 	}
@@ -4393,6 +4447,7 @@ Current version indicated by LITEVER below.
 		chat_context_mod: true, //extra injection for chat mode
 		chatname: "User", //name to use in chat
 		chatopponent: defaultchatopponent,
+		groupchat_data: {}, //persistent metadata for groupchat characters. key is a hash of the bot character name
 		instruct_starttag: "{{[INPUT]}}",
 		instruct_endtag: "{{[OUTPUT]}}",
 		instruct_systag: "{{[SYSTEM]}}",
@@ -12901,6 +12956,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("charactercreator").classList.contains("hidden") &&
 			document.getElementById("zoomedimgcontainer").classList.contains("hidden") &&
 			document.getElementById("groupselectcontainer").classList.contains("hidden") &&
+			document.getElementById("groupchataestheticcontainer").classList.contains("hidden") &&
 			document.getElementById("addmediacontainer").classList.contains("hidden") &&
 			document.getElementById("pasteimgcontainer").classList.contains("hidden") &&
 			document.getElementById("webcamcontainer").classList.contains("hidden") &&
@@ -12944,6 +13000,8 @@ Current version indicated by LITEVER below.
 		document.getElementById("charactercreator").classList.add("hidden");
 		document.getElementById("zoomedimgcontainer").classList.add("hidden");
 		document.getElementById("groupselectcontainer").classList.add("hidden");
+		document.getElementById("groupchataestheticcontainer").classList.add("hidden");
+		groupchat_select_snapshot = null;
 		document.getElementById("addmediacontainer").classList.add("hidden");
 		document.getElementById("pasteimgcontainer").classList.add("hidden");
 		document.getElementById("webcamcontainer").classList.add("hidden");
@@ -17220,7 +17278,15 @@ Current version indicated by LITEVER below.
 		numberOfLineBreaks = numberOfLineBreaks>8?8:numberOfLineBreaks;
 		textarea.rows = numberOfLineBreaks+1;
 	}
-
+	function groupchat_reply_order(coarr)
+	{
+		//refactored out to a global function so that usermods can change the reply order strategy
+		if(!coarr || coarr.length==0)
+		{
+			return "";
+		}
+		return coarr[Math.floor(Math.random()*coarr.length)];
+	}
 	function toggle_generate_images_mode(silent=false)
 	{
 		document.getElementById("generate_images_model_container").classList.add("hidden");
@@ -20152,9 +20218,10 @@ Current version indicated by LITEVER below.
 				{
 					let coarr = co.split("||$||");
 					coarr = coarr.filter(x=>(x&&x!=""));
+					coarr = coarr.map(x=>sanitize_groupchat_participant_name(x));
+					coarr = coarr.filter(x=>(x&&x!=""));
 					coarr = coarr.filter(x=>(!groupchat_removals.includes(x)));
-					coarr = coarr.map(x=>x.trim());
-					co = coarr[Math.floor(Math.random()*coarr.length)];
+					co = groupchat_reply_order(coarr);
 
 					//we check if a name was recently mentioned in the previous response.
 					//if so, switch to that user
@@ -20282,13 +20349,17 @@ Current version indicated by LITEVER below.
 							}
 							let coarr = localsettings.chatopponent.split("||$||");
 							coarr = coarr.filter(x=>(x&&x!=""));
+							coarr = coarr.map(x=>sanitize_groupchat_participant_name(x));
+							coarr = coarr.filter(x=>(x&&x!=""));
 							coarr = coarr.filter(x=>(!groupchat_removals.includes(x)));
-							coarr = coarr.map(x=>x.trim());
-							let co = coarr[Math.floor(Math.random()*coarr.length)];
-							pending_context_preinjection += co + ":";
-							if(localsettings.inject_jailbreak_instruct || (localsettings.think_injected!=0 && localsettings.start_thinking_tag!=""))
+							let co = groupchat_reply_order(coarr);
+							if(co!="")
 							{
-								pending_context_preinjection += " ";
+								pending_context_preinjection += co + ":";
+								if(localsettings.inject_jailbreak_instruct || (localsettings.think_injected!=0 && localsettings.start_thinking_tag!=""))
+								{
+									pending_context_preinjection += " ";
+								}
 							}
 						}
 						if(localsettings.think_injected==1 && localsettings.start_thinking_tag!="")
@@ -20336,7 +20407,13 @@ Current version indicated by LITEVER below.
 				}
 				appendedsysprompt += "\n";
 			}
-			let truncated_memory = truncate_memory(current_memory, max_mem_len, true);
+			let memory_with_groupchat_context = current_memory;
+			let groupchat_context_memory = get_groupchat_context_memory();
+			if(groupchat_context_memory!="")
+			{
+				memory_with_groupchat_context += (memory_with_groupchat_context.trim()!="" ? "\n" : "") + groupchat_context_memory;
+			}
+			let truncated_memory = truncate_memory(memory_with_groupchat_context, max_mem_len, true);
 			if (truncated_memory != null && truncated_memory != "") {
 				if(newlineaftermemory)
 				{
@@ -27713,41 +27790,462 @@ Current version indicated by LITEVER below.
 		}, null);
 	}
 
+
 	var groupchat_removals = []; //list of names removed from groupchat
+	var groupchat_select_snapshot = null;
+	function sanitize_groupchat_participant_name(name)
+	{
+		name = name == null ? "" : String(name);
+		return replaceAll(name,"||$||"," ").replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+	}
+	function clone_groupchat_data(data)
+	{
+		if(!data || typeof data!="object" || Array.isArray(data))
+		{
+			return {};
+		}
+		return JSON.parse(JSON.stringify(data || {}));
+	}
+	function ensure_groupchat_data()
+	{
+		if(!localsettings.groupchat_data || typeof localsettings.groupchat_data!="object" || Array.isArray(localsettings.groupchat_data))
+		{
+			localsettings.groupchat_data = {};
+		}
+		return localsettings.groupchat_data;
+	}
+	function begin_groupchat_select_session()
+	{
+		if(groupchat_select_snapshot==null)
+		{
+			groupchat_select_snapshot = {
+				chatname:localsettings.chatname,
+				chatopponent:localsettings.chatopponent,
+				groupchat_data:clone_groupchat_data(ensure_groupchat_data()),
+				aestheticInstructUISettings:deepCopyAestheticSettings(aestheticInstructUISettings)
+			};
+		}
+	}
+	function restore_groupchat_select_snapshot()
+	{
+		if(groupchat_select_snapshot==null)
+		{
+			return;
+		}
+		localsettings.chatname = groupchat_select_snapshot.chatname;
+		localsettings.chatopponent = groupchat_select_snapshot.chatopponent;
+		localsettings.groupchat_data = clone_groupchat_data(groupchat_select_snapshot.groupchat_data);
+		aestheticInstructUISettings = deepCopyAestheticSettings(groupchat_select_snapshot.aestheticInstructUISettings);
+		let chatopponent = document.getElementById("chatopponent");
+		if(chatopponent)
+		{
+			chatopponent.value = replaceAll(localsettings.chatopponent,"||$||","\n");
+			handle_bot_name_onchange();
+		}
+		groupchat_select_snapshot = null;
+	}
+	function groupchat_bot_names()
+	{
+		return localsettings.chatopponent ? localsettings.chatopponent.split("||$||").map(x=>sanitize_groupchat_participant_name(x)).filter(x=>x!="") : [];
+	}
+	function groupchat_default_bot_meta()
+	{
+		return {
+			portrait:"default",
+			portrait_width:aestheticInstructUISettings.portrait_width_AI,
+			portrait_ratio:aestheticInstructUISettings.portrait_ratio_AI,
+			bubbleColor:aestheticInstructUISettings.bubbleColor_AI,
+			text_tcolor:aestheticInstructUISettings.text_tcolor_AI,
+			speech_tcolor:aestheticInstructUISettings.speech_tcolor_AI,
+			action_tcolor:aestheticInstructUISettings.action_tcolor_AI,
+			ctx_memory:""
+		};
+	}
+	function apply_groupchat_ai_style(meta)
+	{
+		meta.portrait_width = aestheticInstructUISettings.portrait_width_AI;
+		meta.portrait_ratio = aestheticInstructUISettings.portrait_ratio_AI;
+		meta.bubbleColor = aestheticInstructUISettings.bubbleColor_AI;
+		meta.text_tcolor = aestheticInstructUISettings.text_tcolor_AI;
+		meta.speech_tcolor = aestheticInstructUISettings.speech_tcolor_AI;
+		meta.action_tcolor = aestheticInstructUISettings.action_tcolor_AI;
+		return meta;
+	}
+	function apply_groupchat_ai_style_to_all()
+	{
+		let groupchat_data = ensure_groupchat_data();
+		for (let key in groupchat_data) {
+			apply_groupchat_ai_style(groupchat_data[key]);
+		}
+	}
+	function groupchat_bot_meta_key(name)
+	{
+		return "gc_" + cyrb_hash(sanitize_groupchat_participant_name(name), 0, 8);
+	}
+	function normalize_groupchat_bot_meta(found)
+	{
+		return Object.assign(groupchat_default_bot_meta(), found || {});
+	}
+	function groupchat_bot_meta_exists(name)
+	{
+		let found = ensure_groupchat_data()[groupchat_bot_meta_key(name)];
+		return (found?true:false);
+	}
+	function get_groupchat_bot_meta(name)
+	{
+		let found = ensure_groupchat_data()[groupchat_bot_meta_key(name)];
+		if(found)
+		{
+			return normalize_groupchat_bot_meta(found);
+		}
+		return groupchat_default_bot_meta();
+	}
+	function set_groupchat_bot_meta(name, meta)
+	{
+		ensure_groupchat_data()[groupchat_bot_meta_key(name)] = normalize_groupchat_bot_meta(meta);
+	}
+	function set_groupchat_bot_names(names)
+	{
+		localsettings.chatopponent = names.map(x=>sanitize_groupchat_participant_name(x)).filter(x=>x!="").join("||$||");
+		let chatopponent = document.getElementById("chatopponent");
+		if(chatopponent)
+		{
+			chatopponent.value = replaceAll(localsettings.chatopponent,"||$||","\n");
+			handle_bot_name_onchange();
+		}
+		prune_groupchat_bot_meta();
+	}
+	function prune_groupchat_bot_meta()
+	{
+		let validkeys = groupchat_bot_names().map(x=>groupchat_bot_meta_key(x));
+		let groupchat_data = ensure_groupchat_data();
+		for (let key in groupchat_data) {
+			if (!validkeys.includes(key)) {
+				delete groupchat_data[key];
+			}
+		}
+	}
+	function rename_groupchat_participant(index, newname)
+	{
+		let names = groupchat_bot_names();
+		if(index<0 || index>=names.length)
+		{
+			console.log("rename_groupchat_participant: Invalid bot index.");
+			return;
+		}
+		newname = sanitize_groupchat_participant_name(newname);
+		if(newname=="")
+		{
+			if(names.length<=1)
+			{
+				msgbox("You need to keep at least one AI participant.");
+			}
+			else
+			{
+				names.splice(index, 1);
+				set_groupchat_bot_names(names);
+			}
+			show_groupchat_select();
+			return;
+		}
+		let oldname = names[index];
+		let oldmeta = get_groupchat_bot_meta(oldname);
+		names[index] = newname;
+		set_groupchat_bot_names(names);
+		set_groupchat_bot_meta(newname, oldmeta);
+		prune_groupchat_bot_meta();
+		show_groupchat_select();
+	}
+	function edit_groupchat_participant_name(index, is_self)
+	{
+		if(is_self)
+		{
+			let text = "Edit your chat name.";
+			inputBoxOkCancel(text,"Edit your Chat Name",localsettings.chatname,"[Enter User Name]",()=>{
+				let userinput = getInputBoxValue();
+				userinput = sanitize_groupchat_participant_name(userinput);
+				if(userinput.trim()!="")
+				{
+					localsettings.chatname = userinput.trim();
+				}
+				show_groupchat_select();
+			},()=>{},false);
+		}
+		else
+		{
+			let names = groupchat_bot_names();
+			let text ="Edit this AI participant name.\n\nLeave this field blank and press OK to delete this participant. The final AI participant cannot be deleted.";
+			inputBoxOkCancel(text,"Rename or Delete Participant",names[index],"[Enter Participant Name]",()=>{
+				let userinput = getInputBoxValue();
+				rename_groupchat_participant(index, userinput);
+			},()=>{},false);
+		}
+	}
+	function edit_groupchat_context(index)
+	{
+		let names = groupchat_bot_names();
+		if(index<0 || index>=names.length)
+		{
+			return;
+		}
+		let currname = names[index];
+		let curr_bot_data = get_groupchat_bot_meta(currname);
+		inputBox(`Set character context memory for ${currname}.`,"Character Context Memory",curr_bot_data.ctx_memory,"Enter participant context",()=>{
+			let userinput = getInputBoxValue();
+			curr_bot_data.ctx_memory = userinput;
+			set_groupchat_bot_meta(currname, curr_bot_data);
+		},false,true);
+	}
+	function get_groupchat_context_memory()
+	{
+		if(!(localsettings.opmode==3 || (localsettings.opmode==4 && localsettings.inject_chatnames_instruct)))
+		{
+			return "";
+		}
+		let names = groupchat_bot_names();
+		let ctx = [];
+		for(let i=0;i<names.length;++i)
+		{
+			if(groupchat_removals.includes(names[i]))
+			{
+				continue;
+			}
+			let curr_bot_data = get_groupchat_bot_meta(names[i]);
+			if(curr_bot_data.ctx_memory && curr_bot_data.ctx_memory.trim()!="")
+			{
+				ctx.push("[" + names[i] + " Info: " + curr_bot_data.ctx_memory.trim() + "]");
+			}
+		}
+		return ctx.join("\n");
+	}
 	function show_groupchat_select()
 	{
+		begin_groupchat_select_session();
 		document.getElementById("groupselectcontainer").classList.remove("hidden");
+		let selectable_groupchat = (localsettings.opmode==3 || (localsettings.opmode==4 && localsettings.inject_chatnames_instruct));
 		let gs = ``;
-		if(localsettings.opmode==3)
-		{
-			if (localsettings.chatopponent != "" && localsettings.chatopponent.includes("||$||")) {
-				gs = `Selected participants will reply randomly, unless you address them directly by name.`
-				+`<br><br>Unselected participants will not reply in group chats.<br>`
-				+`<table style="width:90%; margin:8px auto;">`;
-				let grouplist = localsettings.chatopponent.split("||$||");
-				for (let i = 0; i < grouplist.length; ++i) {
-					let show = !groupchat_removals.includes(grouplist[i]);
-					gs += `<tr><td width='184px'><span style="vertical-align: middle;">` + grouplist[i] + `</span></td>`
-						+`<td width='24px'><button type="button" class="btn btn-primary widelbtn" id="widel0" onclick="impersonate_message(`+i+`)">+</button></td>`
-						+`<td width='24px'><input type="checkbox" id="groupselectitem_` + i + `" style=" vertical-align: top;" ` + (show ? "checked" : "") + `></td></tr>`;
-				}
-				gs += `</table>`;
-			}
-			else if(localsettings.chatopponent != "")
-			{
-				gs = `You're having a one-on-one chat with <b>`+localsettings.chatopponent+`</b>.<br><br>`
-				+`<a href='#' class='color_blueurl' onclick='hide_popups();display_settings();display_settings_tab(0);'>Turn it into a <b>group chat</b> by <b>adding more AI characters</b> (one per line)</a>.<br><br>`
-				+ `<a href='#' class='color_blueurl' onclick='impersonate_message(0)'>Impersonate `+localsettings.chatopponent+` speaking as them</a>`;
-			}
-		}else{
-			gs = `You're in Instruct Mode.<br><br>`
-				+ `<a href='#' class='color_blueurl' onclick='impersonate_message(0)'>Impersonate the AI Assistant</a>`;
-		}
 
-		gs += `<br><a href='#' class='color_blueurl' onclick='impersonate_user()'>Make the AI write a response as me (for 1 turn)</a>`;
+		if(selectable_groupchat)
+		{
+			gs = `Selected participants will reply randomly, unless you address them directly by name.`
+			+`<br><br>Unselected participants will not reply in group chats.<br>`;
+
+			gs += `<table class="groupchatselect-table">`
+			+`<thead><tr>`
+			+`<th style="text-align:center;">Participant</th>`
+			+`<th style="text-align:center;">Avatar</th>`
+			+`<th style="text-align:center;">Persona</th>`
+			+`<th style="text-align:center;">Reply For</th>`
+			+`<th style="text-align:center;">Reply</th>`
+			+`</tr></thead><tbody>`;
+
+			let grouplist = groupchat_bot_names();
+
+			gs += `<tr><td><div title="Edit participant name" class="ui-settings-inline color_blueurl groupchat-inline-action" onclick="edit_groupchat_participant_name(0,true)">${escape_html(localsettings.chatname)}</div></td>`
+				+`<td style="text-align:center;">${render_groupchat_avatar_cell(0,true)}</td>`
+				+`<td style="text-align:center;"></td>`
+				+`<td style="text-align:center;"><button title="Make the AI write a response as me" type="button" class="btn btn-primary widelbtn" onclick="impersonate_user()">+</button></td>`
+				+`<td style="text-align:center;"><input title="Your own name is always available" type="checkbox" style="vertical-align: top;" checked disabled></td></tr>`;
+
+			for (let i = 0; i < grouplist.length; ++i) {
+				let show = !groupchat_removals.includes(grouplist[i]);
+				let participant_index = i;
+				let participant_name = grouplist[participant_index];
+				let impersonate_button = `<button title="Impersonate Character" type="button" class="btn btn-primary widelbtn" onclick="impersonate_message(${i})">+</button>`;
+				let checkbox = `<input type="checkbox" id="groupselectitem_${participant_index}" style="vertical-align: top;" ${(show ? "checked" : "")}>`;
+				gs += `<tr><td><div title="Edit participant name" class="ui-settings-inline color_blueurl groupchat-inline-action" onclick="edit_groupchat_participant_name(${participant_index},false)">${escape_html(participant_name)}</div></td>`
+					+`<td style="text-align:center;">${render_groupchat_avatar_cell(participant_index,false)}</td>`
+					+`<td style="text-align:center;"><button title="Set participant context" type="button" class="btn btn-primary" style="height:24px;min-width:24px;padding:1px 6px;margin:2px;font-weight:bolder;" onclick="edit_groupchat_context(${participant_index})">+</button></td>`
+					+`<td style="text-align:center;">${impersonate_button}</td>`
+					+`<td style="text-align:center;">${checkbox}</td></tr>`;
+			}
+			gs += `</tbody></table>`;
+			gs += `<br><div class="ui-settings-inline color_blueurl groupchat-inline-action" onclick="add_another_participant(true)">Add AI Participant</div>`;
+		}
+		else if(localsettings.opmode==4 && !localsettings.inject_chatnames_instruct)
+		{
+			gs = `You're in Instruct Mode.<br><br>`
+			+ `<a href='#' class='color_blueurl' onclick='impersonate_message(0)'>Impersonate the AI Assistant</a>`;
+			gs += `<br><a href='#' class='color_blueurl' onclick='impersonate_user()'>Make the AI write a response as me (for 1 turn)</a>`;
+		}
 
 		document.getElementById("groupselectitems").innerHTML = gs;
 	}
+	function get_groupchat_portrait(name, is_self)
+	{
+		let portrait = is_self ? aestheticInstructUISettings.you_portrait:aestheticInstructUISettings.AI_portrait;
+		if(!is_self)
+		{
+			if(groupchat_bot_meta_exists(name))
+			{
+				let data = get_groupchat_bot_meta(name);
+				portrait = data.portrait;
+			}
+		}
+		return portrait;
+	}
+	function render_groupchat_avatar_cell(index, is_self)
+	{
+		let name = is_self ? localsettings.chatname : groupchat_bot_names()[index];
+		let portrait = get_groupchat_portrait(name, is_self);
+		portrait = (!is_self && portrait=="default") ? niko_square : portrait;
+		if(!portrait)
+		{
+			return `<button title="Set Aesthetics" type="button" class="btn btn-primary widelbtn" onclick="open_groupchat_aesthetics(${index},${is_self})">Set</button>`;
+		}
+		return `<button title="Set Aesthetics" type="button" class="btn btn-primary" style="padding:1px;" onclick="open_groupchat_aesthetics(${index},${is_self})"><span style="display:block;width:36px;height:36px;background-image:url(${escape_html(portrait)});background-size:cover;background-position:center;border-radius:4px;"></span></button>`;
+	}
+	var current_groupchat_aesthetic_key = "";
+	var temp_groupchat_aesthetic_data = null;
+	function refresh_groupchat_aesthetics()
+	{
+		let color_to_input_value = function(color)
+		{
+			if(!color)
+			{
+				return "#000000";
+			}
+			color = color.trim();
+			return color.startsWith("#") ? color : rgb_to_hex(color);
+		}
+		let portrait = temp_groupchat_aesthetic_data.portrait;
+		document.getElementById("groupchat_aesthetic_avatar").style.backgroundImage = portrait ? `url(${portrait=="default"?niko_square:portrait})` : "none";
+		document.getElementById("groupchat_portrait_width").value = temp_groupchat_aesthetic_data.portrait_width;
+		document.getElementById("groupchat_portrait_ratio").value = temp_groupchat_aesthetic_data.portrait_ratio;
+		document.getElementById("groupchat_bubbleColor").value = color_to_input_value(temp_groupchat_aesthetic_data.bubbleColor);
+		document.getElementById("groupchat_text_tcolor").value = color_to_input_value(temp_groupchat_aesthetic_data.text_tcolor);
+		document.getElementById("groupchat_speech_tcolor").value = color_to_input_value(temp_groupchat_aesthetic_data.speech_tcolor);
+		document.getElementById("groupchat_action_tcolor").value = color_to_input_value(temp_groupchat_aesthetic_data.action_tcolor);
+	}
+	function read_groupchat_aesthetics()
+	{
+		temp_groupchat_aesthetic_data.portrait_width = Math.max(10, Math.min(250, parseFloat(document.getElementById("groupchat_portrait_width").value) || 64));
+		temp_groupchat_aesthetic_data.portrait_ratio = Math.max(0.01, Math.min(3, parseFloat(document.getElementById("groupchat_portrait_ratio").value) || 1));
+		temp_groupchat_aesthetic_data.bubbleColor = document.getElementById("groupchat_bubbleColor").value;
+		temp_groupchat_aesthetic_data.text_tcolor = document.getElementById("groupchat_text_tcolor").value;
+		temp_groupchat_aesthetic_data.speech_tcolor = document.getElementById("groupchat_speech_tcolor").value;
+		temp_groupchat_aesthetic_data.action_tcolor = document.getElementById("groupchat_action_tcolor").value;
+	}
+	function open_groupchat_aesthetics(index, is_self)
+	{
+		let grouplist = groupchat_bot_names();
+		if(!is_self && (index<0 || index>=grouplist.length))
+		{
+			return;
+		}
+		let currname = is_self?localsettings.chatname:grouplist[index];
+		document.getElementById("groupchataestheticcontainer").classList.remove("hidden");
+		document.getElementById("groupchataesthetictitle").innerText = "Participant Aesthetics - " + currname;
+		let portrait = get_groupchat_portrait(currname,is_self);
+		if(is_self)
+		{
+			current_groupchat_aesthetic_key = "self";
+			temp_groupchat_aesthetic_data = {};
+			temp_groupchat_aesthetic_data.portrait_width = aestheticInstructUISettings.portrait_width_you;
+			temp_groupchat_aesthetic_data.portrait_ratio = aestheticInstructUISettings.portrait_ratio_you;
+			temp_groupchat_aesthetic_data.bubbleColor = aestheticInstructUISettings.bubbleColor_you;
+			temp_groupchat_aesthetic_data.text_tcolor = aestheticInstructUISettings.text_tcolor_you;
+			temp_groupchat_aesthetic_data.speech_tcolor = aestheticInstructUISettings.speech_tcolor_you;
+			temp_groupchat_aesthetic_data.action_tcolor = aestheticInstructUISettings.action_tcolor_you;
+			temp_groupchat_aesthetic_data.portrait = portrait;
+		}
+		else
+		{
+			current_groupchat_aesthetic_key = currname;
+			temp_groupchat_aesthetic_data = get_groupchat_bot_meta(currname);
+			temp_groupchat_aesthetic_data.portrait = portrait;
+		}
+		refresh_groupchat_aesthetics();
+	}
+	function select_groupchat_avatar()
+	{
+		if(!temp_groupchat_aesthetic_data)
+		{
+			return;
+		}
+		let finput = document.getElementById('portraitFileInput');
+		finput.click();
+		finput.onchange = (event) => {
+			if (event.target.files.length > 0 && event.target.files[0]) {
+				const file = event.target.files[0];
+				const reader = new FileReader();
+				reader.onload = function(img) {
+					compressImage(img.target.result, (compressedImageURI, aspectratio) => {
+						temp_groupchat_aesthetic_data.portrait = compressedImageURI;
+						temp_groupchat_aesthetic_data.portrait_ratio = aspectratio.toFixed(2);
+						refresh_groupchat_aesthetics();
+					}, true, AVATAR_PX);
+				}
+				reader.readAsDataURL(file);
+			}
+			finput.value = "";
+		};
+	}
+	function reset_groupchat_avatar()
+	{
+		if(!temp_groupchat_aesthetic_data)
+		{
+			return;
+		}
+		if(current_groupchat_aesthetic_key=="self")
+		{
+			temp_groupchat_aesthetic_data.portrait = null;
+			temp_groupchat_aesthetic_data.portrait_width = aestheticInstructUISettings.portrait_width_you;
+			temp_groupchat_aesthetic_data.portrait_ratio = aestheticInstructUISettings.portrait_ratio_you;
+			temp_groupchat_aesthetic_data.bubbleColor = aestheticInstructUISettings.bubbleColor_you;
+			temp_groupchat_aesthetic_data.text_tcolor = aestheticInstructUISettings.text_tcolor_you;
+			temp_groupchat_aesthetic_data.speech_tcolor = aestheticInstructUISettings.speech_tcolor_you;
+			temp_groupchat_aesthetic_data.action_tcolor = aestheticInstructUISettings.action_tcolor_you;
+		}
+		else
+		{
+			temp_groupchat_aesthetic_data.portrait = "default";
+			apply_groupchat_ai_style(temp_groupchat_aesthetic_data);
+		}
+		refresh_groupchat_aesthetics();
+	}
+	function confirm_groupchat_aesthetics()
+	{
+		if(!temp_groupchat_aesthetic_data || !current_groupchat_aesthetic_key)
+		{
+			return;
+		}
+		read_groupchat_aesthetics();
+		if(current_groupchat_aesthetic_key=="self")
+		{
+			aestheticInstructUISettings.you_portrait = temp_groupchat_aesthetic_data.portrait;
+			aestheticInstructUISettings.portrait_width_you = temp_groupchat_aesthetic_data.portrait_width;
+			aestheticInstructUISettings.portrait_ratio_you = temp_groupchat_aesthetic_data.portrait_ratio;
+			aestheticInstructUISettings.bubbleColor_you = temp_groupchat_aesthetic_data.bubbleColor;
+			aestheticInstructUISettings.text_tcolor_you = temp_groupchat_aesthetic_data.text_tcolor;
+			aestheticInstructUISettings.speech_tcolor_you = temp_groupchat_aesthetic_data.speech_tcolor;
+			aestheticInstructUISettings.action_tcolor_you = temp_groupchat_aesthetic_data.action_tcolor;
+		}
+		else
+		{
+			let curr_bot_data = get_groupchat_bot_meta(current_groupchat_aesthetic_key);
+			curr_bot_data.portrait = temp_groupchat_aesthetic_data.portrait;
+			curr_bot_data.portrait_width = temp_groupchat_aesthetic_data.portrait_width;
+			curr_bot_data.portrait_ratio = temp_groupchat_aesthetic_data.portrait_ratio;
+			curr_bot_data.bubbleColor = temp_groupchat_aesthetic_data.bubbleColor;
+			curr_bot_data.text_tcolor = temp_groupchat_aesthetic_data.text_tcolor;
+			curr_bot_data.speech_tcolor = temp_groupchat_aesthetic_data.speech_tcolor;
+			curr_bot_data.action_tcolor = temp_groupchat_aesthetic_data.action_tcolor;
+			set_groupchat_bot_meta(current_groupchat_aesthetic_key, curr_bot_data);
+		}
+		temp_groupchat_aesthetic_data = null;
+		current_groupchat_aesthetic_key = "";
+		document.getElementById("groupchataestheticcontainer").classList.add("hidden");
+		show_groupchat_select();
+	}
+	function cancel_groupchat_aesthetics()
+	{
+		temp_groupchat_aesthetic_data = null;
+		current_groupchat_aesthetic_key = "";
+		document.getElementById("groupchataestheticcontainer").classList.add("hidden");
+		show_groupchat_select();
+	}
+
 	var is_impersonate_user = false;
 	function impersonate_user()
 	{
@@ -27806,50 +28304,64 @@ Current version indicated by LITEVER below.
 			},false);
 		}
 	}
-	function add_another_participant()
+	function add_another_participant(also_open_groupchat)
 	{
 		inputBox("Turn it into a group chat by adding more AI characters.\n\nInput name of additional character:","Add Another Participant","","[Enter Character Name]", ()=>{
 			let userinput = getInputBoxValue();
-			userinput = userinput.trim();
+			userinput = sanitize_groupchat_participant_name(userinput);
 			if(userinput!="")
 			{
-				if(document.getElementById("chatopponent").value=="")
+				let names = groupchat_bot_names();
+				let chatopponent = document.getElementById("chatopponent");
+				if(chatopponent && !also_open_groupchat)
 				{
-					document.getElementById("chatopponent").value = userinput;
-				}else{
-					document.getElementById("chatopponent").value += "||$||"+userinput;
-					handle_bot_name_onchange();
+					names = chatopponent.value.split("\n").map(x=>sanitize_groupchat_participant_name(x)).filter(x=>x!="");
+				}
+				names.push(userinput);
+				set_groupchat_bot_names(names);
+				if(also_open_groupchat)
+				{
+					show_groupchat_select();
 				}
 			}
 		},false);
 	}
 	function confirm_groupchat_select()
 	{
-		groupchat_removals = [];
+		let new_groupchat_removals = [];
 		if(localsettings.chatopponent!="")
 		{
-			let grouplist = localsettings.chatopponent.split("||$||");
+			let grouplist = groupchat_bot_names();
 			for(let i=0;i<grouplist.length;++i)
 			{
 				let sel = document.getElementById("groupselectitem_"+i);
 				if(sel && !sel.checked)
 				{
-					groupchat_removals.push(grouplist[i]);
+					new_groupchat_removals.push(grouplist[i]);
 				}
 			}
-			hide_popups();
-			if(groupchat_removals.length==grouplist.length)
+			if(new_groupchat_removals.length==grouplist.length)
 			{
 				msgbox("You need to select at least one group chat participant!");
-				groupchat_removals = [];
+				return;
 			}
+			groupchat_removals = new_groupchat_removals;
 		}
 		else
 		{
-			hide_popups();
+			groupchat_removals = [];
 		}
-
-
+		groupchat_select_snapshot = null;
+		hide_popups();
+		refreshAestheticPreview(false);
+		render_gametext();
+	}
+	function cancel_groupchat_select()
+	{
+		restore_groupchat_select_snapshot();
+		hide_popups();
+		refreshAestheticPreview(false);
+		render_gametext();
 	}
 
 	function toggleTopNav() {
@@ -27939,6 +28451,7 @@ Current version indicated by LITEVER below.
 
 	let aestheticInstructUISettings = new AestheticInstructUISettings();
 	let tempAestheticInstructUISettings = null; // These exist to act as backup when customizing, to revert when pressing the 'Cancel' button.
+	let tempAestheticGroupchatData = null;
 
 	function selectAvatarImage(isSelfPortrait)
 	{
@@ -28031,6 +28544,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("reset-all-aesthetic-instruct").addEventListener('click', (e) => {
 			let ns = new AestheticInstructUISettings();
 			aestheticInstructUISettings = deepCopyAestheticSettings(ns);
+			apply_groupchat_ai_style_to_all();
 			refreshAestheticPreview(false);
 		});
 
@@ -28039,6 +28553,7 @@ Current version indicated by LITEVER below.
 
 	function openAestheticUISettingsMenu() {
 		tempAestheticInstructUISettings = deepCopyAestheticSettings(aestheticInstructUISettings);
+		tempAestheticGroupchatData = clone_groupchat_data(ensure_groupchat_data());
 		document.getElementById("aestheticsettingscontainer").classList.remove("hidden");
 		updateAestheticTextPreview();
 	}
@@ -28046,9 +28561,11 @@ Current version indicated by LITEVER below.
 	function hideAestheticUISettingsMenu(confirm) {
 		if (!confirm) {
 			aestheticInstructUISettings = deepCopyAestheticSettings(tempAestheticInstructUISettings);
+			localsettings.groupchat_data = tempAestheticGroupchatData || {};
 			refreshAestheticPreview(false);
 		}
 		tempAestheticInstructUISettings = null;
+		tempAestheticGroupchatData = null;
 		document.getElementById("aestheticsettingscontainer").classList.add("hidden");
 		render_gametext();
 	}
@@ -28069,6 +28586,14 @@ Current version indicated by LITEVER below.
 	}
 
 	function updateDataFromUI() {
+		let previousAIStyle = {
+			portrait_width:aestheticInstructUISettings.portrait_width_AI,
+			portrait_ratio:aestheticInstructUISettings.portrait_ratio_AI,
+			bubbleColor:aestheticInstructUISettings.bubbleColor_AI,
+			text_tcolor:aestheticInstructUISettings.text_tcolor_AI,
+			speech_tcolor:aestheticInstructUISettings.speech_tcolor_AI,
+			action_tcolor:aestheticInstructUISettings.action_tcolor_AI
+		};
 		aestheticInstructUISettings.text_tcolor_you = getColorPickerValueFromElement(`you-text-colorselector`);
 		aestheticInstructUISettings.speech_tcolor_you = getColorPickerValueFromElement(`you-speech-colorselector`);
 		aestheticInstructUISettings.action_tcolor_you = getColorPickerValueFromElement(`you-action-colorselector`);
@@ -28108,6 +28633,15 @@ Current version indicated by LITEVER below.
 		aestheticInstructUISettings.portrait_width_you = cleannum(aestheticInstructUISettings.portrait_width_you, 10, 250);
 		aestheticInstructUISettings.portrait_ratio_you = cleannum(aestheticInstructUISettings.portrait_ratio_you, 0.01, 3).toFixed(2);
 		aestheticInstructUISettings.background_minHeight = cleannum(aestheticInstructUISettings.background_minHeight, 0, 300);
+		if(previousAIStyle.portrait_width != aestheticInstructUISettings.portrait_width_AI
+			|| previousAIStyle.portrait_ratio != aestheticInstructUISettings.portrait_ratio_AI
+			|| previousAIStyle.bubbleColor != aestheticInstructUISettings.bubbleColor_AI
+			|| previousAIStyle.text_tcolor != aestheticInstructUISettings.text_tcolor_AI
+			|| previousAIStyle.speech_tcolor != aestheticInstructUISettings.speech_tcolor_AI
+			|| previousAIStyle.action_tcolor != aestheticInstructUISettings.action_tcolor_AI)
+		{
+			apply_groupchat_ai_style_to_all();
+		}
 
 		function getColorPickerValueFromElement(id) {
 			let element = document.getElementById(id);
@@ -28196,7 +28730,7 @@ Current version indicated by LITEVER below.
 
 	function render_aesthetic_ui(input, isPreview) //class suffix string used to prevent defined styles from leaking into global scope
 	{
-		const avatarImage = function(for_ai) { //todo: this is still bad code, but will keep it for now
+		const avatarImage = function(for_ai, bot_key) { //todo: this is still bad code, but will keep it for now
 			if((for_ai && !as.AI_portrait) || (!for_ai && !as.you_portrait) || as.border_style == 'None')
 			{
 				return ''; //for no portrait
@@ -28213,6 +28747,14 @@ Current version indicated by LITEVER below.
 				width = as.portrait_width_AI;
 				height = (as.border_style == 'Circle' ? as.portrait_width_AI : as.portrait_width_AI / as.portrait_ratio_AI);
 				imgclassname = "AI-portrait-image";
+				if(groupchat_bot_meta_exists(bot_key))
+				{
+					let botdata = get_groupchat_bot_meta(bot_key);
+					width = botdata.portrait_width;
+					height = (as.border_style == 'Circle' ? width : width / botdata.portrait_ratio);
+					let metakey = groupchat_bot_meta_key(bot_key);
+					imgclassname = `aui_participant_${metakey} AI-portrait-image`;
+				}
 			}
 			return `<div class='${imgclassname}${classSuffixStr}${reinvertcolor}' style='width:${width}px; height:${height}px; border-radius: ${radius}'></div>`;
 		}
@@ -28241,6 +28783,40 @@ Current version indicated by LITEVER below.
 		}
 		let as = aestheticInstructUISettings;
 		let classSuffixStr = isPreview ? "prv" : "";
+		let participantStyling = "";
+
+		let groupchat_data = ensure_groupchat_data();
+		for (const key in groupchat_data) {
+			if (groupchat_data.hasOwnProperty(key)) {
+				let currchar = normalize_groupchat_bot_meta(groupchat_data[key]);
+				let participantClass = `aui_participant_${key}`;
+				let portrait = currchar.portrait!="default" ? currchar.portrait : niko_square;
+				participantStyling +=
+				`.${participantClass}{
+					color: ${currchar.text_tcolor};
+					background-color:${currchar.bubbleColor};
+				}
+				.${participantClass}.AI-portrait-image${classSuffixStr}{
+					background:url(${portrait});
+					background-clip: content-box;
+					background-position: 50% 50%;
+					background-size: 100% 100%;
+					background-origin: content-box;
+					background-repeat: no-repeat;
+				}
+				.${participantClass} em, .${participantClass} b :not(code){
+					color: ${currchar.action_tcolor};
+					font-style: italic;
+					font-weight: normal;
+				}
+				.${participantClass} .quotespn {
+					color: ${currchar.speech_tcolor};
+					font-weight: normal;
+				}`;
+				participantStyling += "\n";
+			}
+		}
+
 		let portraitsStyling = // Also, implement portraits as css classes. Now chat entries can reuse them instead of recreating them.
 		`<style>
 			.you-portrait-image${classSuffixStr} {margin: 6px 6px; background:url(${as.you_portrait}); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
@@ -28284,6 +28860,7 @@ Current version indicated by LITEVER below.
 				color: ${as.speech_tcolor_AI};
 				font-weight: normal;
 			}
+			${participantStyling}
 			#chat_msg_body blockquote, #aesthetic_text_preview blockquote
 			{
 				font-size: ${as.font_size}px;
@@ -28383,6 +28960,8 @@ Current version indicated by LITEVER below.
 			}
 
 			let namepart = (curr.name!="" && localsettings.show_nametags?`<p class='aui_nametag'>${escape_html(curr.name)}</p>`:"");
+
+			let turnParticipantClass = groupchat_bot_meta_exists(curr.name) ? `aui_participant_${groupchat_bot_meta_key(curr.name)}` : "";
 			let showavatar = true;
 
 			//adventure and story has no names or avatars, also handle unlabelled first turns for chat/instruct
@@ -28404,13 +28983,13 @@ Current version indicated by LITEVER below.
 			newbodystr += `<div style='display:flex; align-items:stretch; flex-direction: row;'>`;
 			if(curr.myturn)
 			{
-				newbodystr += `${(showavatar?avatarImage(false):"")}
-				<div class='aui_myturn_block'`;
+				newbodystr += `${(showavatar?avatarImage(false,null):"")}
+				<div class='aui_myturn_block ${turnParticipantClass}'`;
 			}
 			else
 			{
-				newbodystr += `${(showavatar?avatarImage(true):"")}
-				<div class='aui_aiturn_block'`;
+				newbodystr += `${(showavatar?avatarImage(true,curr.name):"")}
+				<div class='aui_aiturn_block ${turnParticipantClass}'`;
 			}
 			newbodystr += ` style='flex: 1; display:flex; padding: ${as.padding()}; margin: ${as.margin()}; min-height:${as.background_minHeight}px;`
 			+ ` font-size: ${as.font_size}px; flex-direction:column; align-items: ${as.centerHorizontally ? 'center' : 'flex-start'};`
@@ -29676,7 +30255,7 @@ Current version indicated by LITEVER below.
 									</div>
 								</div>
 								<div class="settinglabel" style="width:100%">
-									<button type="button" class="btn btn-primary" style="padding:2px 4px;margin:2px;margin-left:auto;font-size:12px;" onclick="add_another_participant()">Add Another Participant</button>
+									<button type="button" class="btn btn-primary" style="padding:2px 4px;margin:2px;margin-left:auto;font-size:12px;" onclick="add_another_participant(false)">Add Another Participant</button>
 								</div>
 							</div>
 
@@ -32240,7 +32819,7 @@ Current version indicated by LITEVER below.
 
 	<div class="popupcontainer flex hidden" id="groupselectcontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup flexsizevsmall">
+		<div class="nspopup flexsizesmall">
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Chat Selectors</div>
 			</div>
@@ -32250,7 +32829,52 @@ Current version indicated by LITEVER below.
 			</div>
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="confirm_groupchat_select()">Ok</button>
-				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
+				<button type="button" class="btn btn-primary" onclick="cancel_groupchat_select()">Cancel</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="groupchataestheticcontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup groupchataestheticpopup">
+			<div class="popuptitlebar">
+				<div class="popuptitletext" id="groupchataesthetictitle">Participant Aesthetics</div>
+			</div>
+			<div class="menutext">
+				<div id="groupchat_aesthetic_avatar"></div>
+				<div class="ui-settings-inline" style="justify-content:center; margin-bottom:8px;">
+					<div style="margin-right: 20px">Portrait: </div>
+					<div id="groupchat-portrait" onclick="select_groupchat_avatar()">🖼️ Set Portrait</div>
+					<div style="margin-left: 10px;"><a href="#" class="color_blueurl" onclick="reset_groupchat_avatar(); return false;">(Reset Image)</a></div>
+				</div>
+				<div class="settinglabel">
+					<div class="justifyleft">Portrait Size</div>
+					<input class="push-right" title="Portrait Size" type="number" min="10" max="250" id="groupchat_portrait_width" style="width:70px">
+				</div>
+				<div class="settinglabel">
+					<div class="justifyleft">Portrait Ratio</div>
+					<input class="push-right" title="Portrait Ratio" type="number" min="0.01" max="3" step="0.01" id="groupchat_portrait_ratio" style="width:70px">
+				</div>
+				<div class="settinglabel">
+					<div class="justifyleft">Bubble Color</div>
+					<input class="push-right" title="Bubble Color" type="color" id="groupchat_bubbleColor">
+				</div>
+				<div class="settinglabel">
+					<div class="justifyleft">Text Color</div>
+					<input class="push-right" title="Text Color" type="color" id="groupchat_text_tcolor">
+				</div>
+				<div class="settinglabel">
+					<div class="justifyleft">Speech Color</div>
+					<input class="push-right" title="Speech Color" type="color" id="groupchat_speech_tcolor">
+				</div>
+				<div class="settinglabel">
+					<div class="justifyleft">Action Color</div>
+					<input class="push-right" title="Action Color" type="color" id="groupchat_action_tcolor">
+				</div>
+			</div>
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="confirm_groupchat_aesthetics()">OK</button>
+				<button type="button" class="btn btn-primary" onclick="cancel_groupchat_aesthetics()">Cancel</button>
 			</div>
 		</div>
 	</div>
