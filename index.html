@@ -10379,6 +10379,11 @@ Current version indicated by LITEVER below.
 							load_tavern_jsonl(temparrs);
 							return;
 						}
+						else if(temparrs && temparrs.length>1 && temparrs[0].type=="session")
+						{
+							load_lcpp_jsonl(temparrs);
+							return;
+						}
 					}
 					catch(error)
 					{
@@ -10968,6 +10973,34 @@ Current version indicated by LITEVER below.
 			}
 		}
 		return false;
+	}
+
+	function load_lcpp_jsonl(obj)
+	{
+		if(localsettings.opmode!=4)
+		{
+			//force into instruct
+			localsettings.opmode = 4;
+		}
+		gametext_arr = [];
+		localsettings.gui_type_instruct = 2;
+		localsettings.inject_chatnames_instruct = false;
+		for(let i=0;i<obj.length;++i)
+		{
+			let curr = obj[i];
+			if(curr.type!="message")
+			{
+				continue;
+			}
+			if (curr.message && curr.message.role == "user") {
+				gametext_arr.push(get_instructstartplaceholder() + curr.message.content);
+			} else if (curr.message && curr.message.role == "assistant") {
+				gametext_arr.push(get_instructendplaceholder() + curr.message.content);
+			}
+		}
+		update_for_sidepanel();
+		render_gametext(true);
+		sync_multiplayer(true);
 	}
 
 	function load_tavern_jsonl(obj)
