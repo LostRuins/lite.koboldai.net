@@ -4193,12 +4193,18 @@ Current version indicated by LITEVER below.
 	var a1111_img2img_endpoint = "/sdapi/v1/img2img";
 	var a1111_interrogate_endpoint = "/sdapi/v1/interrogate";
 
-	var comfy_models_endpoint = "/models/checkpoints";
+	// Base / System Endpoints
+	var comfy_generate_endpoint      = "/prompt";
+	var comfy_history_endpoint       = "/history";
+	var comfy_results_endpoint       = "/view?filename=";
+	var comfy_upload_endpoint        = "/api/upload/image";
+
+	// Model Tracking Endpoints
+	var comfy_checkpoints_endpoint = "/models/checkpoints";
+	var comfy_diffusion_models_endpoint = "/models/diffusion_models";
+	var comfy_clip_endpoint = "/models/text_encoders";
+	var comfy_vae_endpoint  = "/models/vae";
 	var comfy_loras_endpoint = "/models/loras";
-	var comfy_generate_endpoint = "/prompt";
-	var comfy_history_endpoint = "/history";
-	var comfy_results_endpoint = "/view?filename=";
-	var comfy_upload_endpoint = "/api/upload/image";
 
 	var xtts_gen_endpoint = "/tts_to_audio/";
 	var xtts_voices_endpoint = "/speakers_list";
@@ -9015,75 +9021,73 @@ Current version indicated by LITEVER below.
 		});
 	}
 
-
 	function connect_to_comfyui(silent=false)
 	{
 		console.log("Attempt ComfyUI Connection...");
-		//establish initial connection to a1111 api
 		let headers = {};
 		if (localsettings.saved_comfy_bearer_token != "") {
-			headers['Authorization'] = 'Bearer '+localsettings.saved_comfy_bearer_token
+			headers['Authorization'] = 'Bearer '+localsettings.saved_comfy_bearer_token;
 		}
-		fetch(localsettings.saved_comfy_url + comfy_models_endpoint, {
-			headers: headers
-		})
+
+		let typeDropdown = document.getElementById("generate_images_comfy_type");
+		let isAnima = typeDropdown && typeDropdown.value === "1"; 
+		let activeModelEndpoint = isAnima ? comfy_diffusion_models_endpoint : comfy_checkpoints_endpoint;
+
+		// 1. Fetch Main Model/Diffusion
+		fetch(localsettings.saved_comfy_url + activeModelEndpoint, { headers: headers })
 		.then(x => {
 			if (!silent && !x.ok) {
-				msg = "Connection returned "+x.status
-				if (x.status == 401) {
-					msg +=". Check Bearer Token."
-				}
-				msgbox(msg)
+				let msg = "Connection returned " + x.status;
+				if (x.status == 401) { msg += ". Check Bearer Token."; }
+				msgbox(msg);
 			}
-			return x.json()
+			return x.json();
 		})
 		.then(modelsdata => {
-
-			if (modelsdata == null || modelsdata.length == 0) {
-				msgbox("Invalid data received or no models found. Is ComfyUI running at the url " + localsettings.saved_comfy_url + " ?\n\nIt must be launched with the flags --listen --enable-cors-header '*' to enable API access.\n(If --enable-cors-header '*' does not work, try --enable-cors-header *)");
-			} else {
-				let current_loaded_model = modelsdata[0];
-				//repopulate our model list
+			if (modelsdata != null && modelsdata.length > 0) {
 				let dropdown = document.getElementById("generate_images_comfy_model");
-				let selectionhtml = ``;
-				for (var i = 0; i < modelsdata.length; ++i) {
-					selectionhtml += `<option value="` + modelsdata[i] + `" `+(current_loaded_model==modelsdata[i]?"selected":"")+`>`+modelsdata[i]+`</option>`;
-				}
-				dropdown.innerHTML = selectionhtml;
+				dropdown.innerHTML = modelsdata.map((m, i) => `<option value="${m}" ${i===0?"selected":""}>${m}</option>`).join('');
 				comfyui_is_connected = true;
 			}
-		}).catch((error) => {
-			if(!silent)
-			{
-				msgbox("ComfyUI Connect Error: " + error+"\nPlease make sure ComfyUI is running at "+localsettings.saved_comfy_url+" and properly configured!\n\nIt must be launched with the flags --listen --enable-cors-header '*' to enable API access. If using ComfyUI-Login, the Bearer Token must match.\n(If --enable-cors-header '*' does not work, try --enable-cors-header *)\n");
-			}
-			comfyui_is_connected = false;
-		});
+		}).catch(err => { if(!silent) msgbox("ComfyUI Model Connect Error: " + err); });
 
-		fetch(localsettings.saved_comfy_url + comfy_loras_endpoint, {headers:headers})
-        .then(x => x.json())
-        .then(lorasdata => {
-            //repopulate our lora list
-            let dropdown_lora = document.getElementById("generate_images_comfy_lora");
-            let loraSelectionHtml = ``;
-            if (lorasdata == null || lorasdata.length == 0) {
-                dropdown_lora.disabled = true;
-                loraSelectionHtml = `<option value="" disabled selected>No Lora Found</option>`;
-            } else {
-                dropdown_lora.disabled = false;
-                let current_loaded_model = lorasdata[0];
-                loraSelectionHtml += `<option value="">No Lora Selected</option>`;
-                for (var i = 0; i < lorasdata.length; ++i) {
-                    loraSelectionHtml += `<option value="${lorasdata[i]}" ${(current_loaded_model==lorasdata[i]?"selected":"")}>${lorasdata[i]}</option>`;
-                }
-            }
-            dropdown_lora.innerHTML = loraSelectionHtml;
-        }).catch((error) => {
-			console.log(error);
+		// 2. Fetch LoRAs
+		fetch(localsettings.saved_comfy_url + comfy_loras_endpoint, { headers: headers })
+		.then(x => x.json())
+		.then(lorasdata => {
 			let dropdown_lora = document.getElementById("generate_images_comfy_lora");
-			dropdown_lora.disabled = true;
-			loraSelectionHtml = `<option value="" disabled selected>No Lora Found</option>`;
-		});
+			if (!lorasdata || lorasdata.length == 0) {
+				dropdown_lora.disabled = true;
+				dropdown_lora.innerHTML = `<option value="" disabled selected>No Lora Found</option>`;
+			} else {
+				dropdown_lora.disabled = false;
+				dropdown_lora.innerHTML = `<option value="">No Lora Selected</option>` + 
+					lorasdata.map((l, i) => `<option value="${l}" ${i===0?"selected":""}>${l}</option>`).join('');
+			}
+		}).catch(err => console.log(err));
+
+		// 3. IF ANIMA: Fetch CLIP Text Encoders & VAEs
+		if (isAnima) {
+			// Populate CLIP Dropdown
+			fetch(localsettings.saved_comfy_url + comfy_clip_endpoint, { headers: headers })
+			.then(x => x.json())
+			.then(clipData => {
+				let clipDropdown = document.getElementById("generate_images_comfy_clip");
+				if(clipData && clipData.length > 0) {
+					clipDropdown.innerHTML = clipData.map((c, i) => `<option value="${c}" ${i===0?"selected":""}>${c}</option>`).join('');
+				}
+			}).catch(err => console.log("CLIP fetch error:", err));
+
+			// Populate VAE Dropdown
+			fetch(localsettings.saved_comfy_url + comfy_vae_endpoint, { headers: headers })
+			.then(x => x.json())
+			.then(vaeData => {
+				let vaeDropdown = document.getElementById("generate_images_comfy_vae");
+				if(vaeData && vaeData.length > 0) {
+					vaeDropdown.innerHTML = vaeData.map((v, i) => `<option value="${v}" ${i===0?"selected":""}>${v}</option>`).join('');
+				}
+			}).catch(err => console.log("VAE fetch error:", err));
+		}
 	}
 
 	function uploadBase64ImgToComfy(base64Data,filename) {
@@ -9116,7 +9120,7 @@ Current version indicated by LITEVER below.
 		});
 	}
 
-	function generate_comfy_image(req_payload, autoappend)
+	function generate_comfy_image(req_payload, autoappend, is_anima)
 	{
 		let dropdown_lora = document.getElementById("generate_images_comfy_lora");
 		let use_lora = ((dropdown_lora && dropdown_lora.disabled==false && dropdown_lora.value != "") ? true : false);
@@ -9125,6 +9129,7 @@ Current version indicated by LITEVER below.
 		let negprompt = (splits.length > 1 ? splits[1] : "");
 		let comfyimg2imgname = 'kcpp_img2img.jpg';
 
+		// Base structural blueprint mapping
 		let genimg_payload = {
 			"prompt": {
 				"3": {
@@ -9133,19 +9138,13 @@ Current version indicated by LITEVER below.
 						"cfg": req_payload.params.cfg_scale,
 						"denoise": 1,
 						"latent_image": ["5", 0],
-						"model": use_lora ? ["11", 0] : ["4", 0],
+						"model": use_lora ? ["11", 0] : (is_anima ? ["12", 0] : ["4", 0]),
 						"negative": ["7", 0],
 						"positive": ["6", 0],
 						"sampler_name": req_payload.params.sampler_name,
-						"scheduler": (req_payload.params.scheduler?req_payload.params.scheduler:"normal"),
+						"scheduler": (req_payload.params.scheduler ? req_payload.params.scheduler : "normal"),
 						"seed": Math.floor(Math.random() * 99999999),
 						"steps": req_payload.params.steps
-					}
-				},
-				"4": {
-					"class_type": "CheckpointLoaderSimple",
-					"inputs": {
-						"ckpt_name": req_payload.models[0]
 					}
 				},
 				"5": {
@@ -9160,21 +9159,21 @@ Current version indicated by LITEVER below.
 					"class_type": "CLIPTextEncode",
 					"inputs": {
 						"text": prompt,
-						"clip": use_lora ? ["11", 1] : ["4", 1]
+						"clip": use_lora ? ["11", 1] : (is_anima ? ["13", 0] : ["4", 1])
 					}
 				},
 				"7": {
 					"class_type": "CLIPTextEncode",
 					"inputs": {
 						"text": negprompt,
-						"clip": use_lora ? ["11", 1] : ["4", 1]
+						"clip": use_lora ? ["11", 1] : (is_anima ? ["13", 0] : ["4", 1])
 					}
 				},
 				"8": {
 					"class_type": "VAEDecode",
 					"inputs": {
 						"samples": ["3", 0],
-						"vae": ["4", 2]
+						"vae": is_anima ? ["14", 0] : ["4", 2]
 					}
 				},
 				"9": {
@@ -9187,6 +9186,44 @@ Current version indicated by LITEVER below.
 			}
 		};
 
+		// Inject the model loaders based on type
+		if (is_anima) {
+			// Node 12: UNET/Diffusion loader
+			genimg_payload.prompt["12"] = {
+				"class_type": "UNETLoader",
+				"inputs": {
+					"unet_name": req_payload.models[0],
+					"weight_dtype": "default"            
+				}
+			};
+			
+			// Node 13: Separate CLIP Text Encoder loader
+			genimg_payload.prompt["13"] = {
+				"class_type": "CLIPLoader",
+				"inputs": {
+					"clip_name": req_payload.clip_model || "qwen_3_06b_base.safetensors",
+					"type": "qwen_image" 
+				}
+			};
+			
+			// Node 14: Separate VAE loader
+			genimg_payload.prompt["14"] = {
+				"class_type": "VAELoader",
+				"inputs": {
+					"vae_name": req_payload.vae_model || "qwen_image_vae.safetensors"
+				}
+			};
+		} else {
+			// Standard SDXL Monolithic Checkpoint loader
+			genimg_payload.prompt["4"] = {
+				"class_type": "CheckpointLoaderSimple",
+				"inputs": {
+					"ckpt_name": req_payload.models[0]
+				}
+			};
+		}
+
+		// Handle LoRAs adaptively
 		if (use_lora) {
 			genimg_payload.prompt["11"] = {
 				"class_type": "LoraLoader",
@@ -9194,14 +9231,14 @@ Current version indicated by LITEVER below.
 					"lora_name": dropdown_lora.value,
 					"strength_model": 1.0,
 					"strength_clip": 1.0,
-					"model": ["4", 0],
-					"clip": ["4", 1]
+					"model": is_anima ? ["12", 0] : ["4", 0],
+					"clip": is_anima ? ["13", 0] : ["4", 1]
 				}
 			};
 		}
 
-		if(req_payload["source_image"]) //override with img2img nodes
-		{
+		// Handle img2img capabilities adaptively
+		if (req_payload["source_image"]) {
 			genimg_payload["prompt"]["5"] = {
 				"class_type": "LoadImage",
 				"inputs": {
@@ -9212,7 +9249,7 @@ Current version indicated by LITEVER below.
 				"class_type": "VAEEncode",
 				"inputs": {
 					"pixels": ["5", 0],
-					"vae": ["4", 2]
+					"vae": is_anima ? ["14", 0] : ["4", 2]
 				}
 			};
 			genimg_payload["prompt"]["3"]["inputs"]["latent_image"] = ["10", 0];
@@ -9223,54 +9260,52 @@ Current version indicated by LITEVER below.
 		console.log(genimg_payload);
 		let imgid = "Comfyimg"+(Math.floor(10000 + Math.random() * 90000)).toString();
 		let nimgtag = "[<|p|" + imgid + "|p|>]";
+		
 		if (localsettings.img_newturn) {
-			if(localsettings.opmode == 4)
-			{
+			if(localsettings.opmode == 4) {
 				nimgtag = wrap_newgen_instruct_format(nimgtag,false);
-			}
-			else if(localsettings.opmode == 3)
-			{
+			} else if(localsettings.opmode == 3) {
 				nimgtag = wrap_newgen_chat_format(nimgtag);
 			}
 		}
-		if(autoappend)
-		{
+		if(autoappend) {
 			gametext_arr.push(nimgtag);
 		}
+		
 		image_db[imgid] = { done: false, queue: "Generating", result: "", prompt:prompt, poll_category:2 };
 		image_db[imgid].aspect = (req_payload.params.width>=req_payload.params.height*2?5:(req_payload.params.height>=req_payload.params.width*2?4:(req_payload.params.width>req_payload.params.height?2:(req_payload.params.width<req_payload.params.height?1:0))));
-		image_db[imgid].imsource = 0; //0=generated,1=uploaded
+		image_db[imgid].imsource = 0; 
 		image_db[imgid].imrefid = "";
-		image_db[imgid].type = 0; //0=image, 1=audio
+		image_db[imgid].type = 0; 
 
 		uploadBase64ImgToComfy(req_payload["source_image"],comfyimg2imgname).then(() => {
-		headers = {'Content-Type': 'application/json'}
-		if (localsettings.saved_comfy_bearer_token != "") {
-			headers['Authorization'] = 'Bearer '+localsettings.saved_comfy_bearer_token
-		}
-		fetch(gen_endpoint, {
-			method: 'POST',
-			headers: headers,
-			body: JSON.stringify(genimg_payload),
-		})
-		.then(x => x.json())
-		.then(resp => {
-			console.log(resp);
-			if(resp.prompt_id)
-			{
-				image_db[imgid].imrefid = resp.prompt_id.toString();
-			}else{
-				console.log("Generation Error!");
-				msgbox("Image Generation Failed!\n\nPlease make sure ComfyUI is running at "+localsettings.saved_comfy_url+" and properly configured!\n\nIt must be launched with the flag --listen --enable-cors-header '*' to enable API access\n(If --enable-cors-header '*' does not work, try --enable-cors-header *)\n");
+			let headers = {'Content-Type': 'application/json'}
+			if (localsettings.saved_comfy_bearer_token != "") {
+				headers['Authorization'] = 'Bearer '+localsettings.saved_comfy_bearer_token
 			}
-		}).catch((error) => {
-			console.log("Generation Error: " + error);
-			msgbox("Image Generation Failed!\n\nPlease make sure ComfyUI is running at "+localsettings.saved_comfy_url+" and properly configured!\n\nIt must be launched with the flag --listen --enable-cors-header '*' to enable API access\n(If --enable-cors-header '*' does not work, try --enable-cors-header *)\n");
-		});
+			fetch(gen_endpoint, {
+				method: 'POST',
+				headers: headers,
+				body: JSON.stringify(genimg_payload),
+			})
+			.then(x => x.json())
+			.then(resp => {
+				console.log(resp);
+				if(resp.prompt_id) {
+					image_db[imgid].imrefid = resp.prompt_id.toString();
+				} else {
+					console.log("Generation Error!");
+					msgbox("Image Generation Failed!\n\nPlease make sure ComfyUI is running at "+localsettings.saved_comfy_url+" and properly configured!\n\nIt must be launched with the flag --listen --enable-cors-header '*' to enable API access\n(If --enable-cors-header '*' does not work, try --enable-cors-header *)\n");
+				}
+			}).catch((error) => {
+				console.log("Generation Error: " + error);
+				msgbox("Image Generation Failed!\n\nPlease make sure ComfyUI is running at "+localsettings.saved_comfy_url+" and properly configured!");
+			});
 		}).catch((error) => {
 			console.log("Upload Img2Img Error: " + error);
-			msgbox("Image Upload Failed!\n\nPlease make sure ComfyUI is running at "+localsettings.saved_comfy_url+" and properly configured!\n\nIt must be launched with the flag --listen --enable-cors-header '*' to enable API access\n(If --enable-cors-header '*' does not work, try --enable-cors-header *)\n");
+			msgbox("Image Upload Failed!");
 		});
+		
 		return imgid;
 	}
 
@@ -22313,9 +22348,19 @@ Current version indicated by LITEVER below.
 		}
 		else if(localsettings.generate_images_mode==4) //comfyui
 		{
+			let typeDropdown = document.getElementById("generate_images_comfy_type");
+			let is_anima = typeDropdown && typeDropdown.value === "1";
+
 			let desired_model = document.getElementById("generate_images_comfy_model").value;
 			genimg_payload.models = [desired_model];
-			imgid = generate_comfy_image(genimg_payload, autoappend);
+			
+			// Read selections if ANIMA is true, otherwise default safely out
+			if (is_anima) {
+				genimg_payload.clip_model = document.getElementById("generate_images_comfy_clip").value;
+				genimg_payload.vae_model = document.getElementById("generate_images_comfy_vae").value;
+			}
+
+			imgid = generate_comfy_image(genimg_payload, autoappend, is_anima);
 		}
 		else if(localsettings.generate_images_mode==5) //pollinations
         {
@@ -22325,6 +22370,16 @@ Current version indicated by LITEVER below.
         }
 
 		return imgid;
+	}
+
+	function toggle_comfy_inputs() {
+		let typeDropdown = document.getElementById("generate_images_comfy_type");
+		let isAnima = typeDropdown && typeDropdown.value === "1";
+		let animaInputs = document.querySelectorAll(".anima-only-input");
+		
+		animaInputs.forEach(el => {
+			el.style.display = isAnima ? "flex" : "none";
+		});
 	}
 
 	function interrogate_new_image(base64img, imghash, use_horde=true)
@@ -31012,19 +31067,40 @@ Current version indicated by LITEVER below.
 						</div>
 
 						<div id="generate_images_comfy_container" class="settinglabel hidden settingsbox">
-							<div class="settinglabel" style="display: flex; width: 100%">
-							<div class="justifyleft">Model</div>
-							<select title="Select Image Model" class="form-control push-right" id="generate_images_comfy_model" style="width:calc(100% - 170px)">
-								<option value="">[None]</option>
+							<div class="justifyleft">Model Type</div>
+							<select title="Select Image Model" class="form-control push-right" id="generate_images_comfy_type" onchange="toggle_comfy_inputs(); connect_to_comfyui(true);" style="width:calc(100% - 170px)">
+								<option value="0">Checkpoint</option>
+								<option value="1">ANIMA</option>
 							</select>
-							<button type="button" class="btn btn-primary" onclick="set_comfy_endpoint()" style="width:52px; padding: 2px 2px; margin-left: 3px; font-size:12px;">Set URL</button>
-							<button type="button" class="btn btn-primary" onclick="set_comfy_key()" style="width:52px; padding: 2px 2px; margin-left: 3px; font-size:12px;">Set Key</button>
+							
+							<div class="settinglabel" style="display: flex; width: 100%">
+								<div class="justifyleft">Model / Diffusion</div>
+								<select title="Select Image Model" class="form-control push-right" id="generate_images_comfy_model" style="width:calc(100% - 170px)">
+									<option value="">[None]</option>
+								</select>
+								<button type="button" class="btn btn-primary" onclick="set_comfy_endpoint()" style="width:52px; padding: 2px 2px; margin-left: 3px; font-size:12px;">Set URL</button>
+								<button type="button" class="btn btn-primary" onclick="set_comfy_key()" style="width:52px; padding: 2px 2px; margin-left: 3px; font-size:12px;">Set Key</button>
 							</div>
+
+							<div class="settinglabel anima-only-input" style="display: none; width: 100%">
+								<div class="justifyleft">CLIP / Text Encoder</div>
+								<select title="Select CLIP Model" class="form-control push-right" id="generate_images_comfy_clip" style="width:calc(100% - 170px)">
+									<option value="">[None]</option>
+								</select>
+							</div>
+
+							<div class="settinglabel anima-only-input" style="display: none; width: 100%">
+								<div class="justifyleft">VAE</div>
+								<select title="Select VAE Model" class="form-control push-right" id="generate_images_comfy_vae" style="width:calc(100% - 170px)">
+									<option value="">[None]</option>
+								</select>
+							</div>
+
 							<div class="settinglabel" style="display: flex; width: 100%">
-							<div class="justifyleft">LoRA</div>
-							<select id="generate_images_comfy_lora" class="form-control push-right">
-								<option value="" disabled selected>No Lora Found</option>
-							</select>
+								<div class="justifyleft">LoRA</div>
+								<select id="generate_images_comfy_lora" class="form-control push-right">
+									<option value="" disabled selected>No Lora Found</option>
+								</select>
 							</div>
 						</div>
 
