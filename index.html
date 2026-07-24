@@ -10281,7 +10281,7 @@ Current version indicated by LITEVER below.
 				//we don't want to fiddle with the file as its very complex. only handle the parts we are interested in, and just leave the rest untouched.
 				if (is_kai_json(new_loaded_storyobj) && !new_loaded_storyobj.scenarioVersion) {
 					//quick sanity check. if prompt does not exist, this is not a KAI save.
-					kai_json_load(new_loaded_storyobj,false);
+					kai_json_load(new_loaded_storyobj,false, false, true, to_groupchat);
 					if (selectedFilename && selectedFilename != "") {
 						localsettings.last_known_filename = selectedFilename;
 					}
@@ -10298,7 +10298,7 @@ Current version indicated by LITEVER below.
 					}
 					else if(new_loaded_storyobj.md && new_loaded_storyobj.savedsettings) //add some compat loading for sharefiles
 					{
-						kai_json_load(new_loaded_storyobj,false);
+						kai_json_load(new_loaded_storyobj,false, false, true, to_groupchat);
 					}
 					else if(new_loaded_storyobj.scenarioVersion>1 && new_loaded_storyobj.scenarioVersion<10)
 					{
@@ -10349,7 +10349,7 @@ Current version indicated by LITEVER below.
 					try {
 						result = UnzipKAISTORYFile(arr);
 						if (result) {
-							kai_json_load(result, false);
+							kai_json_load(result, false, false, true, to_groupchat);
 							return;
 						}
 					} catch (error) {
@@ -10421,8 +10421,16 @@ Current version indicated by LITEVER below.
 		return is_kai;
 	}
 
-	function kai_json_load(storyobj, force_load_settings, ignore_multiplayer_sync=false, save_after_loading=true)
+	function kai_json_load(storyobj, force_load_settings, ignore_multiplayer_sync=false, save_after_loading=true, to_groupchat=false)
 	{
+		if(to_groupchat)
+		{
+			let chatopponent = storyobj.savedsettings.chatopponent?storyobj.savedsettings.chatopponent:defaultchatopponent;
+			let memory = storyobj.memory?storyobj.memory:"";
+			memory = replaceAll(memory,"{{char}}",chatopponent,true);
+			add_another_participant_from_file({name:chatopponent,ctx_memory:memory,portrait:storyobj.savedaestheticsettings.AI_portrait});
+			return;
+		}
 		//either show popup or just proceed to load
 		handle_advload_popup((localsettings.show_advanced_load && !force_load_settings),()=>
 		{
