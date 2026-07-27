@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 <head>
 	<script id="init-config">
-	const LITEVER = 339;
+	const LITEVER = 340;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -5359,7 +5359,7 @@ Current version indicated by LITEVER below.
 
 	function preserve_protected_fields(source) {
 		const out = {};
-		for (const key in PROTECTED_FIELDS) {
+		for (let key in PROTECTED_FIELDS) {
 			if (source[key] !== undefined) {
 			out[key] = source[key];
 			}
@@ -6013,6 +6013,44 @@ Current version indicated by LITEVER below.
 	{
 		return "["+(new Date().toLocaleTimeString([], {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'}))+"]";
 	}
+	function get_thinking_boundary_regex()
+	{
+		let raw_boundary_tags = [
+			get_instructstartplaceholder(),
+			get_instructendplaceholder(),
+			get_instructsysplaceholder(),
+			get_instructstartplaceholder_end(),
+			get_instructendplaceholder_end(),
+			get_instructsysplaceholder_end()
+		];
+		let boundary_tags = [];
+		for(let i=0;i<raw_boundary_tags.length;++i)
+		{
+			let tag = raw_boundary_tags[i];
+			if(tag)
+			{
+				if(boundary_tags.indexOf(tag)==-1)
+				{
+					boundary_tags.push(tag);
+				}
+				tag = tag.trim();
+				if(tag && boundary_tags.indexOf(tag)==-1)
+				{
+					boundary_tags.push(tag);
+				}
+			}
+		}
+		if(boundary_tags.length==0)
+		{
+			return "";
+		}
+		return `(?:${boundary_tags.map(function(tag) { return escapeRegExp(tag); }).join("|")})`;
+	}
+	function get_thinking_content_regex()
+	{
+		const boundary = get_thinking_boundary_regex();
+		return boundary ? `(?:(?!${boundary})[\\s\\S])*?` : `[\\s\\S]*?`;
+	}
 	function get_thinking_regex()
 	{
 		if(!localsettings.start_thinking_tag || !localsettings.stop_thinking_tag)
@@ -6021,7 +6059,7 @@ Current version indicated by LITEVER below.
 		}
 		const safeStart = escapeRegExp(localsettings.start_thinking_tag);
 		const safeStop = escapeRegExp(localsettings.stop_thinking_tag);
-		return `${safeStart}([\\s\\S]*?)${safeStop}`;
+		return `${safeStart}(${get_thinking_content_regex()})${safeStop}`;
 	}
 	function get_orphaned_thinking_regex(tag)
 	{
@@ -6031,7 +6069,7 @@ Current version indicated by LITEVER below.
 		}
 		const safeStart = escapeRegExp(get_instructendplaceholder());
 		const safeStop = escapeRegExp(tag);
-		return `${safeStart}([\\s\\S]*?)${safeStop}`;
+		return `${safeStart}(${get_thinking_content_regex()})${safeStop}`;
 	}
 
 	function remove_all_instruct_tags(text)
@@ -11086,7 +11124,7 @@ Current version indicated by LITEVER below.
 			memory = replaceAll(memory,"{{char}}",chatopponent,true);
 			add_another_participant_from_file({name: chatopponent,ctx_memory:memory,portrait:image_data});
 			return;
-		} 
+		}
 		let selectedgreeting = "";
 		let load_tav_obj_confirm_p1 = function(usechatmode) // need second input for alt greeting
 		{
@@ -21635,7 +21673,8 @@ Current version indicated by LITEVER below.
 					if (oai_payload.messages && Array.isArray(oai_payload.messages))
 					{
 						const systemInstructions = [];
-						for (const msg of oai_payload.messages) {
+						for (let i = 0; i < oai_payload.messages.length; i++) {
+							var msg = oai_payload.messages[i];
 							// 1. Handle System Instructions
 							if (msg.role === 'system') {
 								systemInstructions.push({ text: msg.content });
@@ -21652,7 +21691,8 @@ Current version indicated by LITEVER below.
 							}
 							else if (Array.isArray(msg.content))  // Handle Multimodal Arrays (Text + Image + Audio)
 							{
-								for (const item of msg.content) {
+								for (var j = 0; j < msg.content.length; j++) {
+									var item = msg.content[j];
 									if (item.type === 'text') {
 										parts.push({ text: item.text });
 									} else if (item.type === 'image_url') {
@@ -28897,7 +28937,7 @@ Current version indicated by LITEVER below.
 		let participantStyling = "";
 
 		let groupchat_data = ensure_groupchat_data();
-		for (const key in groupchat_data) {
+		for (let key in groupchat_data) {
 			if (groupchat_data.hasOwnProperty(key)) {
 				let currchar = normalize_groupchat_bot_meta(groupchat_data[key]);
 				let participantClass = `aui_participant_${key}`;
