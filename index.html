@@ -13729,6 +13729,14 @@ Current version indicated by LITEVER below.
 			}
 		}
 		toggleoaichatcompl();
+		document.getElementById("model_cost").innerText = "";
+		if(cached_model_pricing[dropdown.value])
+		{
+			let data = cached_model_pricing[dropdown.value];
+			let price_input = (data.prompt * 1000000).toFixed(2);
+			let price_output = (data.completion * 1000000).toFixed(2);
+			document.getElementById("model_cost").innerText = `($${price_input} / $${price_output} per 1M)`;
+		}
 	}
 	function claude_fetch_models()
 	{
@@ -13803,6 +13811,7 @@ Current version indicated by LITEVER below.
 	}
 	function update_oai_model_list(data, dropdown, epchoice)
 	{
+		cached_model_pricing = {};
 		var lastOption = dropdown.lastElementChild;
 		for (var i = dropdown.options.length - 1; i >= 0; i--) {
 			var option = dropdown.options[i];
@@ -13813,6 +13822,10 @@ Current version indicated by LITEVER below.
 		for(var i = 0; i < data.data.length; i++) {
 			var opt = data.data[i];
 			sortedarr.push(opt.id);
+			if(opt.pricing)
+			{
+				cached_model_pricing[opt.id] = opt.pricing;
+			}
 		}
 		sortedarr.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 		let pending_custmodel = (localsettings.prev_custom_endpoint_model_dict?(localsettings.prev_custom_endpoint_model_dict[epchoice] || ""):"");
@@ -13923,6 +13936,7 @@ Current version indicated by LITEVER below.
 	}
 
 	let autofetch_attempt_dict = {};
+	let cached_model_pricing = {};
 	function try_fetch_oai_models_auto()
 	{
 		let targetep = document.getElementById("custom_oai_endpoint").value;
@@ -32292,7 +32306,10 @@ Current version indicated by LITEVER below.
 
 				<input class="form-control" name="username" autocomplete="username" type="text" id="custom_oai_endpoint" placeholder="OpenAI API URL" value="" onblur="">
 				<input class="form-control" name="password" autocomplete="current-password" type="password" id="custom_oai_key" placeholder="API Key (Required)" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
-				Model Choice:<br>
+				<div style="display:flex; align-items:center;">
+					<div style="padding:2px">Model Choice:</div>
+					<div style="padding:2px;margin-left:auto;" id="model_cost"></div>
+				</div>
 				<select title="OpenAI Model Selection" style="padding:4px;display:inline;width:calc(100% - 200px)" class="form-control" id="custom_oai_model" onchange="oai_model_change(true)">
 					<option value="gpt-3.5-turbo-instruct" selected="selected">gpt-3.5-turbo-instruct</option>
 					<option value="davinci-002">davinci-002</option>
@@ -32480,7 +32497,9 @@ Current version indicated by LITEVER below.
 				<span class="color_green" style="font-weight: bold;">Please input Claude API URL and Key.</span><br><br>
 				<input class="form-control" type="text" id="custom_claude_endpoint" placeholder="Claude API URL" value="">
 				<input class="form-control" type="password" id="custom_claude_key" placeholder="Claude API Key (Required)" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
-				Model Choice:<br>
+				<div style="display:flex; align-items:center;">
+					<div style="padding:2px">Model Choice:</div>
+				</div>
 				<select title="Claude AI Model Selection" style="padding:4px; width:calc(100% - 110px); display:inline-block" class="form-control" id="custom_claude_model"  onload="toggleclaudemodel()"  onchange="toggleclaudemodel()">
 					<option value="claude-opus-4-8">claude-opus-4-8</option>
 					<option value="claude-opus-4-7">claude-opus-4-7</option>
