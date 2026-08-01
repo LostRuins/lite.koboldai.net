@@ -4111,6 +4111,8 @@ Current version indicated by LITEVER below.
 	var poll_interval_multiplayer = 1000; //every 1s
 	var poll_interval_chunked_tts = 300;
 	var max_branches = 8;
+	var randomness_max_size = 500;
+	var randomness_allow_newlines = false;
 
 	var horde_base_url = "https://aihorde.net"
 	var horde_perf_endpoint = horde_base_url + "/api/v2/status/performance";
@@ -6184,17 +6186,17 @@ Current version indicated by LITEVER below.
 				let stablereg = "";
 				if(!isgametext)
 				{
-					inputtxt = inputtxt.replace(/\{\{roll\s?:?:?([^\}\n]{1,500})\}\}/gi, function (m,matchValue) {
+					inputtxt = inputtxt.replace(RegExp("\{\{roll\s?:?:?([^\}"+(randomness_allow_newlines?"":"\n")+"]{1,"+randomness_max_size+"})\}\}","gi"), function (m,matchValue) {
 						return dicenotation(matchValue, 0);
 					});
-					inputtxt = inputtxt.replace(/\{\{random\s?:?:?([^\}\n]{1,500})\}\}/gi, function (m,listString) {
+					inputtxt = inputtxt.replace(RegExp("\{\{random\s?:?:?([^\}"+(randomness_allow_newlines?"":"\n")+"]{1,"+randomness_max_size+"})\}\}","gi"), function (m,listString) {
 						return pickfromlist(listString,0);
 					});
-					stablereg = /\{\{(pick)\s?:?:?([^\}\n]{1,500})\}\}/gi;
+					stablereg = RegExp("\{\{(pick)\s?:?:?([^\}"+(randomness_allow_newlines?"":"\n")+"]{1,"+randomness_max_size+"})\}\}","gi");
 				}
 				else
 				{
-					stablereg = /\{\{(pick|random|roll)\s?:?:?([^\}\n]{1,500})\}\}/gi;
+					stablereg = RegExp("\{\{(pick|random|roll)\s?:?:?([^\}"+(randomness_allow_newlines?"":"\n")+"]{1,"+randomness_max_size+"})\}\}","gi");
 				}
 
 				let countmap = (persistent_countmap?persistent_countmap:new Map());
@@ -17723,10 +17725,9 @@ Current version indicated by LITEVER below.
 			pending_response_id = "-1";
 			waiting_for_summarycall = 2;
 			let max_allowed_characters = Math.floor(localsettings.max_context_length * 3.0) - 100;
-			let truncated_context = recentCtx.substring(recentCtx.length - max_allowed_characters);
-
-			truncated_context = replace_placeholders(truncated_context);
 			let wst = (localsettings.websearch_template==""?default_websearch_template:localsettings.websearch_template);
+			let truncated_context = replace_placeholders(recentCtx);
+			truncated_context = truncated_context.substring(truncated_context.length - max_allowed_characters);
 			truncated_context += "\n\n" + wst.replaceAll('{{QUERY}}', search_query);
 
 			let submit_payload = {
@@ -20537,7 +20538,7 @@ Current version indicated by LITEVER below.
 			{
 				memory_with_groupchat_context += (memory_with_groupchat_context.trim()!="" ? "\n" : "") + groupchat_context_memory;
 			}
-			let truncated_memory = truncate_memory(memory_with_groupchat_context, max_mem_len, true);
+			let truncated_memory = memory_with_groupchat_context;
 			if (truncated_memory != null && truncated_memory != "") {
 				if(newlineaftermemory)
 				{
@@ -20729,9 +20730,7 @@ Current version indicated by LITEVER below.
 				wistr = substring_to_boundary(wistr, max_wi_len);
 			}
 
-			//we clip the authors note if its too long
 			let truncated_anote = current_anotetemplate.replace("<|>", current_anote);
-			truncated_anote = substring_to_boundary(truncated_anote, max_anote_len);
 
 			if (current_anote.length == 0) {
 				//if there's no authors note at all, don't include the template
@@ -20741,24 +20740,23 @@ Current version indicated by LITEVER below.
 			if(wi_insertlocation>0)
 			{
 				truncated_anote = wistr + truncated_anote;
-				truncated_anote = substring_to_boundary(truncated_anote, max_anote_len);
 			}
 			else
 			{
 				truncated_memory += wistr;
 			}
-
-			truncated_memory = appendedsysprompt + truncate_memory(truncated_memory, max_mem_len, true);
-
-			//now we resize the context such that the memory and authors note can fit inside
-			truncated_context = substring_to_boundary(truncated_context, max_allowed_characters);
-
-			//append memory to the start of the context, clipping excess space if needed
-			//only do this processing if memory or anote is not blank
-			if (truncated_memory.length > 0 || current_anote.length > 0)
+			
+			//if memory or authors note is not blank, 
+			//append memory to the start of the context and insert anote somewhere before the ending
+			//if they are too long, clip excess space and resize the context so they can fit inside
+			if (appendedsysprompt.length > 0 || truncated_memory.length > 0 || truncated_anote.length > 0)
 			{
+				appendedsysprompt = replace_placeholders(appendedsysprompt,false,false,true);
 				truncated_memory = replace_placeholders(truncated_memory,false,false,true);
+				truncated_memory = appendedsysprompt + truncate_memory(truncated_memory, max_mem_len, true);				
 				truncated_anote = replace_placeholders(truncated_anote,false,false,false);
+				truncated_anote = substring_to_boundary(truncated_anote, max_anote_len);
+				truncated_context = replace_placeholders(truncated_context,false,false,true); 
 				if(!is_using_kcpp_with_added_memory())
 				{
 					let augmented_len = truncated_memory.length + truncated_context.length + truncated_anote.length;
@@ -20802,10 +20800,11 @@ Current version indicated by LITEVER below.
 				{
 					truncated_context = truncated_memory + truncated_context;
 				}
-			}
-
+			} else
+			{
 			truncated_context = replace_placeholders(truncated_context,false,false,true);
-
+			truncated_context = substring_to_boundary(truncated_context, max_allowed_characters);
+			}
 			if(is_using_kcpp_with_added_memory())
 			{
 				let tmp = repair_post_placeholders_fix(truncated_memory, truncated_context);
