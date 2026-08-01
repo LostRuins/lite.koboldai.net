@@ -12,7 +12,7 @@ Current version indicated by LITEVER below.
 -->
 <head>
 	<script id="init-config">
-	const LITEVER = 340;
+	const LITEVER = 341;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -6184,19 +6184,21 @@ Current version indicated by LITEVER below.
 			if (lowerinputtxt.includes("\{\{pick") || lowerinputtxt.includes("\{\{random") || lowerinputtxt.includes("\{\{roll"))
 			{
 				let stablereg = "";
+				let randomness_content = "[^}" + (randomness_allow_newlines ? "" : "\\n") + "]";
+				let randomness_range = "{1," + randomness_max_size + "}";
 				if(!isgametext)
 				{
-					inputtxt = inputtxt.replace(RegExp("\{\{roll\s?:?:?([^\}"+(randomness_allow_newlines?"":"\n")+"]{1,"+randomness_max_size+"})\}\}","gi"), function (m,matchValue) {
+					inputtxt = inputtxt.replace(RegExp("\\{\\{roll\\s?:?:?(" + randomness_content + randomness_range + ")\\}\\}","gi"), function (m,matchValue) {
 						return dicenotation(matchValue, 0);
 					});
-					inputtxt = inputtxt.replace(RegExp("\{\{random\s?:?:?([^\}"+(randomness_allow_newlines?"":"\n")+"]{1,"+randomness_max_size+"})\}\}","gi"), function (m,listString) {
+					inputtxt = inputtxt.replace(RegExp("\\{\\{random\\s?:?:?(" + randomness_content + randomness_range + ")\\}\\}","gi"), function (m,listString) {
 						return pickfromlist(listString,0);
 					});
-					stablereg = RegExp("\{\{(pick)\s?:?:?([^\}"+(randomness_allow_newlines?"":"\n")+"]{1,"+randomness_max_size+"})\}\}","gi");
+					stablereg = RegExp("\\{\\{(pick)\\s?:?:?(" + randomness_content + randomness_range + ")\\}\\}","gi");
 				}
 				else
 				{
-					stablereg = RegExp("\{\{(pick|random|roll)\s?:?:?([^\}"+(randomness_allow_newlines?"":"\n")+"]{1,"+randomness_max_size+"})\}\}","gi");
+					stablereg = RegExp("\\{\\{(pick|random|roll)\\s?:?:?(" + randomness_content + randomness_range + ")\\}\\}","gi");
 				}
 
 				let countmap = (persistent_countmap?persistent_countmap:new Map());
@@ -17727,7 +17729,7 @@ Current version indicated by LITEVER below.
 			let max_allowed_characters = Math.floor(localsettings.max_context_length * 3.0) - 100;
 			let wst = (localsettings.websearch_template==""?default_websearch_template:localsettings.websearch_template);
 			let truncated_context = replace_placeholders(recentCtx);
-			truncated_context = truncated_context.substring(truncated_context.length - max_allowed_characters);
+			truncated_context = substring_to_boundary(truncated_context, max_allowed_characters);
 			truncated_context += "\n\n" + wst.replaceAll('{{QUERY}}', search_query);
 
 			let submit_payload = {
@@ -17800,14 +17802,15 @@ Current version indicated by LITEVER below.
 			}
 
 			truncated_context = end_trim_to_sentence(truncated_context,true);
-			truncated_context = truncated_context.substring(truncated_context.length - max_allowed_characters);
+			truncated_context = replace_placeholders(truncated_context);
+			truncated_context = substring_to_boundary(truncated_context, max_allowed_characters);
+			truncated_memory = truncate_memory(replace_placeholders(truncated_memory), max_mem_len, false);
 			let augmented_len = truncated_memory.length + truncated_context.length;
 			let excess_len = augmented_len - max_allowed_characters; //if > 0, then we exceeded context window
 			truncated_context = truncated_memory + truncated_context.substring(excess_len);
 
 			let long_story = (truncated_context.length>1800?true:false);
 			truncated_context += "\n### Instruction: Summarize the above text in a single paragraph of up to "+(long_story?"ten":"five")+" detailed sentences.\n### Response:";
-			truncated_context = replace_placeholders(truncated_context);
 			let submit_payload = {
 			"prompt": truncated_context,
 			"params": {
@@ -20516,6 +20519,9 @@ Current version indicated by LITEVER below.
 				}
 			}
 
+			truncated_context = replace_placeholders(truncated_context,false,false,true);
+			truncated_context = substring_to_boundary(truncated_context, max_allowed_characters);
+
 			//we clip the memory if its too long, taking the last x chars (not the first)
 			//memory is allowed to be up to 0.8 times of ctx allowance, anote up to 0.6 times
 			let max_mem_len = Math.floor(max_allowed_characters*0.8);
@@ -20745,25 +20751,42 @@ Current version indicated by LITEVER below.
 			{
 				truncated_memory += wistr;
 			}
-			
-			//if memory or authors note is not blank, 
+
+			//if memory or authors note is not blank,
 			//append memory to the start of the context and insert anote somewhere before the ending
 			//if they are too long, clip excess space and resize the context so they can fit inside
 			if (appendedsysprompt.length > 0 || truncated_memory.length > 0 || truncated_anote.length > 0)
 			{
 				appendedsysprompt = replace_placeholders(appendedsysprompt,false,false,true);
 				truncated_memory = replace_placeholders(truncated_memory,false,false,true);
-				truncated_memory = appendedsysprompt + truncate_memory(truncated_memory, max_mem_len, true);				
+				truncated_memory = appendedsysprompt + truncate_memory(truncated_memory, max_mem_len, true);
 				truncated_anote = replace_placeholders(truncated_anote,false,false,false);
 				truncated_anote = substring_to_boundary(truncated_anote, max_anote_len);
-				truncated_context = replace_placeholders(truncated_context,false,false,true); 
+				let min_context_len = Math.min(32, max_allowed_characters);
 				if(!is_using_kcpp_with_added_memory())
 				{
-					let augmented_len = truncated_memory.length + truncated_context.length + truncated_anote.length;
-					let excess_len = augmented_len - max_allowed_characters; //if > 0, then we exceeded context window
-					excess_len = excess_len < 0 ? 0 : excess_len;
-					let newlimit = (max_allowed_characters-excess_len) < 32 ? 32 : (max_allowed_characters-excess_len);
-					truncated_context = substring_to_boundary(truncated_context, newlimit); //must always have at least 32 chars from main context
+					let available_aux_len = max_allowed_characters - min_context_len;
+					if(truncated_anote.length > available_aux_len)
+					{
+						truncated_anote = substring_to_boundary(truncated_anote, available_aux_len);
+						truncated_memory = "";
+					}
+					else if(truncated_memory.length + truncated_anote.length > available_aux_len)
+					{
+						truncated_memory = truncate_memory(truncated_memory, available_aux_len - truncated_anote.length, true);
+					}
+					let newlimit = Math.max(min_context_len, max_allowed_characters - truncated_memory.length - truncated_anote.length);
+					truncated_context = substring_to_boundary(truncated_context, newlimit);
+				}
+				else
+				{
+					let available_anote_len = max_allowed_characters - min_context_len;
+					if(truncated_anote.length > available_anote_len)
+					{
+						truncated_anote = substring_to_boundary(truncated_anote, available_anote_len);
+					}
+					let newlimit = Math.max(min_context_len, max_allowed_characters - truncated_anote.length);
+					truncated_context = substring_to_boundary(truncated_context, newlimit);
 				}
 
 				//insert authors note 80 tokens before the ending (320 characters).
@@ -20800,10 +20823,6 @@ Current version indicated by LITEVER below.
 				{
 					truncated_context = truncated_memory + truncated_context;
 				}
-			} else
-			{
-			truncated_context = replace_placeholders(truncated_context,false,false,true);
-			truncated_context = substring_to_boundary(truncated_context, max_allowed_characters);
 			}
 			if(is_using_kcpp_with_added_memory())
 			{
