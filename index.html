@@ -4535,6 +4535,8 @@ Current version indicated by LITEVER below.
 		show_nametags: true,
 		enable_tool_use: false,
 		tools_auto_exec: false,
+		customtools: [], //array of custom tools (with source code)
+		customtools_AI_enabled: false,
 		corsproxy_mcp: false,
 		kcpp_mcp_bridge: true,
 		cached_mcp_tools: {}, //key is url, value is tools array
@@ -8289,6 +8291,490 @@ Current version indicated by LITEVER below.
 			onDone(null); //probe failed
 		});
 	}
+	
+	var trusted_custom_tools = {}; //Functions are only evaluated when actually called (by user or AI)
+	var customtools_snapshot = null; //Temp UI editor
+	function show_customtools()
+	{
+		let enable_custom_tools_AI;
+		if(customtools_snapshot===null) //open fresh popup
+		{
+			customtools_snapshot = localsettings.custom_tools;
+			enable_custom_tools_AI = localsettings.customtools_AI_enabled;
+		}
+		else //refresh already open popup
+		{
+			enable_custom_tools_AI = (document.getElementById("enable_custom_tools_AI").checked?true:false);
+		}
+		hide_popups();
+		document.getElementById("customtoolscontainer").classList.remove("hidden");
+		let ct = `Here, you can define your own custom tools using Javascript <b>Function</b> code.<br><br><span class='color_red'>Caution: These tools will have full access to your story and API keys, so only enable third-party tools that you trust!</span><br><div><span>Let AI Use Custom Tools? (Requires Toolcalling Enabled) </span><input type='checkbox' id='enable_custom_tools_AI' style='vertical-align: top;' ${enable_custom_tools_AI?'checked':''}></div><br>You can call selected tools with slash command syntax in the prompt submission box, e.g.<br><i>/toolname parameter1 parameter2 ... parameterN</i>.<br><br>Want to get started? <a href='#' class='color_blueurl' onclick='simplecustomtoolsexample()'>Click here</a> to load some simple example tools.<br><div><button type="button" class="btn btn-primary widelbtn" onclick="load_customtools_from_file()">Load Tools from JSON</button> <button type="button" class="btn btn-primary widelbtn" onclick="export_customtools_to_file()">Export Tools to JSON</button></div>`;
+		
+		if(customtools_snapshot.length>0)
+		{
+			ct += `<table class="tools-table"><thead><tr>`
+				+`<th>Tool Name</th>`
+				+`<th style="text-align:center;">Edit</th>`
+				+`<th style="text-align:center;">/Call</th>`
+				+`<th style="text-align:center;">Del.</th>`
+				+`</tr></thead><tbody>`;
+					
+			for (let i=0; i<customtools_snapshot.length; ++i){
+				let toolidx = i;
+				let tool = customtools_snapshot[i];
+				ct += `<tr><td class="tools-info"><div class="tool-title">${tool.name}</div><div class="tool-description">${tool.description ? tool.description.substr(0,180):"No description"}</div></td>`;
+				ct += `<td style="text-align:center;"><button title="Edit Tool" type="button" class="btn btn-primary widelbtn" onclick="edit_customtool(${toolidx})">+</button></td>`;
+				ct += `<td class="tools-checkbox" style="text-align:center; vertical-align:middle;"><input type="checkbox" title="Make Tool Callable With Slash Syntax" id="customtool_${tool.name}" ${(tool.userCallable?"checked":"")}></td>`;
+				ct += `<td style="text-align:center;"><button title="Delete Tool" type="button" class="btn btn-primary widelbtn" onclick="customtools_snapshot.splice(${toolidx},1); customtools_snapshot.forEach(tool => { tool.userCallable = (document.getElementById('customtool_'+tool.name).checked?true:false); }); show_customtools();">X</button></td></tr>`;
+			}
+			ct += `</tbody></table>`;
+		}
+		else
+		{
+			ct += "<hr /><br><p><i>No custom tools defined.</i></p><br>";
+		}
+		ct += `<div><button title="Add a New Custom Tool" type="button" class="btn btn-primary widelbtn" style="margin:8px;" onclick="edit_customtool(${customtools_snapshot.length})">Add a New Custom Tool</div>`;
+		
+		document.getElementById("customtoolsitems").innerHTML = ct;
+	}
+	function customtools_done(save)
+	{
+		if(save)
+		{
+			customtools_snapshot.forEach(tool => {
+				if(tool.tmp_edited){ //clear the trusted_custom_tools cache
+					delete tool["tmp_edited"];
+					delete trusted_custom_tools[tool.name];
+				}
+				tool.userCallable = (document.getElementById("customtool_"+tool.name).checked?true:false);
+			});
+			localsettings.custom_tools = customtools_snapshot;
+			localsettings.customtools_AI_enabled = (document.getElementById("enable_custom_tools_AI").checked?true:false);
+		}
+		customtools_snapshot = null;
+		document.getElementById("customtoolscontainer").classList.add("hidden");
+		hide_popups();
+	}
+	function simplecustomtoolsexample()
+	{
+		customtools_snapshot = [
+			{name:"mult",description:"Multiply two numbers",parameters:{type:"object",properties:{a:{type:"number"},b:{type:"number",default:"42"}},required:["a"],additionalProperties:false},functionBody:"return a*b;",userCallable:true},
+			{name:"set_nostalgia_theme",description:"Sets the user's interface to the Nostalgia theme.",parameters:{type:"object",properties:{},additionalProperties:false},functionBody:"document.getElementById('colortheme').value = localsettings.colortheme = 1;\ntoggle_theme_colors();",userCallable:true},
+			{name:"critic_agent",description:"Independently reviews the input text.",parameters:{type:"object",properties:{inputtxt:{type:"string"}},required:["inputtxt"],additionalProperties:{asynchronous:true}},functionBody:"return fetch(\n\tapply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_endpoint),\n\t{\n\t\tmethod: 'POST',\n\t\theaders: get_kobold_header(),\n\t\tbody: JSON.stringify({\n\t\t\t'prompt': get_instruct_starttag(false) + 'Scrutinize the following text, and identify one area for improvement:\\n\"\"\"\\n' + inputtxt + '\\n\"\"\"' + get_instruct_endtag(false) + 'Here is a brief critique:\\n',\n\t\t\t'max_length': 512,\n\t\t\t'temperature': localsettings.temperature,\n\t\t\t'quiet': false\n\t\t})\n\t}\n).then(x => x.json())\n.then((resp) => resp.results[0].text);",userCallable:false}
+		];
+		show_customtools();
+	}
+	function export_customtools_to_file()
+	{
+		let tmp_edited = customtools_snapshot.map(tool => tool.tmp_edited); //record these, but don't export
+		customtools_snapshot.forEach(tool => {
+			if(tool.tmp_edited){
+				delete tool["tmp_edited"];
+			}
+			tool.userCallable = (document.getElementById("customtool_"+tool.name).checked?true:false);
+		});
+		saveFileGeneric("custom_tools",JSON.stringify(customtools_snapshot),"application/json");
+		for (let i=0; i < tmp_edited.length; ++i){ //restore records
+			if(tmp_edited[i]){
+				customtools_snapshot[i].tmp_edited = true;
+			}
+		}
+	}
+	function load_customtools_from_file()
+	{
+		promptUserForLocalFile((fileDetails) => {
+			try
+			{
+				let { file, fileName, ext, content, plaintext } = fileDetails;
+				let filecontent = JSON.parse(plaintext);
+				if(filecontent && (typeof filecontent==="object") && filecontent.hasOwnProperty("savedsettings")){
+					//assume it's a kai file
+					filecontent = filecontent.savedsettings.custom_tools;
+				}
+				//else assume it's an exported array
+				let has_unknown_attributes = false;
+				let typetemplate = {name:"string",description:"string",parameters:"object",functionBody:"string",userCallable:"boolean"};
+				for(let i=0; i<filecontent.length; ++i){
+					if(!is_obj_with_types(filecontent[i],typetemplate,false)){
+						throw new Error("Array element "+i+" is not a custom tool");
+					}
+					has_unknown_attributes ||= (Object.keys(filecontent[i]).length>5);
+				}
+				if(has_unknown_attributes){ //for security, we destroy them (but alert the user)
+					msgbox("Warning: Found unknown attributes in your custom tools JSON (not imported).","Custom Tools Import Warning");
+				}
+				customtools_snapshot = filecontent.map(tool => filter_obj_by_keys(tool,Object.keys(typetemplate)));
+				show_customtools();
+			}
+			catch (e) {
+				msgbox("Custom Tools File Import Failed: "+e);
+				return;
+			}
+		});
+	}
+	function is_obj_with_types(inp, typObj, strict=true) //check if inp is an object with typed fields specified by typObj
+	{
+	return inp && (typeof inp==="object") && !Array.isArray(inp) &&
+		Object.keys(typObj).map(k => {return inp.hasOwnProperty(k) && (typeof inp[k]===typObj[k])}).every(Boolean) &&
+		(!strict || Object.keys(inp).length===Object.keys(typObj).length); //if strict, then no other fields are allowed
+	}	
+	function filter_obj_by_keys(obj,keys)
+	{
+		let filteredObj = {};
+		for (let k of keys){
+			filteredObj[k] = obj[k];
+		}
+		return filteredObj;
+	}
+	function edit_customtool(idx=null) //we stash the working tmptool at the end of the customtools_snapshot array
+	{
+		if(document.getElementById("customtooleditcontainer").classList.contains("hidden"))
+		{
+			customtools_snapshot.forEach(tool => {
+				tool.userCallable = (document.getElementById("customtool_"+tool.name).checked?true:false);
+			});
+			let tool = (customtools_snapshot.length===idx) ?
+				{name:"", description:"", parameters:{type:"object",properties:{},additionalProperties:false}, functionBody:"",userCallable:false} :
+				filter_obj_by_keys(customtools_snapshot[idx],["name","description","parameters","functionBody","userCallable"]);
+			tool.tmp_origidx = idx;
+			customtools_snapshot.push(tool);
+			
+			document.getElementById("customtooleditcontainer").classList.remove("hidden");
+			document.getElementById("customtooleditor_name").value = tool.name;
+			document.getElementById("customtooleditor_description").value = tool.description;
+			let paramsjsonstr = JSON.stringify(tool.parameters);
+			document.getElementById("customtooleditor_parametersjson").value = paramsjsonstr;
+			document.getElementById("customtooleditor_functionbody").value = tool.functionBody;
+			document.getElementById("customtooleditor_asynchronous").checked = (tool.parameters.additionalProperties.asynchronous?true:false);
+			try { //check if parameters JSON can be completely reconstructed from the template
+			document.getElementById("customtooleditor_editparametersjsondirectly").checked = (JSON.stringify(customtooleditor_templated_json(false))!==paramsjsonstr);		
+			} catch (e) {
+				document.getElementById("customtooleditor_editparametersjsondirectly").checked = true;
+			}
+			customtooleditor_parameters_toggle();
+		}
+
+		let tool = customtools_snapshot[customtools_snapshot.length-1];
+		let toolargs = Object.keys(tool.parameters.properties);
+		let ctep = "<hr /><p><i>This tool has no parameters.</i></p>";
+		if(toolargs.length)
+		{
+			let selectable_types = ["string","number","boolean","integer","null","array","object"]; //"function"
+			ctep = `<table class="groupchatselect-table">`
+					+`<thead><tr>`
+					+`<th style="text-align:center;">Name </th>`
+					+`<th style="text-align:center;">Type</th>`
+					+`<th style="text-align:center;">Default Value</th>`
+					+`<th style="text-align:center;">Delete</th>`
+					+`</tr></thead><tbody>`;
+			for( let i=0; i<toolargs.length; ++i){
+					let argidx = i;
+					let name = toolargs[i];
+					let hasdefault = tool.parameters.properties[name].hasOwnProperty("default");
+					ctep += `<tr><td><input class="menuinput_inline" type="text" value="${name}" id="customtooleditor_arg${argidx+1}_name"></td>`
+						+`<td><select class="form-control" id="customtooleditor_arg${argidx+1}_type">`;
+					selectable_types.forEach(typ => { ctep += `<option value="${typ}" ${(tool.parameters.properties[name].type===typ)?'selected':''}>${typ}</option>`; });
+					ctep += `</select></td>`
+					+`<td>Set Default?  <input type="checkbox" title="Set Default Value?" id="customtooleditor_arg${argidx+1}_hasdefault" onchange="customtooleditor_argdefault_toggle(${argidx})" ${hasdefault?'checked':''}><br><input class="menuinput_inline ${hasdefault?'':'hidden'}" style="width: 100px;" type="text" value="${hasdefault?tool.parameters.properties[name].default:''}" id="customtooleditor_arg${argidx+1}_default" placeholder="(Empty)"></td>`
+					+`<td><button title="Delete Parameter" type="button" class="btn btn-primary widelbtn" onclick="customtooleditor_modifyparams(${argidx})">X</button></td></tr>`;
+			}
+			ctep += `</tbody></table>`;
+		}
+		ctep += `<div class="ui-settings-inline color_blueurl groupchat-inline-action" onclick="customtooleditor_modifyparams(${toolargs.length})">Add Parameter</div>`;
+		document.getElementById("customtooleditor_parameterstemplatecontainer").innerHTML = ctep;
+	}
+	function customtooleditor_templated_json(usetemplate=true) //returns a parameters JSON object, or an error string
+	{
+		let newparams = {type:"object",properties:{}};
+		let newrequired = [];
+		let toolprops = customtools_snapshot[customtools_snapshot.length-1].parameters.properties;
+		for(let i=0; i<Object.keys(toolprops).length; ++i){
+			let newname = usetemplate ? document.getElementById("customtooleditor_arg"+(i+1)+"_name").value : Object.keys(toolprops)[i];
+			if(!newname){
+				return "Error: Parameter "+(i+1)+" is empty";
+			}
+			if(newparams.properties.hasOwnProperty(newname)){
+				return "Error: Duplicate parameter name: "+newname;
+			}
+			let newprop = {type:(usetemplate? document.getElementById("customtooleditor_arg"+(i+1)+"_type").value : toolprops[newname].type)};
+			if(usetemplate? document.getElementById("customtooleditor_arg"+(i+1)+"_hasdefault").checked : toolprops[newname].hasOwnProperty("default")){
+				newprop["default"] = (usetemplate? document.getElementById("customtooleditor_arg"+(i+1)+"_default").value : toolprops[newname].default);
+			} else {
+				newrequired.push(newname);
+			}
+			newparams.properties[newname] = newprop;
+		}
+		if(newrequired.length){
+			newparams.required = newrequired;
+		}
+		newparams.additionalProperties = (usetemplate?(document.getElementById("customtooleditor_asynchronous").checked ?{asynchronous:true}:false):customtools_snapshot[customtools_snapshot.length-1].parameters.additionalProperties);
+		return newparams;
+	}
+	function customtooleditor_modifyparams(argidx) //adding or deleting a parameter triggers a form redraw
+	{
+		let newparams = customtooleditor_templated_json();
+		if(typeof newparams==="string"){
+			msgbox(newparams);
+			return;
+		}
+		let tool = customtools_snapshot[customtools_snapshot.length-1];
+		let toolargs = Object.keys(tool.parameters.properties);
+		if(argidx < toolargs.length){ //delete this param
+			delete newparams.properties[toolargs[argidx]];
+		} else { //add a new param
+			let freshname = "arg"+(toolargs.length+1);
+			while(toolargs.includes(freshname)){ freshname += "_"; }
+			newparams.properties[freshname] = {type:"string"};
+			if(!newparams.required) {
+				newparams = {type:"object",properties:newparams.properties,required:[],additionalProperties:newparams.additionalProperties};
+			}
+			newparams.required.push(freshname);
+		}
+		tool.parameters = newparams;
+		edit_customtool();
+	}
+	function customtooleditor_parameters_toggle()
+	{
+		if(document.getElementById("customtooleditor_editparametersjsondirectly").checked){
+			document.getElementById("customtooleditor_parametersjsoncontainer").classList.remove("hidden");
+			document.getElementById("customtooleditor_parameterstemplatecontainer").classList.add("hidden");
+		} else {
+			document.getElementById("customtooleditor_parameterstemplatecontainer").classList.remove("hidden");
+			document.getElementById("customtooleditor_parametersjsoncontainer").classList.add("hidden");
+		}
+	}
+	function customtooleditor_argdefault_toggle(idx)
+	{
+		if(document.getElementById("customtooleditor_arg"+(idx+1)+"_hasdefault").checked){
+			document.getElementById("customtooleditor_arg"+(idx+1)+"_default").classList.remove("hidden");
+		} else {
+			document.getElementById("customtooleditor_arg"+(idx+1)+"_default").classList.add("hidden");
+		}
+	}
+	function customtooleditor_done(save)
+	{
+		if(save)
+		{
+			let newname = document.getElementById("customtooleditor_name").value;
+			if(!newname)
+			{
+				msgbox("Tool name cannot be empty!");
+				return;
+			}
+			if(/\s/.test(newname))
+			{
+				msgbox("Tool name cannot contain whitespace!");
+				return;
+			}
+			let namematch = customtools_snapshot.findIndex(tool => tool.name.toLowerCase()===newname.toLowerCase());
+			let idx = customtools_snapshot[customtools_snapshot.length-1].tmp_origidx;
+			if(![-1,customtools_snapshot.length-1,idx].includes(namematch))
+			{
+				msgbox("Duplicate tool names are not allowed!");
+				return;				
+			}
+			let newparameters = document.getElementById("customtooleditor_editparametersjsondirectly").checked;
+			if(newparameters)
+			{
+				try
+				{
+					newparameters = JSON.parse(document.getElementById("customtooleditor_parametersjson").value);
+					if(!newparameters || (typeof newparameters !== "object"))
+					{
+						msgbox("Must specify a parameters JSON object!");
+						return;
+					}
+				} catch(e) {
+					msgbox("Error parsing parameters JSON: "+e.message);
+					return;
+				}			
+			}
+			else
+			{
+				newparameters = customtooleditor_templated_json();
+				if(typeof newparameters==="string") //Error
+				{
+					msgbox(newparameters);
+					return;
+				}
+			}
+
+			let tool = customtools_snapshot[idx];
+			if(tool.name!==newname)
+			{
+				tool.name = newname;
+				tool["tmp_edited"] = true;
+			}
+			if(tool.description!==document.getElementById("customtooleditor_description").value)
+			{
+				tool.description = document.getElementById("customtooleditor_description").value;
+			}
+			if(JSON.stringify(tool.parameters)!==JSON.stringify(newparameters))
+			{
+				tool.parameters = newparameters;
+				tool["tmp_edited"] = true;
+			}
+			if(tool.functionBody!==document.getElementById("customtooleditor_functionbody").value)
+			{
+				tool.functionBody = document.getElementById("customtooleditor_functionbody").value;
+				tool["tmp_edited"] = true;
+			}
+			if(idx===customtools_snapshot.length-1) //newly added tool
+			{
+				delete tool["tmp_origidx"];
+				tool["tmp_edited"] = true;
+				customtools_snapshot.push(null); //push a dummy value to get popped
+			}
+		}
+		customtools_snapshot.pop(); //clear the working tmptool
+		document.getElementById("customtooleditcontainer").classList.add("hidden");
+		show_customtools();
+	}
+
+	function parse_slash_command(tool, senttext) //simple domain-specific language, returns args object or string error
+	{
+		let toolparams = Object.keys(tool.parameters.properties);
+		let sentargs = {};
+		if(tool.name.length+1>=senttext.length){
+			return sentargs;
+		}
+		let paramidx = -1;
+		let currarg = "";
+		let currstack = []; //tracks nesting depth, empty=toplevel
+		let inquotes = false;
+		for(let i=tool.name.length+1; i<senttext.length; ++i){
+			let ch = senttext[i]; //next char
+			let stacktop = currstack.length?currstack[currstack.length-1]:'';
+			if(inquotes) //handle string content, then continue next char
+			{
+				currarg += ch;
+				if(ch==='\\' && i+1<senttext.length){ //escape next char
+					currarg += senttext[++i];
+				} else if(ch===stacktop) { //end quotes
+					currstack.pop();
+					inquotes = false;
+				}
+				continue;
+			}
+			if(ch==='=' && !currstack.length) //handle named parameters, then continue next char
+			{
+				paramidx = toolparams.indexOf(currarg);
+				if(paramidx===-1 && /^[\[{]/.test(currarg)){
+					return "Sorry, slash commands (/"+tool.name+") do not supporting destructuring ("+currarg+"). Please supply your parameters explicitly.";
+				}
+				currarg = "";
+				continue;
+			}
+			if(/[,\s]/.test(ch) && !currstack.length) //handle inter-argument separators, then continue next char
+			{
+				if(ch===',' || currarg.length) //end of argument
+				{
+					if(paramidx===-1){ //no named parameter, assign to the next available one
+						paramidx = toolparams.findIndex(nam => !sentargs.hasOwnProperty(nam));
+						//if this still == -1 (i.e. all arguments already bound)
+						//then we assume currarg is a trailing comment, and discard it
+					}
+					if(paramidx!==-1){
+						sentargs[toolparams[paramidx]] = currarg;
+						paramidx = -1;
+					}
+					currarg = "";
+				} //else ch is inter-argument whitespace, discard it
+				continue;
+			}
+			if(ch==='[' || ch==='{' || ch==='(' || ch==='"' || ch==="'") //handle nested delimiters (do NOT continue next char)
+			{
+				currstack.push(ch);
+				inquotes = (ch==='"' || ch==="'");
+			}
+			else if(ch===']' || ch==='}' || ch===')')
+			{
+				if(!(ch===']' && stacktop==='[') && !(ch==='}' && stacktop==='{') && !(ch===')' && stacktop==='(')){
+					return "Error parsing slash command (/"+tool.name+"): mismatched delimiters ('"+stacktop+"' followed by '"+ch+"')";
+				}
+				currstack.pop();
+			}
+			currarg += ch; //ordinary character
+		}
+		//end of senttext input
+		if(currstack.length){
+			return "Error parsing slash command (/"+tool.name+"): unmatched delimiter "+currstack.pop();
+		}
+		if(paramidx!==-1 || currarg.length) //last argument
+		{
+			if(paramidx===-1){
+				paramidx = toolparams.findIndex(nam => !sentargs.hasOwnProperty(nam));
+			}
+			if(paramidx!==-1){
+				sentargs[toolparams[paramidx]] = currarg;
+			}
+		}
+		return sentargs;
+	}
+	function TrustedCustomToolCallPromise(tool, argsobj){
+		return Promise.resolve()
+		.then(()=>{
+			let toolparamobj = tool.parameters;
+			if(toolparamobj.type==="object" && toolparamobj.hasOwnProperty("properties")) //should be true if the toolcall is correctly formatted
+			{
+				toolparamobj = toolparamobj.properties;
+			}
+			toolparams = Object.keys(toolparamobj);
+			let callargs = toolparams.map((nam) => { //(indirect) evaluates each argument, using default values if missing
+				let propobj = toolparamobj[nam];
+				let type = propobj.type?propobj.type:"";
+				let argval = argsobj.hasOwnProperty(nam) ? argsobj[nam]
+				: propobj.hasOwnProperty("default") ? propobj.default
+				: "undefined";
+				if(type==="string" && /^['"].+/.test(argval) && argval[0]===argval[argval.length-1]) //if argval is a quoted string, return its contents directly
+				{
+					return argval.slice(1,-1);
+				}
+				try { argval = (0,eval)("("+argval+")");
+				} catch (e) {
+					console.log("Failed to evaluate "+argval+", falling back to raw string interpretation");
+					return argval;
+				}
+				switch(type) // if the parameters JSON provides a type, cast to it
+				{
+					case "string":
+						return String(argval);
+					case "number":
+						return Number(argval);
+					case "boolean":
+						return Boolean(argval);
+					case "integer":
+						return Math.trunc(Number(argval));
+					case "null":
+						return (argval==null)?argval:undefined;
+					case "array":
+						return Array.from(argval);
+					case "object":
+						return Object(argval);
+					default:
+						return argval;
+				}
+			});
+			let name = tool.name;
+			if(!trusted_custom_tools.hasOwnProperty(name)) //evaluates the tool's functionBody
+			{
+				trusted_custom_tools[name] = new Function(...toolparams, tool.functionBody);
+			}
+			let result = trusted_custom_tools[name](...callargs);
+			if(result)
+			{
+				console.log("Custom Tool Call OK");
+				console.log(result);
+			}
+			return (tool.parameters.additionalProperties && tool.parameters.additionalProperties.asynchronous) ?
+			result : Promise.resolve(result);
+		})
+		.catch(err => {
+			console.log("Custom Tool Call Error");
+			console.log(err || String(err));
+			throw err;
+		})
+	}
 
 	//MCP HTTP client code
 	const MCP_PROTOCOL_VER = "2025-11-25";
@@ -8617,16 +9103,49 @@ Current version indicated by LITEVER below.
 			pending_response_id = "toolcall-v1-dummy-id-"+(Math.floor(1000 + Math.random() * 9000)).toString(); //dummy id, autogenerated
 
 			let mcpurl = GetMCPUrlOfTool(callresp.name);
-			const customHeaders = localsettings.cached_mcp_tools[mcpurl].apikey ?
-			{ 'Authorization': `Bearer ${localsettings.cached_mcp_tools[mcpurl].apikey}` } : {};
-			if(localsettings.corsproxy_mcp)
+			let MCPToolCallPromise = null;
+			if(mcpurl==="custom_tools" && localsettings.customtools_AI_enabled) //hook in the custom tool
 			{
-				mcpurl = apply_proxy_url(mcpurl,true);
+				MCPToolCallPromise = Promise.resolve()
+				.then(() => {
+					// Validate inputs
+					if(!localsettings.cached_mcp_tools || Object.keys(localsettings.cached_mcp_tools).length === 0 || !callresp.name) {
+						throw new Error("tool call invalid parameters");
+					}
+					let idx = localsettings.custom_tools.map(tool => tool.name).indexOf(callresp.name);
+					if(idx===-1){
+						throw new Error("Custom tool not found");
+					}
+					// Simulate the tool call in Javascript
+					return TrustedCustomToolCallPromise(localsettings.custom_tools[idx],callargs);
+				}).then((result) => {
+					let content = {type: typeof(result)};
+					if(content.type==="undefined") //if the function has no return value, we add one
+					{
+						content.type = "string";
+						content.string = "Operation completed successfully";
+					}
+					else
+					{
+						content[content.type] = result;
+					}
+					return {"content":[content]};
+				});
 			}
-			MCPInit(mcpurl, customHeaders)
-			.then(mcp_client => {
-				return MCPToolCallInternal(mcp_client,callresp.name,callargs);
-			}).then(function (response) {
+			else
+			{
+				const customHeaders = localsettings.cached_mcp_tools[mcpurl].apikey ?
+				{ 'Authorization': `Bearer ${localsettings.cached_mcp_tools[mcpurl].apikey}` } : {};
+				if(localsettings.corsproxy_mcp)
+				{
+					mcpurl = apply_proxy_url(mcpurl,true);
+				}
+				MCPToolCallPromise = MCPInit(mcpurl, customHeaders)
+				.then(mcp_client => {
+					return MCPToolCallInternal(mcp_client,callresp.name,callargs);
+				});
+			}
+			MCPToolCallPromise.then(function (response) {
 				if(response.content && response.content.length>0)
 				{
 					let outitems = [];
@@ -8684,6 +9203,9 @@ Current version indicated by LITEVER below.
 		const textarea = document.getElementById('mcpurls');
 		const lines = textarea.value.split('\n').filter(line => line.trim());
 		const servers = {};
+		if(localsettings.customtools_AI_enabled){
+			servers["custom_tools"] = { apikey: null, tools: [] };
+		}
 		for (let i = 0; i < lines.length; i++) {
 			const line = lines[i];
 			const commaIndex = line.indexOf(',');
@@ -8714,6 +9236,10 @@ Current version indicated by LITEVER below.
 		const fetchPromises = [];
 
 		urls.forEach(url => {
+			if(url==="custom_tools" && localsettings.customtools_AI_enabled)
+			{
+				fetchPromises.push({url:url, apikey:null, tools:localsettings.custom_tools.map(tool => ({type:"function",function:filter_obj_by_keys(tool,["name","description","parameters"])}))});
+			} else {
 			const customHeaders = urlsobj[url].apikey ?
 				{ 'Authorization': `Bearer ${urlsobj[url].apikey}` } : {};
 
@@ -8734,8 +9260,9 @@ Current version indicated by LITEVER below.
 					console.error(`Error fetching tools from ${url}:`, error);
 					return retobj;
 				});
-
+			
 			fetchPromises.push(fetchPromise);
+			}
 		});
 
 		// wait till all fetched or failed
@@ -20075,6 +20602,23 @@ Current version indicated by LITEVER below.
 			corpo_edit_chunk_save();
 		}
 		let senttext = document.getElementById("input_text").value;
+		let toolname = senttext.startsWith('/')?senttext.slice(1).match(/^\S*/)[0]:'';
+		let idx = localsettings.custom_tools.map(tool => tool.name).indexOf(toolname);
+		if(idx!==-1 && localsettings.custom_tools[idx].userCallable){
+			//try to parse senttext as a slash command
+			let sentargs = parse_slash_command(localsettings.custom_tools[idx],senttext);
+			if(typeof sentargs==="string"){
+				msgbox(sentargs);
+				return;
+			}
+			document.getElementById("input_text").value = "Slash command (/"+toolname+") activated, please wait...";
+			TrustedCustomToolCallPromise(localsettings.custom_tools[idx],sentargs).then(function (res) {
+				document.getElementById("input_text").value = res?res:("Slash command (/"+toolname+") executed successfully.");
+			}).catch(function (err) {
+				document.getElementById("input_text").value = "Slash command (/"+toolname+") error: "+err.message;
+			});
+			return;
+		}
 		document.getElementById("input_text").value = "";
 		PerformWebsearch(senttext,(res)=>{
 			submit_generation(senttext);
@@ -31713,6 +32257,10 @@ Current version indicated by LITEVER below.
 							<input title="Automatically Execute Tools" type="checkbox" id="tools_auto_exec" class="push-right">
 						</div>
 						<div class="settinglabel">
+							<div class="justifyleft">Define Custom Tools <span class="helpicon">?<span class="helptext">Allows you to build your own tools as Javascript functions (caution).</span></span></div>
+							<button type="button" class="btn btn-primary push-right" onclick="show_customtools()">Custom Tools</button>
+						</div>
+						<div class="settinglabel">
 							<div class="justifyleft">Use CORS Proxy for MCP <span class="helpicon">?<span
 								class="helptext">Many public MCP servers restrict CORS, use this to proxy your requests. Uses external tools, please only use if necessary.</span></span></div>
 							<input title="Use CORS Proxy for MCP" type="checkbox" id="corsproxy_mcp" class="push-right">
@@ -33063,6 +33611,47 @@ Current version indicated by LITEVER below.
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="confirm_groupchat_aesthetics()">OK</button>
 				<button type="button" class="btn btn-primary" onclick="cancel_groupchat_aesthetics()">Cancel</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="customtoolscontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup flexsize evenhigher">
+			<div class="popuptitlebar">
+				<div class="popuptitletext">Define Custom Tools</div>
+			</div>
+			<div class="menutext">
+				<div id="customtoolsitems">
+				</div>
+			</div>
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="customtools_done(true)">OK</button>
+				<button type="button" class="btn btn-primary" onclick="customtools_done(false)">Cancel</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="customtooleditcontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup flexsize higher">
+			<div class="popuptitlebar">
+				<div class="popuptitletext">Edit Custom Tool</div>
+			</div>
+			<div class="menutext">
+				<div class="settinglabel"><div class="justifyleft">&nbsp;&nbsp;Tool Name: </div><input class="push-right" title="Tool Name" type="text" placeholder="Enter the tool's name (e.g. read_diary)" style="width: calc(100% - 250px);" id="customtooleditor_name"></div>
+				<div class="settinglabel"><div class="justifyleft">&nbsp;&nbsp;Description: </div><textarea class="form-control menuinput_multiline" title="Description" placeholder="Details on when and how to use the tool (e.g. Read the contents of the diary)" id="customtooleditor_description"></textarea></div>
+				<br>
+				<div class="settinglabel"><div class="justify-center">&nbsp;&nbsp;Edit parameters JSON directly  <span class="helpicon">?<span class="helptext">When checked, you must manually specify the JSON schema for the tool's input arguments.</span></span>  <input type="checkbox" title="Edit Parameters JSON directly?" id="customtooleditor_editparametersjsondirectly" onchange="customtooleditor_parameters_toggle()"></div></div>
+				<div class="settinglabel hidden" id="customtooleditor_parametersjsoncontainer"><textarea class="form-control menuinput_multiline" title="Parameters JSON" placeholder="{ type:'object', properties:{}, additionalProperties:false }" id="customtooleditor_parametersjson"></textarea></div>
+				<div id="customtooleditor_parameterstemplatecontainer">
+				</div>
+				<div class="settinglabel"><div class="justifyleft">&nbsp;&nbsp;Function Body: </div><textarea class="form-control menuinput_multiline" title="Function Body" placeholder="Javascript source code for the function (e.g. return String( localsettings.diary ? localsettings.diary : 'The diary is empty' ); )" rows="5" id="customtooleditor_functionbody"></textarea></div>`
+				<div class="settinglabel"><div class="justifyleft">&nbsp;&nbsp;Is Asynchronous (returns a Promise)?:  <input type="checkbox" title="Is Asynchronous?" id="customtooleditor_asynchronous"></div></div>
+			</div>
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="customtooleditor_done(true)">OK</button>
+				<button type="button" class="btn btn-primary" onclick="customtooleditor_done(false)">Cancel</button>
 			</div>
 		</div>
 	</div>
