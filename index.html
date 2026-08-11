@@ -9119,16 +9119,19 @@ Current version indicated by LITEVER below.
 					// Simulate the tool call in Javascript
 					return TrustedCustomToolCallPromise(localsettings.custom_tools[idx],callargs);
 				}).then((result) => {
-					let content = {type: typeof(result)};
-					if(content.type==="undefined") //if the function has no return value, we add one
+					let restype = typeof(result);
+					if(restype==="string" && result.startsWith("data:image"))
 					{
-						content.type = "string";
-						content.string = "Operation completed successfully";
+						restype = "image_url";
+						result = {url:result};
 					}
-					else
+					if(restype==="undefined") //if the function has no return value, we add one
 					{
-						content[content.type] = result;
+						restype = "string";
+						result = "Operation completed successfully";
 					}
+					let content = {type: restype};
+					content[restype] = result;
 					return {"content":[content]};
 				});
 			}
@@ -9154,7 +9157,7 @@ Current version indicated by LITEVER below.
 						let tgt = replaceStringsInObject(response.content[i], "&quot;", "\""); //we must remove existing escaped quotes or things break later
 						outitems.push(tgt);
 					}
-					callresp.content = JSON.stringify(outitems);
+					callresp.content = outitems;
 				}
 				callresptxt += JSON.stringify(callresp);
 				if(toolcall_obj.tool_calls.length < 2)
