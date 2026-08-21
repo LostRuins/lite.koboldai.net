@@ -17134,8 +17134,10 @@ Current version indicated by LITEVER below.
 		localsettings.tts_mode = document.getElementById("ttsselect").value;
 		localsettings.xtts_voice = document.getElementById("xtts_voices").value;
 		localsettings.kcpp_tts_voice = document.getElementById("kcpp_tts_voice").value;
-		localsettings.oai_tts_model = document.getElementById("oai_tts_model").value?document.getElementById("oai_tts_model").value:defaultsettings.oai_tts_model;
-		localsettings.oai_tts_voice = document.getElementById("oai_tts_voice").value?document.getElementById("oai_tts_voice").value:defaultsettings.oai_tts_voice;
+		let oai_tts_model = document.getElementById("oai_tts_model").value;
+		let oai_tts_voice = document.getElementById("oai_tts_voice").value;
+		localsettings.oai_tts_model = oai_tts_model?oai_tts_model:defaultsettings.oai_tts_model;
+		localsettings.oai_tts_voice = oai_tts_voice?oai_tts_voice:defaultsettings.oai_tts_voice;
 		localsettings.wb_tts_choice = document.getElementById("wb_tts_choice").value?document.getElementById("wb_tts_choice").value:0;
 		localsettings.kcpp_tts_json = kcpp_tts_json;
 		localsettings.beep_notify_mode = document.getElementById("beep_notify_mode").value;
@@ -19464,6 +19466,15 @@ Current version indicated by LITEVER below.
 	ttsMasterGain.connect(ttsAudioContext.destination);
 	function tts_speak(text, do_download=false, do_embed_tts=false, is_test=false)
 	{
+		if(!text || text=="" || text.trim()=="")
+		{
+			return;
+		}
+		text = strip_tts_media_placeholders(text);
+		if(!text || text=="" || text.trim()=="")
+		{
+			return;
+		}
 		let ssval = localsettings.tts_mode;
 		let streamallowed = (ssval==XTTS_ID || ssval==ALLTALK_ID || ssval==OAI_TTS_ID || ssval==KCPP_TTS_ID);
 		if(streamallowed && localsettings.tts_stream && !is_test)
@@ -19480,6 +19491,16 @@ Current version indicated by LITEVER below.
 			tts_speak_direct(text,do_download,do_embed_tts,is_test,false);
 		}
 	}
+
+	function strip_tts_media_placeholders(text)
+	{
+		text = text.replace(/<t2i>[\s\S]*?<\/t2i>/g, "");
+		text = text.replace(/\[<\|p\|.+?\|p\|>\]/g, "");
+		text = text.replace(/\[<\|h\|.+?\|h\|>\]/g, "");
+		text = text.replace(/{{\[DAT_.{1,8}_REF\]}}/g, "");
+		return text;
+	}
+
 	function poll_chunked_tts()
 	{
 		if(tts_speak_input_queue.length>0 && !tts_is_processing && tts_speak_output_queue.length < 3)
@@ -19514,6 +19535,11 @@ Current version indicated by LITEVER below.
 
 	function tts_speak_direct(text, do_download=false, do_embed_tts=false, is_test=false, append_to_outqueue=false)
 	{
+		if(!text || text=="" || text.trim()=="")
+		{
+			return;
+		}
+		text = strip_tts_media_placeholders(text);
 		if(!text || text=="" || text.trim()=="")
 		{
 			return;
@@ -23335,17 +23361,6 @@ Current version indicated by LITEVER below.
 				let pat = new RegExp(get_thinking_regex(), "gmi");
 				gentxtspeak = gentxtspeak.replace(pat, '');
 			}
-			//remove t2i and p
-			if (localsettings.img_autogen_type == 2)
-			{
-				const pat = /<t2i>(.*?)<\/t2i>/g;
-				gentxtspeak = gentxtspeak.replace(pat, "");
-				const pat2 = /{{\[DAT_.{1,8}_REF\]}}/g;
-				gentxtspeak = gentxtspeak.replace(pat2, "");
-				const pat3 = /\[<\|p\|(.*?)\|p\|>\]/g;
-				gentxtspeak = gentxtspeak.replace(pat3, "");
-			}
-
 			if(localsettings.narrate_targets != 0)
 			{
 				tts_speak(gentxtspeak,false,localsettings.embed_narrations,false);
