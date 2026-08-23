@@ -4643,7 +4643,9 @@ Current version indicated by LITEVER below.
 		saved_comfy_bearer_token: true,
 		saved_xtts_url: true,
 		generate_images_mode: true,
-		saved_mcp_urls: true
+		saved_mcp_urls: true,
+		custom_tools: true,
+		custom_tools_AI_enabled: true
 	};
 
 	const defaultsettings = JSON.parse(JSON.stringify(localsettings));
@@ -8304,17 +8306,135 @@ Current version indicated by LITEVER below.
 	
 	var trusted_custom_tools = {}; //Functions are only evaluated when actually called (by user or AI)
 	var customtools_snapshot = null; //Temp UI editor
+	function customtools_empty_parameters()
+	{
+		return {type:"object",properties:{},additionalProperties:false};
+	}
+	function customtools_clone(value)
+	{
+		return JSON.parse(JSON.stringify(value));
+	}
+	function customtool_is_valid_name(name)
+	{
+		return (typeof name==="string" && /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/.test(name));
+	}
+	function customtool_is_valid_param_name(name)
+	{
+		return (typeof name==="string" && /^[$A-Z_a-z][$0-9A-Z_a-z]*$/.test(name));
+	}
+	function customtool_is_async(tool)
+	{
+		return (tool && tool.parameters && tool.parameters.additionalProperties && tool.parameters.additionalProperties.asynchronous);
+	}
+	function customtool_get_parameters(tool)
+	{
+		if(!tool || !tool.parameters || typeof tool.parameters!=="object" || Array.isArray(tool.parameters) || tool.parameters.type!=="object" || !tool.parameters.properties || typeof tool.parameters.properties!=="object" || Array.isArray(tool.parameters.properties))
+		{
+			return null;
+		}
+		return tool.parameters.properties;
+	}
+	function customtool_schema_error(tool)
+	{
+		let params = customtool_get_parameters(tool);
+		if(params===null)
+		{
+			return "Parameters must be a JSON schema object with type:\"object\" and a properties object.";
+		}
+		let names = Object.keys(params);
+		for(let i=0;i<names.length;++i)
+		{
+			let nam = names[i];
+			if(!customtool_is_valid_param_name(nam))
+			{
+				return "Parameter name is not a valid Javascript function argument: "+nam;
+			}
+			let prop = params[nam];
+			if(!prop || typeof prop!=="object" || Array.isArray(prop))
+			{
+				return "Parameter "+nam+" must be an object.";
+			}
+			if(prop.type && !["string","number","boolean","integer","null","array","object"].includes(prop.type))
+			{
+				return "Unsupported parameter type for "+nam+": "+prop.type;
+			}
+		}
+		if(tool.parameters.required && (!Array.isArray(tool.parameters.required) || !tool.parameters.required.every(nam => typeof nam==="string" && params.hasOwnProperty(nam))))
+		{
+			return "Required parameters must be an array of defined parameter names.";
+		}
+		return "";
+	}
+	function customtool_normalize(tool)
+	{
+		let typetemplate = {name:"string",description:"string",parameters:"object",functionBody:"string",userCallable:"boolean"};
+		if(!is_obj_with_types(tool,typetemplate,false))
+		{
+			throw new Error("Object is not a custom tool");
+		}
+		let clean = filter_obj_by_keys(tool,Object.keys(typetemplate));
+		if(!customtool_is_valid_name(clean.name))
+		{
+			throw new Error("Invalid tool name: "+clean.name);
+		}
+		let schemaerr = customtool_schema_error(clean);
+		if(schemaerr)
+		{
+			throw new Error(schemaerr);
+		}
+		return clean;
+	}
+	function customtools_sanitize_list(tools)
+	{
+		if(!Array.isArray(tools))
+		{
+			return [];
+		}
+		let clean_tools = [];
+		let seen_names = {};
+		for(let i=0;i<tools.length;++i)
+		{
+			try {
+				let clean = customtool_normalize(tools[i]);
+				let lowername = clean.name.toLowerCase();
+				if(!seen_names[lowername])
+				{
+					seen_names[lowername] = true;
+					clean_tools.push(clean);
+				}
+			} catch(e) {
+				console.log("Skipping invalid custom tool: "+(e.message || String(e)));
+			}
+		}
+		return clean_tools;
+	}
+	function customtools_capture_user_callable()
+	{
+		if(!customtools_snapshot)
+		{
+			return;
+		}
+		for(let i=0;i<customtools_snapshot.length;++i)
+		{
+			let box = document.getElementById("customtool_"+i);
+			if(box)
+			{
+				customtools_snapshot[i].userCallable = (box.checked?true:false);
+			}
+		}
+	}
 	function show_customtools()
 	{
 		let enable_custom_tools_AI;
 		if(customtools_snapshot===null) //open fresh popup
 		{
-			customtools_snapshot = localsettings.custom_tools;
+			customtools_snapshot = customtools_clone(customtools_sanitize_list(localsettings.custom_tools));
 			enable_custom_tools_AI = localsettings.custom_tools_AI_enabled;
 		}
 		else //refresh already open popup
 		{
-			enable_custom_tools_AI = (document.getElementById("enable_custom_tools_AI").checked?true:false);
+			let ai_box = document.getElementById("enable_custom_tools_AI");
+			enable_custom_tools_AI = (ai_box && ai_box.checked?true:false);
 		}
 		hide_popups();
 		document.getElementById("customtoolscontainer").classList.remove("hidden");
@@ -8332,10 +8452,11 @@ Current version indicated by LITEVER below.
 			for (let i=0; i<customtools_snapshot.length; ++i){
 				let toolidx = i;
 				let tool = customtools_snapshot[i];
-				ct += `<tr><td class="tools-info"><div class="tool-title">${tool.name}</div><div class="tool-description">${tool.description ? tool.description.substr(0,180):"No description"}</div></td>`;
+				let desc = tool.description ? tool.description.substr(0,180) : "No description";
+				ct += `<tr><td class="tools-info"><div class="tool-title">${escape_html(tool.name)}</div><div class="tool-description">${escape_html(desc)}</div></td>`;
 				ct += `<td style="text-align:center; vertical-align:middle;"><button title="Edit Tool" type="button" class="btn btn-primary widelbtn" onclick="edit_customtool(${toolidx})">+</button></td>`;
-				ct += `<td class="tools-checkbox" style="text-align:center; vertical-align:middle;"><input type="checkbox" title="Make Tool Callable With Slash Syntax" id="customtool_${tool.name}" ${(tool.userCallable?"checked":"")}></td>`;
-				ct += `<td style="text-align:center; vertical-align:middle;"><button title="Delete Tool" type="button" class="btn btn-primary widelbtn" onclick="customtools_snapshot.splice(${toolidx},1); customtools_snapshot.forEach(tool => { tool.userCallable = (document.getElementById('customtool_'+tool.name).checked?true:false); }); show_customtools();">X</button></td></tr>`;
+				ct += `<td class="tools-checkbox" style="text-align:center; vertical-align:middle;"><input type="checkbox" title="Make Tool Callable With Slash Syntax" id="customtool_${toolidx}" ${(tool.userCallable?"checked":"")}></td>`;
+				ct += `<td style="text-align:center; vertical-align:middle;"><button title="Delete Tool" type="button" class="btn btn-primary widelbtn" onclick="customtools_capture_user_callable(); customtools_snapshot.splice(${toolidx},1); show_customtools();">X</button></td></tr>`;
 			}
 			ct += `</tbody></table>`;
 		}
@@ -8343,7 +8464,7 @@ Current version indicated by LITEVER below.
 		{
 			ct += "<hr /><br><p><i>No custom tools defined.</i></p><br>";
 		}
-		ct += `<div><button title="Add a New Custom Tool" type="button" class="btn btn-primary widelbtn" style="margin:8px;" onclick="edit_customtool(${customtools_snapshot.length})">Add a New Custom Tool</div>`;
+		ct += `<div><button title="Add a New Custom Tool" type="button" class="btn btn-primary widelbtn" style="margin:8px;" onclick="edit_customtool(${customtools_snapshot.length})">Add a New Custom Tool</button></div>`;
 		
 		document.getElementById("customtoolsitems").innerHTML = ct;
 	}
@@ -8351,13 +8472,17 @@ Current version indicated by LITEVER below.
 	{
 		if(save)
 		{
+			customtools_capture_user_callable();
+			let customtools_edited = false;
 			customtools_snapshot.forEach(tool => {
-				if(tool.tmp_edited){ //clear the trusted_custom_tools cache
+				if(tool.tmp_edited){
+					customtools_edited = true;
 					delete tool["tmp_edited"];
-					delete trusted_custom_tools[tool.name];
 				}
-				tool.userCallable = (document.getElementById("customtool_"+tool.name).checked?true:false);
 			});
+			if(customtools_edited){
+				trusted_custom_tools = {};
+			}
 			localsettings.custom_tools = customtools_snapshot;
 			localsettings.custom_tools_AI_enabled = (document.getElementById("enable_custom_tools_AI").checked?true:false);
 		}
@@ -8376,19 +8501,9 @@ Current version indicated by LITEVER below.
 	}
 	function export_customtools_to_file()
 	{
-		let tmp_edited = customtools_snapshot.map(tool => tool.tmp_edited); //record these, but don't export
-		customtools_snapshot.forEach(tool => {
-			if(tool.tmp_edited){
-				delete tool["tmp_edited"];
-			}
-			tool.userCallable = (document.getElementById("customtool_"+tool.name).checked?true:false);
-		});
-		saveFileGeneric("custom_tools",JSON.stringify(customtools_snapshot),"application/json");
-		for (let i=0; i < tmp_edited.length; ++i){ //restore records
-			if(tmp_edited[i]){
-				customtools_snapshot[i].tmp_edited = true;
-			}
-		}
+		customtools_capture_user_callable();
+		let exported = customtools_snapshot.map(tool => filter_obj_by_keys(tool,["name","description","parameters","functionBody","userCallable"]));
+		saveFileGeneric("custom_tools",JSON.stringify(exported),"application/json");
 	}
 	function load_customtools_from_file()
 	{
@@ -8401,19 +8516,27 @@ Current version indicated by LITEVER below.
 					//assume it's a kai file
 					filecontent = filecontent.savedsettings.custom_tools;
 				}
+				if(!Array.isArray(filecontent)){
+					throw new Error("Custom tools file must contain an array");
+				}
 				//else assume it's an exported array
 				let has_unknown_attributes = false;
-				let typetemplate = {name:"string",description:"string",parameters:"object",functionBody:"string",userCallable:"boolean"};
+				let clean_tools = [];
+				let seen_names = {};
 				for(let i=0; i<filecontent.length; ++i){
-					if(!is_obj_with_types(filecontent[i],typetemplate,false)){
-						throw new Error("Array element "+i+" is not a custom tool");
-					}
+					let clean = customtool_normalize(filecontent[i]);
 					has_unknown_attributes ||= (Object.keys(filecontent[i]).length>5);
+					let lowername = clean.name.toLowerCase();
+					if(seen_names[lowername]){
+						throw new Error("Duplicate tool name: "+clean.name);
+					}
+					seen_names[lowername] = true;
+					clean_tools.push(clean);
 				}
 				if(has_unknown_attributes){ //for security, we destroy them (but alert the user)
 					msgbox("Warning: Found unknown attributes in your custom tools JSON (not imported).","Custom Tools Import Warning");
 				}
-				customtools_snapshot = filecontent.map(tool => filter_obj_by_keys(tool,Object.keys(typetemplate)));
+				customtools_snapshot = clean_tools;
 				show_customtools();
 			}
 			catch (e) {
@@ -8440,12 +8563,10 @@ Current version indicated by LITEVER below.
 	{
 		if(document.getElementById("customtooleditcontainer").classList.contains("hidden"))
 		{
-			customtools_snapshot.forEach(tool => {
-				tool.userCallable = (document.getElementById("customtool_"+tool.name).checked?true:false);
-			});
+			customtools_capture_user_callable();
 			let tool = (customtools_snapshot.length===idx) ?
-				{name:"", description:"", parameters:{type:"object",properties:{},additionalProperties:false}, functionBody:"",userCallable:false} :
-				filter_obj_by_keys(customtools_snapshot[idx],["name","description","parameters","functionBody","userCallable"]);
+				{name:"", description:"", parameters:customtools_empty_parameters(), functionBody:"",userCallable:false} :
+				customtools_clone(filter_obj_by_keys(customtools_snapshot[idx],["name","description","parameters","functionBody","userCallable"]));
 			tool.tmp_origidx = idx;
 			customtools_snapshot.push(tool);
 			
@@ -8455,7 +8576,7 @@ Current version indicated by LITEVER below.
 			let paramsjsonstr = JSON.stringify(tool.parameters);
 			document.getElementById("customtooleditor_parametersjson").value = paramsjsonstr;
 			document.getElementById("customtooleditor_functionbody").value = tool.functionBody;
-			document.getElementById("customtooleditor_asynchronous").checked = (tool.parameters.additionalProperties.asynchronous?true:false);
+			document.getElementById("customtooleditor_asynchronous").checked = customtool_is_async(tool);
 			try { //check if parameters JSON can be completely reconstructed from the template
 			document.getElementById("customtooleditor_editparametersjsondirectly").checked = (JSON.stringify(customtooleditor_templated_json(false))!==paramsjsonstr);		
 			} catch (e) {
@@ -8481,11 +8602,11 @@ Current version indicated by LITEVER below.
 					let argidx = i;
 					let name = toolargs[i];
 					let hasdefault = tool.parameters.properties[name].hasOwnProperty("default");
-					ctep += `<tr><td><input class="menuinput_inline" type="text" value="${name}" id="customtooleditor_arg${argidx+1}_name"></td>`
+					ctep += `<tr><td><input class="menuinput_inline" type="text" value="${escape_html(name)}" id="customtooleditor_arg${argidx+1}_name"></td>`
 						+`<td><select class="form-control" id="customtooleditor_arg${argidx+1}_type">`;
 					selectable_types.forEach(typ => { ctep += `<option value="${typ}" ${(tool.parameters.properties[name].type===typ)?'selected':''}>${typ}</option>`; });
 					ctep += `</select></td>`
-					+`<td>Set Default?  <input type="checkbox" title="Set Default Value?" id="customtooleditor_arg${argidx+1}_hasdefault" onchange="customtooleditor_argdefault_toggle(${argidx})" ${hasdefault?'checked':''}><br><input class="menuinput_inline ${hasdefault?'':'hidden'}" style="width: 100px;" type="text" value="${hasdefault?tool.parameters.properties[name].default:''}" id="customtooleditor_arg${argidx+1}_default" placeholder="(Empty)"></td>`
+					+`<td>Set Default?  <input type="checkbox" title="Set Default Value?" id="customtooleditor_arg${argidx+1}_hasdefault" onchange="customtooleditor_argdefault_toggle(${argidx})" ${hasdefault?'checked':''}><br><input class="menuinput_inline ${hasdefault?'':'hidden'}" style="width: 100px;" type="text" value="${hasdefault?escape_html(String(tool.parameters.properties[name].default)):''}" id="customtooleditor_arg${argidx+1}_default" placeholder="(Empty)"></td>`
 					+`<td><button title="Delete Parameter" type="button" class="btn btn-primary widelbtn" onclick="customtooleditor_modifyparams(${argidx})">X</button></td></tr>`;
 			}
 			ctep += `</tbody></table>`;
@@ -8502,6 +8623,9 @@ Current version indicated by LITEVER below.
 			let newname = usetemplate ? document.getElementById("customtooleditor_arg"+(i+1)+"_name").value : Object.keys(toolprops)[i];
 			if(!newname){
 				return "Error: Parameter "+(i+1)+" is empty";
+			}
+			if(!customtool_is_valid_param_name(newname)){
+				return "Error: Parameter "+(i+1)+" is not a valid Javascript function argument";
 			}
 			if(newparams.properties.hasOwnProperty(newname)){
 				return "Error: Duplicate parameter name: "+newname;
@@ -8571,9 +8695,9 @@ Current version indicated by LITEVER below.
 				msgbox("Tool name cannot be empty!");
 				return;
 			}
-			if(/\s/.test(newname))
+			if(!customtool_is_valid_name(newname))
 			{
-				msgbox("Tool name cannot contain whitespace!");
+				msgbox("Tool name must start with a letter or underscore, and may contain letters, numbers, underscores, or hyphens.");
 				return;
 			}
 			let namematch = customtools_snapshot.findIndex(tool => tool.name.toLowerCase()===newname.toLowerCase());
@@ -8592,6 +8716,12 @@ Current version indicated by LITEVER below.
 					if(!newparameters || (typeof newparameters !== "object"))
 					{
 						msgbox("Must specify a parameters JSON object!");
+						return;
+					}
+					let schemaerr = customtool_schema_error({parameters:newparameters});
+					if(schemaerr)
+					{
+						msgbox(schemaerr);
 						return;
 					}
 				} catch(e) {
@@ -8643,7 +8773,11 @@ Current version indicated by LITEVER below.
 
 	function parse_slash_command(tool, senttext) //simple domain-specific language, returns args object or string error
 	{
-		let toolparams = Object.keys(tool.parameters.properties);
+		let toolprops = customtool_get_parameters(tool);
+		if(toolprops===null){
+			return "Error parsing slash command (/"+tool.name+"): invalid tool parameters";
+		}
+		let toolparams = Object.keys(toolprops);
 		let sentargs = {};
 		if(tool.name.length+1>=senttext.length){
 			return sentargs;
@@ -8721,49 +8855,99 @@ Current version indicated by LITEVER below.
 		}
 		return sentargs;
 	}
+	function customtool_parse_literal(value)
+	{
+		if(typeof value!=="string")
+		{
+			return value;
+		}
+		let trimmed = value.trim();
+		if(trimmed==="")
+		{
+			return "";
+		}
+		if((trimmed[0]==="'" && trimmed[trimmed.length-1]==="'") || (trimmed[0]==='"' && trimmed[trimmed.length-1]==='"'))
+		{
+			if(trimmed[0]==="'")
+			{
+				return trimmed.slice(1,-1).replace(/\\'/g,"'").replace(/\\\\/g,"\\");
+			}
+			try {
+				return JSON.parse(trimmed);
+			} catch(e) {
+				return trimmed.slice(1,-1);
+			}
+		}
+		if(/^(true|false|null)$/i.test(trimmed) || /^-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(trimmed) || /^[\[{]/.test(trimmed))
+		{
+			try {
+				return JSON.parse(trimmed);
+			} catch(e) {
+				return value;
+			}
+		}
+		return value;
+	}
+	function customtool_coerce_arg(value, propobj)
+	{
+		let type = propobj.type?propobj.type:"";
+		let argval = customtool_parse_literal(value);
+		switch(type)
+		{
+			case "string":
+				return (argval===undefined?undefined:String(argval));
+			case "number":
+				argval = Number(argval);
+				if(Number.isNaN(argval)){ throw new Error("Parameter must be a number"); }
+				return argval;
+			case "boolean":
+				if(typeof argval==="string")
+				{
+					if(argval.toLowerCase()==="true"){ return true; }
+					if(argval.toLowerCase()==="false"){ return false; }
+				}
+				return Boolean(argval);
+			case "integer":
+				argval = Number(argval);
+				if(Number.isNaN(argval)){ throw new Error("Parameter must be an integer"); }
+				return Math.trunc(argval);
+			case "null":
+				return (argval==null)?null:undefined;
+			case "array":
+				if(!Array.isArray(argval)){ throw new Error("Parameter must be an array"); }
+				return argval;
+			case "object":
+				if(argval===null || typeof argval!=="object" || Array.isArray(argval)){ throw new Error("Parameter must be an object"); }
+				return argval;
+			default:
+				return argval;
+		}
+	}
 	function TrustedCustomToolCallPromise(tool, argsobj){
 		return Promise.resolve()
 		.then(()=>{
-			let toolparamobj = tool.parameters;
-			if(toolparamobj.type==="object" && toolparamobj.hasOwnProperty("properties")) //should be true if the toolcall is correctly formatted
-			{
-				toolparamobj = toolparamobj.properties;
-			}
+			argsobj = argsobj || {};
+			let schemaerr = customtool_schema_error(tool);
+			if(schemaerr){ throw new Error(schemaerr); }
+			let toolparamobj = customtool_get_parameters(tool);
 			let toolparams = Object.keys(toolparamobj);
-			let callargs = toolparams.map((nam) => { //(indirect) evaluates each argument, using default values if missing
+			if(tool.parameters.required)
+			{
+				for(let i=0;i<tool.parameters.required.length;++i)
+				{
+					let reqname = tool.parameters.required[i];
+					if(!Object.prototype.hasOwnProperty.call(argsobj, reqname) && !Object.prototype.hasOwnProperty.call(toolparamobj[reqname], "default"))
+					{
+						throw new Error("Missing required parameter: "+reqname);
+					}
+				}
+			}
+			let callargs = toolparams.map((nam) => {
 				let propobj = toolparamobj[nam];
-				let type = propobj.type?propobj.type:"";
-				let argval = argsobj.hasOwnProperty(nam) ? argsobj[nam]
-				: propobj.hasOwnProperty("default") ? propobj.default
-				: "undefined";
-				if(type==="string" && /^['"].+/.test(argval) && argval[0]===argval[argval.length-1]) //if argval is a quoted string, return its contents directly
-				{
-					return argval.slice(1,-1);
-				}
-				try { argval = (0,eval)("("+argval+")");
-				} catch (e) {
-					console.log("Failed to evaluate "+argval+", falling back to raw string interpretation");
-					return argval;
-				}
-				switch(type) // if the parameters JSON provides a type, cast to it
-				{
-					case "string":
-						return String(argval);
-					case "number":
-						return Number(argval);
-					case "boolean":
-						return Boolean(argval);
-					case "integer":
-						return Math.trunc(Number(argval));
-					case "null":
-						return (argval==null)?argval:undefined;
-					case "array":
-						return Array.from(argval);
-					case "object":
-						return Object(argval);
-					default:
-						return argval;
-				}
+				let argval = Object.prototype.hasOwnProperty.call(argsobj, nam) ? argsobj[nam]
+				: Object.prototype.hasOwnProperty.call(propobj, "default") ? propobj.default
+				: undefined;
+				return customtool_coerce_arg(argval, propobj);
 			});
 			let name = tool.name;
 			if(!trusted_custom_tools.hasOwnProperty(name)) //evaluates the tool's functionBody
@@ -9122,12 +9306,13 @@ Current version indicated by LITEVER below.
 					if(!localsettings.cached_mcp_tools || Object.keys(localsettings.cached_mcp_tools).length === 0 || !callresp.name) {
 						throw new Error("tool call invalid parameters");
 					}
-					let idx = localsettings.custom_tools.map(tool => tool.name).indexOf(callresp.name);
+					let customtools = customtools_sanitize_list(localsettings.custom_tools);
+					let idx = customtools.map(tool => tool.name).indexOf(callresp.name);
 					if(idx===-1){
 						throw new Error("Custom tool not found");
 					}
 					// Simulate the tool call in Javascript
-					return TrustedCustomToolCallPromise(localsettings.custom_tools[idx],callargs);
+					return TrustedCustomToolCallPromise(customtools[idx],callargs);
 				}).then((result) => {
 					let restype = typeof(result);
 					if(restype==="string" && result.startsWith("data:image"))
@@ -9167,7 +9352,7 @@ Current version indicated by LITEVER below.
 						let tgt = replaceStringsInObject(response.content[i], "&quot;", "\""); //we must remove existing escaped quotes or things break later
 						outitems.push(tgt);
 					}
-					callresp.content = outitems;
+					callresp.content = JSON.stringify(outitems);
 				}
 				callresptxt += JSON.stringify(callresp);
 				if(toolcall_obj.tool_calls.length < 2)
@@ -9216,9 +9401,6 @@ Current version indicated by LITEVER below.
 		const textarea = document.getElementById('mcpurls');
 		const lines = textarea.value.split('\n').filter(line => line.trim());
 		const servers = {};
-		if(localsettings.custom_tools_AI_enabled){
-			servers["custom_tools"] = { apikey: null, tools: [] };
-		}
 		for (let i = 0; i < lines.length; i++) {
 			const line = lines[i];
 			const commaIndex = line.indexOf(',');
@@ -9237,6 +9419,9 @@ Current version indicated by LITEVER below.
 			let url = apply_proxy_url(custom_kobold_endpoint + koboldcpp_mcp_endpoint);
 			servers[url] = { apikey: (custom_kobold_key!=""?custom_kobold_key:null), tools:[] };
 		}
+		if(localsettings.custom_tools_AI_enabled){
+			servers["custom_tools"] = { apikey: null, tools: [] };
+		}
 		return servers;
 	}
 	function Fetch_MCP_Tools() //connects to multiple mcp servers, updates the tool list
@@ -9251,7 +9436,8 @@ Current version indicated by LITEVER below.
 		urls.forEach(url => {
 			if(url==="custom_tools" && localsettings.custom_tools_AI_enabled)
 			{
-				fetchPromises.push({url:url, apikey:null, tools:localsettings.custom_tools.map(tool => ({type:"function",function:filter_obj_by_keys(tool,["name","description","parameters"])}))});
+				let customtools = customtools_sanitize_list(localsettings.custom_tools);
+				fetchPromises.push({url:url, apikey:null, tools:customtools.map(tool => ({type:"function",function:filter_obj_by_keys(tool,["name","description","parameters"])}))});
 			} else {
 			const customHeaders = urlsobj[url].apikey ?
 				{ 'Authorization': `Bearer ${urlsobj[url].apikey}` } : {};
@@ -9282,9 +9468,19 @@ Current version indicated by LITEVER below.
 		Promise.all(fetchPromises)
 		.then(results => {
 			pending_cached_mcp_tools = {};
+			let seen_tool_names = {};
 			for(let i=0;i<results.length;++i)
 			{
 				let itm = results[i];
+				itm.tools = itm.tools.filter(tool => {
+					let toolname = tool && tool.function ? tool.function.name : "";
+					if(!toolname || seen_tool_names[toolname.toLowerCase()])
+					{
+						return false;
+					}
+					seen_tool_names[toolname.toLowerCase()] = true;
+					return true;
+				});
 				pending_cached_mcp_tools[itm.url] = {apikey: itm.apikey, tools:itm.tools };
 			}
 			Render_MCP_Tools(pending_cached_mcp_tools,pending_disabled_mcp_tools);
@@ -9305,6 +9501,7 @@ Current version indicated by LITEVER below.
 		const toolscontainer = document.getElementById("tools_list_container");
 		let toolshtml = `<table class="tools-table"><thead><tr><th>Tool</th><th>Enabled</th></tr></thead><tbody>`;
 		let hasAnyTools = false;
+		let toolidx = 0;
 
 		for(let url in mcp_tools)
 		{
@@ -9312,17 +9509,20 @@ Current version indicated by LITEVER below.
 			itm.tools.forEach(tool => {
 				const toolFunction = tool.function || tool;
 				hasAnyTools = true;
+				let checkboxid = "mcptool_"+toolidx;
+				let tooldesc = toolFunction.description ? toolFunction.description.substr(0, 180) : "No description";
 				toolshtml += `
 					<tr>
 						<td class="tools-info">
-							<div class="tool-title">${toolFunction.name}</div>
-							<div class="tool-description">${toolFunction.description ? toolFunction.description.substr(0, 180) : 'No description'}</div>
+							<div class="tool-title">${escape_html(toolFunction.name)}</div>
+							<div class="tool-description">${escape_html(tooldesc)}</div>
 						</td>
 						<td class="tools-checkbox">
-							<input type="checkbox" id="mcptool_${toolFunction.name}" value="${toolFunction.name}" ${disabled_tools.includes(toolFunction.name)?"":"checked"}/>
+							<input type="checkbox" id="${checkboxid}" value="${escape_html(toolFunction.name)}" ${disabled_tools.includes(toolFunction.name)?"":"checked"}/>
 						</td>
 					</tr>
 				`;
+				toolidx++;
 			});
 		}
 		toolshtml += `</tbody></table>`;
@@ -10812,6 +11012,8 @@ Current version indicated by LITEVER below.
 			new_save_storyobj.savedsettings.saved_comfy_bearer_token = "";
 			new_save_storyobj.savedsettings.saved_xtts_url = "";
 			new_save_storyobj.savedsettings.saved_mcp_urls = "";
+			new_save_storyobj.savedsettings.custom_tools = [];
+			new_save_storyobj.savedsettings.custom_tools_AI_enabled = false;
 
 			new_save_storyobj.savedsettings.modelhashes = [];
 
@@ -17708,16 +17910,18 @@ Current version indicated by LITEVER below.
 		localsettings.saved_mcp_urls = document.getElementById("mcpurls").value.trim();
 		localsettings.cached_mcp_tools = JSON.parse(JSON.stringify(pending_cached_mcp_tools));
 		pending_disabled_mcp_tools = [];
+		let mcptoolidx = 0;
 		for(key in localsettings.cached_mcp_tools)
 		{
 			let currarr = localsettings.cached_mcp_tools[key].tools;
 			for(let i=0;i<currarr.length;++i)
 			{
-				let mcptool = document.getElementById(`mcptool_${currarr[i].function.name}`);
+				let mcptool = document.getElementById("mcptool_"+mcptoolidx);
 				if(mcptool && !mcptool.checked)
 				{
 					pending_disabled_mcp_tools.push(currarr[i].function.name);
 				}
+				mcptoolidx++;
 			}
 		}
 		localsettings.disabled_mcp_tools = JSON.parse(JSON.stringify(pending_disabled_mcp_tools));
@@ -18807,7 +19011,7 @@ Current version indicated by LITEVER below.
 			let styleElement = document.getElementById('custom_css');
 			styleElement.innerHTML = "";
 			show_welcome_panel();
-		},null,false,"Also clear API keys");
+		},null,false,"Also clear API keys and custom tools");
 
 	}
 
@@ -20644,16 +20848,17 @@ Current version indicated by LITEVER below.
 		}
 		let senttext = document.getElementById("input_text").value;
 		let toolname = senttext.startsWith('/')?senttext.slice(1).match(/^\S*/)[0]:'';
-		let idx = localsettings.custom_tools.map(tool => tool.name).indexOf(toolname);
-		if(idx!==-1 && localsettings.custom_tools[idx].userCallable){
+		let customtools = customtools_sanitize_list(localsettings.custom_tools);
+		let idx = customtools.map(tool => tool.name).indexOf(toolname);
+		if(idx!==-1 && customtools[idx].userCallable){
 			//try to parse senttext as a slash command
-			let sentargs = parse_slash_command(localsettings.custom_tools[idx],senttext);
+			let sentargs = parse_slash_command(customtools[idx],senttext);
 			if(typeof sentargs==="string"){
 				msgbox(sentargs);
 				return;
 			}
 			document.getElementById("input_text").value = "Slash command (/"+toolname+") activated, please wait...";
-			TrustedCustomToolCallPromise(localsettings.custom_tools[idx],sentargs).then(function (res) {
+			TrustedCustomToolCallPromise(customtools[idx],sentargs).then(function (res) {
 				document.getElementById("input_text").value = res?res:("Slash command (/"+toolname+") executed successfully.");
 			}).catch(function (err) {
 				document.getElementById("input_text").value = "Slash command (/"+toolname+") error: "+err.message;
