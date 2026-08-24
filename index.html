@@ -8975,6 +8975,30 @@ Current version indicated by LITEVER below.
 			throw err;
 		})
 	}
+	function mcp_content_has_media(content)
+	{
+		if(!Array.isArray(content))
+		{
+			return false;
+		}
+		for(let i=0;i<content.length;++i)
+		{
+			let item = content[i];
+			if(!item || typeof item!=="object")
+			{
+				continue;
+			}
+			if(item.type==="image_url" || item.type==="input_audio")
+			{
+				return true;
+			}
+			if(item.type==="text" && typeof item.text==="string" && item.text.indexOf("data:image")!==-1)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
 
 	//MCP HTTP client code
 	const MCP_PROTOCOL_VER = "2025-11-25";
@@ -9358,7 +9382,7 @@ Current version indicated by LITEVER below.
 						let tgt = replaceStringsInObject(response.content[i], "&quot;", "\""); //we must remove existing escaped quotes or things break later
 						outitems.push(tgt);
 					}
-					callresp.content = JSON.stringify(outitems);
+					callresp.content = mcp_content_has_media(outitems) ? outitems : JSON.stringify(outitems);
 				}
 				callresptxt += JSON.stringify(callresp);
 				if(toolcall_obj.tool_calls.length < 2)
@@ -33882,12 +33906,12 @@ Current version indicated by LITEVER below.
 				<div class="popuptitletext">Edit Custom Tool</div>
 			</div>
 			<div class="menutext">
-				<div class="settinglabel"><div class="justifyleft">&nbsp;&nbsp;Tool Name: </div><input class="push-right" title="Tool Name" type="text" placeholder="Enter the tool's name (e.g. read_diary)" style="width: calc(100% - 250px);" id="customtooleditor_name"></div>
+				<div class="settinglabel"><div class="justifyleft">&nbsp;&nbsp;Tool Name: </div><input class="push-right" title="Tool Name" type="text" placeholder="Enter the tool's name (e.g. read_diary)" style="width: calc(100% - 100px);" id="customtooleditor_name"></div>
 				<div class="settinglabel"><div class="justifyleft">&nbsp;&nbsp;Description: </div><textarea class="form-control menuinput_multiline" title="Description" placeholder="Details on when and how to use the tool (e.g. Read the contents of the diary)" id="customtooleditor_description"></textarea></div>
 				<br>
 				<div class="settinglabel"><div class="justify-center">&nbsp;&nbsp;Edit parameters JSON directly  <span class="helpicon">?<span class="helptext">When checked, you must manually specify the JSON schema for the tool's input arguments.</span></span>  <input type="checkbox" title="Edit Parameters JSON directly?" id="customtooleditor_editparametersjsondirectly" onchange="customtooleditor_parameters_toggle()"></div></div>
 				<div class="settinglabel hidden" id="customtooleditor_parametersjsoncontainer"><textarea class="form-control menuinput_multiline" title="Parameters JSON" placeholder="{ type:'object', properties:{}, additionalProperties:false }" id="customtooleditor_parametersjson"></textarea></div>
-				<div id="customtooleditor_parameterstemplatecontainer">
+				<div class="settinglabel" id="customtooleditor_parameterstemplatecontainer">
 				</div>
 				<div class="settinglabel"><div class="justifyleft">&nbsp;&nbsp;Function Body: </div><textarea class="form-control menuinput_multiline" title="Function Body" placeholder="Javascript source code for the function (e.g. return String( localsettings.diary || 'The diary is empty' ); )" rows="5" id="customtooleditor_functionbody"></textarea></div>
 				<div class="settinglabel"><div class="justifyleft">&nbsp;&nbsp;Is Asynchronous (returns a Promise)?:  <input type="checkbox" title="Is Asynchronous?" id="customtooleditor_asynchronous"></div></div>
