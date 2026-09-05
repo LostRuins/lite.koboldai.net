@@ -6077,6 +6077,54 @@ Current version indicated by LITEVER below.
 		const safeStop = escapeRegExp(localsettings.stop_thinking_tag);
 		return `${safeStart}(${get_thinking_content_regex()})${safeStop}`;
 	}
+	function protect_complete_thinking_blocks(input)
+	{
+		let protected_blocks = [];
+		if(!input || !localsettings.start_thinking_tag || !localsettings.stop_thinking_tag)
+		{
+			return {text:input, blocks:protected_blocks, placeholder_prefix:""};
+		}
+
+		let tag_pairs = [[localsettings.start_thinking_tag, localsettings.stop_thinking_tag]];
+		let escaped_start = escape_html(localsettings.start_thinking_tag);
+		let escaped_stop = escape_html(localsettings.stop_thinking_tag);
+		if(escaped_start!=localsettings.start_thinking_tag || escaped_stop!=localsettings.stop_thinking_tag)
+		{
+			tag_pairs.push([escaped_start, escaped_stop]);
+		}
+
+		let placeholder_prefix = "!%%CHAT_THINK_BLOCK_";
+		let placeholder_variant = 0;
+		while(input.includes(placeholder_prefix))
+		{
+			placeholder_prefix = `!%%CHAT_THINK_BLOCK_${++placeholder_variant}_`;
+		}
+
+		let patterns = tag_pairs.map(function(pair) {
+			return `${escapeRegExp(pair[0])}[\\s\\S]*?${escapeRegExp(pair[1])}`;
+		});
+		let pat = new RegExp(`(?:${patterns.join("|")})`, "gmi");
+		let protected_text = input.replace(pat, function(match) {
+			let placeholder = `${placeholder_prefix}${protected_blocks.length}%%!`;
+			protected_blocks.push(match);
+			return placeholder;
+		});
+
+		return {text:protected_text, blocks:protected_blocks, placeholder_prefix:placeholder_prefix};
+	}
+	function restore_complete_thinking_blocks(input, protected_thinking)
+	{
+		if(!input || !protected_thinking || !protected_thinking.blocks || protected_thinking.blocks.length==0)
+		{
+			return input;
+		}
+		for(let i=protected_thinking.blocks.length-1;i>=0;--i)
+		{
+			let placeholder = `${protected_thinking.placeholder_prefix}${i}%%!`;
+			input = input.split(placeholder).join(protected_thinking.blocks[i]);
+		}
+		return input;
+	}
 	function get_orphaned_thinking_regex(tag)
 	{
 		if(!tag)
@@ -23942,6 +23990,9 @@ Current version indicated by LITEVER below.
 
 		//if we are in chatmode, truncate to my first response
 		if (localsettings.opmode == 3) {
+			let protected_thinking = protect_complete_thinking_blocks(gentxt);
+			gentxt = protected_thinking.text;
+
 			//sometimes the bot repeats its own name at the very start. if that happens, trim it away.
 			let oppomatch = localsettings.chatopponent + "\: ";
 			let oppomatchwithNL = "\n" + localsettings.chatopponent + "\: ";
@@ -24017,6 +24068,7 @@ Current version indicated by LITEVER below.
 				startpart = startpart.substring(0, startpart.length - 1);
 			}
 			gentxt = startpart;
+			gentxt = restore_complete_thinking_blocks(gentxt, protected_thinking);
 		}
 
 		//if we are in instruct mode, truncate to instruction
@@ -27595,6 +27647,8 @@ Current version indicated by LITEVER below.
 	{
 		let chatunits = []; //parse chat body into nice chat chunks
 		let myturnchat = false; //who is currently speaking?
+		let protected_thinking = protect_complete_thinking_blocks(input);
+		input = protected_thinking.text;
 
 		//fix: because chat operates on actual names, we MUST replace chat name placeholders early on.
 		input = replace_chat_name_placeholders(input,false);
@@ -27687,6 +27741,10 @@ Current version indicated by LITEVER below.
 					chatunits[chatunits.length-1].msg += "\n"+tempfullsearchable;
 				}
 			}
+		}
+		for(let i=0;i<chatunits.length;++i)
+		{
+			chatunits[i].msg = restore_complete_thinking_blocks(chatunits[i].msg, protected_thinking);
 		}
 		return chatunits;
 	}
