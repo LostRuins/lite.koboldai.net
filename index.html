@@ -4235,6 +4235,7 @@ Current version indicated by LITEVER below.
 	var default_alltalk_base = "http://localhost:7851";
 	var default_comfy_base = "http://localhost:8188";
 
+	//if tts is force disabled, its set to -1
 	const WEBBROWSER_TTS_ID = 1;
 	const KCPP_TTS_ID = 2;
 	const XTTS_ID = 3;
@@ -4465,7 +4466,7 @@ Current version indicated by LITEVER below.
 		inject_randomness_seed: 999,
 		request_logprobs: false,
 		persist_session: true,
-		tts_mode: 0, //0 is disabled
+		tts_mode: 0, //0 is off (automatic), -1 is force disable
 		xtts_voice: "female_calm",
 		kcpp_tts_voice: "kobo",
 		oai_tts_model: "tts-1",
@@ -4479,7 +4480,7 @@ Current version indicated by LITEVER below.
 		tts_stream: false,
 		voice_end_delay: 300,
 		voice_suppress_nonspeech: false,
-		voice_typing_mode: 0,  //0=off, 1=on, 2=ptt, 3=ttt
+		voice_typing_mode: 0,  //0=off, 1=on, 2=ptt, 3=ttt, -1=forcedisable
 		voice_langcode: "auto",
 		tts_speed: 1.0,
 		image_styles: "",
@@ -15236,7 +15237,7 @@ Current version indicated by LITEVER below.
 									{
 										if(localsettings.voice_typing_mode==0)
 										{
-											localsettings.voice_typing_mode = 2;
+											localsettings.voice_typing_mode = 2; //set to PTT mode
 										}
 									}
 									else
@@ -15244,6 +15245,22 @@ Current version indicated by LITEVER below.
 										if(localsettings.voice_typing_mode==2) //don't auto disable the other STT modes for now
 										{
 											localsettings.voice_typing_mode = 0;
+										}
+									}
+
+									//check if kcpp TTS is available, enable it if permitted
+									if(is_using_kcpp_with_tts())
+									{
+										if(localsettings.tts_mode==0)
+										{
+											localsettings.tts_mode = KCPP_TTS_ID;
+										}
+									}
+									else
+									{
+										if(localsettings.tts_mode==KCPP_TTS_ID)
+										{
+											localsettings.tts_mode = 0;
 										}
 									}
 
@@ -17626,7 +17643,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("btn_inner_genimg_custom").classList.remove("bg_gray");
 		}
 
-		if(localsettings.tts_mode==0)
+		if(localsettings.tts_mode<=0)
 		{
 			document.getElementById("btn_inner_genspeech_custom").classList.add("bg_gray");
 		} else {
@@ -20032,7 +20049,7 @@ Current version indicated by LITEVER below.
 	function manual_tts()
 	{
 		let ssval = localsettings.tts_mode;
-		if (ssval == 0) {
+		if (ssval <= 0) {
 			if (is_using_kcpp_with_tts()) {
 				msgboxYesNo("Error: No TTS Generator was selected!\nPlease select a Text-To-Speech option in Media Settings first.\n\nKoboldCpp with TTS support was detected!\nEnable KoboldCpp TTS?", "No TTS Generator",()=>{
 					localsettings.tts_mode = KCPP_TTS_ID;
@@ -20089,7 +20106,7 @@ Current version indicated by LITEVER below.
 
 		const selectedTTS = document.getElementById("ttsselect").value;
 
-		if (selectedTTS == 0) {
+		if (selectedTTS <= 0) {
 			document.getElementById("narratedialogdiv").classList.add("hidden");
 			document.getElementById("narratetargetsdiv").classList.add("hidden");
 		} else {
@@ -20801,7 +20818,7 @@ Current version indicated by LITEVER below.
 	}
 	function submit_generation_button(aesthetic_ui)
 	{
-		if(localsettings.voice_typing_mode==0 || !is_using_kcpp_with_whisper()) //normal submit when voice off, or when whisper is unavailable (e.g. stale saved setting) so the button still works
+		if(localsettings.voice_typing_mode<=0 || !is_using_kcpp_with_whisper()) //normal submit when voice off, or when whisper is unavailable (e.g. stale saved setting) so the button still works
 		{
 			if(aesthetic_ui)
 			{
@@ -32216,12 +32233,13 @@ Current version indicated by LITEVER below.
 							<div class="justifyleft">Text to speech <span class="helpicon">?<span class="helptext">Enable Text-To-Speech to have your story or chat automatically read to you. You can also generate audio clips with this enabled in the Add File menu.</span></span></div>
 							<div class="push-right">
 							<select title="Text To Speech" class="form-control" id="ttsselect" onchange="toggle_tts_mode()">
-								<option value="0">Disabled</option>
+								<option value="0">Off</option>
 								<option value="1">Browser Inbuilt TTS</option>
 								<option value="2">KoboldCpp TTS API</option>
 								<option value="3">XTTS API Server</option>
 								<option value="4">AllTalk API Server</option>
 								<option value="5">OpenAI-Compat. API Server</option>
+								<option value="-1">Force Disable</option>
 							</select>
 							</div>
 							<button id="manual_tts" type="button" class="bg_green btn btn-primary" style="margin-left: 2px;" onclick="test_tts()">Test</button>
@@ -32362,6 +32380,7 @@ Current version indicated by LITEVER below.
 								<option value="1">Detect Voice</option>
 								<option value="2">Push-To-Talk</option>
 								<option value="3">Toggle-To-Talk</option>
+								<option value="-1">Force Disable</option>
 							</select>
 							</div>
 						</div>
