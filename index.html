@@ -15231,6 +15231,22 @@ Current version indicated by LITEVER below.
 										console.log("Failed to get local image models: " + error);
 									});
 
+									//check if whisper speech-to-text is enabled, set to PTT if available
+									if(is_using_kcpp_with_whisper())
+									{
+										if(localsettings.voice_typing_mode==0)
+										{
+											localsettings.voice_typing_mode = 2;
+										}
+									}
+									else
+									{
+										if(localsettings.voice_typing_mode==2) //don't auto disable the other STT modes for now
+										{
+											localsettings.voice_typing_mode = 0;
+										}
+									}
+
 									//prompt to request password for kcpp
 									if(localflag && has_password && !localmodekey)
 									{
@@ -17638,11 +17654,13 @@ Current version indicated by LITEVER below.
 		if(is_using_kcpp_with_lcppui())
 		{
 			document.getElementById("btn_open_lcppui").classList.remove("hidden");
+			document.getElementById("btn_open_lcppui2").classList.remove("hidden");
 			document.getElementById("links_to_other_uis").classList.remove("hidden");
 		}
 		else
 		{
 			document.getElementById("btn_open_lcppui").classList.add("hidden");
+			document.getElementById("btn_open_lcppui2").classList.add("hidden");
 			document.getElementById("links_to_other_uis").classList.add("hidden");
 		}
 	}
@@ -20691,6 +20709,7 @@ Current version indicated by LITEVER below.
 
 	var ptt_start_timestamp = performance.now();
 	var recent_voice_duration = 0;
+	var voice_init_attempts = 0;
 	function ptt_start()
 	{
 		if(localsettings.voice_typing_mode==3 && voice_is_speaking)
@@ -20705,7 +20724,7 @@ Current version indicated by LITEVER below.
 			++voice_speaking_counter;
 			if(ready_to_record())
 			{
-				if (voicerecorder.state === "inactive") {
+				if (voicerecorder && voicerecorder.state === "inactive") {
 					if (voiceprerecorder.state !== "inactive") {
 						voiceprerecorder.stop();
 					}
@@ -20714,11 +20733,26 @@ Current version indicated by LITEVER below.
 				voice_is_recording = true;
 				update_submit_button(false);
 				ptt_start_timestamp = performance.now();
+				voice_init_attempts = 0;
 			}
 			else if(!isVoiceInputConfigured)
 			{
 				//trigger popup for audio permissions
 				init_voice_typing();
+				++voice_init_attempts;
+
+				if(voice_init_attempts>2)
+				{
+					//no permissions, fall back to submit, fall back to click behavior
+					if(is_corpo_ui() || is_aesthetic_ui())
+					{
+						chat_submit_generation();
+					}
+					else
+					{
+						prepare_submit_generation();
+					}
+				}
 			}
 		}
 	}
@@ -24786,6 +24820,7 @@ Current version indicated by LITEVER below.
 	}
 
 	var isVoiceInputConfigured = false;
+	var isVoiceInputInitializing = false;
 	function init_voice_typing()
 	{
 		if(navigator.mediaDevices==null)
@@ -24794,10 +24829,10 @@ Current version indicated by LITEVER below.
 			localsettings.voice_typing_mode = document.getElementById("voice_typing_mode").checked = 0;
 			return;
 		}
-		if (isVoiceInputConfigured) {
+		if (isVoiceInputConfigured || isVoiceInputInitializing) {
 			return;
 		}
-		isVoiceInputConfigured = true;
+		isVoiceInputInitializing = true;
 
 		//under BSD-3-Clause license
 		//original source https://github.com/kdavis-mozilla/vad.js Copyright (c) 2015, Kelly Daviss
@@ -24847,6 +24882,9 @@ Current version indicated by LITEVER below.
 		navigator.mediaDevices.getUserMedia({
 			audio: true
 		}).then(function (stream) {
+			isVoiceInputConfigured = true;
+			isVoiceInputInitializing = false;
+			voice_init_attempts = 0;
 			voiceprerecorder = new MediaRecorder(stream);
 			voiceprerecorder.addEventListener('dataavailable', (ev)=>{
 				preaudiobuffers.push(ev.data);
@@ -24888,6 +24926,11 @@ Current version indicated by LITEVER below.
 			};
 			// Create VAD
 			let myvad = new VAD(options);
+			update_submit_button(false);
+		}).catch(function (error) {
+			//voice init failed
+			isVoiceInputConfigured = false;
+			isVoiceInputInitializing = false;
 		});
 	}
 	function dispatch_transcribe_audio(dataurl)
@@ -30795,6 +30838,7 @@ Current version indicated by LITEVER below.
 				<div style="margin-top: 10px;">
 					<p class="color_lightgray" id="welcomeuidesc"></p>
 					<p>Alternatively, you can <a href="#" class="color_blueurl" onclick="close_welcome_panel(false);load_file_button()">Load A Savefile</a> or <a href="#" class="color_blueurl" onclick="close_welcome_panel(false);display_scenarios()">Quick Start Scenario</a></p>
+					<p class="hidden" id="btn_open_lcppui2">Or, <a href="#" class="color_blueurl" onclick="go_to_lcppui()">Launch llama.cpp UI</a></p>
 				</div>
 			</div>
 			<div class="popupfooter">
