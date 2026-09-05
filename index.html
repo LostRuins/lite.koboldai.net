@@ -28913,7 +28913,14 @@ Current version indicated by LITEVER below.
 			return;
 		}
 		let oldname = names[index];
+		if(newname===oldname)
+		{
+			show_groupchat_select();
+			return;
+		}
 		let oldmeta = get_groupchat_bot_meta(oldname);
+		// Capture the displayed portrait before the old name's metadata is pruned.
+		oldmeta.portrait = get_groupchat_portrait(oldname, false);
 		names[index] = newname;
 		set_groupchat_bot_names(names);
 		set_groupchat_bot_meta(newname, oldmeta);
@@ -28955,8 +28962,14 @@ Current version indicated by LITEVER below.
 		}
 		let currname = names[index];
 		let curr_bot_data = get_groupchat_bot_meta(currname);
+		// Preserve the global portrait when creating metadata for a participant.
+		curr_bot_data.portrait = get_groupchat_portrait(currname, false);
 		inputBox(`Set character context memory for ${currname}.`,"Character Context Memory",curr_bot_data.ctx_memory,"Enter participant context",()=>{
 			let userinput = getInputBoxValue();
+			if(userinput===curr_bot_data.ctx_memory)
+			{
+				return;
+			}
 			curr_bot_data.ctx_memory = userinput;
 			set_groupchat_bot_meta(currname, curr_bot_data);
 		},false,true);
@@ -29040,6 +29053,7 @@ Current version indicated by LITEVER below.
 	}
 	function get_groupchat_portrait(name, is_self)
 	{
+		name = sanitize_groupchat_participant_name(name);
 		let portrait = is_self ? aestheticInstructUISettings.you_portrait:aestheticInstructUISettings.AI_portrait;
 		if(!is_self)
 		{
