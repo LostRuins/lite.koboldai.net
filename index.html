@@ -4309,6 +4309,7 @@ Current version indicated by LITEVER below.
 	var current_anote = ""; //stored author note
 	var current_anotetemplate = "[Author\'s note: <|>]";
 
+	var current_posthistory = ""; //post-history instructions, injected at the very end of context (deepest position)
 	var anote_strength = 320; //distance from end
 	var newlineaftermemory = true;
 	var current_wi = []; //each item stores a wi object.
@@ -11028,6 +11029,7 @@ Current version indicated by LITEVER below.
 		new_save_storyobj.anotetemplate = current_anotetemplate;
 		new_save_storyobj.authorsnote = current_anote;
 		new_save_storyobj.memory = current_memory;
+		new_save_storyobj.posthistory = current_posthistory;
 		new_save_storyobj.worldinfo = current_wi;
 
 		//extra unofficial fields for the story
@@ -11357,6 +11359,9 @@ Current version indicated by LITEVER below.
 				if (storyobj.memory) {
 					current_memory = storyobj.memory;
 				}
+				if (storyobj.posthistory) {
+					current_posthistory = storyobj.posthistory;
+				}
 				if (storyobj.worldinfo) {
 					current_wi = storyobj.worldinfo;
 				}
@@ -11468,6 +11473,9 @@ Current version indicated by LITEVER below.
 				}
 				if (storyobj.memory) {
 					current_memory = storyobj.memory;
+				}
+				if (storyobj.posthistory) {
+					current_posthistory = storyobj.posthistory;
 				}
 				if (storyobj.worldinfo_v2 != null && storyobj.worldinfo_v2.entries != null) {
 					for (var key in storyobj.worldinfo_v2.entries) {
@@ -11984,16 +11992,13 @@ Current version indicated by LITEVER below.
 			let sysprompt = obj.system_prompt?obj.system_prompt:"";
 			let personalnotes = obj.creator_notes?obj.creator_notes:"";
 			let posthistoryinstructions = obj.post_history_instructions?obj.post_history_instructions:"";
+			let depthprompt = get_card_depth_prompt(obj);
 			let greeting = selectedgreeting;
 
 			//post process
 			if(scenario!="")
 			{
 				scenario = "\n[Scenario: "+scenario+"]";
-			}
-			if(posthistoryinstructions!="")
-			{
-				posthistoryinstructions = "\n[Special Instructions: "+posthistoryinstructions+"]";
 			}
 			if(examplemsg!="")
 			{
@@ -12003,7 +12008,8 @@ Current version indicated by LITEVER below.
 			{
 				sysprompt = sysprompt+"\n";
 			}
-			let combinedmem = sysprompt + memory + scenario + posthistoryinstructions + examplemsg;
+			//post_history_instructions is routed to the Post-History field (deep injection), not folded into memory
+			let combinedmem = sysprompt + memory + scenario + examplemsg;
 			let agnaidatafieldsempty = scenario + examplemsg + (obj.personality?obj.personality:"") + greeting;
 			let has_tav_wi_check = has_tavern_wi_check(obj);
 			//check if it's a world info only card, if so, do not restart game
@@ -12026,6 +12032,8 @@ Current version indicated by LITEVER below.
 				localsettings.chatname = myname;
 				localsettings.chatopponent = chatopponent;
 				current_memory = combinedmem + "\n***";
+				current_posthistory = posthistoryinstructions;
+				current_anote = depthprompt;
 				personal_notes = personalnotes;
 				localsettings.multiline_replies = true;
 				if(usechatmode)
@@ -12213,6 +12221,14 @@ Current version indicated by LITEVER below.
 		return loadedwi;
 	}
 
+	function get_card_depth_prompt(obj)
+	{
+		//SillyTavern depth_prompt / Character's Note (data.extensions.depth_prompt.prompt) -> mapped to Author's Note
+		let dp = null;
+		if(obj && obj.extensions && obj.extensions.depth_prompt) { dp = obj.extensions.depth_prompt; }
+		else if(obj && obj.data && obj.data.extensions && obj.data.extensions.depth_prompt) { dp = obj.data.extensions.depth_prompt; }
+		return (dp && dp.prompt) ? dp.prompt : "";
+	}
 	function load_temp_scenario_from_tavernobj(obj)
 	{
 		if(obj!=null)
@@ -12232,6 +12248,7 @@ Current version indicated by LITEVER below.
 			let sysprompt = obj.system_prompt?obj.system_prompt:"";
 			let creatornotes = obj.creator_notes?obj.creator_notes:"";
 			let posthistoryinstructions = obj.post_history_instructions?obj.post_history_instructions:"";
+			let depthprompt = get_card_depth_prompt(obj);
 
 			//aliases
 			examplemsg = (examplemsg==="" && obj.mesExample)?obj.mesExample:examplemsg;
@@ -12241,10 +12258,6 @@ Current version indicated by LITEVER below.
 			{
 				scenario = "\n[Scenario: "+scenario+"]";
 			}
-			if(posthistoryinstructions!="")
-			{
-				posthistoryinstructions = "\n[Special Instructions: "+posthistoryinstructions+"]";
-			}
 			if(examplemsg!="")
 			{
 				examplemsg = "\n"+(/^<START>\r?\n/.test(examplemsg)?"":"<START>\n")+examplemsg;
@@ -12253,7 +12266,8 @@ Current version indicated by LITEVER below.
 			{
 				sysprompt = sysprompt+"\n";
 			}
-			let combinedmem = sysprompt + memory + scenario + posthistoryinstructions + examplemsg;
+			//post_history_instructions is routed to the Post-History field (deep injection), not folded into memory
+			let combinedmem = sysprompt + memory + scenario + examplemsg;
 			temp_scenario.title = chatopponent;
 			let prev2 = replaceAll(obj.description,"{{char}}",chatopponent,true);
 			prev2 = replaceAll(prev2,"{{user}}","User",true);
@@ -12261,6 +12275,8 @@ Current version indicated by LITEVER below.
 			temp_scenario.chatopponent = chatopponent;
 			temp_scenario.prompt = ("\n{{char}}: "+ greeting);
 			temp_scenario.memory = combinedmem;
+			temp_scenario.posthistory = posthistoryinstructions;
+			temp_scenario.authorsnote = depthprompt;
 			temp_scenario.personalnotes = creatornotes;
 
 			//since cai format has no wi, try to grab it from tavern format
@@ -12519,6 +12535,13 @@ Current version indicated by LITEVER below.
 			if(!localsettings.placeholder_tags)
 			{
 				current_memory = replace_placeholders(current_memory, false, true, false);
+			}
+		}
+		if (temp_scenario.posthistory) {
+			current_posthistory = temp_scenario.posthistory;
+			if(!localsettings.placeholder_tags)
+			{
+				current_posthistory = replace_placeholders(current_posthistory, false, true, false);
 			}
 		}
 		if (temp_scenario.image && temp_scenario.image != "") {
@@ -18548,6 +18571,7 @@ Current version indicated by LITEVER below.
 	function confirm_memory() {
 		current_memory = document.getElementById("memorytext").value;
 		current_anote = document.getElementById("anotetext").value;
+		current_posthistory = document.getElementById("posthistorytext").value;
 		current_anotetemplate = document.getElementById("anotetemplate").value;
 		anote_strength = document.getElementById("anote_strength").value;
 		newlineaftermemory = (document.getElementById("newlineaftermemory").checked?true:false);
@@ -19058,6 +19082,7 @@ Current version indicated by LITEVER below.
 			personal_notes = "";
 			current_memory = "";
 			current_anote = "";
+			current_posthistory = "";
 			current_wi = [];
 			anote_strength = 320;
 			wi_searchdepth = 0;
@@ -21752,6 +21777,7 @@ Current version indicated by LITEVER below.
 			}
 
 			let truncated_anote = current_anotetemplate.replace("<|>", current_anote);
+			let truncated_posthistory = current_posthistory ? current_posthistory : "";
 
 			if (current_anote.length == 0) {
 				//if there's no authors note at all, don't include the template
@@ -21770,13 +21796,15 @@ Current version indicated by LITEVER below.
 			//if memory or authors note is not blank,
 			//append memory to the start of the context and insert anote somewhere before the ending
 			//if they are too long, clip excess space and resize the context so they can fit inside
-			if (appendedsysprompt.length > 0 || truncated_memory.length > 0 || truncated_anote.length > 0)
+			if (appendedsysprompt.length > 0 || truncated_memory.length > 0 || truncated_anote.length > 0 || truncated_posthistory.length > 0)
 			{
 				appendedsysprompt = replace_placeholders(appendedsysprompt,false,false,true);
 				truncated_memory = replace_placeholders(truncated_memory,false,false,true);
 				truncated_memory = appendedsysprompt + truncate_memory(truncated_memory, max_mem_len, true);
 				truncated_anote = replace_placeholders(truncated_anote,false,false,false);
 				truncated_anote = substring_to_boundary(truncated_anote, max_anote_len);
+				truncated_posthistory = replace_placeholders(truncated_posthistory,false,false,false);
+				truncated_posthistory = substring_to_boundary(truncated_posthistory, max_anote_len);
 				let min_context_len = Math.min(32, max_allowed_characters);
 				if(!is_using_kcpp_with_added_memory())
 				{
@@ -21790,7 +21818,7 @@ Current version indicated by LITEVER below.
 					{
 						truncated_memory = truncate_memory(truncated_memory, available_aux_len - truncated_anote.length, true);
 					}
-					let newlimit = Math.max(min_context_len, max_allowed_characters - truncated_memory.length - truncated_anote.length);
+					let newlimit = Math.max(min_context_len, max_allowed_characters - truncated_memory.length - truncated_anote.length - truncated_posthistory.length);
 					truncated_context = substring_to_boundary(truncated_context, newlimit);
 				}
 				else
@@ -21800,7 +21828,7 @@ Current version indicated by LITEVER below.
 					{
 						truncated_anote = substring_to_boundary(truncated_anote, available_anote_len);
 					}
-					let newlimit = Math.max(min_context_len, max_allowed_characters - truncated_anote.length);
+					let newlimit = Math.max(min_context_len, max_allowed_characters - truncated_anote.length - truncated_posthistory.length);
 					truncated_context = substring_to_boundary(truncated_context, newlimit);
 				}
 
@@ -21837,6 +21865,11 @@ Current version indicated by LITEVER below.
 				if(!is_using_kcpp_with_added_memory())
 				{
 					truncated_context = truncated_memory + truncated_context;
+				}
+				if(truncated_posthistory.length > 0)
+				{
+					//inject post-history at the very end of context, right before the AI's reply
+					truncated_context = truncated_context + "\n" + truncated_posthistory;
 				}
 			}
 			if(is_using_kcpp_with_added_memory())
@@ -28282,6 +28315,7 @@ Current version indicated by LITEVER below.
 		//setup memory tab
 		document.getElementById("memorytext").value = current_memory;
 		document.getElementById("anotetext").value = current_anote;
+		document.getElementById("posthistorytext").value = current_posthistory;
 		document.getElementById("anotetemplate").value = current_anotetemplate;
 		document.getElementById("anote_strength").value = anote_strength;
 		document.getElementById("newlineaftermemory").checked = (newlineaftermemory?true:false);
@@ -31374,6 +31408,13 @@ Current version indicated by LITEVER below.
 				</div>
 				<textarea title="Edit Author's Note" style="height: 80px;" class="form-control menuinput_multiline" id="anotetext"
 					placeholder="Author's Note will be inserted close to end of context."></textarea>
+				<br>
+				<div class="settinglabel">
+					<span class="justifyleft">Post-History Instructions <span class="helpicon">?<span
+						class="helptext">Injected at the very end of the context, immediately before the AI's reply - the deepest, least-forgotten position. Ideal for style rules you want re-asserted every turn.</span></span></span>
+				</div>
+				<textarea title="Edit Post-History Instructions" style="height: 80px;" class="form-control menuinput_multiline" id="posthistorytext"
+					placeholder="Injected at the very end of context, just before the AI's reply."></textarea>
 				<br>
 				<div class="settinglabel">
 					<span class="justifyleft">Author's Note Template <span class="helpicon">?<span
