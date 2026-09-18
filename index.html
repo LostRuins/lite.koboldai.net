@@ -21074,7 +21074,7 @@ Current version indicated by LITEVER below.
 			}
 		}
 
-		const user_input_empty = (newgen.trim()=="");
+		let user_input_empty = (newgen.trim()=="");
 		pending_context_postinjection = "";
 
 		if (!user_input_empty || gametext_arr.length > 0 || current_memory != "" || current_anote != "")
@@ -21092,6 +21092,37 @@ Current version indicated by LITEVER below.
 
 			if (localsettings.opmode == 4)
 			{
+				// An empty send with a trailing vision attachment is an image-only user turn.
+				// Move the attachment in the stored history so both prompts and rendering see it there.
+				if(newgen=="" && !is_impersonate_user)
+				{
+					let history = concat_gametext();
+					let shiftStart = get_trailing_vision_media_start(history,true);
+					if(shiftStart<history.length)
+					{
+						let media = history.slice(shiftStart);
+						if(media.includes("[<|p|"))
+						{
+							msgbox("Attachment is still processing. Please send again when it is ready.");
+							return;
+						}
+						if(!is_instruct_latest_human_turn())
+						{
+							let remaining = media.length;
+							while(remaining>0 && gametext_arr.length>0)
+							{
+								let last = gametext_arr.length-1;
+								let segment = gametext_arr[last];
+								let removed = Math.min(remaining, segment.length);
+								gametext_arr[last] = segment.slice(0, segment.length-removed);
+								if(gametext_arr[last]=="") gametext_arr.pop();
+								remaining -= removed;
+							}
+							newgen = media;
+							user_input_empty = false;
+						}
+					}
+				}
 				newgen = wrap_newgen_instruct_format(newgen,true);
 				let latest_human = is_instruct_latest_human_turn();
 				if(!localsettings.allow_continue_user_turn && newgen=="" && latest_human && !is_impersonate_user) //assume the user is trying to get the AI to respond even though there's no output tag
@@ -27050,6 +27081,25 @@ Current version indicated by LITEVER below.
 	}
 
 	var toolcall_waiting_approve = null;
+	function get_trailing_vision_media_start(text, includePendingUploads=false)
+	{
+		let media = text.match(/(?:\s*\[<\|([hp])\|.+?\|\1\|>\])+\s*$/);
+		if(!media) return text.length;
+		let attachments = Array.from(media[0].matchAll(/\s*\[<\|([hp])\|(.+?)\|\1\|>\]/g));
+		let shiftStart = text.length;
+		for(let j=attachments.length-1;j>=0;--j)
+		{
+			let type = attachments[j][1];
+			let hash = attachments[j][2];
+			let meta = completed_imgs_meta[hash];
+			let pending = image_db[hash];
+			if(type=="h" && (!meta || !(meta.visionmode==1 || meta.visionmode==2 || meta.visionmode==3))) break;
+			if(type=="p" && (!includePendingUploads || !pending || pending.imsource!=1)) break;
+			shiftStart = media.index + attachments[j].index;
+		}
+		return shiftStart;
+	}
+
 	function repact_instruct_turns_beautify_render(chatunits) //display-only formatting; preserve original turns for editing
 	{
 		toolcall_waiting_approve = null;
@@ -27063,24 +27113,9 @@ Current version indicated by LITEVER below.
 			}
 
 			// Only move trailing vision-enabled attachments; generated or unknown media stays put.
-			let media = prev.msg.match(/(?:\s*\[<\|h\|.+?\|h\|>\])+\s*$/);
-			if(media)
+			let shiftStart = get_trailing_vision_media_start(prev.msg);
+			if(shiftStart<prev.msg.length)
 			{
-				let attachments = Array.from(media[0].matchAll(/\s*\[<\|h\|(.+?)\|h\|>\]/g));
-				let shiftStart = prev.msg.length;
-				for(let j=attachments.length-1;j>=0;--j)
-				{
-					let meta = completed_imgs_meta[attachments[j][1]];
-					if(!meta || !(meta.visionmode==1 || meta.visionmode==2 || meta.visionmode==3))
-					{
-						break;
-					}
-					shiftStart = media.index + attachments[j].index;
-				}
-				if(shiftStart==prev.msg.length)
-				{
-					continue;
-				}
 				prev.origmsg = prev.msg;
 				curr.origmsg = curr.msg;
 				curr.msg = prev.msg.slice(shiftStart) + "\n" + curr.msg;
