@@ -20341,9 +20341,36 @@ Current version indicated by LITEVER below.
 	var tts_speak_output_queue = [];
 	var tts_queue_embed = false;
 	var tts_queue_download = false;
-	var ttsAudioContext = new (window.AudioContext || window.webkitAudioContext)();
-	var ttsMasterGain = ttsAudioContext.createGain();
-	ttsMasterGain.connect(ttsAudioContext.destination);
+	var ttsAudioContext = null;
+	var ttsMasterGain = null;
+	function ensure_tts_audio_context()
+	{
+		if(ttsAudioContext)
+		{
+			return true;
+		}
+		const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+		if(!AudioContextConstructor)
+		{
+			return false;
+		}
+		try
+		{
+			const audioContext = new AudioContextConstructor();
+			const masterGain = audioContext.createGain();
+			masterGain.connect(audioContext.destination);
+			ttsAudioContext = audioContext;
+			ttsMasterGain = masterGain;
+			return true;
+		}
+		catch(error)
+		{
+			ttsAudioContext = null;
+			ttsMasterGain = null;
+			console.warn("Web Audio is unavailable; audio-based TTS is disabled.", error);
+			return false;
+		}
+	}
 	function tts_speak(text, do_download=false, do_embed_tts=false, is_test=false)
 	{
 		if(!text || text=="" || text.trim()=="")
@@ -20466,6 +20493,11 @@ Current version indicated by LITEVER below.
 
 		if(ssval==XTTS_ID || ssval==ALLTALK_ID || ssval==OAI_TTS_ID || ssval==KCPP_TTS_ID) //xtts api server
 		{
+			if(!ensure_tts_audio_context())
+			{
+				console.warn("Unable to use audio-based TTS because Web Audio is unavailable.");
+				return;
+			}
 			let is_xtts = (ssval==XTTS_ID);
 			let is_oai_tts = (ssval==OAI_TTS_ID);
 			let is_kcpp_tts = (ssval==KCPP_TTS_ID);
