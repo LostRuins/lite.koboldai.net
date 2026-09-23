@@ -10840,10 +10840,11 @@ Current version indicated by LITEVER below.
 	var tempfileurl = null;
 	var tempfileobj = null;
 	var newfilename = "";
+	var tempfilemime = "application/json";
 	function savenowfn()
 	{
 		var a = document.getElementById("tempfile");
-		var file = new Blob([tempfileobj], { type: 'application/json' });
+		var file = new Blob([tempfileobj], { type: tempfilemime || 'application/json' });
 		console.log("Normal save handling")
 		if (tempfileurl) {
 			window.URL.revokeObjectURL(tempfileurl);
@@ -10890,6 +10891,7 @@ Current version indicated by LITEVER below.
 		var userAgent = window.navigator.userAgent;
 		tempfileobj = fileContent;
 		newfilename = fileName;
+		tempfilemime = mimeType || "application/json"; //the blob's type follows the caller (was always JSON)
 
 		if (userAgent.match(/AppleWebKit/) && (userAgent.match(/iPad/i) || userAgent.match(/iPhone/i))) {
 			let ststr = fileContent;
@@ -10952,6 +10954,36 @@ Current version indicated by LITEVER below.
 		else
 		{
 			save_file();
+		}
+	}
+
+	//Save the story as a plain-text file: the prose only, under the story's own
+	//filename with a .txt ending. The JSON save stays the one to reload from (it
+	//keeps Memory, World Info and settings); this is for reading, sending and
+	//working on the text elsewhere. (feat/save-as-txt)
+	function save_txt_button()
+	{
+		let story = concat_gametext(true, "", "", "", false);
+		let base = (localsettings.last_known_filename || "saved_story.json").replace(/\.json$/i, "").replace(/\.txt$/i, "");
+		const save_txt = function (name)
+		{
+			saveFileGeneric(name, story, "text/plain;charset=utf-8");
+		};
+		if (localsettings.prompt_for_savename)
+		{
+			inputBox("Enter a Filename", "Save as Text", base + ".txt", "Input Filename", () => {
+				let userinput = getInputBoxValue();
+				if (userinput != null && userinput.trim() != "")
+				{
+					let tmp = userinput.trim();
+					if (!/\.txt$/i.test(tmp)) { tmp += ".txt"; }
+					save_txt(tmp);
+				}
+			}, false);
+		}
+		else
+		{
+			save_txt(base + ".txt");
 		}
 	}
 
@@ -33335,9 +33367,10 @@ Current version indicated by LITEVER below.
 			<div style="overflow: auto;">
 				<div id="saveloadentries" class="menutext saveloadgrid">
 					<div style="display:flex">
-						<button type="button" style="font-size:12px; margin:2px; padding-left:2px; padding-right:2px; width:33%" name="localsave" class="btn btn-primary" onclick="hide_popups();save_file_button()">💾<br>Download Save</button>
-						<button type="button" style="font-size:12px; margin:2px; padding-left:2px; padding-right:2px; width:33%" name="localload" class="btn btn-primary" onclick="hide_popups();load_file_button()">📁<br>Open File</button>
-						<button type="button" style="font-size:12px; margin:2px; padding-left:2px; padding-right:2px; width:34%" name="shareurl" class="btn btn-primary" onclick="hide_popups();share_story_button()">🌐<br>Share</button>
+						<button type="button" style="font-size:12px; margin:2px; padding-left:2px; padding-right:2px; width:25%" name="localsave" class="btn btn-primary" onclick="hide_popups();save_file_button()">💾<br>Download Save</button>
+						<button type="button" style="font-size:12px; margin:2px; padding-left:2px; padding-right:2px; width:25%" name="localsavetxt" class="btn btn-primary" title="Download the story as plain text (the prose only; use Download Save to keep Memory, World Info and settings)" onclick="hide_popups();save_txt_button()">📝<br>Save .txt</button>
+						<button type="button" style="font-size:12px; margin:2px; padding-left:2px; padding-right:2px; width:25%" name="localload" class="btn btn-primary" onclick="hide_popups();load_file_button()">📁<br>Open File</button>
+						<button type="button" style="font-size:12px; margin:2px; padding-left:2px; padding-right:2px; width:25%" name="shareurl" class="btn btn-primary" onclick="hide_popups();share_story_button()">🌐<br>Share</button>
 					</div>
 
 					<div style="margin-top:3px; text-align: center; align-self: center; width: 100%">
