@@ -14804,7 +14804,38 @@ Current version indicated by LITEVER below.
 			localsettings.saved_oai_favorites = localsettings.saved_oai_favorites.filter(favorite =>
 				favorite && typeof favorite.name === "string" && typeof favorite.endpoint === "string" && typeof favorite.key === "string");
 		}
+
+		let favorites = localsettings.saved_oai_favorites;
+		let default_index = favorites.findIndex(favorite => favorite.is_default === true);
+		if(default_index < 0)
+		{
+			// Migrate the old single endpoint/key setting when it belongs to official OpenAI.
+			let default_key = (oai_favorite_endpoints_match(localsettings.saved_oai_addr, default_oai_base) && localsettings.saved_oai_key !== dummy_api_key)
+				? localsettings.saved_oai_key
+				: "";
+			favorites.unshift({name:"[Default]", endpoint:default_oai_base, key:default_key, is_default:true});
+		}
+		else
+		{
+			let default_favorite = favorites[default_index];
+			default_favorite.name = "[Default]";
+			default_favorite.endpoint = default_oai_base;
+			// Keep one canonical built-in entry and place it first.
+			favorites = favorites.filter((favorite, index) => favorite.is_default !== true || index === default_index);
+			default_index = favorites.indexOf(default_favorite);
+			if(default_index > 0)
+			{
+				favorites.splice(default_index, 1);
+				favorites.unshift(default_favorite);
+			}
+			localsettings.saved_oai_favorites = favorites;
+		}
 		return localsettings.saved_oai_favorites;
+	}
+
+	function oai_favorite_endpoints_match(first, second)
+	{
+		return transform_oai_ep(first) === transform_oai_ep(second);
 	}
 
 	function refresh_oai_favorites(selected_index = -1)
@@ -14817,10 +14848,6 @@ Current version indicated by LITEVER below.
 
 		let favorites = get_oai_favorites();
 		dropdown.replaceChildren();
-		let default_option = document.createElement("option");
-		default_option.value = "default";
-		default_option.textContent = "[Default]";
-		dropdown.appendChild(default_option);
 		let placeholder = document.createElement("option");
 		placeholder.value = "";
 		placeholder.textContent = "[Custom]";
@@ -14843,72 +14870,81 @@ Current version indicated by LITEVER below.
 		}
 		else
 		{
-			selected_index = favorites.findIndex(favorite => favorite && favorite.endpoint === endpoint && favorite.key === key);
+			// A named favorite is more specific than the built-in default if both pairs match.
+			selected_index = favorites.findIndex(favorite => !favorite.is_default && oai_favorite_endpoints_match(favorite.endpoint, endpoint) && favorite.key === key);
+			if(selected_index < 0)
+			{
+				selected_index = favorites.findIndex(favorite => oai_favorite_endpoints_match(favorite.endpoint, endpoint) && favorite.key === key);
+			}
 			if(selected_index >= 0)
 			{
 				dropdown.value = selected_index.toString();
-			}
-			else if(endpoint === default_oai_base)
-			{
-				dropdown.value = "default";
 			}
 			else
 			{
 				dropdown.value = "";
 			}
 		}
+		dropdown.dataset.currentValue = dropdown.value;
 		update_oai_favorite_btns();
 	}
 
 	function update_oai_favorite_btns()
 	{
 		let selected_value = document.getElementById("custom_oai_favorites").value;
+		let favorite = selected_value === "" ? null : get_oai_favorites()[Number.parseInt(selected_value, 10)];
 		document.getElementById("btn_save_oai_favorite").classList.toggle("hidden", selected_value !== "");
-		document.getElementById("btn_delete_oai_favorite").classList.toggle("hidden", selected_value === "" || selected_value === "default");
+		document.getElementById("btn_delete_oai_favorite").classList.toggle("hidden", !favorite || favorite.is_default === true);
 	}
 
 	function oai_favorite_fields_changed()
 	{
+		// The same inputs are reused by the dedicated providers; their keys must not affect these favorites.
+		if(document.getElementById("customapidropdown").value != 2)
+		{
+			return;
+		}
 		let endpoint = document.getElementById("custom_oai_endpoint").value.trim();
 		let key = document.getElementById("custom_oai_key").value.trim();
 		let dropdown = document.getElementById("custom_oai_favorites");
 		let selected_value = dropdown.value;
-		if(selected_value === "default")
-		{
-			if(endpoint !== default_oai_base)
-			{
-				dropdown.value = "";
-			}
-		}
-		else if(selected_value !== "")
+		if(selected_value !== "")
 		{
 			let favorite = get_oai_favorites()[Number.parseInt(selected_value, 10)];
-			if(!favorite || favorite.endpoint !== endpoint || favorite.key !== key)
+			if(favorite && favorite.is_default === true)
+			{
+				favorite.key = key;
+			}
+			if(!favorite || !oai_favorite_endpoints_match(favorite.endpoint, endpoint) || favorite.key !== key)
 			{
 				dropdown.value = "";
 			}
 		}
+		dropdown.dataset.currentValue = dropdown.value;
 		update_oai_favorite_btns();
 	}
 
 	function load_oai_favorite()
 	{
 		let dropdown = document.getElementById("custom_oai_favorites");
-		if(dropdown.value === "default")
+		let favorites = get_oai_favorites();
+		let previous_favorite = favorites[Number.parseInt(dropdown.dataset.currentValue, 10)];
+		if(previous_favorite && previous_favorite.is_default === true)
 		{
-			document.getElementById("custom_oai_endpoint").value = default_oai_base;
-			update_oai_favorite_btns();
-			return;
+			// Capture autofill and other changes that may not have fired the input handler.
+			previous_favorite.key = document.getElementById("custom_oai_key").value.trim();
 		}
 		let index = Number.parseInt(dropdown.value, 10);
-		let favorite = get_oai_favorites()[index];
+		let favorite = favorites[index];
 		if(!favorite)
 		{
+			dropdown.dataset.currentValue = dropdown.value;
 			update_oai_favorite_btns();
 			return;
 		}
 		document.getElementById("custom_oai_endpoint").value = favorite.endpoint;
 		document.getElementById("custom_oai_key").value = favorite.key;
+		dropdown.dataset.currentValue = dropdown.value;
 		update_oai_favorite_btns();
 	}
 
@@ -14921,8 +14957,10 @@ Current version indicated by LITEVER below.
 			msgbox("Enter an OpenAI API URL before adding a favorite.", "Missing API URL");
 			return;
 		}
+		endpoint = transform_oai_ep(endpoint);
+		document.getElementById("custom_oai_endpoint").value = endpoint;
 
-		let default_name = "Endpoint " + (get_oai_favorites().length + 1);
+		let default_name = "Endpoint " + (get_oai_favorites().filter(favorite => !favorite.is_default).length + 1);
 		try
 		{
 			default_name = new URL(endpoint).host || default_name;
@@ -14952,7 +14990,7 @@ Current version indicated by LITEVER below.
 		let dropdown = document.getElementById("custom_oai_favorites");
 		let index = Number.parseInt(dropdown.value, 10);
 		let favorite = get_oai_favorites()[index];
-		if(!favorite)
+		if(!favorite || favorite.is_default === true)
 		{
 			return;
 		}
@@ -15579,6 +15617,12 @@ Current version indicated by LITEVER below.
 				custom_oai_key = desired_oai_key;
 				if(epchoice==2)
 				{
+					let oai_favorite_index = Number.parseInt(document.getElementById("custom_oai_favorites").value, 10);
+					let selected_oai_favorite = get_oai_favorites()[oai_favorite_index];
+					if(selected_oai_favorite && selected_oai_favorite.is_default === true && custom_oai_endpoint === default_oai_base)
+					{
+						selected_oai_favorite.key = custom_oai_key;
+					}
 					if(localsettings.saved_oai_addr!=custom_oai_endpoint || localsettings.saved_oai_key!=custom_oai_key)
 					{
 						//if not reconnecting exact same key and API, overwrite custom eps
@@ -33680,7 +33724,7 @@ Current version indicated by LITEVER below.
 				<div id="custom_oai_favorites_container" class="hidden">
 				<div style="display:flex; gap:4px; margin-bottom:4px; align-items:center; justify-content:flex-end;">
 					Favorites: <select title="Saved OpenAI API URL and key pairs" class="form-control" id="custom_oai_favorites" style="min-width:0;flex:1;height: 25px;font-size: 12px;padding: 3px;display: inline;max-width: 140px;" onchange="load_oai_favorite()">
-						<option value="default">[Default]</option>
+						<option value="0">[Default]</option>
 						<option value="">[Custom]</option>
 					</select>
 					<button title="Save the current API URL and key as a favorite" type="button" class="btn btn-primary" id="btn_save_oai_favorite" style="padding:3px; font-size:12px;" onclick="save_oai_favorite()">Save</button>
