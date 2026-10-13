@@ -19,17 +19,6 @@
 			"BasicResult": {
 				"properties": {
 					"result": {
-						"$ref": "#/components/schemas/BasicResultInner"
-					}
-				},
-				"required": [
-					"result"
-				],
-				"type": "object"
-			},
-			"BasicResultInner": {
-				"properties": {
-					"result": {
 						"type": "string"
 					}
 				},
@@ -211,7 +200,7 @@
 					},
 					"logit_bias": {
 						"default": {},
-						"description": "KoboldCpp ONLY. An dictionary of key-value pairs, which indicate the token IDs (int) and logit bias (float) to apply for that token. Up to 16 value can be provided.",
+						"description": "KoboldCpp ONLY. An dictionary of key-value pairs, which indicate the token IDs (int) and logit bias (float) to apply for that token.",
 						"type": "object",
 						"example": {
 							"2": -20,
@@ -263,7 +252,7 @@
 					},
 					"logprobs": {
 						"default": false,
-						"description": "If true, return up to 5 top logprobs for generated tokens. Incurs performance overhead.",
+						"description": "If true, return up to 10 top logprobs for generated tokens. Incurs performance overhead.",
 						"type": "boolean"
 					},
 					"replace_instruct_placeholders": {
@@ -339,14 +328,41 @@
 				],
 				"type": "object"
 			},
-			"ValueResult": {
+			"UnauthorizedError": {
 				"properties": {
-					"value": {
-						"type": "integer"
+					"detail": {
+						"properties": {
+							"error": {
+								"type": "string"
+							},
+							"msg": {
+								"type": "string"
+							},
+							"type": {
+								"type": "string"
+							}
+						},
+						"required": [
+							"error",
+							"msg",
+							"type"
+						],
+						"type": "object"
 					}
 				},
 				"required": [
-					"value"
+					"detail"
+				],
+				"type": "object"
+			},
+			"TranscriptionResult": {
+				"properties": {
+					"text": {
+						"type": "string"
+					}
+				},
+				"required": [
+					"text"
 				],
 				"type": "object"
 			},
@@ -423,11 +439,11 @@
 						"description": "Status of embedded horde worker, if applicable. If it's too high, may have crashed."
 					},
 					"uptime": {
-						"type": "integer",
+						"type": "number",
 						"description": "Seconds that the server has been running for."
 					},
 					"idletime": {
-						"type": "integer",
+						"type": "number",
 						"description": "Seconds that the server has been inactive for."
 					},
 					"quiet": {
@@ -455,20 +471,2676 @@
 						"description": "Generation speed (tokens/sec)."
 					}
 				},
-				"required": [
-					"version"
-				],
 				"type": "object"
+			},
+			"OpenAIUsage": {
+				"type": "object",
+				"description": "Token counts reported by KoboldCpp.",
+				"properties": {
+					"prompt_tokens": {
+						"type": "integer"
+					},
+					"completion_tokens": {
+						"type": "integer"
+					},
+					"total_tokens": {
+						"type": "integer"
+					}
+				},
+				"required": [
+					"prompt_tokens",
+					"completion_tokens",
+					"total_tokens"
+				]
+			},
+			"OpenAIFunctionDefinition": {
+				"type": "object",
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"parameters": {
+						"type": "object",
+						"description": "JSON Schema describing the function arguments.",
+						"additionalProperties": true
+					}
+				},
+				"required": [
+					"name",
+					"parameters"
+				]
+			},
+			"OpenAITool": {
+				"type": "object",
+				"description": "Function tool definition. KoboldCpp uses the name, description, and JSON Schema parameters.",
+				"properties": {
+					"type": {
+						"type": "string",
+						"enum": [
+							"function"
+						]
+					},
+					"function": {
+						"$ref": "#/components/schemas/OpenAIFunctionDefinition"
+					}
+				},
+				"required": [
+					"type",
+					"function"
+				]
+			},
+			"OpenAIToolCall": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"function"
+						]
+					},
+					"function": {
+						"type": "object",
+						"properties": {
+							"name": {
+								"type": "string"
+							},
+							"arguments": {
+								"type": "string",
+								"description": "JSON-encoded function arguments."
+							}
+						},
+						"required": [
+							"name",
+							"arguments"
+						]
+					}
+				},
+				"required": [
+					"id",
+					"type",
+					"function"
+				]
+			},
+			"OpenAIToolCallDelta": {
+				"type": "object",
+				"description": "A partial streamed tool call. Metadata and argument text may arrive in separate chunks.",
+				"properties": {
+					"index": {
+						"type": "integer"
+					},
+					"id": {
+						"type": "string"
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"function"
+						]
+					},
+					"function": {
+						"type": "object",
+						"properties": {
+							"name": {
+								"type": "string"
+							},
+							"arguments": {
+								"type": "string"
+							}
+						}
+					}
+				},
+				"required": [
+					"index"
+				]
+			},
+			"OpenAIContentPart": {
+				"oneOf": [
+					{
+						"type": "object",
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": [
+									"text"
+								]
+							},
+							"text": {
+								"type": "string"
+							}
+						},
+						"required": [
+							"type",
+							"text"
+						]
+					},
+					{
+						"type": "object",
+						"description": "KoboldCpp consumes data:image URLs. Remote image URLs are not downloaded.",
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": [
+									"image_url"
+								]
+							},
+							"image_url": {
+								"type": "object",
+								"properties": {
+									"url": {
+										"type": "string",
+										"description": "A data:image/...;base64,... URL."
+									}
+								},
+								"required": [
+									"url"
+								]
+							}
+						},
+						"required": [
+							"type",
+							"image_url"
+						]
+					},
+					{
+						"type": "object",
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": [
+									"input_audio"
+								]
+							},
+							"input_audio": {
+								"type": "object",
+								"properties": {
+									"data": {
+										"type": "string",
+										"format": "byte"
+									},
+									"format": {
+										"type": "string",
+										"example": "wav"
+									}
+								},
+								"required": [
+									"data"
+								]
+							}
+						},
+						"required": [
+							"type",
+							"input_audio"
+						]
+					}
+				]
+			},
+			"OpenAIChatMessage": {
+				"type": "object",
+				"properties": {
+					"role": {
+						"type": "string",
+						"enum": [
+							"system",
+							"user",
+							"assistant",
+							"tool"
+						]
+					},
+					"content": {
+						"nullable": true,
+						"description": "Text, or OpenAI-style text, image_url, and input_audio content parts.",
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "array",
+								"items": {
+									"$ref": "#/components/schemas/OpenAIContentPart"
+								}
+							}
+						]
+					},
+					"tool_calls": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/OpenAIToolCall"
+						}
+					},
+					"tool_call_id": {
+						"type": "string"
+					}
+				},
+				"required": [
+					"role"
+				]
+			},
+			"OpenAICompletionRequest": {
+				"type": "object",
+				"properties": {
+					"model": {
+						"type": "string"
+					},
+					"prompt": {
+						"type": "string"
+					},
+					"max_tokens": {
+						"type": "integer",
+						"minimum": 1
+					},
+					"max_completion_tokens": {
+						"type": "integer",
+						"minimum": 1,
+						"description": "Accepted as a fallback when max_tokens is absent."
+					},
+					"temperature": {
+						"type": "number"
+					},
+					"top_p": {
+						"type": "number"
+					},
+					"presence_penalty": {
+						"type": "number"
+					},
+					"frequency_penalty": {
+						"type": "number",
+						"description": "Accepted as a fallback alias for presence_penalty."
+					},
+					"stop": {
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							}
+						]
+					},
+					"seed": {
+						"type": "integer"
+					},
+					"stream": {
+						"type": "boolean",
+						"default": false
+					},
+					"logprobs": {
+						"description": "Truthy values request log probabilities.",
+						"oneOf": [
+							{
+								"type": "boolean"
+							},
+							{
+								"type": "integer"
+							}
+						]
+					}
+				},
+				"required": [
+					"prompt"
+				],
+				"additionalProperties": true
+			},
+			"OpenAICompletionResponse": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"object": {
+						"type": "string",
+						"enum": [
+							"text_completion"
+						]
+					},
+					"created": {
+						"type": "integer"
+					},
+					"model": {
+						"type": "string"
+					},
+					"choices": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"text": {
+									"type": "string"
+								},
+								"index": {
+									"type": "integer"
+								},
+								"finish_reason": {
+									"type": "string",
+									"enum": [
+										"stop",
+										"length",
+										"error"
+									]
+								},
+								"logprobs": {
+									"type": "object",
+									"nullable": true,
+									"additionalProperties": true
+								}
+							},
+							"required": [
+								"text",
+								"index",
+								"finish_reason"
+							]
+						}
+					},
+					"usage": {
+						"$ref": "#/components/schemas/OpenAIUsage"
+					}
+				},
+				"required": [
+					"id",
+					"object",
+					"choices"
+				]
+			},
+			"OpenAIChatCompletionRequest": {
+				"type": "object",
+				"properties": {
+					"model": {
+						"type": "string"
+					},
+					"messages": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/OpenAIChatMessage"
+						}
+					},
+					"max_tokens": {
+						"type": "integer",
+						"minimum": 1
+					},
+					"max_completion_tokens": {
+						"type": "integer",
+						"minimum": 1
+					},
+					"temperature": {
+						"type": "number"
+					},
+					"top_p": {
+						"type": "number"
+					},
+					"presence_penalty": {
+						"type": "number"
+					},
+					"frequency_penalty": {
+						"type": "number",
+						"description": "Accepted as a fallback alias for presence_penalty."
+					},
+					"stop": {
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							}
+						]
+					},
+					"seed": {
+						"type": "integer"
+					},
+					"stream": {
+						"type": "boolean",
+						"default": false
+					},
+					"stream_options": {
+						"type": "object",
+						"properties": {
+							"include_usage": {
+								"type": "boolean"
+							}
+						}
+					},
+					"tools": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/OpenAITool"
+						}
+					},
+					"tool_choice": {
+						"description": "Supports auto, required, none, an exact function name, or an OpenAI-style function choice object.",
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "object",
+								"additionalProperties": true
+							}
+						]
+					},
+					"response_format": {
+						"type": "object",
+						"description": "json_object and json_schema are converted to a generation grammar.",
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": [
+									"json_object",
+									"json_schema"
+								]
+							},
+							"json_schema": {
+								"type": "object",
+								"properties": {
+									"name": {
+										"type": "string"
+									},
+									"schema": {
+										"type": "object",
+										"additionalProperties": true
+									}
+								}
+							}
+						},
+						"required": [
+							"type"
+						]
+					},
+					"reasoning_effort": {
+						"type": "string",
+						"description": "Forwarded to the active Jinja chat template."
+					},
+					"chat_template_kwargs": {
+						"type": "object",
+						"additionalProperties": true
+					},
+					"continue_assistant_turn": {
+						"type": "boolean",
+						"default": true
+					},
+					"encapsulate_thinking": {
+						"type": "boolean",
+						"default": true
+					},
+					"logprobs": {
+						"type": "boolean"
+					}
+				},
+				"required": [
+					"messages"
+				],
+				"additionalProperties": true
+			},
+			"OpenAIChatCompletionResponse": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"object": {
+						"type": "string",
+						"enum": [
+							"chat.completion"
+						]
+					},
+					"created": {
+						"type": "integer"
+					},
+					"model": {
+						"type": "string"
+					},
+					"choices": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"index": {
+									"type": "integer"
+								},
+								"message": {
+									"$ref": "#/components/schemas/OpenAIChatMessage"
+								},
+								"finish_reason": {
+									"type": "string",
+									"enum": [
+										"stop",
+										"length",
+										"tool_calls",
+										"error"
+									]
+								},
+								"logprobs": {
+									"type": "object",
+									"nullable": true,
+									"additionalProperties": true
+								}
+							},
+							"required": [
+								"index",
+								"message",
+								"finish_reason"
+							]
+						}
+					},
+					"usage": {
+						"$ref": "#/components/schemas/OpenAIUsage"
+					}
+				},
+				"required": [
+					"id",
+					"object",
+					"created",
+					"model",
+					"choices",
+					"usage"
+				]
+			},
+			"OpenAICompletionChunk": {
+				"type": "object",
+				"description": "JSON value carried by each data: line. The stream ends with data: [DONE].",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"object": {
+						"type": "string",
+						"enum": [
+							"text_completion"
+						]
+					},
+					"created": {
+						"type": "integer"
+					},
+					"model": {
+						"type": "string"
+					},
+					"choices": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"index": {
+									"type": "integer"
+								},
+								"text": {
+									"type": "string"
+								},
+								"finish_reason": {
+									"type": "string",
+									"nullable": true,
+									"enum": [
+										"stop",
+										"length",
+										"error"
+									]
+								},
+								"logprobs": {
+									"type": "object",
+									"nullable": true,
+									"additionalProperties": true
+								}
+							},
+							"required": [
+								"index",
+								"text"
+							]
+						}
+					}
+				},
+				"required": [
+					"id",
+					"object",
+					"created",
+					"model",
+					"choices"
+				]
+			},
+			"OpenAIChatCompletionChunk": {
+				"type": "object",
+				"description": "JSON value carried by each data: line. Tool calls may be buffered and emitted near the end. The stream ends with data: [DONE].",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"object": {
+						"type": "string",
+						"enum": [
+							"chat.completion.chunk"
+						]
+					},
+					"created": {
+						"type": "integer"
+					},
+					"model": {
+						"type": "string"
+					},
+					"choices": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"index": {
+									"type": "integer"
+								},
+								"finish_reason": {
+									"type": "string",
+									"nullable": true,
+									"enum": [
+										"stop",
+										"length",
+										"tool_calls",
+										"error"
+									]
+								},
+								"delta": {
+									"type": "object",
+									"properties": {
+										"role": {
+											"type": "string",
+											"enum": [
+												"assistant"
+											]
+										},
+										"content": {
+											"type": "string"
+										},
+										"reasoning_content": {
+											"type": "string"
+										},
+										"tool_calls": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/OpenAIToolCallDelta"
+											}
+										}
+									}
+								},
+								"logprobs": {
+									"type": "object",
+									"nullable": true,
+									"additionalProperties": true
+								}
+							},
+							"required": [
+								"index",
+								"delta"
+							]
+						}
+					},
+					"usage": {
+						"$ref": "#/components/schemas/OpenAIUsage"
+					}
+				},
+				"required": [
+					"id",
+					"object",
+					"created",
+					"model",
+					"choices"
+				]
+			},
+			"OpenAIResponsesInputPart": {
+				"oneOf": [
+					{
+						"type": "object",
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": [
+									"input_text"
+								]
+							},
+							"text": {
+								"type": "string"
+							}
+						},
+						"required": [
+							"type",
+							"text"
+						]
+					},
+					{
+						"type": "object",
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": [
+									"input_image"
+								]
+							},
+							"image_url": {
+								"type": "string",
+								"description": "Use a data:image/...;base64,... URL."
+							}
+						},
+						"required": [
+							"type",
+							"image_url"
+						]
+					}
+				]
+			},
+			"OpenAIResponsesInputItem": {
+				"type": "object",
+				"properties": {
+					"role": {
+						"type": "string",
+						"enum": [
+							"system",
+							"user",
+							"assistant"
+						]
+					},
+					"content": {
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "array",
+								"items": {
+									"$ref": "#/components/schemas/OpenAIResponsesInputPart"
+								}
+							}
+						]
+					}
+				},
+				"required": [
+					"role",
+					"content"
+				]
+			},
+			"OpenAIResponsesRequest": {
+				"type": "object",
+				"description": "Experimental subset converted internally to Chat Completions.",
+				"properties": {
+					"model": {
+						"type": "string"
+					},
+					"input": {
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "array",
+								"items": {
+									"oneOf": [
+										{
+											"type": "string"
+										},
+										{
+											"$ref": "#/components/schemas/OpenAIResponsesInputItem"
+										}
+									]
+								}
+							}
+						]
+					},
+					"instructions": {
+						"type": "string"
+					},
+					"max_tokens": {
+						"type": "integer",
+						"description": "KoboldCpp compatibility field; max_output_tokens is not currently consumed."
+					},
+					"temperature": {
+						"type": "number"
+					},
+					"top_p": {
+						"type": "number"
+					},
+					"stream": {
+						"type": "boolean",
+						"default": false
+					},
+					"tools": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/OpenAITool"
+						}
+					},
+					"tool_choice": {
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "object",
+								"additionalProperties": true
+							}
+						]
+					}
+				},
+				"required": [
+					"input"
+				],
+				"additionalProperties": true
+			},
+			"OpenAIResponseObject": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"object": {
+						"type": "string",
+						"enum": [
+							"response"
+						]
+					},
+					"created_at": {
+						"type": "integer"
+					},
+					"completed_at": {
+						"type": "integer",
+						"nullable": true
+					},
+					"status": {
+						"type": "string",
+						"enum": [
+							"in_progress",
+							"completed",
+							"failed"
+						]
+					},
+					"model": {
+						"type": "string"
+					},
+					"incomplete_details": {
+						"type": "object",
+						"nullable": true,
+						"additionalProperties": true
+					},
+					"previous_response_id": {
+						"type": "string",
+						"nullable": true
+					},
+					"truncation": {
+						"type": "string",
+						"enum": [
+							"disabled"
+						]
+					},
+					"parallel_tool_calls": {
+						"type": "boolean"
+					},
+					"text": {
+						"type": "object",
+						"properties": {
+							"format": {
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"enum": [
+											"text"
+										]
+									}
+								}
+							},
+							"verbosity": {
+								"type": "string"
+							}
+						}
+					},
+					"instructions": {
+						"type": "string",
+						"nullable": true
+					},
+					"error": {
+						"type": "object",
+						"nullable": true,
+						"additionalProperties": true
+					},
+					"metadata": {
+						"type": "object",
+						"additionalProperties": true
+					},
+					"tools": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/OpenAITool"
+						}
+					},
+					"tool_choice": {
+						"type": "string"
+					},
+					"background": {
+						"type": "boolean"
+					},
+					"service_tier": {
+						"type": "string"
+					},
+					"safety_identifier": {
+						"type": "string",
+						"nullable": true
+					},
+					"prompt_cache_key": {
+						"type": "string",
+						"nullable": true
+					},
+					"max_tool_calls": {
+						"type": "integer",
+						"nullable": true
+					},
+					"store": {
+						"type": "boolean"
+					},
+					"top_p": {
+						"type": "number"
+					},
+					"max_output_tokens": {
+						"type": "integer",
+						"nullable": true
+					},
+					"presence_penalty": {
+						"type": "number"
+					},
+					"frequency_penalty": {
+						"type": "number"
+					},
+					"top_logprobs": {
+						"type": "integer"
+					},
+					"temperature": {
+						"type": "number"
+					},
+					"reasoning": {
+						"type": "object",
+						"properties": {
+							"effort": {
+								"type": "string",
+								"nullable": true
+							},
+							"summary": {
+								"type": "string",
+								"nullable": true
+							}
+						}
+					},
+					"output": {
+						"type": "array",
+						"description": "Assistant message and function_call output items.",
+						"items": {
+							"oneOf": [
+								{
+									"type": "object",
+									"properties": {
+										"type": {
+											"type": "string",
+											"enum": [
+												"message"
+											]
+										},
+										"id": {
+											"type": "string"
+										},
+										"status": {
+											"type": "string"
+										},
+										"role": {
+											"type": "string",
+											"enum": [
+												"assistant"
+											]
+										},
+										"content": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"type": {
+														"type": "string",
+														"enum": [
+															"output_text"
+														]
+													},
+													"text": {
+														"type": "string"
+													},
+													"annotations": {
+														"type": "array",
+														"items": {}
+													},
+													"logprobs": {
+														"type": "array",
+														"items": {}
+													}
+												},
+												"required": [
+													"type",
+													"text"
+												]
+											}
+										}
+									},
+									"required": [
+										"type",
+										"id",
+										"status",
+										"role",
+										"content"
+									]
+								},
+								{
+									"type": "object",
+									"properties": {
+										"type": {
+											"type": "string",
+											"enum": [
+												"function_call"
+											]
+										},
+										"id": {
+											"type": "string"
+										},
+										"call_id": {
+											"type": "string"
+										},
+										"name": {
+											"type": "string"
+										},
+										"arguments": {
+											"type": "string"
+										},
+										"status": {
+											"type": "string"
+										}
+									},
+									"required": [
+										"type",
+										"id",
+										"call_id",
+										"name",
+										"arguments",
+										"status"
+									]
+								}
+							]
+						}
+					},
+					"usage": {
+						"type": "object",
+						"nullable": true,
+						"properties": {
+							"input_tokens": {
+								"type": "integer"
+							},
+							"output_tokens": {
+								"type": "integer"
+							},
+							"total_tokens": {
+								"type": "integer"
+							}
+						},
+						"required": [
+							"input_tokens",
+							"output_tokens",
+							"total_tokens"
+						]
+					}
+				},
+				"required": [
+					"id",
+					"object",
+					"created_at",
+					"status",
+					"model",
+					"output",
+					"usage"
+				]
+			},
+			"OpenAIErrorResponse": {
+				"type": "object",
+				"properties": {
+					"error": {
+						"type": "object",
+						"properties": {
+							"message": {
+								"type": "string"
+							},
+							"type": {
+								"type": "string"
+							},
+							"param": {
+								"type": "string",
+								"nullable": true
+							},
+							"code": {
+								"type": "string"
+							}
+						},
+						"required": [
+							"message",
+							"type",
+							"code"
+						]
+					}
+				},
+				"required": [
+					"error"
+				]
+			},
+			"OpenAIResponseStreamEvent": {
+				"type": "object",
+				"description": "Data object for one Responses SSE event. KoboldCpp emits response.created, response.output_item.added, response.content_part.added, response.output_text.delta, response.output_text.done, response.output_item.done, and response.completed.",
+				"properties": {
+					"type": {
+						"type": "string",
+						"enum": [
+							"response.created",
+							"response.output_item.added",
+							"response.content_part.added",
+							"response.output_text.delta",
+							"response.output_text.done",
+							"response.output_item.done",
+							"response.completed"
+						]
+					},
+					"sequence_number": {
+						"type": "integer"
+					},
+					"response": {
+						"$ref": "#/components/schemas/OpenAIResponseObject"
+					},
+					"output_index": {
+						"type": "integer"
+					},
+					"content_index": {
+						"type": "integer"
+					},
+					"item_id": {
+						"type": "string"
+					},
+					"delta": {
+						"type": "string"
+					},
+					"text": {
+						"type": "string"
+					},
+					"item": {
+						"type": "object",
+						"additionalProperties": true
+					},
+					"part": {
+						"type": "object",
+						"additionalProperties": true
+					},
+					"logprobs": {
+						"type": "array",
+						"items": {}
+					}
+				},
+				"required": [
+					"type",
+					"sequence_number"
+				]
+			},
+			"OpenAIImageRequest": {
+				"type": "object",
+				"properties": {
+					"model": {
+						"type": "string"
+					},
+					"prompt": {
+						"type": "string"
+					},
+					"size": {
+						"type": "string",
+						"example": "512x512"
+					},
+					"response_format": {
+						"type": "string",
+						"enum": [
+							"b64_json"
+						]
+					},
+					"n": {
+						"type": "integer",
+						"description": "Accepted, but KoboldCpp returns one image."
+					}
+				},
+				"required": [
+					"prompt"
+				],
+				"additionalProperties": true
+			},
+			"OpenAIImageEditRequest": {
+				"type": "object",
+				"properties": {
+					"image": {
+						"type": "string",
+						"format": "binary"
+					},
+					"mask": {
+						"type": "string",
+						"format": "binary"
+					},
+					"prompt": {
+						"type": "string"
+					},
+					"model": {
+						"type": "string"
+					},
+					"size": {
+						"type": "string"
+					},
+					"response_format": {
+						"type": "string",
+						"enum": [
+							"b64_json"
+						]
+					}
+				},
+				"required": [
+					"image",
+					"prompt"
+				],
+				"additionalProperties": true
+			},
+			"OpenAIImageResponse": {
+				"type": "object",
+				"properties": {
+					"created": {
+						"type": "integer"
+					},
+					"data": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"b64_json": {
+									"type": "string",
+									"format": "byte"
+								}
+							},
+							"required": [
+								"b64_json"
+							]
+						}
+					},
+					"background": {
+						"type": "string"
+					},
+					"output_format": {
+						"type": "string"
+					},
+					"size": {
+						"type": "string"
+					},
+					"quality": {
+						"type": "string"
+					}
+				},
+				"required": [
+					"created",
+					"data"
+				]
+			},
+			"OpenAIModelList": {
+				"type": "object",
+				"properties": {
+					"object": {
+						"type": "string",
+						"enum": [
+							"list"
+						]
+					},
+					"data": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"object": {
+									"type": "string",
+									"enum": [
+										"model"
+									]
+								},
+								"created": {
+									"type": "integer"
+								},
+								"owned_by": {
+									"type": "string"
+								},
+								"status": {
+									"type": "object",
+									"additionalProperties": true
+								},
+								"permission": {
+									"type": "array",
+									"items": {
+										"type": "object"
+									}
+								},
+								"root": {
+									"type": "string"
+								}
+							},
+							"required": [
+								"id",
+								"object",
+								"created",
+								"owned_by"
+							]
+						}
+					}
+				},
+				"required": [
+					"object",
+					"data"
+				]
+			},
+			"OpenAITranscriptionRequest": {
+				"type": "object",
+				"properties": {
+					"file": {
+						"type": "string",
+						"format": "binary"
+					},
+					"model": {
+						"type": "string"
+					},
+					"prompt": {
+						"type": "string"
+					},
+					"language": {
+						"type": "string",
+						"description": "Language code, or auto when omitted."
+					}
+				},
+				"required": [
+					"file"
+				]
+			},
+			"OpenAISpeechRequest": {
+				"type": "object",
+				"properties": {
+					"model": {
+						"type": "string"
+					},
+					"input": {
+						"type": "string"
+					},
+					"voice": {
+						"type": "string"
+					},
+					"response_format": {
+						"type": "string",
+						"enum": [
+							"wav",
+							"mp3"
+						],
+						"default": "wav"
+					},
+					"seed": {
+						"type": "integer"
+					},
+					"language": {
+						"type": "string"
+					},
+					"instruction": {
+						"type": "string"
+					}
+				},
+				"required": [
+					"input"
+				]
+			},
+			"OpenAIVoiceList": {
+				"type": "object",
+				"properties": {
+					"status": {
+						"type": "string",
+						"enum": [
+							"ok"
+						]
+					},
+					"voices": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					}
+				},
+				"required": [
+					"status",
+					"voices"
+				]
+			},
+			"OpenAIEmbeddingRequest": {
+				"type": "object",
+				"properties": {
+					"model": {
+						"type": "string"
+					},
+					"input": {
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							}
+						]
+					},
+					"encoding_format": {
+						"type": "string",
+						"enum": [
+							"float",
+							"base64"
+						]
+					},
+					"truncate": {
+						"type": "boolean",
+						"default": true
+					}
+				},
+				"required": [
+					"input"
+				]
+			},
+			"OpenAIEmbeddingResponse": {
+				"type": "object",
+				"properties": {
+					"object": {
+						"type": "string",
+						"enum": [
+							"list"
+						]
+					},
+					"data": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"object": {
+									"type": "string",
+									"enum": [
+										"embedding"
+									]
+								},
+								"index": {
+									"type": "integer"
+								},
+								"embedding": {
+									"oneOf": [
+										{
+											"type": "array",
+											"items": {
+												"type": "number",
+												"format": "float"
+											}
+										},
+										{
+											"type": "string",
+											"format": "byte"
+										}
+									]
+								}
+							},
+							"required": [
+								"object",
+								"index",
+								"embedding"
+							]
+						}
+					},
+					"model": {
+						"type": "string"
+					},
+					"usage": {
+						"type": "object",
+						"properties": {
+							"prompt_tokens": {
+								"type": "integer"
+							},
+							"total_tokens": {
+								"type": "integer"
+							}
+						},
+						"required": [
+							"prompt_tokens",
+							"total_tokens"
+						]
+					}
+				},
+				"required": [
+					"object",
+					"data",
+					"model",
+					"usage"
+				]
+			},
+			"AnthropicSource": {
+				"type": "object",
+				"description": "Media/document source. Images and audio are usable as model media when supplied as base64; URL image sources are not downloaded. Document text/data is inserted as text.",
+				"properties": {
+					"type": {
+						"type": "string",
+						"enum": [
+							"base64",
+							"url",
+							"text"
+						]
+					},
+					"media_type": {
+						"type": "string"
+					},
+					"data": {
+						"type": "string"
+					},
+					"url": {
+						"type": "string"
+					},
+					"text": {
+						"type": "string"
+					}
+				},
+				"required": [
+					"type"
+				]
+			},
+			"AnthropicContentBlock": {
+				"oneOf": [
+					{
+						"type": "object",
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": [
+									"text"
+								]
+							},
+							"text": {
+								"type": "string"
+							}
+						},
+						"required": [
+							"type",
+							"text"
+						]
+					},
+					{
+						"type": "object",
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": [
+									"image",
+									"audio",
+									"document"
+								]
+							},
+							"source": {
+								"$ref": "#/components/schemas/AnthropicSource"
+							}
+						},
+						"required": [
+							"type",
+							"source"
+						]
+					},
+					{
+						"type": "object",
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": [
+									"tool_use"
+								]
+							},
+							"id": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							},
+							"input": {
+								"type": "object",
+								"additionalProperties": true
+							}
+						},
+						"required": [
+							"type",
+							"id",
+							"name",
+							"input"
+						]
+					},
+					{
+						"type": "object",
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": [
+									"tool_result"
+								]
+							},
+							"tool_use_id": {
+								"type": "string"
+							},
+							"content": {
+								"oneOf": [
+									{
+										"type": "string"
+									},
+									{
+										"type": "array",
+										"items": {
+											"$ref": "#/components/schemas/AnthropicContentBlock"
+										}
+									}
+								]
+							},
+							"is_error": {
+								"type": "boolean"
+							}
+						},
+						"required": [
+							"type",
+							"tool_use_id",
+							"content"
+						]
+					}
+				]
+			},
+			"AnthropicMessage": {
+				"type": "object",
+				"properties": {
+					"role": {
+						"type": "string",
+						"enum": [
+							"user",
+							"assistant"
+						]
+					},
+					"content": {
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "array",
+								"items": {
+									"$ref": "#/components/schemas/AnthropicContentBlock"
+								}
+							}
+						]
+					}
+				},
+				"required": [
+					"role",
+					"content"
+				]
+			},
+			"AnthropicTool": {
+				"type": "object",
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"input_schema": {
+						"type": "object",
+						"additionalProperties": true
+					}
+				},
+				"required": [
+					"name",
+					"input_schema"
+				]
+			},
+			"AnthropicMessagesRequest": {
+				"type": "object",
+				"properties": {
+					"model": {
+						"type": "string",
+						"description": "Compatibility model identifier. KoboldCpp generates with the active text model and reports that model's name in the response."
+					},
+					"messages": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/AnthropicMessage"
+						}
+					},
+					"system": {
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"type": {
+											"type": "string",
+											"enum": [
+												"text"
+											]
+										},
+										"text": {
+											"type": "string"
+										}
+									},
+									"required": [
+										"type",
+										"text"
+									]
+								}
+							}
+						]
+					},
+					"max_tokens": {
+						"type": "integer",
+						"minimum": 1
+					},
+					"temperature": {
+						"type": "number"
+					},
+					"top_p": {
+						"type": "number"
+					},
+					"top_k": {
+						"type": "integer"
+					},
+					"stop_sequences": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Accepted in the payload but not currently mapped to stopping. Use the KoboldCpp/OpenAI-compatible stop field for working stop strings."
+					},
+					"stop": {
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							}
+						]
+					},
+					"stream": {
+						"type": "boolean",
+						"default": false
+					},
+					"tools": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/AnthropicTool"
+						}
+					},
+					"tool_choice": {
+						"description": "Supports auto, required, none, an exact function name, or an OpenAI-style function choice object. Anthropic's native {type: tool, name: ...} object is not currently interpreted.",
+						"oneOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "object",
+								"additionalProperties": true
+							}
+						]
+					},
+					"encapsulate_thinking": {
+						"type": "boolean",
+						"default": true
+					}
+				},
+				"required": [
+					"messages",
+					"max_tokens"
+				],
+				"additionalProperties": true
+			},
+			"AnthropicMessagesResponse": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"message"
+						]
+					},
+					"role": {
+						"type": "string",
+						"enum": [
+							"assistant"
+						]
+					},
+					"model": {
+						"type": "string"
+					},
+					"content": {
+						"type": "array",
+						"items": {
+							"oneOf": [
+								{
+									"type": "object",
+									"properties": {
+										"type": {
+											"type": "string",
+											"enum": [
+												"text"
+											]
+										},
+										"text": {
+											"type": "string"
+										}
+									},
+									"required": [
+										"type",
+										"text"
+									]
+								},
+								{
+									"type": "object",
+									"properties": {
+										"type": {
+											"type": "string",
+											"enum": [
+												"thinking"
+											]
+										},
+										"thinking": {
+											"type": "string"
+										}
+									},
+									"required": [
+										"type",
+										"thinking"
+									]
+								},
+								{
+									"type": "object",
+									"properties": {
+										"type": {
+											"type": "string",
+											"enum": [
+												"tool_use"
+											]
+										},
+										"id": {
+											"type": "string"
+										},
+										"name": {
+											"type": "string"
+										},
+										"input": {
+											"type": "object",
+											"additionalProperties": true
+										}
+									},
+									"required": [
+										"type",
+										"id",
+										"name",
+										"input"
+									]
+								}
+							]
+						}
+					},
+					"stop_reason": {
+						"type": "string",
+						"enum": [
+							"end_turn",
+							"max_tokens",
+							"stop_sequence",
+							"tool_use"
+						]
+					},
+					"stop_sequence": {
+						"type": "string",
+						"nullable": true
+					},
+					"usage": {
+						"type": "object",
+						"properties": {
+							"input_tokens": {
+								"type": "integer"
+							},
+							"output_tokens": {
+								"type": "integer"
+							}
+						},
+						"required": [
+							"input_tokens",
+							"output_tokens"
+						]
+					}
+				},
+				"required": [
+					"id",
+					"type",
+					"role",
+					"model",
+					"content",
+					"stop_reason",
+					"usage"
+				]
+			},
+			"AnthropicStreamEvent": {
+				"type": "object",
+				"description": "Data object for an Anthropic-style SSE event. The SSE event name matches type.",
+				"properties": {
+					"type": {
+						"type": "string",
+						"enum": [
+							"message_start",
+							"content_block_start",
+							"content_block_delta",
+							"content_block_stop",
+							"message_delta",
+							"message_stop"
+						]
+					},
+					"message": {
+						"type": "object",
+						"description": "Partial message supplied by message_start.",
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": [
+									"message"
+								]
+							},
+							"id": {
+								"type": "string"
+							},
+							"role": {
+								"type": "string",
+								"enum": [
+									"assistant"
+								]
+							},
+							"model": {
+								"type": "string"
+							},
+							"content": {
+								"type": "array",
+								"items": {}
+							},
+							"stop_reason": {
+								"type": "string",
+								"nullable": true
+							},
+							"stop_sequence": {
+								"type": "string",
+								"nullable": true
+							},
+							"usage": {
+								"type": "object",
+								"properties": {
+									"input_tokens": {
+										"type": "integer"
+									},
+									"output_tokens": {
+										"type": "integer"
+									}
+								}
+							}
+						},
+						"required": [
+							"type",
+							"id",
+							"role",
+							"model",
+							"usage"
+						]
+					},
+					"index": {
+						"type": "integer"
+					},
+					"content_block": {
+						"type": "object",
+						"additionalProperties": true
+					},
+					"delta": {
+						"type": "object",
+						"description": "text_delta, thinking_delta, input_json_delta, or final stop information.",
+						"additionalProperties": true
+					},
+					"usage": {
+						"type": "object",
+						"properties": {
+							"input_tokens": {
+								"type": "integer"
+							},
+							"output_tokens": {
+								"type": "integer"
+							}
+						}
+					}
+				},
+				"required": [
+					"type"
+				]
+			}
+		},
+		"securitySchemes": {
+			"BearerAuth": {
+				"type": "http",
+				"scheme": "bearer",
+				"bearerFormat": "KoboldCpp server password",
+				"description": "Required on protected endpoints when KoboldCpp is launched with --password. Send the password as `Authorization: Bearer <password>`. If both passwords are configured, --adminpassword is also accepted as an alternative on these regular protected endpoints."
+			},
+			"AdminBearerAuth": {
+				"type": "http",
+				"scheme": "bearer",
+				"bearerFormat": "KoboldCpp admin password",
+				"description": "Used by /api/admin endpoints when --adminpassword is configured. Send it as `Authorization: Bearer <adminpassword>`. Admin endpoints also require the relevant admin mode options such as --admin and --admindir. Failed admin authentication currently returns an empty or unsuccessful HTTP 200 response rather than HTTP 401."
+			}
+		},
+		"responses": {
+			"Unauthorized": {
+				"description": "The server was launched with password protection and the Bearer token is missing or invalid.",
+				"content": {
+					"application/json": {
+						"example": {
+							"detail": {
+								"error": "Unauthorized",
+								"msg": "Authentication key is missing or invalid.",
+								"type": "unauthorized"
+							}
+						},
+						"schema": {
+							"$ref": "#/components/schemas/UnauthorizedError"
+						}
+					}
+				}
 			}
 		}
 	},
 	"info": {
 		"title": "KoboldCpp API",
 		"description": "For swagger.json, <a href=\"?json=1\">click here</a> or use <a href=\"https://lite.koboldai.net/koboldcpp_api.json\">online version</a>.",
-		"version": "2025.06.03"
+		"version": "2026.10.11"
 	},
 	"openapi": "3.0.3",
 	"paths": {
+		"/v1/completions": {
+			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
+				"summary": "Generates text continuations given a prompt. Please refer to OpenAI documentation",
+				"description": "Generates text continuations given a prompt.\n\nThis is an OpenAI compatibility endpoint.\n\n Please refer to OpenAI documentation at [https://developers.openai.com/api/reference/resources/completions/methods/create](https://developers.openai.com/api/reference/resources/completions/methods/create). All KoboldCpp samplers are supported, please refer to /api/v1/generate for more details.",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"example": {
+								"model": "kcpp",
+								"prompt": "Hi, my name is Kobo and",
+								"temperature": 0.8,
+								"max_tokens": 64
+							},
+							"schema": {
+								"$ref": "#/components/schemas/OpenAICompletionRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"tags": [
+					"v1"
+				],
+				"responses": {
+					"200": {
+						"description": "Completion response, or an SSE stream when stream=true.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OpenAICompletionResponse"
+								}
+							},
+							"text/event-stream": {
+								"schema": {
+									"oneOf": [
+										{
+											"$ref": "#/components/schemas/OpenAICompletionChunk"
+										},
+										{
+											"$ref": "#/components/schemas/OpenAIErrorResponse"
+										}
+									],
+									"description": "Each data payload is a completion chunk or, after headers have been committed, an error object. The stream terminates with [DONE]."
+								}
+							}
+						}
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"500": {
+						"description": "The backend failed to generate a completion.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OpenAIErrorResponse"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/chat/completions": {
+			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
+				"summary": "Generates a response from a list of messages. Please refer to OpenAI documentation",
+				"description": "Given a list of messages comprising a conversation, the model will return a response.\n\n This is an OpenAI compatibility endpoint.\n\n Please refer to OpenAI documentation at [https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create). All KoboldCpp samplers are supported, please refer to /api/v1/generate for more details.",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"example": {
+								"model": "kcpp",
+								"messages": [
+									{
+										"role": "system",
+										"content": "You are a helpful assistant."
+									},
+									{
+										"role": "user",
+										"content": "Tell me a joke about Kobolds."
+									}
+								],
+								"temperature": 0.7
+							},
+							"schema": {
+								"$ref": "#/components/schemas/OpenAIChatCompletionRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"tags": [
+					"v1"
+				],
+				"responses": {
+					"200": {
+						"description": "Chat completion, or an SSE stream when stream=true.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OpenAIChatCompletionResponse"
+								}
+							},
+							"text/event-stream": {
+								"schema": {
+									"oneOf": [
+										{
+											"$ref": "#/components/schemas/OpenAIChatCompletionChunk"
+										},
+										{
+											"$ref": "#/components/schemas/OpenAIErrorResponse"
+										}
+									],
+									"description": "Each data payload is a chat chunk or, after headers have been committed, an error object. The stream terminates with [DONE]."
+								}
+							}
+						}
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"500": {
+						"description": "The backend failed to generate a chat completion.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OpenAIErrorResponse"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/responses": {
+			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
+				"summary": "Emulates OpenAI Responses API. Very experimental, not recommended (use chat completions instead). Please refer to OpenAI documentation",
+				"description": "Emulates OpenAI Responses API.\n\n This is an OpenAI compatibility endpoint.\n\n Please refer to OpenAI documentation at [https://developers.openai.com/api/reference/resources/responses](https://developers.openai.com/api/reference/resources/responses). All KoboldCpp samplers are supported, please refer to /api/v1/generate for more details.",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"example": {
+								"model": "kcpp",
+								"input": "Tell me a joke about Kobolds."
+							},
+							"schema": {
+								"$ref": "#/components/schemas/OpenAIResponsesRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"tags": [
+					"v1"
+				],
+				"responses": {
+					"200": {
+						"description": "Response object, or named SSE events when stream=true.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OpenAIResponseObject"
+								}
+							},
+							"text/event-stream": {
+								"schema": {
+									"$ref": "#/components/schemas/OpenAIResponseStreamEvent"
+								}
+							}
+						}
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					}
+				}
+			}
+		},
+		"/v1/images/generations": {
+			"post": {
+				"summary": "Generates images from a text prompt. Please refer to OpenAI documentation",
+				"description": "Creates images from a text prompt.\n\n This is an OpenAI compatibility endpoint.\n\n Please refer to OpenAI documentation at [https://developers.openai.com/docs/api-reference/images/create](https://developers.openai.com/docs/api-reference/images/create).",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"example": {
+								"model": "kcpp",
+								"prompt": "picture of a kobold, high quality HD render",
+								"n": 1,
+								"size": "512x512",
+								"response_format": "b64_json"
+							},
+							"schema": {
+								"$ref": "#/components/schemas/OpenAIImageRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"tags": [
+					"v1"
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"example": {
+									"created": 1710000000,
+									"data": [
+										{
+											"b64_json": "base64_image_data"
+										}
+									]
+								},
+								"schema": {
+									"$ref": "#/components/schemas/OpenAIImageResponse"
+								}
+							}
+						},
+						"description": "Successful request"
+					}
+				}
+			}
+		},
+		"/v1/images/edits": {
+			"post": {
+				"summary": "Edit an image using the OpenAI-compatible multipart format",
+				"description": "Requires a loaded image model. Repeated image or image[] fields and an optional mask are accepted. KoboldCpp returns one base64 PNG image and intentionally bypasses --password authentication.",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"multipart/form-data": {
+							"schema": {
+								"$ref": "#/components/schemas/OpenAIImageEditRequest"
+							}
+						}
+					}
+				},
+				"tags": [
+					"v1"
+				],
+				"responses": {
+					"200": {
+						"description": "Edited image.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OpenAIImageResponse"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/models": {
+			"get": {
+				"summary": "List and describe the various models available in the API. Please refer to OpenAI documentation",
+				"description": "List and describe the various models available in the API.\n\n This is an OpenAI compatibility endpoint.\n\n Please refer to OpenAI documentation at [https://developers.openai.com/docs/api-reference/models](https://developers.openai.com/docs/api-reference/models)",
+				"tags": [
+					"v1"
+				],
+				"responses": {
+					"200": {
+						"description": "Model list.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OpenAIModelList"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/audio/transcriptions": {
+			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
+				"summary": "Create an OpenAI-compatible audio transcription",
+				"description": "Accepts a multipart audio file plus optional prompt and language. Uses the loaded Whisper model, or an audio-capable multimodal projector when Whisper is unavailable.",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"multipart/form-data": {
+							"schema": {
+								"$ref": "#/components/schemas/OpenAITranscriptionRequest"
+							}
+						}
+					}
+				},
+				"tags": [
+					"v1"
+				],
+				"responses": {
+					"200": {
+						"description": "Transcription text.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TranscriptionResult"
+								}
+							}
+						}
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					}
+				}
+			}
+		},
+		"/v1/audio/speech": {
+			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
+				"summary": "Generates Text-To-Speech audio from input text. Please refer to OpenAI documentation",
+				"description": "Generates Text-To-Speech audio from input text.\n\n This is an OpenAI compatibility endpoint.\n\n Please refer to OpenAI documentation at [https://developers.openai.com/docs/api-reference/audio/createSpeech](https://developers.openai.com/docs/api-reference/audio/createSpeech)",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"example": {
+								"model": "kcpp",
+								"input": "Hello, my name is Kobold and I love to play.",
+								"voice": "alloy"
+							},
+							"schema": {
+								"$ref": "#/components/schemas/OpenAISpeechRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"tags": [
+					"v1"
+				],
+				"responses": {
+					"200": {
+						"description": "Generated audio bytes.",
+						"content": {
+							"audio/wav": {
+								"schema": {
+									"type": "string",
+									"format": "binary"
+								}
+							},
+							"audio/mpeg": {
+								"schema": {
+									"type": "string",
+									"format": "binary"
+								}
+							}
+						}
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					}
+				}
+			}
+		},
+		"/v1/audio/voices": {
+			"get": {
+				"summary": "List voices available to the OpenAI-compatible speech endpoint",
+				"description": "KoboldCpp extension used by compatible TTS clients. This public endpoint does not enforce --password.",
+				"tags": [
+					"v1"
+				],
+				"responses": {
+					"200": {
+						"description": "Available voice names.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OpenAIVoiceList"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/embeddings": {
+			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
+				"summary": "Creates an embedding vector representing the input text. Please refer to OpenAI documentation",
+				"description": "Creates an embedding vector representing the input text.\n\nThis is an OpenAI compatibility endpoint.\n\n Please refer to OpenAI documentation at [https://developers.openai.com/docs/api-reference/embeddings/create](https://developers.openai.com/docs/api-reference/embeddings/create)",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"example": {
+								"model": "kcpp",
+								"input": "Niko the Kobold is in town today.",
+								"truncate": true
+							},
+							"schema": {
+								"$ref": "#/components/schemas/OpenAIEmbeddingRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"tags": [
+					"v1"
+				],
+				"responses": {
+					"200": {
+						"description": "Embedding list.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OpenAIEmbeddingResponse"
+								}
+							}
+						}
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					}
+				}
+			}
+		},
+		"/v1/messages": {
+			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
+				"summary": "Creates a message using the Anthropic Messages API format",
+				"description": "Given a structured list of input messages, a system prompt, and required tokens parameter, the model will return a response. This follows the native Anthropic Messages payload style.",
+				"tags": [
+					"v1"
+				],
+				"parameters": [
+					{
+						"name": "x-api-key",
+						"in": "header",
+						"required": false,
+						"description": "Optional Anthropic compatibility header. KoboldCpp does not validate this header; when --password is configured, authenticate with Authorization: Bearer <password> instead.",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "anthropic-version",
+						"in": "header",
+						"required": false,
+						"description": "Accepted for Anthropic client compatibility but not inspected or validated by KoboldCpp.",
+						"schema": {
+							"type": "string",
+							"default": "2023-06-01"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"example": {
+								"model": "claude-3-5-sonnet-20241022",
+								"max_tokens": 1024,
+								"system": "You are a helpful assistant.",
+								"messages": [
+									{
+										"role": "user",
+										"content": "Tell me a joke about Kobolds."
+									}
+								],
+								"temperature": 0.7
+							},
+							"schema": {
+								"$ref": "#/components/schemas/AnthropicMessagesRequest"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Message response, or named Anthropic-style SSE events when stream=true.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/AnthropicMessagesResponse"
+								}
+							},
+							"text/event-stream": {
+								"schema": {
+									"$ref": "#/components/schemas/AnthropicStreamEvent"
+								}
+							}
+						}
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					}
+				}
+			}
+		},
+		"/v1/completion": {
+			"$ref": "#/paths/~1v1~1completions"
+		},
+		"/completions": {
+			"$ref": "#/paths/~1v1~1completions"
+		},
+		"/chat/completions": {
+			"$ref": "#/paths/~1v1~1chat~1completions"
+		},
+		"/responses": {
+			"$ref": "#/paths/~1v1~1responses"
+		},
+		"/images/generations": {
+			"$ref": "#/paths/~1v1~1images~1generations"
+		},
+		"/images/edits": {
+			"$ref": "#/paths/~1v1~1images~1edits"
+		},
+		"/models": {
+			"$ref": "#/paths/~1v1~1models"
+		},
+		"/audio/transcriptions": {
+			"$ref": "#/paths/~1v1~1audio~1transcriptions"
+		},
+		"/audio/speech": {
+			"$ref": "#/paths/~1v1~1audio~1speech"
+		},
+		"/audio/voices": {
+			"$ref": "#/paths/~1v1~1audio~1voices"
+		},
+		"/messages": {
+			"$ref": "#/paths/~1v1~1messages"
+		},
 		"/api/v1/config/max_context_length": {
 			"get": {
 				"responses": {
@@ -517,6 +3189,11 @@
 		},
 		"/api/v1/generate": {
 			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
 				"description": "Generates text given a prompt and generation settings.\n\nUnspecified values are set to defaults.",
 				"requestBody": {
 					"content": {
@@ -610,7 +3287,13 @@
 		},
 		"/api/v1/model": {
 			"get": {
-				"description": "Gets the current model display name.",
+				"security": [
+					{
+						"BearerAuth": []
+					},
+					{}
+				],
+				"description": "Gets the current model display name. When --password is configured, a missing or invalid Bearer token does not return HTTP 401; the endpoint returns `koboldcpp/protected-model` instead. A valid server or admin password reveals the real display name.",
 				"responses": {
 					"200": {
 						"content": {
@@ -755,6 +3438,11 @@
 		},
 		"/api/extra/multiplayer/status": {
 			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
 				"requestBody": {
 					"content": {
 						"application/json": {
@@ -782,21 +3470,21 @@
 						"content": {
 							"application/json": {
 								"example": {
-									"turn_major": 0,
-									"turn_minor": 0,
-									"idle": 1,
+									"turn_major": 1,
+									"turn_minor": 1,
+									"idle": true,
 									"data_format": ""
 								},
 								"schema": {
 									"properties": {
 										"turn_major": {
-											"type": "string"
+											"type": "integer"
 										},
 										"turn_minor": {
-											"type": "string"
+											"type": "integer"
 										},
 										"idle": {
-											"type": "number"
+											"type": "boolean"
 										},
 										"data_format": {
 											"type": "string"
@@ -818,6 +3506,11 @@
 		},
 		"/api/extra/multiplayer/getstory": {
 			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
 				"responses": {
 					"200": {
 						"content": {
@@ -840,6 +3533,11 @@
 		},
 		"/api/extra/multiplayer/setstory": {
 			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
 				"description": "Sets the current multiplayer story and increments the turn.",
 				"requestBody": {
 					"content": {
@@ -876,15 +3574,11 @@
 						"content": {
 							"application/json": {
 								"example": {
-									"results": [
-										{
-											"success": true,
-											"turn_major": 1,
-											"turn_minor": 0,
-											"idle": 1,
-											"data_format": ""
-										}
-									]
+									"success": true,
+									"turn_major": 2,
+									"turn_minor": 1,
+									"idle": true,
+									"data_format": "kcpp_lzma_b64"
 								},
 								"schema": {
 									"properties": {
@@ -892,18 +3586,25 @@
 											"type": "boolean"
 										},
 										"turn_major": {
-											"type": "string"
+											"type": "integer"
 										},
 										"turn_minor": {
-											"type": "string"
+											"type": "integer"
 										},
 										"idle": {
-											"type": "number"
+											"type": "boolean"
 										},
 										"data_format": {
 											"type": "string"
 										}
 									},
+									"required": [
+										"success",
+										"turn_major",
+										"turn_minor",
+										"idle",
+										"data_format"
+									],
 									"type": "object"
 								}
 							}
@@ -919,7 +3620,12 @@
 		},
 		"/api/extra/generate/stream": {
 			"post": {
-				"description": "Generates text given a prompt and generation settings, with SSE streaming.\n\nUnspecified values are set to defaults.\n\nSSE streaming establishes a persistent connection, returning ongoing process in the form of message events.\n\n``` \nevent: message\ndata: {data}\n\n```",
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
+				"description": "Generates text given a prompt and generation settings, with Server-Sent Events (SSE) streaming.\n\nUnspecified values are set to defaults.\n\nThe response uses `text/event-stream`. Each event has `event: message` and a JSON `data` object containing `token` (a generated text fragment) and `finish_reason`. Events are separated by a blank line. Concatenate the `token` values to obtain the generated text.\n\n`finish_reason` is `null` while generation is in progress. The final event has an empty `token` and a `finish_reason` of `stop`, `length`, or `error`. The server then closes the connection; no `[DONE]` sentinel is sent.",
 				"requestBody": {
 					"content": {
 						"application/json": {
@@ -938,20 +3644,14 @@
 				"responses": {
 					"200": {
 						"content": {
-							"application/json": {
-								"example": {
-									"results": [
-										{
-											"text": " Holding up his tail to keep it from dragging in the dirty snow that covered the cobblestone, he waited patiently for the butcher to turn his attention from his stall so that he could pilfer his next meal: a tender-looking chicken."
-										}
-									]
-								},
+							"text/event-stream": {
+								"example": "event: message\ndata: {\"token\": \" Holding\", \"finish_reason\": null}\n\nevent: message\ndata: {\"token\": \" up his tail\", \"finish_reason\": null}\n\nevent: message\ndata: {\"token\": \"\", \"finish_reason\": \"length\"}\n\n",
 								"schema": {
-									"$ref": "#/components/schemas/GenerationOutput"
+									"type": "string"
 								}
 							}
 						},
-						"description": "Successful request"
+						"description": "Generated text streamed as SSE message events"
 					},
 					"503": {
 						"content": {
@@ -978,6 +3678,11 @@
 		},
 		"/api/extra/generate/check": {
 			"get": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
 				"responses": {
 					"200": {
 						"content": {
@@ -1004,6 +3709,11 @@
 				]
 			},
 			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
 				"description": "Poll the incomplete results of the currently ongoing text generation. A unique genkey previously submitted allows polling even in multiuser mode.",
 				"requestBody": {
 					"content": {
@@ -1051,6 +3761,11 @@
 		},
 		"/api/extra/last_logprobs": {
 			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
 				"description": "Obtains the token logprobs of the most recent request. A unique genkey previously submitted is required in multiuser mode.",
 				"requestBody": {
 					"content": {
@@ -1382,6 +4097,11 @@
 		},
 		"/api/extra/tokencount": {
 			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
 				"description": "Counts the number of tokens in a string, and returns their token IDs. Also aliased to /api/extra/tokenize",
 				"requestBody": {
 					"content": {
@@ -1447,6 +4167,11 @@
 		},
 		"/api/extra/detokenize": {
 			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
 				"description": "Converts an array of token IDs into a string.",
 				"requestBody": {
 					"content": {
@@ -1509,6 +4234,11 @@
 		},
 		"/api/extra/abort": {
 			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
 				"description": "Aborts the currently ongoing text generation. Does not work when multiple requests are in queue.",
 				"requestBody": {
 					"content": {
@@ -1534,15 +4264,33 @@
 						"content": {
 							"application/json": {
 								"example": {
-									"success": true
+									"success": "true",
+									"done": "true"
 								},
 								"schema": {
 									"properties": {
 										"success": {
-											"type": "boolean",
-											"description": "Whether the abort was successful."
+											"type": "string",
+											"enum": [
+												"true",
+												"false"
+											],
+											"description": "Whether the abort was successful. Returned as a JSON string for compatibility."
+										},
+										"done": {
+											"type": "string",
+											"enum": [
+												"true",
+												"false"
+											],
+											"description": "Whether the target generation was aborted immediately. Returned as a JSON string for compatibility."
 										}
-									}
+									},
+									"required": [
+										"success",
+										"done"
+									],
+									"type": "object"
 								}
 							}
 						},
@@ -1557,6 +4305,11 @@
 		},
 		"/api/extra/transcribe": {
 			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
 				"description": "Uses Whisper to perform a Speech-To-Text transcription.",
 				"requestBody": {
 					"content": {
@@ -1600,7 +4353,7 @@
 									"text": "Hello world"
 								},
 								"schema": {
-									"$ref": "#/components/schemas/ValueResult"
+									"$ref": "#/components/schemas/TranscriptionResult"
 								}
 							}
 						},
@@ -1615,6 +4368,11 @@
 		},
 		"/api/extra/websearch": {
 			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
 				"description": "Searches the web using DuckDuckGo and returns the top 3 results.",
 				"requestBody": {
 					"content": {
@@ -1648,8 +4406,30 @@
 									}
 								],
 								"schema": {
-									"properties": {},
-									"type": "object"
+									"type": "array",
+									"items": {
+										"type": "object",
+										"properties": {
+											"title": {
+												"type": "string"
+											},
+											"url": {
+												"type": "string"
+											},
+											"desc": {
+												"type": "string"
+											},
+											"content": {
+												"type": "string"
+											}
+										},
+										"required": [
+											"title",
+											"url",
+											"desc",
+											"content"
+										]
+									}
 								}
 							}
 						},
@@ -1664,6 +4444,11 @@
 		},
 		"/api/extra/tts": {
 			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
 				"description": "Creates text-to-speech audio from input text.",
 				"requestBody": {
 					"content": {
@@ -1723,20 +4508,18 @@
 					"200": {
 						"content": {
 							"application/json": {
-								"example": {
-									"results": [
-										"kobo",
-										"cheery",
-										"sleepy",
-										"shouty",
-										"chatty",
-										"random",
-										"instruct"
-									]
-								},
+								"example": [
+									"kobo",
+									"cheery",
+									"sleepy",
+									"shouty",
+									"chatty"
+								],
 								"schema": {
-									"properties": {},
-									"type": "object"
+									"type": "array",
+									"items": {
+										"type": "string"
+									}
 								}
 							}
 						},
@@ -1752,6 +4535,11 @@
 		},
 		"/api/extra/embeddings": {
 			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
 				"summary": "Creates an embedding vector representing the input text. Please refer to OpenAI documentation",
 				"description": "Creates an embedding vector representing the input text.\n\nThis is an OpenAI compatibility endpoint.\n\n Please refer to OpenAI documentation at [https://developers.openai.com/docs/api-reference/embeddings/create](https://developers.openai.com/docs/api-reference/embeddings/create)",
 				"requestBody": {
@@ -1824,6 +4612,11 @@
 		},
 		"/api/extra/music/prepare": {
 			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
 				"summary": "Creates song generation parameters such as caption, lyrics, BPM and duration",
 				"description": "Creates song generation parameters such as caption, lyrics, BPM and duration. This should be called to produce the generation input for /api/extra/music/generate",
 				"requestBody": {
@@ -1886,6 +4679,11 @@
 		},
 		"/api/extra/music/generate": {
 			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
 				"summary": "Generates music based on provided captions, lyrics and configurations",
 				"description": "Generates music based on provided captions, lyrics and configurations. The config can be generated using /api/extra/music/prepare or crafted manually",
 				"requestBody": {
@@ -1962,6 +4760,11 @@
 		},
 		"/api/extra/json_to_grammar": {
 			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
 				"summary": "Converts a provided JSON schema into GBNF grammar.",
 				"description": "Converts a provided JSON schema into GBNF grammar. Example schema at [https://developers.openai.com/docs/guides/structured-outputs](https://developers.openai.com/docs/guides/structured-outputs)",
 				"requestBody": {
@@ -2048,6 +4851,11 @@
 		},
 		"/api/extra/data/save": {
 			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
 				"description": "Saves data to a slot in a database file in the KoboldCpp server.",
 				"requestBody": {
 					"content": {
@@ -2116,6 +4924,11 @@
 		},
 		"/api/extra/data/load": {
 			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
 				"description": "Loads data from a save slot in the database file in the KoboldCpp server.",
 				"requestBody": {
 					"content": {
@@ -2142,7 +4955,11 @@
 							"application/json": {
 								"example": {
 									"success": true,
-									"data": "base64_data"
+									"data": {
+										"title": "Untitled Story",
+										"format": "kcpp_lzma_b64",
+										"data": "base64_data"
+									}
 								},
 								"schema": {
 									"properties": {
@@ -2151,10 +4968,32 @@
 											"description": "Whether the operation was successful."
 										},
 										"data": {
-											"type": "string",
-											"description": "Text string containing the loaded data from server."
+											"type": "object",
+											"nullable": true,
+											"description": "The saved slot entry, or null if the slot does not exist.",
+											"properties": {
+												"title": {
+													"type": "string"
+												},
+												"format": {
+													"type": "string"
+												},
+												"data": {
+													"type": "string"
+												}
+											},
+											"required": [
+												"title",
+												"format",
+												"data"
+											]
 										}
-									}
+									},
+									"required": [
+										"success",
+										"data"
+									],
+									"type": "object"
 								}
 							}
 						},
@@ -2169,6 +5008,11 @@
 		},
 		"/api/extra/data/list": {
 			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
 				"description": "List available saved slots from the KoboldCpp server, returns an array of strings containing their titles.",
 				"responses": {
 					"200": {
@@ -2199,6 +5043,11 @@
 		},
 		"/api/admin/list_options": {
 			"get": {
+				"security": [
+					{
+						"AdminBearerAuth": []
+					}
+				],
 				"summary": "List available .kcpps files to load.",
 				"description": "List available .kcpps files to load.",
 				"tags": [
@@ -2213,8 +5062,10 @@
 									"file2.kcpps"
 								],
 								"schema": {
-									"properties": {},
-									"type": "object"
+									"type": "array",
+									"items": {
+										"type": "string"
+									}
 								}
 							}
 						},
@@ -2225,6 +5076,11 @@
 		},
 		"/api/admin/reload_config": {
 			"post": {
+				"security": [
+					{
+						"AdminBearerAuth": []
+					}
+				],
 				"description": "Switches the loaded config, along with any settings and model file changes.",
 				"requestBody": {
 					"content": {
@@ -2278,6 +5134,11 @@
 		},
 		"/api/admin/check_state": {
 			"post": {
+				"security": [
+					{
+						"AdminBearerAuth": []
+					}
+				],
 				"description": "Gets the number of bytes taken for existing save state, and predicts the bytes required for a new save state.",
 				"responses": {
 					"200": {
@@ -2347,6 +5208,11 @@
 		},
 		"/api/admin/save_state": {
 			"post": {
+				"security": [
+					{
+						"AdminBearerAuth": []
+					}
+				],
 				"description": "Creates a new KV cache save state in memory. Overwrites any existing saved state.",
 				"requestBody": {
 					"content": {
@@ -2405,6 +5271,11 @@
 		},
 		"/api/admin/load_state": {
 			"post": {
+				"security": [
+					{
+						"AdminBearerAuth": []
+					}
+				],
 				"description": "Reloads a previous KV cache save state into context.",
 				"requestBody": {
 					"content": {
@@ -2458,6 +5329,11 @@
 		},
 		"/api/admin/clear_state": {
 			"post": {
+				"security": [
+					{
+						"AdminBearerAuth": []
+					}
+				],
 				"description": "Frees all previous KV cache save state.",
 				"responses": {
 					"200": {
@@ -2764,13 +5640,19 @@
 										"base64_image_data"
 									],
 									"parameters": {},
-									"info": ""
+									"info": "{}",
+									"animated": false,
+									"extra_data": "",
+									"final_frame": ""
 								},
 								"schema": {
 									"properties": {
 										"images": {
-											"type": "string",
-											"description": "A base64 string containing the encoded PNG of the generated image."
+											"type": "array",
+											"items": {
+												"type": "string"
+											},
+											"description": "Base64 strings containing the encoded generated images. KoboldCpp currently returns one main image."
 										},
 										"parameters": {
 											"type": "object",
@@ -2778,9 +5660,30 @@
 										},
 										"info": {
 											"type": "string",
-											"description": "Not used. Will be empty."
+											"description": "A stringified JSON object containing generation information."
+										},
+										"animated": {
+											"type": "boolean",
+											"description": "Whether the generated output is animated."
+										},
+										"extra_data": {
+											"type": "string",
+											"description": "Additional base64 encoded output data when supplied by the image backend."
+										},
+										"final_frame": {
+											"type": "string",
+											"description": "Base64 encoded final frame when supplied by the image backend."
 										}
-									}
+									},
+									"required": [
+										"images",
+										"parameters",
+										"info",
+										"animated",
+										"extra_data",
+										"final_frame"
+									],
+									"type": "object"
 								}
 							}
 						},
@@ -2856,7 +5759,7 @@
 										"type": "string"
 									},
 									"inpainting_mask_invert": {
-										"type": "string"
+										"type": "integer"
 									},
 									"extra_images": {
 										"type": "array",
@@ -2881,13 +5784,19 @@
 										"base64_image_data"
 									],
 									"parameters": {},
-									"info": ""
+									"info": "{}",
+									"animated": false,
+									"extra_data": "",
+									"final_frame": ""
 								},
 								"schema": {
 									"properties": {
 										"images": {
-											"type": "string",
-											"description": "A base64 string containing the encoded PNG of the generated image."
+											"type": "array",
+											"items": {
+												"type": "string"
+											},
+											"description": "Base64 strings containing the encoded generated images. KoboldCpp currently returns one main image."
 										},
 										"parameters": {
 											"type": "object",
@@ -2895,9 +5804,30 @@
 										},
 										"info": {
 											"type": "string",
-											"description": "Not used. Will be empty."
+											"description": "A stringified JSON object containing generation information."
+										},
+										"animated": {
+											"type": "boolean",
+											"description": "Whether the generated output is animated."
+										},
+										"extra_data": {
+											"type": "string",
+											"description": "Additional base64 encoded output data when supplied by the image backend."
+										},
+										"final_frame": {
+											"type": "string",
+											"description": "Base64 encoded final frame when supplied by the image backend."
 										}
-									}
+									},
+									"required": [
+										"images",
+										"parameters",
+										"info",
+										"animated",
+										"extra_data",
+										"final_frame"
+									],
+									"type": "object"
 								}
 							}
 						},
@@ -3020,322 +5950,6 @@
 					"sdapi/v1"
 				]
 			}
-		},
-		"/v1/completions": {
-			"post": {
-				"summary": "Generates text continuations given a prompt. Please refer to OpenAI documentation",
-				"description": "Generates text continuations given a prompt.\n\nThis is an OpenAI compatibility endpoint.\n\n Please refer to OpenAI documentation at [https://developers.openai.com/api/reference/resources/completions/methods/create](https://developers.openai.com/api/reference/resources/completions/methods/create). All KoboldCpp samplers are supported, please refer to /api/v1/generate for more details.",
-				"requestBody": {
-					"content": {
-						"application/json": {
-							"example": {
-								"model": "kcpp",
-								"prompt": "Hi, my name is Kobo and",
-								"temperature": 0.8,
-								"max_tokens": 64
-							},
-							"schema": {
-								"properties": {},
-								"type": "object"
-							}
-						}
-					},
-					"required": true
-				},
-				"tags": [
-					"v1"
-				],
-				"responses": {
-					"default": {
-						"description": ""
-					}
-				}
-			}
-		},
-		"/v1/chat/completions": {
-			"post": {
-				"summary": "Generates a response from a list of messages. Please refer to OpenAI documentation",
-				"description": "Given a list of messages comprising a conversation, the model will return a response.\n\n This is an OpenAI compatibility endpoint.\n\n Please refer to OpenAI documentation at [https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create). All KoboldCpp samplers are supported, please refer to /api/v1/generate for more details.",
-				"requestBody": {
-					"content": {
-						"application/json": {
-							"example": {
-								"model": "kcpp",
-								"messages": [
-									{
-										"role": "system",
-										"content": "You are a helpful assistant."
-									},
-									{
-										"role": "user",
-										"content": "Tell me a joke about Kobolds."
-									}
-								],
-								"temperature": 0.7
-							},
-							"schema": {
-								"properties": {},
-								"type": "object"
-							}
-						}
-					},
-					"required": true
-				},
-				"tags": [
-					"v1"
-				],
-				"responses": {
-					"default": {
-						"description": ""
-					}
-				}
-			}
-		},
-		"/v1/responses": {
-			"post": {
-				"summary": "Emulates OpenAI Responses API. Very experimental, not recommended (use chat completions instead). Please refer to OpenAI documentation",
-				"description": "Emulates OpenAI Responses API.\n\n This is an OpenAI compatibility endpoint.\n\n Please refer to OpenAI documentation at [https://developers.openai.com/api/reference/resources/responses](https://developers.openai.com/api/reference/resources/responses). All KoboldCpp samplers are supported, please refer to /api/v1/generate for more details.",
-				"requestBody": {
-					"content": {
-						"application/json": {
-							"example": {
-								"model": "kcpp",
-								"input": "Tell me a joke about Kobolds."
-							},
-							"schema": {
-								"properties": {},
-								"type": "object"
-							}
-						}
-					},
-					"required": true
-				},
-				"tags": [
-					"v1"
-				],
-				"responses": {
-					"default": {
-						"description": ""
-					}
-				}
-			}
-		},
-		"/v1/models": {
-			"get": {
-				"summary": "List and describe the various models available in the API. Please refer to OpenAI documentation",
-				"description": "List and describe the various models available in the API.\n\n This is an OpenAI compatibility endpoint.\n\n Please refer to OpenAI documentation at [https://developers.openai.com/docs/api-reference/models](https://developers.openai.com/docs/api-reference/models)",
-				"tags": [
-					"v1"
-				],
-				"responses": {
-					"default": {
-						"description": ""
-					}
-				}
-			}
-		},
-		"/v1/audio/transcriptions": {
-			"post": {
-				"summary": "Transcribes a wav file with speech to text using loaded Whisper model. Please refer to OpenAI documentation",
-				"description": "Transcribes a wav file with speech to text using loaded Whisper model.\n\n This is an OpenAI compatibility endpoint.\n\n Please refer to OpenAI documentation at [https://developers.openai.com/docs/api-reference/audio/createTranscription](https://developers.openai.com/docs/api-reference/audio/createTranscription)",
-				"tags": [
-					"v1"
-				],
-				"responses": {
-					"default": {
-						"description": ""
-					}
-				}
-			}
-		},
-		"/v1/audio/speech": {
-			"post": {
-				"summary": "Generates Text-To-Speech audio from input text. Please refer to OpenAI documentation",
-				"description": "Generates Text-To-Speech audio from input text.\n\n This is an OpenAI compatibility endpoint.\n\n Please refer to OpenAI documentation at [https://developers.openai.com/docs/api-reference/audio/createSpeech](https://developers.openai.com/docs/api-reference/audio/createSpeech)",
-				"requestBody": {
-					"content": {
-						"application/json": {
-							"example": {
-								"model": "kcpp",
-								"input": "Hello, my name is Kobold and I love to play.",
-								"voice": "alloy"
-							},
-							"schema": {
-								"properties": {},
-								"type": "object"
-							}
-						}
-					},
-					"required": true
-				},
-				"tags": [
-					"v1"
-				],
-				"responses": {
-					"default": {
-						"description": ""
-					}
-				}
-			}
-		},
-		"/v1/embeddings": {
-			"post": {
-				"summary": "Creates an embedding vector representing the input text. Please refer to OpenAI documentation",
-				"description": "Creates an embedding vector representing the input text.\n\nThis is an OpenAI compatibility endpoint.\n\n Please refer to OpenAI documentation at [https://developers.openai.com/docs/api-reference/embeddings/create](https://developers.openai.com/docs/api-reference/embeddings/create)",
-				"requestBody": {
-					"content": {
-						"application/json": {
-							"example": {
-								"model": "kcpp",
-								"input": "Niko the Kobold is in town today.",
-								"truncate": true
-							},
-							"schema": {
-								"properties": {},
-								"type": "object"
-							}
-						}
-					},
-					"required": true
-				},
-				"tags": [
-					"v1"
-				],
-				"responses": {
-					"default": {
-						"description": ""
-					}
-				}
-			}
-		},
-		"/v1/messages": {
-			"post": {
-				"summary": "Creates a message using the Anthropic Messages API format",
-				"description": "Given a structured list of input messages, a system prompt, and required tokens parameter, the model will return a response. This follows the native Anthropic Messages payload style.",
-				"tags": [
-					"v1"
-				],
-				"parameters": [
-					{
-						"name": "x-api-key",
-						"in": "header",
-						"required": false,
-						"description": "Anthropic API Key used for authentication.",
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"name": "anthropic-version",
-						"in": "header",
-						"required": false,
-						"description": "Anthropic API version. Currently, '2023-06-01' is expected.",
-						"schema": {
-							"type": "string",
-							"default": "2023-06-01"
-						}
-					}
-				],
-				"requestBody": {
-					"required": false,
-					"content": {
-						"application/json": {
-							"example": {
-								"model": "claude-3-5-sonnet-20241022",
-								"max_tokens": 1024,
-								"system": "You are a helpful assistant.",
-								"messages": [
-									{
-										"role": "user",
-										"content": "Tell me a joke about Kobolds."
-									}
-								],
-								"temperature": 0.7
-							},
-							"schema": {
-								"type": "object",
-								"required": [
-									"model",
-									"messages",
-									"max_tokens"
-								],
-								"properties": {
-									"model": {
-										"type": "string",
-										"description": "The model that will handle the request."
-									},
-									"messages": {
-										"type": "array",
-										"description": "Input messages. Roles must alternate between user and assistant.",
-										"items": {
-											"type": "object",
-											"required": [
-												"role",
-												"content"
-											],
-											"properties": {
-												"role": {
-													"type": "string",
-													"enum": [
-														"user",
-														"assistant"
-													]
-												},
-												"content": {
-													"oneOf": [
-														{
-															"type": "string"
-														},
-														{
-															"type": "array",
-															"items": {
-																"type": "object",
-																"properties": {
-																	"type": {
-																		"type": "string",
-																		"enum": [
-																			"text",
-																			"image"
-																		]
-																	},
-																	"text": {
-																		"type": "string"
-																	}
-																}
-															}
-														}
-													]
-												}
-											}
-										}
-									},
-									"system": {
-										"type": "string",
-										"description": "System prompt to define the behavior and tone of the model."
-									},
-									"max_tokens": {
-										"type": "integer",
-										"description": "The maximum number of tokens to generate."
-									},
-									"temperature": {
-										"type": "number",
-										"minimum": 0.0,
-										"maximum": 1.0
-									},
-									"stream": {
-										"type": "boolean"
-									}
-								}
-							}
-						}
-					}
-				},
-				"responses": {
-					"default": {
-						"description": ""
-					}
-				}
-			}
 		}
 	},
 	"servers": [
@@ -3345,6 +5959,10 @@
 	],
 	"tags": [
 		{
+			"description": "OpenAI Compatible and Anthropic APIs. Recommended for beginners.",
+			"name": "v1"
+		},
+		{
 			"description": "KoboldAI United compatible API core endpoints",
 			"name": "api/v1"
 		},
@@ -3353,16 +5971,16 @@
 			"name": "api/extra"
 		},
 		{
-			"description": "Common identity API for LLM services",
-			"name": "serviceinfo"
+			"description": "Administrative model/configuration and KV-state operations. These endpoints require admin mode and use the --adminpassword Bearer credential when configured.",
+			"name": "api/admin"
 		},
 		{
 			"description": "Image Generation API (A1111 compatible)",
 			"name": "sdapi/v1"
 		},
 		{
-			"description": "OpenAI Compatible APIs",
-			"name": "v1"
+			"description": "Common identity API for LLM services",
+			"name": "serviceinfo"
 		}
 	]
 }
