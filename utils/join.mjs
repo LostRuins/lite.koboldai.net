@@ -19,7 +19,7 @@ import {
 	reSectionMarker,
 	reSectionMarkerLike,
 	reSectionSeparator,
-	sectionSeparator,
+	SECTION_SEPARATOR,
 	reSectionSeparatorLike,
 	indentSection,
 	sectionMarker,
@@ -211,7 +211,7 @@ export async function joinHtml(htmlFile) {
 		// (split writes an empty file as '' and anything else with a final newline.)
 		text = crlfToLf(text);
 		const lines = text ? (text.endsWith('\n') ? text.slice(0, -1) : text).split('\n') : [];
-		const reSeparator = reSectionSeparator(kind);
+		const reSeparator = reSectionSeparator;
 		/** @type {string[][]} */
 		const sections = [[]];
 		lines.forEach((line, i) => {
@@ -220,7 +220,8 @@ export async function joinHtml(htmlFile) {
 			} else if (reSectionSeparatorLike.test(line)) {
 				throw new Error(
 					`${path} line ${i + 1}: malformed section separator '${line.trim()}' (must be exactly ` +
-						`'${sectionSeparator(kind)}' at the start of the line)!`,
+						`'${SECTION_SEPARATOR}' at the start of the line)!` +
+						(line.trim().startsWith('//') ? ` Split files made by an older version use '//': join them with that version and split again.` : ''),
 				);
 			} else {
 				sections.at(-1).push(line);
@@ -233,7 +234,7 @@ export async function joinHtml(htmlFile) {
 
 	/**
 	 * Appends a section to `lines` the way it goes into the joined file: its marker line, then its lines (indented again).
-	 * A `// split: path` (`/* split: path *\/`) line in a split file includes the file `path` at that point, so new files
+	 * A `/* split: path *\/` line in a split .js/.css file includes the file `path` at that point, so new files
 	 * can be added without splitting again: its code follows under its own marker, then the rest of the section
 	 * continues under a new marker - exactly as if the markers had been added to the joined file.
 	 *
@@ -246,8 +247,8 @@ export async function joinHtml(htmlFile) {
 	 * @param {string[]} lines
 	 */
 	async function emitSection(kind, name, section, marker, indent, parents, lines) {
-		const reMarker = reSectionMarker(kind);
-		const reLike = reSectionMarkerLike(kind);
+		const reMarker = reSectionMarker;
+		const reLike = reSectionMarkerLike;
 		/** @type {string[]} */
 		let piece = [];
 		let first = true;
@@ -255,7 +256,7 @@ export async function joinHtml(htmlFile) {
 		const flush = includeFollows => {
 			// No marker for a part without code next to an include (its blank lines simply stay where they are).
 			const hasCode = piece.some(line => line.trim());
-			if (first ? hasCode || !includeFollows : hasCode) lines.push(marker + sectionMarker(kind, name));
+			if (first ? hasCode || !includeFollows : hasCode) lines.push(marker + sectionMarker(name));
 			lines.push(...indentSection(piece, indent));
 			piece = [];
 			first = false;
@@ -265,7 +266,7 @@ export async function joinHtml(htmlFile) {
 			if (!m) {
 				if (reLike.test(line)) {
 					throw new Error(
-						`'${parents.at(-1)}': malformed include '${line.trim()}' (use '${sectionMarker(kind, 'path/to/file')}')!`,
+						`'${parents.at(-1)}': malformed include '${line.trim()}' (use '${sectionMarker('path/to/file')}')!`,
 					);
 				}
 				piece.push(line);
@@ -278,7 +279,7 @@ export async function joinHtml(htmlFile) {
 			const file = await getSections(kind, path, `included in '${parents.at(-1)}'`);
 			if (file.included || file.used) throw new Error(`'${path}' is included more than once (or also listed in ${ORDER_FILE})!`);
 			if (file.sections.length > 1) {
-				throw new Error(`'${path}' is included with a '${sectionMarker(kind, includeName)}' line, so it cannot have '@split-section' lines!`);
+				throw new Error(`'${path}' is included with a '${sectionMarker(includeName)}' line, so it cannot have '@split-section' lines!`);
 			}
 			file.included = true;
 			file.used = file.sections.length;
@@ -309,12 +310,12 @@ export async function joinHtml(htmlFile) {
 		for (const { name, marker, indent } of element.entries) {
 			const path = splitNameToPath(kind, name);
 			const file = await getSections(kind, path);
-			if (file.included) throw new Error(`'${path}' is included with a '${sectionMarker(kind, name)}' line, but also listed in ${ORDER_FILE}!`);
+			if (file.included) throw new Error(`'${path}' is included with a '${sectionMarker(name)}' line, but also listed in ${ORDER_FILE}!`);
 			const section = file.sections[file.used++];
 			if (!section) {
 				throw new Error(
 					`'${path}' has ${file.sections.length} section(s), but ${ORDER_FILE} lists more: ` +
-						`was a '${sectionSeparator(kind)}' line removed?`,
+						`was a '${SECTION_SEPARATOR}' line removed?`,
 				);
 			}
 			await emitSection(kind, name, section, marker ?? '', indent ?? '', [path], lines);
@@ -424,10 +425,10 @@ export async function joinHtml(htmlFile) {
 			if (entry.isDirectory()) await walk(rel);
 			else if (/\.(m?js|css|html?)$/.test(entry.name) && rel != htmlFile && !usedFiles.has(rel)) {
 				const [marker, where] = /\.css$/.test(rel)
-					? [`/* split: ${rel} */`, 'a .css file']
+					? [sectionMarker(rel), 'a .css file']
 					: /\.html?$/.test(rel)
 						? [`<!-- split: ${rel} -->`, `an .html file (or ${htmlFile})`]
-						: [`// split: ${rel}`, 'a .js file'];
+						: [sectionMarker(rel), 'a .js file'];
 				throw new Error(
 					`'${rel}' is not used anywhere, so its content would be lost. To include it, add a line '${marker}' ` +
 						`where it belongs in ${where} in ${splitDir}/ (or delete the file).`,

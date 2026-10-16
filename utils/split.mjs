@@ -13,7 +13,8 @@ import {
 	reSectionMarkerLike,
 	reSectionSeparatorLike,
 	outdentSection,
-	sectionSeparator,
+	SECTION_SEPARATOR,
+	sectionMarker,
 	serializeOrder,
 	splitNameToPath,
 	writeFileDeep,
@@ -36,7 +37,7 @@ const htmlFile = args.find(arg => !arg.startsWith('--')) ?? 'index.html';
 // Whether to outline marked HTML regions into partials (disable to keep the split HTML runnable in a browser).
 const outlineHtml = !flags.has('--no-html');
 
-// Whether to split scripts/styles with `// split: path` section markers into feature files (disable to keep every
+// Whether to split scripts/styles with `/* split: path */` section markers into feature files (disable to keep every
 // element in one file, in its original order, so the split HTML stays runnable in a browser).
 const useSections = !flags.has('--no-sections');
 
@@ -133,7 +134,7 @@ let sectionCounter = 0;
  * @param {string} content
  */
 function hasSectionMarkers(kind, content) {
-	const reLike = reSectionMarkerLike(kind);
+	const reLike = reSectionMarkerLike;
 	return content.split('\n').some(line => reLike.test(line));
 }
 
@@ -151,8 +152,8 @@ function outlineSections(node, parent, kind, key) {
 	elementKeys.add(key);
 
 	const lines = node.innerHTML.split('\n');
-	const reMarker = reSectionMarker(kind);
-	const reLike = reSectionMarkerLike(kind);
+	const reMarker = reSectionMarker;
+	const reLike = reSectionMarkerLike;
 
 	// Whitespace-only lines before the first marker and after the last code line stay with the element.
 	let first = lines.findIndex(line => reLike.test(line));
@@ -177,7 +178,7 @@ function outlineSections(node, parent, kind, key) {
 		} else if (reLike.test(line)) {
 			throw new Error(
 				`${where} line ${i + 1}: malformed section marker '${line.trim()}'` +
-					` (use '${kind == 'script' ? '// split: path/to/file.js' : '/* split: path/to/file.css */'}')!`,
+					` (use '${sectionMarker(`path/to/file.${kind == 'script' ? 'js' : 'css'}`)}')!`,
 			);
 		} else {
 			sections.at(-1).lines.push(line);
@@ -396,7 +397,7 @@ for (const { tag, entries, node, parent } of orderElements) {
 
 // Write the files that received sections, and the order file.
 for (const [path, { kind, sections }] of sectionFiles) {
-	const lines = sections.flatMap((section, k) => (k ? [sectionSeparator(kind), ...section] : section));
+	const lines = sections.flatMap((section, k) => (k ? [SECTION_SEPARATOR, ...section] : section));
 	await writeSplitFile(path, lines.length ? lines.join('\n') + '\n' : '');
 }
 if (orderElements.length) {

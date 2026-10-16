@@ -27,10 +27,11 @@ so the split `index.html` loads the feature files and can be opened in a browser
 The split tool does not hardcode any folders: **every path is defined inside the monolithic HTML**, so changing the
 structure only requires editing `index.html`.
 
-- **Code sections** (used by `index.html`): a line `// split: src/import/tavern.js` inside a `<script>` (or
-  `/* split: src/ui/corpo/corpo.css */` inside a `<style>`) starts a section that is written to that path, up to the next
-  marker. Several sections can go to the same file, so code that belongs together ends up in one file **while
-  `index.html` keeps its original order** - see [Code sections and the order file](#code-sections-and-the-order-file).
+- **Code sections** (used by `index.html`): a line `/* split: src/import/tavern.js */` inside a `<script>` or `<style>`
+  starts a section that is written to that path, up to the next marker. JavaScript and CSS use the same `/* */` comment
+  syntax (CSS has no `//` comments); only markup uses `<!-- -->`. Several sections can go to the same file, so code that
+  belongs together ends up in one file **while `index.html` keeps its original order** - see
+  [Code sections and the order file](#code-sections-and-the-order-file).
 - **Scripts and stylesheets without section markers**: the `id` of the element is its path relative to the split
   directory, e.g. `<script id="src/foo/bar.js">` is written to `split/index/src/foo/bar.js`. If the id does not end in
   `.js`/`.mjs` (scripts) or `.css` (styles), that extension is appended, so plain ids like `<script id="main">` produce
@@ -90,7 +91,7 @@ split/index/
 The split files are only a different *view* of `index.html`: every piece of code goes back exactly where it was.
 
 - Most files hold a single section and contain just code. When a file holds code from several places in `index.html`,
-  the parts are separated by a line `// @split-section` (`/* @split-section */` in CSS), written by `split`. There are no
+  the parts are separated by a line `/* @split-section */` (in both `.js` and `.css` files), written by `split`. There are no
   numbers or names to look up: the parts of a file are simply in their `index.html` order.
 - `split/index/split-order.txt` lists, for every `<script>`/`<style>` element with sections, the file of each section in
   their order in `index.html`; the 1st, 2nd, 3rd... time a file is listed is its 1st, 2nd, 3rd... part. `join`
@@ -107,7 +108,7 @@ Editing works as usual: edit code anywhere in a file and it is joined back at th
   part's position.
 - **Add a new file** - no need to split again: create it in the split directory and put a line with its path where it
   belongs in one of the split files, using the same marker syntax as in `index.html`:
-    - `// split: src/memory/notes.js` in a `.js` file (e.g. between two functions), `/* split: src/memory/notes.css */`
+    - `/* split: src/memory/notes.js */` in a `.js` file (e.g. between two functions), `/* split: src/memory/notes.css */`
       in a `.css` file: the new file's code goes into `index.html` at that point, and the rest of the file continues after
       it. The new file can include further new files the same way.
     - `<!-- split: src/memory/notes.html -->` in an `.html` file (or the split `index.html`): the markup goes there. When

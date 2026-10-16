@@ -288,11 +288,11 @@ export const htmlInclude = (name, actions) =>
 
 // ---------- sections: splitting a <script>/<style> into feature files without changing its order
 //
-// In the monolithic HTML, a line `// split: path` (scripts) or `/* split: path */` (styles) starts a section that runs
-// until the next marker or the end of the element. Every section is appended to the file `path`; when a file gets more
-// than one section, they are separated by a line `// @split-section` (`/* @split-section */`). The order file lists,
-// per element, the file of every section in order (the k-th time a file is listed is its k-th section), so join can
-// put everything back in its original order.
+// In the monolithic HTML, a line `/* split: path */` (the same in scripts and styles) starts a section that runs until
+// the next marker or the end of the element. Every section is appended to the file `path`; when a file gets more than
+// one section, they are separated by a line `/* @split-section */`. The order file lists, per element, the file of
+// every section in order (the k-th time a file is listed is its k-th section), so join can put everything back in its
+// original order.
 
 /** File (in the split directory) that records the order of the sections. */
 export const ORDER_FILE = 'split-order.txt';
@@ -300,31 +300,16 @@ export const ORDER_FILE = 'split-order.txt';
 // Attribute marking the <script src>/<link rel="stylesheet"> elements that split adds to load the feature files.
 export const LOAD_ATTR = 'data-split-load';
 
-const SECTION_SYNTAX = Object.freeze({
-	script: Object.freeze({ open: '// ', close: '' }),
-	style: Object.freeze({ open: '/* ', close: ' */' }),
-});
-const reEscape = s => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
-
-/** @param {'script' | 'style'} kind @param {string} name */
-export const sectionMarker = (kind, name) => `${SECTION_SYNTAX[kind].open}split: ${name}${SECTION_SYNTAX[kind].close}`;
-/** @param {'script' | 'style'} kind */
-export const sectionSeparator = kind => `${SECTION_SYNTAX[kind].open}@split-section${SECTION_SYNTAX[kind].close}`;
+/** @param {string} name */
+export const sectionMarker = name => `/* split: ${name} */`;
+export const SECTION_SEPARATOR = '/* @split-section */';
 
 /** Exact section marker (optionally indented); captures the indentation and the name. */
-export function reSectionMarker(kind) {
-	const { open, close } = SECTION_SYNTAX[kind];
-	return new RegExp(`^([ \\t]*)${reEscape(open)}split: (\\S+)${reEscape(close)}$`);
-}
-/** Anything that looks like a section marker (to catch typos and wrongly indented markers). */
-export function reSectionMarkerLike(kind) {
-	return kind == 'script' ? /^\s*\/\/\s*split\s*:/ : /^\s*\/\*\s*split\s*:/;
-}
+export const reSectionMarker = /^([ \t]*)\/\* split: (\S+) \*\/$/;
+/** Anything that looks like a section marker (to catch typos, and markers in the old `// split:` style). */
+export const reSectionMarkerLike = /^\s*(?:\/\/|\/\*)\s*split\s*:/;
 /** Exact section separator (at the start of the line). */
-export function reSectionSeparator(kind) {
-	const { open, close } = SECTION_SYNTAX[kind];
-	return new RegExp(`^${reEscape(open)}@split-section${reEscape(close)}$`);
-}
+export const reSectionSeparator = /^\/\* @split-section \*\/$/;
 /** Anything that looks like a section separator. */
 export const reSectionSeparatorLike = /@split-section\b/;
 
@@ -348,7 +333,7 @@ export function serializeOrder(htmlFile, elements) {
 		`# The 1st, 2nd, 3rd... time a file is listed is its 1st, 2nd, 3rd... section (separated by '@split-section' lines),`,
 		`# and that code goes back to that position. (Extensions are added if missing.)`,
 		`# If you move or rename a file, change its path here too (on every line). Do not add, remove or reorder lines;`,
-		`# to add a new file, put a line '// split: path/to/file.js' where its code belongs in one of the split files.`,
+		`# to add a new file, put a line '/* split: path/to/file.js */' where its code belongs in one of the split files.`,
 		`# {"indent": ...} is the indentation the code had in ${htmlFile}.`,
 	];
 	for (const { tag, key, indent, entries } of elements) {
