@@ -343,10 +343,12 @@ export const reSectionSeparatorLike = /@split-section\b/;
  */
 export function serializeOrder(htmlFile, elements) {
 	const out = [
-		`# Section order for ${htmlFile}, written by 'npm run split' and read by 'npm run join'. Do not edit.`,
+		`# Section order for ${htmlFile}, written by 'npm run split' and read by 'npm run join'.`,
 		`# For every split <script>/<style> element, the file of each of its sections, in their order in ${htmlFile}.`,
 		`# The 1st, 2nd, 3rd... time a file is listed is its 1st, 2nd, 3rd... section (separated by '@split-section' lines),`,
 		`# and that code goes back to that position. (Extensions are added if missing.)`,
+		`# If you move or rename a file, change its path here too (on every line). Do not add, remove or reorder lines;`,
+		`# to add a new file, put a line '// split: path/to/file.js' where its code belongs in one of the split files.`,
 		`# {"indent": ...} is the indentation the code had in ${htmlFile}.`,
 	];
 	for (const { tag, key, indent, entries } of elements) {

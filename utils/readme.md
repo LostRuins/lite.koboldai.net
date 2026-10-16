@@ -105,13 +105,29 @@ Editing works as usual: edit code anywhere in a file and it is joined back at th
   end of a file goes after its last part.
 - **Move code to another position**: move it into another part (of the same or another file); it then goes to that
   part's position.
-- **Move code to another file without moving it in `index.html`**, or **add a new file**: change (or add) a
-  `// split: path/to/file.js` line in `index.html` - a new marker can be added between any two top-level statements - and
-  run `npm run split` again (join first if you have unjoined changes; `split` recreates the split directory).
-- **Do not add, remove or reorder** the `@split-section` lines, and do not edit `split-order.txt`. `join` refuses to run
-  (and leaves `index.html` untouched, with a message saying what is wrong) if a separator is malformed, if a file has more
-  or fewer parts than listed, if a listed file is missing, or if a code or HTML file in the split directory is not used
-  by `index.html` - so no code can get lost.
+- **Add a new file** - no need to split again: create it in the split directory and put a line with its path where it
+  belongs in one of the split files, using the same marker syntax as in `index.html`:
+    - `// split: src/memory/notes.js` in a `.js` file (e.g. between two functions), `/* split: src/memory/notes.css */`
+      in a `.css` file: the new file's code goes into `index.html` at that point, and the rest of the file continues after
+      it. The new file can include further new files the same way.
+    - `<!-- split: src/memory/notes.html -->` in an `.html` file (or the split `index.html`): the markup goes there. When
+      the line has nothing else on it, the markup is indented like the line.
+
+  `join` turns the line into a normal `split:` region in `index.html`; the next `npm run split` treats it like any
+  other file (and the line disappears again, as the file is then part of the regular layout).
+- **Move or rename a file**: move it, then change its path in `split-order.txt` (on every line where it appears) for a
+  `.js`/`.css` file, or in the `<!-- split-include: ... -->` line that includes it for an `.html` file. The markers in
+  `index.html` are renamed accordingly on the next join. (Alternatively, change the path in the markers in `index.html`
+  and split again.)
+- **Move code to another file without moving it in `index.html`**: cut it into a new file at the same spot and include
+  that file there (see above).
+- **Do not add, remove or reorder** the `@split-section` lines or the lines of `split-order.txt`. `join` refuses to run
+  (and leaves `index.html` untouched, with a message saying what is wrong) if a separator is malformed, if a file has
+  more or fewer parts than listed, if a listed or included file is missing or is used twice, or if a code or HTML file
+  in the split directory is not used anywhere - so no code can get lost.
+
+The runnable copy (`npm run split:runnable`) only loads the files that existed when it was split; after adding a file,
+join and run `npm run split:runnable` again (or use `npm run dev`, which always serves the joined file).
 
 Use `npm run split -- --no-sections` to ignore the section markers and write each element to a single file, as before.
 
@@ -147,7 +163,8 @@ The `split` script works as follows:
 7. Write the HTML file
 
 The `join` script reverses the process: it first expands the `split-include` markers (recursively, restoring the
-`<!-- split -->` markers around the inlined markup), then removes the `data-split-load` elements, reassembles the sectioned elements from `split-order.txt`, applies the `data-actions` and inlines the other
+`<!-- split -->` markers around the inlined markup), then removes the `data-split-load` elements, reassembles the sectioned elements from `split-order.txt`
+(expanding `split:` lines added to the split files), applies the `data-actions` and inlines the other
 JS and CSS (removing
 the previously added attributes and turning `<link rel="stylesheet">` back into `<style>`). Splitting and joining an
 unmodified file reproduces it byte for byte.
