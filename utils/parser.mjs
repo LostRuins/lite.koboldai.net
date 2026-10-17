@@ -93,7 +93,7 @@ export function makeAttribute(name, value) {
  *   tagName: string;
  *   attributes: (Attribute | RawString)[];
  *   addAttr: (attr: Attribute) => void;
- *   removeAttr: (name: string) => void;
+ *   removeAttr: (name: string, last?: boolean) => void;
  *   innerHTML: string;
  * }} Element
  */
@@ -147,9 +147,13 @@ export function makeElementRaw(startTagStart = '', parent) {
 			}
 			this.startTagAttrs.push(attr);
 		},
-		/** @param {string} name */
-		removeAttr(name) {
-			const index = this.startTagAttrs.findIndex(attr => attr.type == 'attribute' && attr.name == name);
+		/**
+		 * @param {string} name
+		 * @param {boolean} [last] Remove the last attribute with this name instead of the first.
+		 */
+		removeAttr(name, last = false) {
+			const matches = attr => attr.type == 'attribute' && attr.name == name;
+			const index = last ? this.startTagAttrs.findLastIndex(matches) : this.startTagAttrs.findIndex(matches);
 			if (index == -1) return;
 
 			if (index == this.startTagAttrs.length - 1) {
