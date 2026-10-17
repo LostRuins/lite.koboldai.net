@@ -39,6 +39,15 @@ export function splitNameToPath(kind, name) {
 	return extensions.some(ext => name.endsWith(ext)) ? name : name + extensions[0];
 }
 
+/**
+ * Returns the portable identity of a path in the split directory. Split output may be moved between case-sensitive
+ * and case-insensitive file systems, so names that differ only by ASCII letter case must never identify different
+ * files. Split names are restricted to ASCII by `isValidSplitName`, which makes lower-casing deterministic.
+ *
+ * @param {string} path
+ */
+export const splitPathKey = path => path.toLowerCase();
+
 // Line endings. The files in the repository use LF, but a Windows checkout (git's core.autocrlf) has CRLF.
 // split and join work on LF internally. split writes the split files with the line endings of the HTML file; join
 // accepts either in the split files and writes the HTML file with the line endings of the split HTML file. (A file

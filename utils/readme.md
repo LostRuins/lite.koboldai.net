@@ -46,7 +46,8 @@ All markers must be written exactly in the form shown (one space after `//`, `/*
 `*/` or `-->`); malformed markers are reported as errors instead of being ignored.
 
 Paths may only contain letters, digits, `_`, `-`, `.` and `/` (no `..` or empty segments). Element and HTML region
-paths must be unique.
+paths must be unique without regard to letter case (`src/Foo.js` and `src/foo.js` conflict), so split output stays
+portable between case-sensitive and case-insensitive file systems.
 
 `index.html` uses a feature-based layout, grouped by use case like a regular front-end project (the markers only add
 lines to `index.html`; nothing in it is moved):

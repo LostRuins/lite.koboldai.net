@@ -17,6 +17,7 @@ import {
 	sectionMarker,
 	serializeOrder,
 	splitNameToPath,
+	splitPathKey,
 	writeFileDeep,
 	crlfToLf,
 	detectEol,
@@ -70,18 +71,25 @@ const head = htmlOrDoc.children.filter(node => node.type == 'element').find(node
 // Get the <body> tag, if any.
 const body = htmlOrDoc.children.filter(node => node.type == 'element').find(node => node.tagName == 'body');
 
-// Every file written so far (relative to the split directory), to catch duplicate ids/names.
-/** @type {Set<string>} */
-const writtenFiles = new Set();
+// Every file written so far (portable path key -> original path), to catch duplicate ids/names. Keys are
+// case-insensitive even on a case-sensitive host so split output remains safe when moved to Windows or macOS.
+/** @type {Map<string, string>} */
+const writtenFiles = new Map();
 
 /**
  * @param {string} fileName Path relative to the split directory.
  * @param {string} content
  */
 async function writeSplitFile(fileName, content) {
-	if (writtenFiles.has(fileName)) throw new Error(`Duplicate split file '${fileName}' (check for duplicate ids)!`);
-	if (fileName == htmlFile) throw new Error(`Split file '${fileName}' would overwrite the split HTML file!`);
-	writtenFiles.add(fileName);
+	const key = splitPathKey(fileName);
+	const previous = writtenFiles.get(key);
+	if (previous !== undefined) {
+		const names =
+			previous == fileName ? `'${fileName}'` : `'${previous}' and '${fileName}' (paths differ only by letter case)`;
+		throw new Error(`Duplicate split file ${names} (check for duplicate ids/names)!`);
+	}
+	if (key == splitPathKey(htmlFile)) throw new Error(`Split file '${fileName}' would overwrite the split HTML file!`);
+	writtenFiles.set(key, fileName);
 	await writeFileDeep(`${splitDir}/${fileName}`, lfToEol(content, eol));
 }
 
@@ -401,7 +409,7 @@ for (const [path, { kind, sections }] of sectionFiles) {
 	await writeSplitFile(path, lines.length ? lines.join('\n') + '\n' : '');
 }
 if (orderElements.length) {
-	if (writtenFiles.has(ORDER_FILE)) throw new Error(`A split file is named '${ORDER_FILE}'!`);
+	if (writtenFiles.has(splitPathKey(ORDER_FILE))) throw new Error(`A split file is named '${ORDER_FILE}'!`);
 	await writeFileDeep(`${splitDir}/${ORDER_FILE}`, lfToEol(serializeOrder(htmlFile, orderElements), eol));
 }
 
@@ -415,7 +423,7 @@ await writeFile(`${splitDir}/${htmlFile}`, lfToEol(output, eol));
 // Summarize.
 /** @type {Record<string, number>} */
 const counts = {};
-for (const file of writtenFiles) {
+for (const file of writtenFiles.values()) {
 	const ext = file.slice(file.lastIndexOf('.') + 1);
 	counts[ext] = (counts[ext] ?? 0) + 1;
 }
@@ -424,7 +432,7 @@ console.log(
 		(sectionCounter ? ` (${sectionCounter} sections, order in ${ORDER_FILE})` : '') +
 		(outlineHtml ? '' : ' (HTML partials kept inline)'),
 );
-if (outlineHtml && [...writtenFiles].some(file => /\.html?$/.test(file))) {
+if (outlineHtml && [...writtenFiles.values()].some(file => /\.html?$/.test(file))) {
 	console.log(
 		`${splitDir}/${htmlFile} only references the HTML partials, so it cannot be opened directly. Use 'npm run dev' to\n` +
 			`edit with automatic joining and a local server, or 'npm run split:runnable' (HTML kept inline) for a split copy\n` +

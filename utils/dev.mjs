@@ -86,11 +86,31 @@ let lastHtml = readText(htmlFile); // content of the HTML file as last written/s
 let joinError = null;
 let paused = false;
 
+/** Pauses automatic joining if the source HTML no longer matches the last version observed or written by this server. */
+function pauseIfHtmlChanged() {
+	let current;
+	try {
+		current = readText(htmlFile);
+	} catch {
+		current = null; // Deleting or making the file unreadable is an external change too.
+	}
+	if (current == lastHtml) return false;
+	paused = true;
+	log(
+		`${htmlFile} was changed outside of ${splitDir}/; automatic joining is paused so nothing gets overwritten.\n` +
+			`  Stop the server, run 'npm run split' (or 'npm run join'), then start 'npm run dev' again.`,
+	);
+	return true;
+}
+
 async function rejoin() {
 	try {
 		const joined = await joinHtml(htmlFile);
 		joinError = null;
 		if (joined != lastHtml) {
+			// joinHtml performs asynchronous reads. Check again immediately before writing so an external edit made while
+			// the join was in progress is never replaced with stale output.
+			if (pauseIfHtmlChanged()) return;
 			writeFileSync(htmlFile, joined);
 			lastHtml = joined;
 			log(`Joined into ${htmlFile}.`);
@@ -109,14 +129,7 @@ setInterval(async () => {
 	busy = true;
 	try {
 		// The HTML file must only be changed by us while the dev server runs; otherwise stop before overwriting anything.
-		if (readText(htmlFile) != lastHtml) {
-			paused = true;
-			log(
-				`${htmlFile} was changed outside of ${splitDir}/; automatic joining is paused so nothing gets overwritten.\n` +
-					`  Stop the server, run 'npm run split' (or 'npm run join'), then start 'npm run dev' again.`,
-			);
-			return;
-		}
+		if (pauseIfHtmlChanged()) return;
 		const { signature } = scan(splitDir);
 		if (signature != lastSplit) {
 			lastSplit = signature;

@@ -24,6 +24,7 @@ import {
 	indentSection,
 	sectionMarker,
 	splitNameToPath,
+	splitPathKey,
 } from './common.mjs';
 import { makeString, parse, serialize } from './parser.mjs';
 
@@ -50,8 +51,17 @@ export async function joinHtml(htmlFile) {
 	const { eol } = detectEol(rawSplitHtml);
 
 	// Files in the split directory that were used (to detect files whose content would be lost).
-	/** @type {Set<string>} */
-	const usedFiles = new Set();
+	/** @type {Map<string, string>} Portable path key -> original path. */
+	const usedFiles = new Map();
+	/** @param {string} path */
+	const markUsedFile = path => {
+		const key = splitPathKey(path);
+		const previous = usedFiles.get(key);
+		if (previous !== undefined && previous != path) {
+			throw new Error(`Split paths '${previous}' and '${path}' differ only by letter case and are not portable!`);
+		}
+		usedFiles.set(key, path);
+	};
 
 	/**
 	 * Replaces every `<!-- split-include: path [actions] -->` with the restored contents of that file,
@@ -82,8 +92,9 @@ export async function joinHtml(htmlFile) {
 			const fileName = splitNameToPath('html', name);
 			const content = await readAndRestore(`${splitDir}/${fileName}`, actions);
 			if (content === undefined) throw new Error(`Missing HTML partial '${fileName}'!`);
-			if (usedFiles.has(fileName)) throw new Error(`HTML partial '${fileName}' is included more than once!`);
-			usedFiles.add(fileName);
+			const fileKey = splitPathKey(fileName);
+			if (usedFiles.has(fileKey)) throw new Error(`HTML partial '${fileName}' is included more than once!`);
+			markUsedFile(fileName);
 			const inner = await inlineHtmlPartials(content, [...parents, name]);
 
 			out += html.slice(last, m.index);
@@ -161,7 +172,7 @@ export async function joinHtml(htmlFile) {
 		// Read the outlined file and restore its original form.
 		const content = await readAndRestore(`${splitDir}/${fileName}`, actions);
 		if (content === undefined) return false; // File not found, skip this element.
-		usedFiles.add(fileName);
+		markUsedFile(fileName);
 
 		// Remove the data attribute.
 		if (actionsAttr) node.removeAttr('data-actions', true);
@@ -178,7 +189,10 @@ export async function joinHtml(htmlFile) {
 	let order = null;
 	/** @type {Set<string>} */
 	const usedElements = new Set();
-	/** @type {Map<string, { sections: string[][]; used: number; included?: boolean }>} */
+	/**
+	 * @type {Map<string, { path: string; sections: string[][]; used: number; included?: boolean }>}
+	 * Portable path key -> file.
+	 */
 	const sectionFiles = new Map();
 
 	async function getOrder() {
@@ -200,8 +214,14 @@ export async function joinHtml(htmlFile) {
 	 * @param {string} [from] Where the file is referenced (for the error message if it is missing).
 	 */
 	async function getSections(kind, path, from = `listed in ${ORDER_FILE}`) {
-		let file = sectionFiles.get(path);
-		if (file) return file;
+		const key = splitPathKey(path);
+		let file = sectionFiles.get(key);
+		if (file) {
+			if (file.path != path) {
+				throw new Error(`Split paths '${file.path}' and '${path}' differ only by letter case and are not portable!`);
+			}
+			return file;
+		}
 		let text;
 		try {
 			text = await readFile(`${splitDir}/${path}`, { encoding: 'utf-8' });
@@ -227,8 +247,8 @@ export async function joinHtml(htmlFile) {
 				sections.at(-1).push(line);
 			}
 		});
-		file = { sections, used: 0 };
-		sectionFiles.set(path, file);
+		file = { path, sections, used: 0 };
+		sectionFiles.set(key, file);
 		return file;
 	}
 
@@ -408,8 +428,9 @@ export async function joinHtml(htmlFile) {
 	if (order) {
 		for (const key of order.keys()) if (!usedElements.has(key)) throw new Error(`<${order.get(key).tag} ${key}> from ${ORDER_FILE} is missing in ${splitDir}/${htmlFile}!`);
 	}
-	for (const [path, file] of sectionFiles) {
-		usedFiles.add(path);
+	for (const file of sectionFiles.values()) {
+		const { path } = file;
+		markUsedFile(path);
 		if (file.used < file.sections.length) {
 			throw new Error(
 				`'${path}' has ${file.sections.length} sections, but ${ORDER_FILE} lists only ${file.used}, so code would be ` +
@@ -423,7 +444,14 @@ export async function joinHtml(htmlFile) {
 		for (const entry of await readdir(`${splitDir}/${dir}`, { withFileTypes: true })) {
 			const rel = dir ? `${dir}/${entry.name}` : entry.name;
 			if (entry.isDirectory()) await walk(rel);
-			else if (/\.(m?js|css|html?)$/.test(entry.name) && rel != htmlFile && !usedFiles.has(rel)) {
+			else if (/\.(m?js|css|html?)$/.test(entry.name) && splitPathKey(rel) != splitPathKey(htmlFile)) {
+				const usedAs = usedFiles.get(splitPathKey(rel));
+				if (usedAs !== undefined) {
+					if (usedAs != rel) {
+						throw new Error(`Split paths '${usedAs}' and '${rel}' differ only by letter case and are not portable!`);
+					}
+					continue;
+				}
 				const [marker, where] = /\.css$/.test(rel)
 					? [sectionMarker(rel), 'a .css file']
 					: /\.html?$/.test(rel)
