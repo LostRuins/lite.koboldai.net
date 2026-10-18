@@ -4195,6 +4195,7 @@ Current version indicated by LITEVER below.
 	var horde_worker_endpoint = horde_base_url + "/api/v2/workers?type=text";
 	var horde_finduser_endpoint = horde_base_url + "/api/v2/find_user";
 	var horde_maintenance_endpoint = horde_base_url + "/api/v2/workers";
+	var horde_oai_base_url = "https://oai.aihorde.net/v1";
 
 	var stablehorde_url = "https://aihorde.net";
 	var stablehorde_submit_endpoint = stablehorde_url + "/api/v2/generate/async";
@@ -4376,6 +4377,7 @@ Current version indicated by LITEVER below.
 	var custom_oai_endpoint = "";
 	var custom_oai_key = ""; //if set, uses the OpenAI API to generate
 	var custom_oai_model = "";
+	var horde_chat_completions_active = false;
 	var custom_cohere_key = "";
 	var custom_cohere_model = "";
 	var custom_claude_endpoint = "";
@@ -7818,7 +7820,7 @@ Current version indicated by LITEVER below.
 								if(synchro_pending_stream.includes(cur) && synchro_pending_stream.trim().indexOf(cur) > 1) //don't trigger early stopping if the match is very early
 								{
 									cached_stop_seq = [];
-									let need_clean_output = (synchro_pending_stream!="" && localsettings.opmode==1 && gametext_arr.length>0 && document.getElementById("useoaichatcompl").checked);
+									let need_clean_output = (synchro_pending_stream!="" && localsettings.opmode==1 && gametext_arr.length>0 && is_using_oai_chat_completions());
 									if(need_clean_output)
 									{
 										synchro_pending_stream = cleanup_story_completion(synchro_pending_stream);
@@ -7852,7 +7854,7 @@ Current version indicated by LITEVER below.
 					}
 					streaming_was_thinking = false;
 					synchro_polled_response = synchro_pending_stream;
-					let need_clean_output = (synchro_polled_response!="" && localsettings.opmode==1 && gametext_arr.length>0 && document.getElementById("useoaichatcompl").checked);
+					let need_clean_output = (synchro_polled_response!="" && localsettings.opmode==1 && gametext_arr.length>0 && is_using_oai_chat_completions());
 					if(need_clean_output)
 					{
 						synchro_polled_response = cleanup_story_completion(synchro_polled_response);
@@ -10685,6 +10687,14 @@ Current version indicated by LITEVER below.
 	{
 		return (custom_oai_key != "" || custom_kobold_endpoint != "" || custom_claude_key != "" || custom_cohere_key != "");
 	}
+	function is_using_horde_chat_completions()
+	{
+		return (horde_chat_completions_active && custom_oai_key != "");
+	}
+	function is_using_oai_chat_completions()
+	{
+		return is_using_horde_chat_completions() || document.getElementById("useoaichatcompl").checked;
+	}
 	function is_using_kcpp_with_streaming()
 	{
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.30") >= 0);
@@ -10816,7 +10826,7 @@ Current version indicated by LITEVER below.
 
 	function determine_if_can_use_mcp()
 	{
-		return (custom_oai_key!="" && document.getElementById("useoaichatcompl").checked) || is_using_kcpp_with_streaming();
+		return (custom_oai_key!="" && is_using_oai_chat_completions()) || is_using_kcpp_with_streaming();
 	}
 
 	function determine_if_mcp_active()
@@ -10842,7 +10852,7 @@ Current version indicated by LITEVER below.
 			}
 			else
 			{
-				let isoai = (custom_oai_key!="" && document.getElementById("useoaichatcompl").checked);
+				let isoai = (custom_oai_key!="" && is_using_oai_chat_completions());
 				return isoai;
 			}
 		}
@@ -14569,6 +14579,32 @@ Current version indicated by LITEVER below.
 		document.getElementById("apikey").value = tmpkey;
 	}
 
+	function toggle_horde_chat_completions()
+	{
+		let pickedmodel = document.getElementById("pickedmodel");
+		let manualworker = document.getElementById("manualworker");
+		let use_chat_completions = document.getElementById("horde_use_chat_completions").checked;
+		let was_selecting_worker = manualworker.checked;
+		manualworker.disabled = use_chat_completions;
+		if(use_chat_completions)
+		{
+			manualworker.checked = false;
+			if(was_selecting_worker)
+			{
+				let tmpkey = document.getElementById("apikey").value;
+				display_horde_models();
+				document.getElementById("apikey").value = tmpkey;
+				return;
+			}
+			let selected_options = Array.from(pickedmodel.selectedOptions);
+			for(let i=1; i<selected_options.length; ++i)
+			{
+				selected_options[i].selected = false;
+			}
+		}
+		pickedmodel.multiple = !use_chat_completions;
+	}
+
 	/* split: src/api/openai/models.js */
 	function togglejailbreak()
 	{
@@ -15439,6 +15475,7 @@ Current version indicated by LITEVER below.
 	function connect_custom_endpoint()
 	{
 		mainmenu_untab(false);
+		horde_chat_completions_active = false;
 		custom_kobold_endpoint = "";
 		custom_kobold_key = "";
 		custom_oai_key = "";
@@ -16885,7 +16922,9 @@ Current version indicated by LITEVER below.
 	/* split: src/horde/models.js */
 	//function to allow selection of models
 	function display_horde_models() {
-		document.getElementById("pickedmodel").innerHTML = "";
+		let pickedmodel = document.getElementById("pickedmodel");
+		pickedmodel.innerHTML = "";
+		pickedmodel.multiple = true;
 		document.getElementById("apikey").value = localsettings.my_api_key;
 		document.getElementById("modelquicksearch").value = "";
 		let manualworker = (document.getElementById("manualworker").checked ? true : false);
@@ -16944,6 +16983,7 @@ Current version indicated by LITEVER below.
 					}
 					document.getElementById("pickedmodel").innerHTML = model_choices;
 				}
+				toggle_horde_chat_completions();
 			}
 		}
 
@@ -16989,8 +17029,15 @@ Current version indicated by LITEVER below.
 
 	function confirm_horde_models() {
 		let selected_idx_arr = Array.from(document.getElementById("pickedmodel").selectedOptions).map(({ value }) => value);
+		let use_chat_completions = document.getElementById("horde_use_chat_completions").checked;
+		horde_chat_completions_active = use_chat_completions;
+		if(use_chat_completions && selected_idx_arr.length > 1)
+		{
+			selected_idx_arr = selected_idx_arr.slice(0, 1);
+		}
 
 		custom_kobold_endpoint = "";
+		custom_oai_endpoint = "";
 		custom_oai_key = "";
 		custom_claude_key = "";
 		custom_cohere_key = "";
@@ -16998,7 +17045,7 @@ Current version indicated by LITEVER below.
 		let prep_sel_models = [];
 		let prep_sel_workers = []; //if selected, pick a specific worker ids to use
 
-		let manualworker = (document.getElementById("manualworker").checked ? true : false);
+		let manualworker = (!use_chat_completions && document.getElementById("manualworker").checked ? true : false);
 
 		if (selected_idx_arr.length == 0) { //select everything
 			manualworker = false;
@@ -17032,6 +17079,19 @@ Current version indicated by LITEVER below.
 		//remove undefined and nulls
 		prep_sel_models = prep_sel_models.filter(x=>x);
 		prep_sel_workers = prep_sel_workers.filter(x=>x);
+		let horde_chat_model = "";
+		if(use_chat_completions)
+		{
+			horde_chat_model = (prep_sel_workers.length > 0 && prep_sel_workers[0].models && prep_sel_workers[0].models.length > 0) ? prep_sel_workers[0].models[0] : (prep_sel_models[0] ? prep_sel_models[0].name : "");
+			if(horde_chat_model=="")
+			{
+				msgbox("No AI Horde model is available for the Chat Completions API.", "Model Needed");
+				return;
+			}
+			let selected_horde_model = prep_sel_models.find(x => x.name == horde_chat_model);
+			prep_sel_models = [selected_horde_model || { "performance": 100.0, "queued": 0.0, "eta": 0, "name": horde_chat_model, "count": 1 }];
+			prep_sel_workers = prep_sel_workers.slice(0, 1);
+		}
 
 		selected_models = prep_sel_models;
 		selected_workers = prep_sel_workers;
@@ -17039,6 +17099,12 @@ Current version indicated by LITEVER below.
 		if(localsettings.my_api_key==null || localsettings.my_api_key=="")
 		{
 			localsettings.my_api_key = defaultsettings.my_api_key;
+		}
+		if(use_chat_completions)
+		{
+			custom_oai_endpoint = horde_oai_base_url;
+			custom_oai_key = localsettings.my_api_key;
+			custom_oai_model = horde_chat_model;
 		}
 
 		render_gametext();
@@ -22924,7 +22990,7 @@ Current version indicated by LITEVER below.
 				Object.assign(oai_payload, localsettings.custom_sampler_fields);
 				if(localsettings.request_logprobs && !targetep.toLowerCase().includes("api.x.ai") && !targetep.toLowerCase().includes("api.mistral.ai"))
 				{
-					if(document.getElementById("useoaichatcompl").checked || targetep.toLowerCase().includes("api.x.ai"))
+					if(is_using_oai_chat_completions() || targetep.toLowerCase().includes("api.x.ai"))
 					{
 						oai_payload.logprobs = true;
 						oai_payload.top_logprobs = 5;
@@ -22972,7 +23038,7 @@ Current version indicated by LITEVER below.
 					}
 				}
 
-				if (document.getElementById("useoaichatcompl").checked)
+				if (is_using_oai_chat_completions())
 				{
 					let cannotreason = (targetep.toLowerCase().includes("text.pollinations.ai"));
 					if(!cannotreason)
@@ -24181,7 +24247,7 @@ Current version indicated by LITEVER below.
 			}
 			else
 			{
-				let isoai = (custom_oai_key!="" && document.getElementById("useoaichatcompl").checked);
+				let isoai = (custom_oai_key!="" && is_using_oai_chat_completions());
 				visionstatus = (isoai?`<span class="color_green">OpenAI API (Conditional)</span>`:`<span class="color_yellow">Unsupported</span>`);
 			}
 		}
@@ -25147,7 +25213,7 @@ Current version indicated by LITEVER below.
 							console.log("Replacing with Image: " + matchstr);
 							gametext_arr[i] = gametext_arr[i].replace(matchstr, newstr);
 							//default to llava if supported, and image is self uploaded
-							let isoaichat = (document.getElementById("useoaichatcompl").checked && custom_oai_key!="");
+							let isoaichat = (is_using_oai_chat_completions() && custom_oai_key!="");
 							const imgitm = image_db[key];
 							let desiredvismode = (imgitm.imsource == 1 && (
 								((is_using_kcpp_with_vision() || isoaichat) && imgitm.type == 0) ||
@@ -27497,7 +27563,7 @@ Current version indicated by LITEVER below.
 			if (custom_kobold_endpoint != "") {
 				whorun = "<br>You're using the custom KoboldAI endpoint at <span class=\"color_orange\">"+custom_kobold_endpoint+"</span>";
 			}
-			else if(custom_oai_key!="")
+			else if(custom_oai_key!="" && !is_using_horde_chat_completions())
 			{
 				whorun = "<br>You're using an OpenAI Compatible API";
 			}
@@ -28776,7 +28842,7 @@ Current version indicated by LITEVER below.
 		if (custom_kobold_endpoint != "") {
 			localsettings.prev_custom_endpoint_type = 1;
 		}
-		else if(custom_oai_key!="")
+		else if(custom_oai_key!="" && !is_using_horde_chat_completions())
 		{
 			localsettings.prev_custom_endpoint_type = 2;
 			if(custom_oai_endpoint.toLowerCase().includes("openrouter.ai"))
@@ -34111,6 +34177,12 @@ Current version indicated by LITEVER below.
 					<span style="float:right;">
 						<input title="Quick Search" class="settinglabel miniinput" style="margin: 3px; width: 90px;" type="text" placeholder="Quick Search" value="" id="modelquicksearch" oninput="model_quick_search()">
 					</span>
+				</div>
+				<div class="menutext" style="text-align: left;">
+					Use Chat Completions API <span class="helpicon">?
+						<span class="helptext">Routes generation through AI Horde's OpenAI-compatible Chat Completions API. Only one model can be selected; worker pinning is unavailable.</span>
+					</span>
+					<input title="Use Chat Completions API" class="smallcheckbox" style="vertical-align: middle;" type="checkbox" id="horde_use_chat_completions" onclick="toggle_horde_chat_completions()">
 				</div>
 
 			</div>
