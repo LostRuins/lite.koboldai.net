@@ -4508,6 +4508,7 @@ Current version indicated by LITEVER below.
 		saved_mcp_urls: "",
 		prev_custom_endpoint_type: 0, //show a reconnect box to custom endpoint if needed. 0 is horde, otherwise its dropdown value+1
 		prev_custom_endpoint_model_dict: {}, //we may not be able to match, but set it if we do
+		prev_custom_endpoint_manual_model_dict: {}, //explicitly entered models may be valid even when omitted from a model list
 		prev_custom_endpoint_ischatcmpl: true,
 		generate_images_mode: (localflag?0:1), //0=off, 1=horde, 2=a1111, 3=dalle, 4=comfy, 5=pollinations
 
@@ -14718,6 +14719,55 @@ Current version indicated by LITEVER below.
 				return document.getElementById("custom_oai_model"); //just return oai
 		}
 	}
+	function restore_prev_custom_endpoint_model_option(ep_id=null, allow_inject=true)
+	{
+		let epchoice = (ep_id!=null?ep_id.toString():document.getElementById("customapidropdown").value);
+		let dropdown = get_custom_ep_model_dropdown(epchoice);
+		let saved_model = (localsettings.prev_custom_endpoint_model_dict?(localsettings.prev_custom_endpoint_model_dict[epchoice] || ""):"");
+		let manual_model = (localsettings.prev_custom_endpoint_manual_model_dict?(localsettings.prev_custom_endpoint_manual_model_dict[epchoice] || ""):"");
+		let saved_is_manual = (saved_model!="" && saved_model==manual_model);
+		let can_inject = (allow_inject || saved_is_manual);
+		if(!dropdown)
+		{
+			return false;
+		}
+
+		//Remove an older or unverified injected value if a different model has since been saved.
+		let saved_options = Array.from(dropdown.querySelectorAll("option.saved_model_option"));
+		for(let option of saved_options)
+		{
+			if(option.value!=saved_model || !can_inject)
+			{
+				option.remove();
+			}
+		}
+		if(saved_model=="")
+		{
+			return false;
+		}
+
+		let saved_option = Array.from(dropdown.options).find(option => option.value==saved_model && (can_inject || !option.classList.contains("custom_model_option")));
+		if(!saved_option)
+		{
+			if(!can_inject)
+			{
+				return false;
+			}
+			saved_option = document.createElement("option");
+			saved_option.classList.add("saved_model_option");
+			saved_option.textContent = saved_model;
+			saved_option.value = saved_model;
+			let custom_option = dropdown.querySelector("option.custom_model_option");
+			dropdown.insertBefore(saved_option,custom_option);
+		}
+		dropdown.value = saved_model;
+
+		if(epchoice=="2" || epchoice=="3" || epchoice=="5" || epchoice=="7" || epchoice=="8" || epchoice=="9" || epchoice=="10" || epchoice=="11")
+		{
+			document.getElementById("useoaichatcompl").checked = localsettings.prev_custom_endpoint_ischatcmpl;
+		}
+		return true;
+	}
 	function ep_should_always_use_chat_completions()
 	{
 		let epchoice = document.getElementById("customapidropdown").value;
@@ -14766,6 +14816,7 @@ Current version indicated by LITEVER below.
 		inputBox("Enter custom model name","Custom Model Name",localsettings.saved_oai_custommodel,"", ()=>{
 			let coai = getInputBoxValue().trim();
 			let dropdown = get_custom_ep_model_dropdown();
+			let epchoice = document.getElementById("customapidropdown").value;
 			var mdlopt = dropdown.querySelector('option.custom_model_option');
 			if(coai!="")
 			{
@@ -14773,6 +14824,12 @@ Current version indicated by LITEVER below.
 				mdlopt.innerText = coai;
 				mdlopt.style.display = "";
 				dropdown.selectedIndex = dropdown.options.length - 1;
+				if(!localsettings.prev_custom_endpoint_manual_model_dict)
+				{
+					localsettings.prev_custom_endpoint_manual_model_dict = {};
+				}
+				localsettings.prev_custom_endpoint_model_dict[epchoice] = coai;
+				localsettings.prev_custom_endpoint_manual_model_dict[epchoice] = coai;
 			}
 			oai_model_change(ep_should_always_use_chat_completions());
 		},false);
@@ -14780,6 +14837,20 @@ Current version indicated by LITEVER below.
 	function oai_model_change(autotoggle_check = false)
 	{
 		let dropdown = get_custom_ep_model_dropdown();
+		let epchoice = document.getElementById("customapidropdown").value;
+		if(!localsettings.prev_custom_endpoint_manual_model_dict)
+		{
+			localsettings.prev_custom_endpoint_manual_model_dict = {};
+		}
+		let selected_option = dropdown.options[dropdown.selectedIndex];
+		if(selected_option && selected_option.classList.contains("custom_model_option") && dropdown.value!="custom")
+		{
+			localsettings.prev_custom_endpoint_manual_model_dict[epchoice] = dropdown.value;
+		}
+		else if(localsettings.prev_custom_endpoint_manual_model_dict[epchoice] && localsettings.prev_custom_endpoint_manual_model_dict[epchoice]!=dropdown.value)
+		{
+			delete localsettings.prev_custom_endpoint_manual_model_dict[epchoice];
+		}
 		let non_completions = (dropdown.value.includes("davinci-002") || dropdown.value.includes("text-davinci-003") || dropdown.value.includes("text-davinci-002")
 		|| dropdown.value.includes("text-davinci-001") || dropdown.value.includes("gpt-3.5-turbo-instruct") || dropdown.value == "davinci");
 		if(autotoggle_check)
@@ -14844,7 +14915,6 @@ Current version indicated by LITEVER below.
 					var option = dropdown.options[i];
 					dropdown.remove(option);
 				}
-				let selidx = 0;
 				for(var i = 0; i < data.data.length; i++) {
 					var opt = data.data[i];
 					var el = document.createElement("option");
@@ -14853,7 +14923,10 @@ Current version indicated by LITEVER below.
 					el.value = optname;
 					dropdown.appendChild(el);
 				}
-				dropdown.selectedIndex = selidx;
+				if(!restore_prev_custom_endpoint_model_option(4,false))
+				{
+					dropdown.selectedIndex = 0;
+				}
 				toggleclaudemodel();
 			}
 			else
@@ -14881,12 +14954,11 @@ Current version indicated by LITEVER below.
 	function update_oai_model_list(data, dropdown, epchoice)
 	{
 		cached_model_pricing = {};
-		var lastOption = dropdown.lastElementChild;
+		let custom_option = dropdown.querySelector("option.custom_model_option");
 		for (var i = dropdown.options.length - 1; i >= 0; i--) {
 			var option = dropdown.options[i];
 			dropdown.remove(option);
 		}
-		let selidx = 0;
 		let sortedarr = [];
 		for(var i = 0; i < data.data.length; i++) {
 			var opt = data.data[i];
@@ -14897,21 +14969,21 @@ Current version indicated by LITEVER below.
 			}
 		}
 		sortedarr.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-		let pending_custmodel = (localsettings.prev_custom_endpoint_model_dict?(localsettings.prev_custom_endpoint_model_dict[epchoice] || ""):"");
 		for(var i=0;i<sortedarr.length;++i)
 		{
 			var el = document.createElement("option");
 			el.textContent = sortedarr[i];
 			el.value = sortedarr[i];
-			if(pending_custmodel && sortedarr[i]==pending_custmodel)
-			{
-				selidx = i;
-				document.getElementById("useoaichatcompl").checked = localsettings.prev_custom_endpoint_ischatcmpl;
-			}
 			dropdown.appendChild(el);
 		}
-		dropdown.appendChild(lastOption);
-		dropdown.selectedIndex = selidx;
+		if(custom_option)
+		{
+			dropdown.appendChild(custom_option);
+		}
+		if(!restore_prev_custom_endpoint_model_option(epchoice,false))
+		{
+			dropdown.selectedIndex = 0;
+		}
 		oai_model_change(true);
 	}
 	function oai_fetch_models()
@@ -15381,23 +15453,26 @@ Current version indicated by LITEVER below.
 				document.getElementById("custom_oai_endpoint").value = default_nvidianim_base;
 				try_fetch_oai_models_auto();
 			}
+			restore_prev_custom_endpoint_model_option(epchoice);
 			oai_model_change(ep_should_always_use_chat_completions() || force_autotoggle_chatcompl);
 			toggleoaichatcompl();
 		}
 		else if(epchoice==4)
 		{
-			toggleclaudemodel();
 			document.getElementById("claudecustom").classList.remove("hidden");
 			document.getElementById("custom_claude_key").value = localsettings.saved_claude_key;
 			document.getElementById("custom_claude_endpoint").value = (localsettings.saved_claude_addr?localsettings.saved_claude_addr:default_claude_base);
 			document.getElementById("claudesystemprompt").value = localsettings.saved_claude_jailbreak;
 			document.getElementById("claudejailbreakprompt").value = localsettings.saved_claude_jailbreak2;
+			restore_prev_custom_endpoint_model_option(epchoice);
+			toggleclaudemodel();
 		}
 		else if(epchoice==6)
 		{
 			document.getElementById("coherecustom").classList.remove("hidden");
 			document.getElementById("custom_cohere_key").value = localsettings.saved_cohere_key;
 			document.getElementById("cohere_preamble").value = localsettings.saved_cohere_preamble;
+			restore_prev_custom_endpoint_model_option(epchoice,false);
 			togglecoherepreamble();
 		}
 	}
