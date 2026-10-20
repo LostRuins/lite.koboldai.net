@@ -5369,6 +5369,16 @@ Current version indicated by LITEVER below.
 		}
 		if(localsettings.opmode==4 && localsettings.render_streaming_markdown && localsettings.instruct_has_markdown && !inEditMode)
 		{
+			// A reasoning block may contain an unterminated Markdown code fence. Close it at
+			// the reasoning boundary so Markdown cannot consume the answer that follows.
+			input = input.replace(thinkpat, function(match, thinking) {
+				return `${thinkstartpl}${close_unmatched_thinking_code_fence(thinking)}${thinkendpl}`;
+			});
+			if(!input.includes(thinkstartpl) && input.includes(thinkendpl))
+			{
+				const endIndex = input.lastIndexOf(thinkendpl);
+				input = close_unmatched_thinking_code_fence(input.slice(0, endIndex)) + input.slice(endIndex);
+			}
 			input = simpleMarkdown(input, localsettings.instruct_has_latex);
 		}
 		if(!inEditMode && !localsettings.hide_think_stream)
@@ -6166,6 +6176,16 @@ Current version indicated by LITEVER below.
 			return "";
 		}
 		return `(?:${boundary_tags.map(function(tag) { return escapeRegExp(tag); }).join("|")})`;
+	}
+	function close_unmatched_thinking_code_fence(text)
+	{
+		return has_unmatched_markdown_code_fence(text) ? `${text}\n\`\`\`` : text;
+	}
+	function has_unmatched_markdown_code_fence(text)
+	{
+		// Match the normalization performed by simpleMarkdown before it parses fences.
+		const normalized = text.replace(/\r\n/g, "\n").replace(/\n~~~/g, "\n```");
+		return (normalized.match(/```/g) || []).length % 2 != 0;
 	}
 	function get_thinking_content_regex()
 	{
@@ -19808,7 +19828,7 @@ Current version indicated by LITEVER below.
 		}
 	}
 	/* split: src/ui/gametext/display-regex.js */
-	function apply_display_only_regex(inputtxt)
+	function apply_display_only_regex(inputtxt, renderMarkdown = false)
 	{
 		//apply regex transforms
 		if(localsettings.regexreplace_data && localsettings.regexreplace_data.length>0)
@@ -19901,9 +19921,14 @@ Current version indicated by LITEVER below.
 				let matchiter = 0;
 				inputtxt = inputtxt.replace(/%ExpandBtn%(?:\n{0,2})?/g, function (m) {
 					let curr = matches[matchiter];
+					const currLength = curr.length;
+					if(renderMarkdown)
+					{
+						curr = close_unmatched_thinking_code_fence(curr);
+					}
 					curr = escape_html(curr);
 					curr = unescape_html_alternate(curr);
-					let expandedhtml = `<span><button type="button" title="Show Thoughts" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="toggle_hide_thinking(this)">Show Thoughts (${curr.length} characters)</button><span class="color_lightgreen ${autoexpanded?'':'hidden'}"><br>${(curr)}\n</span></span>\n`;
+					let expandedhtml = `<span><button type="button" title="Show Thoughts" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="toggle_hide_thinking(this)">Show Thoughts (${currLength} characters)</button><span class="color_lightgreen ${autoexpanded?'':'hidden'}"><br>${(curr)}\n</span></span>\n`;
 					if(!curr || curr.trim()=="" || curr.trim()=="/nothink" || curr.trim()==`${localsettings.start_thinking_tag}${localsettings.stop_thinking_tag}`)
 					{
 						expandedhtml = `<span><button type="button" title="No Thoughts" class="btn btn-primary" style="font-size:12px;padding:2px 2px;" onclick="">No Thoughts</button></span>\n`;
@@ -27932,12 +27957,11 @@ Current version indicated by LITEVER below.
 	function repack_postprocess_turn(currchatunit, countmap, centerimages)
 	{
 		let processed_msg = currchatunit.msg;
-		processed_msg = apply_display_only_regex(processed_msg);
+		processed_msg = apply_display_only_regex(processed_msg, localsettings.instruct_has_markdown);
 		if(processed_msg && processed_msg!="")
 		{
 			processed_msg = replace_noninstruct_placeholders(processed_msg,true,true,countmap);
-			let codeblockcount = (processed_msg.match(/```/g) || []).length;
-			if(codeblockcount>0 && codeblockcount%2!=0)
+			if(localsettings.instruct_has_markdown && has_unmatched_markdown_code_fence(processed_msg))
 			{
 				processed_msg += "```"; //force end code block
 			}
