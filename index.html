@@ -3698,6 +3698,8 @@ Current version indicated by LITEVER below.
 	const get_instructstartplaceholder_end = ()=>{if(localsettings.raw_instruct_tags){return get_instruct_starttag_end(false);};return instructstartplaceholder_end;}
 	const get_instructendplaceholder_end = ()=>{if(localsettings.raw_instruct_tags){return get_instruct_endtag_end(false);};return instructendplaceholder_end;}
 	const get_instructsysplaceholder_end = ()=>{if(localsettings.raw_instruct_tags){return get_instruct_systag_end(false);};return instructsysplaceholder_end;}
+	//raw tags can't be closed automatically when sending, so their end tags always go into the story
+	const should_write_instruct_end_tags = ()=>{return (localsettings.separate_end_tags || localsettings.raw_instruct_tags);}
 	/* split: src/utils/device.js */
 	function is_on_mobile()
 	{
@@ -4532,9 +4534,9 @@ Current version indicated by LITEVER below.
 		instruct_starttag: "{{[INPUT]}}",
 		instruct_endtag: "{{[OUTPUT]}}",
 		instruct_systag: "{{[SYSTEM]}}",
-		instruct_starttag_end: "",
-		instruct_endtag_end: "",
-		instruct_systag_end: "",
+		instruct_starttag_end: "{{[INPUT_END]}}",
+		instruct_endtag_end: "{{[OUTPUT_END]}}",
+		instruct_systag_end: "{{[SYSTEM_END]}}",
 		instruct_sysprompt: "",
 		instruct_tag_gen: "",
 		instruct_has_markdown: true,
@@ -4770,7 +4772,6 @@ Current version indicated by LITEVER below.
 		"user_end":"{{[INPUT_END]}}",
 		"assistant_start":"{{[OUTPUT]}}",
 		"assistant_end":"{{[OUTPUT_END]}}",
-		"nonsplit_excludes_endtags":true,
 	},
 	{
 		"name":"Alpaca",
@@ -5821,6 +5822,7 @@ Current version indicated by LITEVER below.
 			if (loadedsettings && loadedsettings.persist_session) {
 				import_compressed_story(loadedstorycompressed,true,false); //use the same compressed format as shared stories and import it
 				import_props_into_object(localsettings,loadedsettings);
+				backfill_legacy_instruct_end_tags(localsettings,loadedsettings);
 				console.log("Loaded local settings and story");
 
 				//offer to reconnect
@@ -6019,6 +6021,16 @@ Current version indicated by LITEVER below.
 		return localsettings.chatname;
 	}
 	/* split: src/generation/instruct-tags.js */
+	//settings saved before split end tags existed relied on empty end tags, so keep them empty instead of using the newer defaults
+	function backfill_legacy_instruct_end_tags(targetObj, importedObj)
+	{
+		if(importedObj && importedObj.instruct_starttag!=null && importedObj.instruct_starttag_end==null)
+		{
+			targetObj.instruct_starttag_end = "";
+			targetObj.instruct_endtag_end = "";
+			targetObj.instruct_systag_end = "";
+		}
+	}
 	function get_instruct_starttag(doTrim=true)
 	{
 		let instag = localsettings.instruct_starttag;
@@ -6238,6 +6250,17 @@ Current version indicated by LITEVER below.
 
 		return text;
 	}
+	//when a turn starts while another is still open, insert the open turn's end placeholder before it
+	function close_open_instruct_turns(inputtxt, openrole="")
+	{
+		const endplaceholders = {"INPUT":instructstartplaceholder_end, "OUTPUT":instructendplaceholder_end, "SYSTEM":instructsysplaceholder_end};
+		inputtxt = inputtxt.replace(/\n?\{\{\[(INPUT|OUTPUT|SYSTEM)(_END)?\]\}\}\n?/g, function(match, role, isend) {
+			let closing = (!isend && openrole ? endplaceholders[openrole] : "");
+			openrole = (isend ? "" : role);
+			return closing + match;
+		});
+		return {"text":inputtxt, "openrole":openrole};
+	}
 	//we separate these 2 functions, as sometimes we only need to replace instruct
 	function replace_instruct_placeholders(inputtxt) //only for instruct placeholders first
 	{
@@ -6401,7 +6424,7 @@ Current version indicated by LITEVER below.
 			ste = replaceAll(foundpreset.user_end, "\\n", "\n");
 			et = et.replace(ste,"");
 		}
-		let skip = (!ete || st.trim()=="{{[INPUT]}}");
+		let skip = (!ete || get_instruct_endtag_end(false) || st.trim()=="{{[INPUT]}}");
 
 		if(!skip)
 		{
@@ -11741,6 +11764,7 @@ Current version indicated by LITEVER below.
 					if(loadgensettings)
 					{
 						import_props_into_object(localsettings, storyobj.savedsettings);
+						backfill_legacy_instruct_end_tags(localsettings, storyobj.savedsettings);
 						//backwards compat support for newlines
 						if (localsettings.instruct_has_newlines == true || (storyobj.savedsettings != null && storyobj.savedsettings.instruct_has_newlines == null && storyobj.savedsettings.instruct_has_markdown == null)) {
 							localsettings.instruct_has_newlines = false;
@@ -12671,7 +12695,7 @@ Current version indicated by LITEVER below.
 			if(!localsettings.placeholder_tags) //do a one-time replace instead
 			{
 				greeting = replace_placeholders(greeting, false, true, false); //this is all onetime replacements, no need for stability
-				combinedmem = replace_placeholders(combinedmem, false, true, false);
+				combinedmem = replace_placeholders(close_open_instruct_turns(combinedmem).text, false, true, false);
 			}
 			if(greeting)
 			{
@@ -12738,6 +12762,8 @@ Current version indicated by LITEVER below.
 			let prompttxt = temp_scenario.prompt;
 			if(!localsettings.placeholder_tags) //do a one-time replace instead
 			{
+				//a turn left open at the end of the scenario memory is closed by the first turn of the prompt
+				prompttxt = close_open_instruct_turns(prompttxt, close_open_instruct_turns(temp_scenario.memory || "").openrole).text;
 				prompttxt = replace_placeholders(prompttxt, false, true, false);
 			}
 			gametext_arr.push(prompttxt);
@@ -12746,14 +12772,14 @@ Current version indicated by LITEVER below.
 			current_anote = temp_scenario.authorsnote;
 			if(!localsettings.placeholder_tags)
 			{
-				current_anote = replace_placeholders(current_anote, false, true, false);
+				current_anote = replace_placeholders(close_open_instruct_turns(current_anote).text, false, true, false);
 			}
 		}
 		if (temp_scenario.memory != "") {
 			current_memory = temp_scenario.memory;
 			if(!localsettings.placeholder_tags)
 			{
-				current_memory = replace_placeholders(current_memory, false, true, false);
+				current_memory = replace_placeholders(close_open_instruct_turns(current_memory).text, false, true, false);
 			}
 		}
 		if (temp_scenario.image && temp_scenario.image != "") {
@@ -18742,7 +18768,6 @@ Current version indicated by LITEVER below.
 		let ete = "";
 		let systage = "";
 		let astgen = "";
-		let nonsplit_excludes_endtags = false;
 
 		for(let i=0;i<instructpresets.length;++i)
 		{
@@ -18755,44 +18780,24 @@ Current version indicated by LITEVER below.
 				ete = instructpresets[i].assistant_end;
 				systage = instructpresets[i].system_end;
 				astgen = instructpresets[i].assistant_gen;
-				nonsplit_excludes_endtags = instructpresets[i].nonsplit_excludes_endtags;
 				break;
 			}
 		}
 
-		return {"system_start":systag,"system_end":systage,"user_start":st,"user_end":ste,"assistant_start":et,"assistant_gen":astgen,"assistant_end":ete,"nonsplit_excludes_endtags":nonsplit_excludes_endtags};
+		return {"system_start":systag,"system_end":systage,"user_start":st,"user_end":ste,"assistant_start":et,"assistant_gen":astgen,"assistant_end":ete};
 	}
 	function toggle_instruct_tag_format()
 	{
 		let sel = document.getElementById('instruct_tag_format').value;
 		let itags = get_preset_instruct_tag_format(sel);
-		let use_et = document.getElementById('separate_end_tags').checked;
 		if(itags.user_start!="" && itags.assistant_start!="" && itags.system_start!==null)
 		{
-			if(!use_et)
-			{
-				if (itags.nonsplit_excludes_endtags) {
-					document.getElementById('instruct_starttag').value = itags.user_start;
-					document.getElementById('instruct_endtag').value = itags.assistant_start;
-					document.getElementById('instruct_systag').value = itags.system_start;
-				} else {
-					document.getElementById('instruct_starttag').value = itags.assistant_end + itags.user_start;
-					document.getElementById('instruct_endtag').value = itags.user_end + itags.assistant_start;
-					document.getElementById('instruct_systag').value = itags.system_start;
-				}
-				document.getElementById('instruct_starttag_end').value = "";
-				document.getElementById('instruct_endtag_end').value = "";
-				document.getElementById('instruct_systag_end').value = "";
-			}
-			else
-			{
-				document.getElementById('instruct_starttag').value = itags.user_start;
-				document.getElementById('instruct_endtag').value = itags.assistant_start;
-				document.getElementById('instruct_systag').value = itags.system_start;
-				document.getElementById('instruct_starttag_end').value = itags.user_end;
-				document.getElementById('instruct_endtag_end').value = itags.assistant_end;
-				document.getElementById('instruct_systag_end').value = itags.system_end;
-			}
+			document.getElementById('instruct_starttag').value = itags.user_start;
+			document.getElementById('instruct_endtag').value = itags.assistant_start;
+			document.getElementById('instruct_systag').value = itags.system_start;
+			document.getElementById('instruct_starttag_end').value = itags.user_end;
+			document.getElementById('instruct_endtag_end').value = itags.assistant_end;
+			document.getElementById('instruct_systag_end').value = itags.system_end;
 			document.getElementById('instruct_tag_gen').value = itags.assistant_gen?itags.assistant_gen:"";
 		}
 	}
@@ -18812,19 +18817,6 @@ Current version indicated by LITEVER below.
 	}
 	function edit_instruct_tag_format()
 	{
-		let use_et = document.getElementById('separate_end_tags').checked;
-		if(use_et)
-		{
-			document.getElementById('instruct_starttag_end').classList.remove("hidden");
-			document.getElementById('instruct_endtag_end').classList.remove("hidden");
-			document.getElementById('instruct_systag_end').classList.remove("hidden");
-		}
-		else
-		{
-			document.getElementById('instruct_starttag_end').classList.add("hidden");
-			document.getElementById('instruct_endtag_end').classList.add("hidden");
-			document.getElementById('instruct_systag_end').classList.add("hidden");
-		}
 		let dropdown = document.getElementById('instruct_tag_format');
 		let options = dropdown.options;
 		let found = false;
@@ -18839,33 +18831,16 @@ Current version indicated by LITEVER below.
 			let sys_end = document.getElementById('instruct_systag_end').value;
 			let astgen = document.getElementById('instruct_tag_gen').value?document.getElementById('instruct_tag_gen').value:"";
 			let matched_astgen = (itags.assistant_gen?itags.assistant_gen:"");
-			if (!use_et) {
-				let matched_st = (itags.nonsplit_excludes_endtags?itags.user_start:(itags.assistant_end + itags.user_start));
-				let matched_et = (itags.nonsplit_excludes_endtags?itags.assistant_start:(itags.user_end + itags.assistant_start));
-				if (itags.user_start != "" && itags.assistant_start != "" && matched_st == st && matched_et == et && itags.system_start == systag && (st_end == "" && et_end == "" && sys_end == "") && astgen==matched_astgen) {
-					document.getElementById('instruct_tag_format').value = option.value;
-					found = true;
-					break;
-				}
-			} else {
-				if (itags.user_start != "" && itags.assistant_start != "" && itags.user_start == st && itags.assistant_start == et && itags.system_start == systag && (st_end == itags.user_end && et_end == itags.assistant_end && sys_end == itags.system_end) && astgen==matched_astgen) {
-					document.getElementById('instruct_tag_format').value = option.value;
-					found = true;
-					break;
-				}
+			if (itags.user_start != "" && itags.assistant_start != "" && itags.user_start == st && itags.assistant_start == et && itags.system_start == systag && (st_end == itags.user_end && et_end == itags.assistant_end && sys_end == itags.system_end) && astgen==matched_astgen) {
+				document.getElementById('instruct_tag_format').value = option.value;
+				found = true;
+				break;
 			}
 		}
 		if(!found)
 		{
 			document.getElementById('instruct_tag_format').value = "0";
 		}
-	}
-	function toggle_separate_end_tags()
-	{
-		let prevdropdown = document.getElementById('instruct_tag_format').value;
-		edit_instruct_tag_format();
-		document.getElementById('instruct_tag_format').value = prevdropdown;
-		toggle_instruct_tag_format();
 	}
 
 	/* split: src/groupchat/participants.js */
@@ -19305,7 +19280,7 @@ Current version indicated by LITEVER below.
 						start = start.replaceAll("{{[INPUT]}}", "\n### Instruction:\n");
 						end = end.replaceAll("{{[OUTPUT]}}", "\n### Response:\n");
 					}
-					payload.prompt = start + task + (localsettings.separate_end_tags ? get_instruct_starttag_end(false) : "") + end;
+					payload.prompt = start + task + get_instruct_starttag_end(false) + end;
 					payload.replace_instruct_placeholders = true;
 				}
 				let response = await fetch(apply_proxy_url(custom_kobold_endpoint + endpoint), {
@@ -19340,7 +19315,7 @@ Current version indicated by LITEVER below.
 			if(userinput.trim()!="")
 			{
 				let str = get_instructstartplaceholder() + userinput.trim();
-				if (localsettings.separate_end_tags) {
+				if (should_write_instruct_end_tags()) {
 					str += get_instructstartplaceholder_end();
 				}
 				document.getElementById("memorytext").value += str;
@@ -19367,9 +19342,10 @@ Current version indicated by LITEVER below.
 			}
 
 			truncated_context = end_trim_to_sentence(truncated_context,true);
+			truncated_context = close_open_instruct_turns(truncated_context, close_open_instruct_turns(current_memory).openrole).text;
 			truncated_context = replace_placeholders(truncated_context);
 			truncated_context = substring_to_boundary(truncated_context, max_allowed_characters);
-			truncated_memory = truncate_memory(replace_placeholders(truncated_memory), max_mem_len, false);
+			truncated_memory = truncate_memory(replace_placeholders(close_open_instruct_turns(truncated_memory).text), max_mem_len, false);
 			let augmented_len = truncated_memory.length + truncated_context.length;
 			let excess_len = augmented_len - max_allowed_characters; //if > 0, then we exceeded context window
 			truncated_context = truncated_memory + truncated_context.substring(excess_len);
@@ -21696,7 +21672,7 @@ Current version indicated by LITEVER below.
 			}
 
 			//append instruction for instruct mode
-			if(localsettings.separate_end_tags)
+			if(should_write_instruct_end_tags())
 			{
 				newgen = prev_et + ist + newgen + iste + (addendtag?iet:"");
 			}
@@ -21710,7 +21686,7 @@ Current version indicated by LITEVER below.
 		{
 			let latest_human = is_instruct_latest_human_turn();
 			if (is_impersonate_user && !latest_human) {
-				if (localsettings.separate_end_tags) {
+				if (should_write_instruct_end_tags()) {
 					pending_context_preinjection = prev_et + ist; //bot response as first msg
 					pending_context_postinjection = iste + iet;
 				} else {
@@ -21875,7 +21851,7 @@ Current version indicated by LITEVER below.
 					//so we force one
 					let iet = get_instructendplaceholder();
 					let iste = get_instructstartplaceholder_end();
-					if(localsettings.separate_end_tags)
+					if(should_write_instruct_end_tags())
 					{
 						newgen = iste + iet;
 					}
@@ -22247,6 +22223,8 @@ Current version indicated by LITEVER below.
 				}
 			}
 
+			//a turn left open at the end of memory is closed by the first turn of the story
+			truncated_context = close_open_instruct_turns(truncated_context, close_open_instruct_turns(current_memory).openrole).text;
 			truncated_context = replace_placeholders(truncated_context,false,false,true);
 			truncated_context = substring_to_boundary(truncated_context, max_allowed_characters);
 
@@ -22260,7 +22238,7 @@ Current version indicated by LITEVER below.
 			{
 				max_mem_len = Math.floor(max_allowed_characters*0.7);
 				appendedsysprompt = get_instruct_systag(false) + localsettings.instruct_sysprompt;
-				if(localsettings.separate_end_tags && get_instruct_systag_end(true))
+				if(get_instruct_systag_end(true))
 				{
 					appendedsysprompt += get_instruct_systag_end(false);
 				}
@@ -22486,7 +22464,7 @@ Current version indicated by LITEVER below.
 			if (appendedsysprompt.length > 0 || truncated_memory.length > 0 || truncated_anote.length > 0)
 			{
 				appendedsysprompt = replace_placeholders(appendedsysprompt,false,false,true);
-				truncated_memory = replace_placeholders(truncated_memory,false,false,true);
+				truncated_memory = replace_placeholders(close_open_instruct_turns(truncated_memory).text,false,false,true);
 				truncated_memory = appendedsysprompt + truncate_memory(truncated_memory, max_mem_len, true);
 				truncated_anote = replace_placeholders(truncated_anote,false,false,false);
 				truncated_anote = substring_to_boundary(truncated_anote, max_anote_len);
@@ -22712,16 +22690,13 @@ Current version indicated by LITEVER below.
 			let et = get_instruct_endtag(true);
 			let me = get_my_multiplayer_chatname();
 			seqs = [st]; //don't include the assistant tag, otherwise it breaks some think formats
-			if(localsettings.separate_end_tags)
+			if(get_instruct_endtag_end(true))
 			{
-				if(get_instruct_endtag_end(true))
-				{
-					seqs.push(get_instruct_endtag_end(true));
-				}
-				if(get_instruct_starttag_end(true) && get_instruct_starttag_end(true)!=get_instruct_endtag_end(true))
-				{
-					seqs.push(get_instruct_starttag_end(true));
-				}
+				seqs.push(get_instruct_endtag_end(true));
+			}
+			if(get_instruct_starttag_end(true) && get_instruct_starttag_end(true)!=get_instruct_endtag_end(true))
+			{
+				seqs.push(get_instruct_starttag_end(true));
 			}
 			if(localsettings.inject_chatnames_instruct)
 			{
@@ -25008,7 +24983,7 @@ Current version indicated by LITEVER below.
 				stripping_arr.push("### Instruction:");
 				stripping_arr.push("### Response:");
 			}
-			if(localsettings.separate_end_tags && get_instruct_endtag_end(true))
+			if(get_instruct_endtag_end(true))
 			{
 				let stet_et = get_instruct_endtag_end(true);
 				if(stet_et!="")
@@ -26673,15 +26648,13 @@ Current version indicated by LITEVER below.
 				let b = escape_html(get_instruct_endtag(false));
 				fulltxt = replaceAll(fulltxt,a,get_instruct_starttag(false));
 				fulltxt = replaceAll(fulltxt,b,get_instruct_endtag(false));
-				if (localsettings.separate_end_tags) {
-					if (get_instruct_endtag_end(true)) {
-						let a = escape_html(get_instruct_endtag_end(false));
-						fulltxt = replaceAll(fulltxt, a, get_instruct_endtag_end(false));
-					}
-					if (get_instruct_starttag_end(true)) {
-						let a = escape_html(get_instruct_starttag_end(false));
-						fulltxt = replaceAll(fulltxt, a, get_instruct_starttag_end(false));
-					}
+				if (get_instruct_endtag_end(true)) {
+					let a = escape_html(get_instruct_endtag_end(false));
+					fulltxt = replaceAll(fulltxt, a, get_instruct_endtag_end(false));
+				}
+				if (get_instruct_starttag_end(true)) {
+					let a = escape_html(get_instruct_starttag_end(false));
+					fulltxt = replaceAll(fulltxt, a, get_instruct_starttag_end(false));
 				}
 			}
 		}
@@ -27477,13 +27450,11 @@ Current version indicated by LITEVER below.
 				}
 				fulltxt = replaceAll(fulltxt, get_instruct_starttag(true), `%SclStg%`+escape_html(get_instruct_starttag(true))+`%SpnEtg%`);
 				fulltxt = replaceAll(fulltxt, get_instruct_endtag(true), `%SclStg%`+escape_html(get_instruct_endtag(true))+`%SpnEtg%`);
-				if (localsettings.separate_end_tags) {
-					if (get_instruct_starttag_end(true) != "") {
-						fulltxt = replaceAll(fulltxt, get_instruct_starttag_end(true), `%SclStg%` + escape_html(get_instruct_starttag_end(true)) + `%SpnEtg%`);
-					}
-					if (get_instruct_endtag_end(true) != "") {
-						fulltxt = replaceAll(fulltxt, get_instruct_endtag_end(true), `%SclStg%` + escape_html(get_instruct_endtag_end(true)) + `%SpnEtg%`);
-					}
+				if (get_instruct_starttag_end(true) != "") {
+					fulltxt = replaceAll(fulltxt, get_instruct_starttag_end(true), `%SclStg%` + escape_html(get_instruct_starttag_end(true)) + `%SpnEtg%`);
+				}
+				if (get_instruct_endtag_end(true) != "") {
+					fulltxt = replaceAll(fulltxt, get_instruct_endtag_end(true), `%SclStg%` + escape_html(get_instruct_endtag_end(true)) + `%SpnEtg%`);
 				}
 				//failsafe to handle removing newline tags
 				fulltxt = replaceAll(fulltxt, instructstartplaceholder.trim(), `%SclStg%`+instructstartplaceholder.trim()+`%SpnEtg%`);
@@ -28059,19 +28030,17 @@ Current version indicated by LITEVER below.
 
 	function repack_instruct_history(input, allow_blank=false) //repack all history into individual turns
 	{
-		if(localsettings.separate_end_tags) {
-			if (get_instruct_starttag_end(true)) {
-				input = replaceAll(input, get_instruct_starttag_end(false), "");
-				input = replaceAll(input, get_instruct_starttag_end(true), "");
-			}
-			if (get_instruct_endtag_end(true)) {
-				input = replaceAll(input, get_instruct_endtag_end(false), "");
-				input = replaceAll(input, get_instruct_endtag_end(true), "");
-			}
-			if (get_instruct_systag_end(true)) {
-				input = replaceAll(input, get_instruct_systag_end(false), "");
-				input = replaceAll(input, get_instruct_systag_end(true), "");
-			}
+		if (get_instruct_starttag_end(true)) {
+			input = replaceAll(input, get_instruct_starttag_end(false), "");
+			input = replaceAll(input, get_instruct_starttag_end(true), "");
+		}
+		if (get_instruct_endtag_end(true)) {
+			input = replaceAll(input, get_instruct_endtag_end(false), "");
+			input = replaceAll(input, get_instruct_endtag_end(true), "");
+		}
+		if (get_instruct_systag_end(true)) {
+			input = replaceAll(input, get_instruct_systag_end(false), "");
+			input = replaceAll(input, get_instruct_systag_end(true), "");
 		}
 
 		let st = get_instruct_starttag(false);
@@ -28255,7 +28224,7 @@ Current version indicated by LITEVER below.
 				let ete = "";
 				let st = get_instructstartplaceholder();
 				let et = get_instructendplaceholder();
-				if (localsettings.separate_end_tags) {
+				if (should_write_instruct_end_tags()) {
 					ste = get_instructstartplaceholder_end();
 					ete = get_instructendplaceholder_end();
 				}
@@ -28392,7 +28361,7 @@ Current version indicated by LITEVER below.
 				let ete = "";
 				let st = get_instructstartplaceholder();
 				let et = get_instructendplaceholder();
-				if (localsettings.separate_end_tags) {
+				if (should_write_instruct_end_tags()) {
 					ste = get_instructstartplaceholder_end();
 					ete = get_instructendplaceholder_end();
 				}
@@ -28789,16 +28758,14 @@ Current version indicated by LITEVER below.
 
 	function render_messenger_ui(input)
 	{
-		if(localsettings.separate_end_tags) {
-			if (get_instruct_starttag_end(true)) {
-				input = replaceAll(input, get_instruct_starttag_end(true), "");
-			}
-			if (get_instruct_endtag_end(true)) {
-				input = replaceAll(input, get_instruct_endtag_end(true), "");
-			}
-			if (get_instruct_systag_end(true)) {
-				input = replaceAll(input, get_instruct_systag_end(true), "");
-			}
+		if (get_instruct_starttag_end(true)) {
+			input = replaceAll(input, get_instruct_starttag_end(true), "");
+		}
+		if (get_instruct_endtag_end(true)) {
+			input = replaceAll(input, get_instruct_endtag_end(true), "");
+		}
+		if (get_instruct_systag_end(true)) {
+			input = replaceAll(input, get_instruct_systag_end(true), "");
 		}
 
 		let newbodystr = "";
@@ -30922,16 +30889,14 @@ Current version indicated by LITEVER below.
 			return `<div class='${imgclassname}${classSuffixStr}${reinvertcolor}' style='width:${width}px; height:${height}px; border-radius: ${radius}'></div>`;
 		}
 
-		if(localsettings.separate_end_tags) {
-			if (get_instruct_starttag_end(true)) {
-				input = replaceAll(input, get_instruct_starttag_end(true), "");
-			}
-			if (get_instruct_endtag_end(true)) {
-				input = replaceAll(input, get_instruct_endtag_end(true), "");
-			}
-			if (get_instruct_systag_end(true)) {
-				input = replaceAll(input, get_instruct_systag_end(true), "");
-			}
+		if (get_instruct_starttag_end(true)) {
+			input = replaceAll(input, get_instruct_starttag_end(true), "");
+		}
+		if (get_instruct_endtag_end(true)) {
+			input = replaceAll(input, get_instruct_endtag_end(true), "");
+		}
+		if (get_instruct_systag_end(true)) {
+			input = replaceAll(input, get_instruct_systag_end(true), "");
 		}
 
 		if(!isPreview)
@@ -32512,9 +32477,9 @@ Current version indicated by LITEVER below.
 								</div>
 							</div>
 							<div class="settinglabel">
-								<div class="justifyleft">Separate end tags <span class="helpicon">?<span
-									class="helptext">Allows using separate Instruction and Response End Tags, instead of combining them with the start tag. Don't change this halfway through a story!</span></span></div>
-								<input type="checkbox" title="Separate End Tags" id="separate_end_tags" class="push-right" onchange="toggle_separate_end_tags()">
+								<div class="justifyleft">Write end tags into story <span class="helpicon">?<span
+									class="helptext">Writes each turn's end tag into the story text. When off, end tags are added automatically when sending. Always on when using raw instruct tags.</span></span></div>
+								<input type="checkbox" title="Write End Tags Into Story" id="separate_end_tags" class="push-right">
 							</div>
 							<div class="settinglabel">
 								<div class="justifyleft">Assistant jailbreak <span class="helpicon">?<span
