@@ -28114,20 +28114,30 @@ Current version indicated by LITEVER below.
 		return currchatunit;
 	}
 
+	//removes the end tags from text, except an end tag that is also part of a start tag (like Mistral's [/INST]),
+	//since removing it would merge the turns together
+	function strip_instruct_end_tags(input, untrimmed_too=false)
+	{
+		let starttags = [get_instruct_starttag(true), get_instruct_endtag(true), get_instruct_systag(true)];
+		for(let get_endtag of [get_instruct_starttag_end, get_instruct_endtag_end, get_instruct_systag_end])
+		{
+			let endtag = get_endtag(true);
+			if(!endtag || starttags.some(st => st.includes(endtag)))
+			{
+				continue;
+			}
+			if(untrimmed_too)
+			{
+				input = replaceAll(input, get_endtag(false), "");
+			}
+			input = replaceAll(input, endtag, "");
+		}
+		return input;
+	}
+
 	function repack_instruct_history(input, allow_blank=false) //repack all history into individual turns
 	{
-		if (get_instruct_starttag_end(true)) {
-			input = replaceAll(input, get_instruct_starttag_end(false), "");
-			input = replaceAll(input, get_instruct_starttag_end(true), "");
-		}
-		if (get_instruct_endtag_end(true)) {
-			input = replaceAll(input, get_instruct_endtag_end(false), "");
-			input = replaceAll(input, get_instruct_endtag_end(true), "");
-		}
-		if (get_instruct_systag_end(true)) {
-			input = replaceAll(input, get_instruct_systag_end(false), "");
-			input = replaceAll(input, get_instruct_systag_end(true), "");
-		}
+		input = strip_instruct_end_tags(input, true);
 
 		let st = get_instruct_starttag(false);
 		let et = get_instruct_endtag(false);
@@ -28844,15 +28854,7 @@ Current version indicated by LITEVER below.
 
 	function render_messenger_ui(input)
 	{
-		if (get_instruct_starttag_end(true)) {
-			input = replaceAll(input, get_instruct_starttag_end(true), "");
-		}
-		if (get_instruct_endtag_end(true)) {
-			input = replaceAll(input, get_instruct_endtag_end(true), "");
-		}
-		if (get_instruct_systag_end(true)) {
-			input = replaceAll(input, get_instruct_systag_end(true), "");
-		}
+		input = strip_instruct_end_tags(input);
 
 		let newbodystr = "";
 		let chatunits = [];
@@ -30975,15 +30977,7 @@ Current version indicated by LITEVER below.
 			return `<div class='${imgclassname}${classSuffixStr}${reinvertcolor}' style='width:${width}px; height:${height}px; border-radius: ${radius}'></div>`;
 		}
 
-		if (get_instruct_starttag_end(true)) {
-			input = replaceAll(input, get_instruct_starttag_end(true), "");
-		}
-		if (get_instruct_endtag_end(true)) {
-			input = replaceAll(input, get_instruct_endtag_end(true), "");
-		}
-		if (get_instruct_systag_end(true)) {
-			input = replaceAll(input, get_instruct_systag_end(true), "");
-		}
+		input = strip_instruct_end_tags(input);
 
 		if(!isPreview)
 		{
