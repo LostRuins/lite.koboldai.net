@@ -6514,24 +6514,27 @@ Current version indicated by LITEVER below.
 		}
 
 		// now fix final assist tag with an assist gen if applicable. an assist tag followed by another turn tag is a
-		// finished turn, not the one being generated. prompts sent as chat messages have their tags stripped, so they get none
+		// finished turn, not the one being generated. prompts sent as chat messages have their tags stripped, so there an assist
+		// gen is only used when it starts with the assist tag: splitting the prompt into messages then leaves the rest of it as
+		// an assistant prefill, while any other assist gen would end up as text in the last user message
 		let replaceDone = false;
+		let taggen = localsettings.instruct_tag_gen.replaceAll("\\n", "\n");
 		let memoryEtIndex = memory.lastIndexOf(et);
 		let promptEtIndex = prompt.lastIndexOf(et);
 		let fulltxt = memory + prompt;
 		let textAfterEt = fulltxt.substring(fulltxt.lastIndexOf(et) + et.length);
-		if(is_instruct_sent_as_messages() || [st, syst, ste, ete, get_instruct_systag_end(false)].some(tag => tag.trim() && textAfterEt.includes(tag.trim())))
+		if((is_instruct_sent_as_messages() && !taggen.startsWith(et)) || [st, syst, ste, ete, get_instruct_systag_end(false)].some(tag => tag.trim() && textAfterEt.includes(tag.trim())))
 		{
 			replaceDone = true;
 		}
-		if(!replaceDone && prompt && promptEtIndex!=-1 && localsettings.instruct_tag_gen)
+		if(!replaceDone && prompt && promptEtIndex!=-1 && taggen)
 		{
-			prompt = replaceLast(prompt,et,localsettings.instruct_tag_gen.replaceAll("\\n", "\n"));
+			prompt = replaceLast(prompt,et,taggen);
 			replaceDone = true;
 		}
-		if(!replaceDone && memory && memoryEtIndex!=-1 && localsettings.instruct_tag_gen)
+		if(!replaceDone && memory && memoryEtIndex!=-1 && taggen)
 		{
-			memory = replaceLast(memory,et,localsettings.instruct_tag_gen.replaceAll("\\n", "\n"));
+			memory = replaceLast(memory,et,taggen);
 			replaceDone = true;
 		}
 
