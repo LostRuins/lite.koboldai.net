@@ -23096,7 +23096,7 @@ Current version indicated by LITEVER below.
 					delete submit_payload["images"];
 					submit_payload.messages = [];
 					submit_payload.continue_assistant_turn = true;
-					let mhistory = repack_instruct_history(combinedprompt);
+					let mhistory = repack_instruct_prompt(combinedprompt);
 
 					for(let i=0;i<mhistory.length;++i)
 					{
@@ -23279,13 +23279,13 @@ Current version indicated by LITEVER below.
 						let mhistory = null;
 						if (typeof mainoaibody === 'string' || mainoaibody instanceof String)
 						{
-							mhistory = repack_instruct_history(mainoaibody);
+							mhistory = repack_instruct_prompt(mainoaibody);
 						}
 						else
 						{
 							//it's an object/array, so repack the text turn
 							let t1 = mainoaibody[0].text;
-							mhistory = repack_instruct_history(t1);
+							mhistory = repack_instruct_prompt(t1);
 						}
 
 						//many backends REFUSE to allow the assistant to go first. If the first turn belongs to assistant, we turn it into user
@@ -28134,6 +28134,34 @@ Current version indicated by LITEVER below.
 			input = replaceAll(input, endtag, "");
 		}
 		return input;
+	}
+
+	//repacks a prompt that starts with lite's own system prompt turn. when the system tag is the same as the user tag (like
+	//Gemma 2 & 3 and Mistral Non-Tekken) the model has no system role, so that turn is merged into the first user turn,
+	//since templates that require alternating roles reject two user turns in a row
+	function repack_instruct_prompt(input)
+	{
+		let syst = get_instruct_systag(false);
+		let st = get_instruct_starttag(false);
+		if(localsettings.opmode!=4 || localsettings.instruct_sysprompt=="" || !syst.trim() || syst.trim()!=st.trim() || !input.startsWith(syst))
+		{
+			return repack_instruct_history(input);
+		}
+		let rest = input.substring(syst.length);
+		let nextidx = rest.indexOf(st);
+		nextidx = (nextidx==-1 ? rest.length : nextidx);
+		//the system end tag is removed even when it is also part of a start tag (Mistral's [/INST])
+		let sysmsg = strip_instruct_end_tags(rest.substring(0, nextidx), true).replace(get_instruct_systag_end(true), "");
+		let turns = repack_instruct_history(rest.substring(nextidx));
+		if(turns.length>0 && turns[0].myturn)
+		{
+			turns[0].msg = sysmsg + "\n" + turns[0].msg;
+		}
+		else
+		{
+			turns.unshift({msg:sysmsg, myturn:true, issystem:false, unlabelled_name:false, unlabelled_img:false});
+		}
+		return turns;
 	}
 
 	function repack_instruct_history(input, allow_blank=false) //repack all history into individual turns
