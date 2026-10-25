@@ -6513,13 +6513,13 @@ Current version indicated by LITEVER below.
 		}
 
 		// now fix final assist tag with an assist gen if applicable. an assist tag followed by another turn tag is a
-		// finished turn, not the one being generated
+		// finished turn, not the one being generated. prompts sent as chat messages have their tags stripped, so they get none
 		let replaceDone = false;
 		let memoryEtIndex = memory.lastIndexOf(et);
 		let promptEtIndex = prompt.lastIndexOf(et);
 		let fulltxt = memory + prompt;
 		let textAfterEt = fulltxt.substring(fulltxt.lastIndexOf(et) + et.length);
-		if([st, syst, ste, ete, get_instruct_systag_end(false)].some(tag => tag.trim() && textAfterEt.includes(tag.trim())))
+		if(is_instruct_sent_as_messages() || [st, syst, ste, ete, get_instruct_systag_end(false)].some(tag => tag.trim() && textAfterEt.includes(tag.trim())))
 		{
 			replaceDone = true;
 		}
@@ -10938,6 +10938,14 @@ Current version indicated by LITEVER below.
 	function determine_if_mcp_active()
 	{
 		return (localsettings.enable_tool_use && determine_if_can_use_mcp() && localsettings.cached_mcp_tools && Object.keys(localsettings.cached_mcp_tools).length>0);
+	}
+	function is_instruct_sent_as_messages() //history is split into chat messages with all instruct tags stripped, instead of sent as a tagged prompt
+	{
+		if(custom_kobold_endpoint!="")
+		{
+			return (localsettings.opmode==4 && (is_using_kcpp_with_jinja() || determine_if_mcp_active()));
+		}
+		return (custom_oai_key!="" && is_using_oai_chat_completions() && localsettings.saved_oai_role==3);
 	}
 
 	//returns true if the current multimodal setup for some media can be used, otherwise false.
@@ -23074,8 +23082,7 @@ Current version indicated by LITEVER below.
 				last_response_obj = null;
 				last_response_streamlog = "";
 
-				if(localsettings.opmode==4 &&
-				(is_using_kcpp_with_jinja() || determine_if_mcp_active()))
+				if(is_instruct_sent_as_messages())
 				{
 					//for tool calling, we hijack the oai endpoint in order to utilize
 					let combinedprompt = submit_payload.prompt;
