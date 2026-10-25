@@ -6066,10 +6066,21 @@ Current version indicated by LITEVER below.
 		return localsettings.chatname;
 	}
 	/* split: src/generation/instruct-tags.js */
-	//settings saved before split end tags existed relied on empty end tags, so keep them empty instead of using the newer defaults
+	//settings saved with empty end tags (or from before split end tags existed) used combined tags. automatic tags get the
+	//automatic end tags, other tags keep empty end tags instead of using the newer defaults
 	function backfill_legacy_instruct_end_tags(targetObj, importedObj)
 	{
-		if(importedObj && importedObj.instruct_starttag!=null && importedObj.instruct_starttag_end==null)
+		if(!importedObj || importedObj.instruct_starttag==null || importedObj.instruct_starttag_end || importedObj.instruct_endtag_end || importedObj.instruct_systag_end)
+		{
+			return;
+		}
+		if(targetObj.instruct_starttag=="{{[INPUT]}}" && targetObj.instruct_endtag=="{{[OUTPUT]}}" && targetObj.instruct_systag=="{{[SYSTEM]}}")
+		{
+			targetObj.instruct_starttag_end = "{{[INPUT_END]}}";
+			targetObj.instruct_endtag_end = "{{[OUTPUT_END]}}";
+			targetObj.instruct_systag_end = "{{[SYSTEM_END]}}";
+		}
+		else if(importedObj.instruct_starttag_end==null)
 		{
 			targetObj.instruct_starttag_end = "";
 			targetObj.instruct_endtag_end = "";
@@ -6124,7 +6135,7 @@ Current version indicated by LITEVER below.
 	function get_instruct_starttag_end(doTrim=true)
 	{
 		let instag = localsettings.instruct_starttag_end;
-		if(instag=="{{[INPUT_END]}}" && !(custom_kobold_endpoint != "" && is_using_kcpp_with_autotags()))
+		if(instag=="{{[INPUT_END]}}" && !(custom_kobold_endpoint != "" && is_using_kcpp_with_autoendtags()))
 		{
 			instag = ""; //backend not compatible with auto
 		}
@@ -6137,7 +6148,7 @@ Current version indicated by LITEVER below.
 	function get_instruct_endtag_end(doTrim=true)
 	{
 		let instag = localsettings.instruct_endtag_end;
-		if(instag=="{{[OUTPUT_END]}}" && !(custom_kobold_endpoint != "" && is_using_kcpp_with_autotags()))
+		if(instag=="{{[OUTPUT_END]}}" && !(custom_kobold_endpoint != "" && is_using_kcpp_with_autoendtags()))
 		{
 			instag = ""; //backend not compatible with auto
 		}
@@ -6150,7 +6161,7 @@ Current version indicated by LITEVER below.
 	function get_instruct_systag_end(doTrim=true)
 	{
 		let instag = localsettings.instruct_systag_end;
-		if(instag=="{{[SYSTEM_END]}}" && !(custom_kobold_endpoint != "" && is_using_kcpp_with_autotags()))
+		if(instag=="{{[SYSTEM_END]}}" && !(custom_kobold_endpoint != "" && is_using_kcpp_with_autoendtags()))
 		{
 			instag = ""; //backend not compatible with auto
 		}
@@ -10853,6 +10864,10 @@ Current version indicated by LITEVER below.
 	function is_using_kcpp_with_autotags()
 	{
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.88") >= 0);
+	}
+	function is_using_kcpp_with_autoendtags() //end tag placeholders are only replaced from 1.92
+	{
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.92") >= 0);
 	}
 	function is_using_kcpp_with_guidance()
 	{
