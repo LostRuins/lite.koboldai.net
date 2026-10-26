@@ -1133,6 +1133,25 @@ Current version indicated by LITEVER below.
 		display: inline-block;
 		font-size: 12px;
 	}
+	.oai-control-row {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-wrap: wrap;
+		gap: 8px;
+	}
+	.oai-mode-row {
+		margin: 6px 0 4px;
+	}
+	.oai-control {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		margin: 0;
+	}
+	.oai-control input[type="checkbox"] {
+		margin: 0;
+	}
 	.context_tab_container
 	{
 		padding:4px;
@@ -4238,6 +4257,10 @@ Current version indicated by LITEVER below.
 	var oai_models_endpoint = "/models";
 	var oai_submit_endpoint = "/completions";
 	var oai_submit_endpoint_chat = "/chat/completions";
+	const OAI_API_TYPE = Object.freeze({
+		TEXT_COMPLETIONS: "text-completions",
+		CHAT_COMPLETIONS: "chat-completions"
+	});
 
 	var default_oai_image_endpoint = "/images/generations";
 	var default_oai_tts_endpoint = "/audio/speech";
@@ -5839,7 +5862,7 @@ Current version indicated by LITEVER below.
 								const hasValue = Array.from(dropdown.options).some(option => option.value === pending_custmodel);
 								if (hasValue) {
 									dropdown.value = pending_custmodel;
-									document.getElementById("useoaichatcompl").checked = pending_ischatcmpl;
+									set_oai_chat_completions(pending_ischatcmpl);
 								}
 							}
 						}
@@ -10707,9 +10730,17 @@ Current version indicated by LITEVER below.
 	{
 		return (horde_chat_completions_active && custom_oai_key != "");
 	}
+	function is_oai_chat_completions_selected()
+	{
+		return document.getElementById("useoaichatcompl").value === OAI_API_TYPE.CHAT_COMPLETIONS;
+	}
+	function set_oai_chat_completions(use_chat_completions)
+	{
+		document.getElementById("useoaichatcompl").value = use_chat_completions ? OAI_API_TYPE.CHAT_COMPLETIONS : OAI_API_TYPE.TEXT_COMPLETIONS;
+	}
 	function is_using_oai_chat_completions()
 	{
-		return is_using_horde_chat_completions() || document.getElementById("useoaichatcompl").checked;
+		return is_using_horde_chat_completions() || is_oai_chat_completions_selected();
 	}
 	function is_using_kcpp_with_streaming()
 	{
@@ -14660,7 +14691,7 @@ Current version indicated by LITEVER below.
 	{
 		document.getElementById("oaiemulatecompletionsbox").classList.add("hidden");
 		document.getElementById("usegeminiwebbox").classList.add("hidden");
-		if(document.getElementById("useoaichatcompl").checked)
+		if(is_oai_chat_completions_selected())
 		{
 			document.getElementById("useoaichatcomplbox").classList.remove("hidden");
 			if(localsettings.saved_oai_role!=null)
@@ -14779,7 +14810,7 @@ Current version indicated by LITEVER below.
 
 		if(epchoice=="2" || epchoice=="3" || epchoice=="5" || epchoice=="7" || epchoice=="8" || epchoice=="9" || epchoice=="10" || epchoice=="11")
 		{
-			document.getElementById("useoaichatcompl").checked = localsettings.prev_custom_endpoint_ischatcmpl;
+			set_oai_chat_completions(localsettings.prev_custom_endpoint_ischatcmpl);
 		}
 		return true;
 	}
@@ -14873,12 +14904,12 @@ Current version indicated by LITEVER below.
 			document.getElementById("useoaichatcompl").disabled = false;
 			if(ep_should_always_use_chat_completions() || dropdown.selectedIndex==dropdown.options.length-1)
 			{
-				document.getElementById("useoaichatcompl").checked = true;
+				set_oai_chat_completions(true);
 				document.getElementById("useoaichatcompl").disabled = true;
 			} else if (document.getElementById("custom_oai_endpoint").value.toLowerCase().includes("featherless.ai")) {
-				document.getElementById("useoaichatcompl").checked = false; //use completions for a better experience
+				set_oai_chat_completions(false); //use completions for a better experience
 			} else {
-				document.getElementById("useoaichatcompl").checked = !non_completions;
+				set_oai_chat_completions(!non_completions);
 			}
 		}
 		toggleoaichatcompl();
@@ -29009,7 +29040,7 @@ Current version indicated by LITEVER below.
 			if(dropdown && dropdown.value)
 			{
 				localsettings.prev_custom_endpoint_model_dict[localsettings.prev_custom_endpoint_type] = dropdown.value;
-				localsettings.prev_custom_endpoint_ischatcmpl = document.getElementById("useoaichatcompl").checked?true:false;
+				localsettings.prev_custom_endpoint_ischatcmpl = is_oai_chat_completions_selected();
 			}
 		}
 	}
@@ -34506,27 +34537,26 @@ Current version indicated by LITEVER below.
 					<input type="checkbox" title="Use Gemini WebSearch" id="usegeminiweb">
 					<div class="box-label">Use WebSearch</div>
 				</div>
-				<div style="display:inline-flex">
-					<div><input type="checkbox" id="useoaichatcompl" title="Use ChatCompletions API" onchange="toggleoaichatcompl()">
-					<div class="box-label">Chat-Completions API</div></div>
-					<div><input type="checkbox" id="useoainonstandard" title="Send Non-Standard Fields">
-					<div class="box-label">Non-Standard Fields <span class="helpicon">?<span class="helptext">Send all extra non-standard samplers (e.g Min-P, Top-K, Top-A, TFS). May be rejected by many endpoints.</span></span></div></div>
+				<div class="oai-control-row oai-mode-row">
+					<label class="oai-control" for="useoaichatcompl">Mode<select class="form-control" style="height:22px; font-size:10px; padding:3px 5px; width:130px" id="useoaichatcompl" title="OpenAI API Type" onchange="toggleoaichatcompl()">
+						<option value="text-completions">Text-Completions</option>
+						<option value="chat-completions">Chat-Completions</option>
+					</select></label>
+					<label class="oai-control" for="useoainonstandard"><input type="checkbox" id="useoainonstandard" title="Send Non-Standard Fields">
+					<span>Non-Standard Fields <span class="helpicon">?<span class="helptext">Send all extra non-standard samplers (e.g Min-P, Top-K, Top-A, TFS). May be rejected by many endpoints.</span></span></span></label>
 				</div>
 				<div id="useoaichatcomplbox" class="hidden" onload="toggleoaichatcompl();">
-					<div style="display: inline-block;">
-					Main Message Role:
-					<select title="Main Message Role" class="form-control" style="height: 25px; font-size:12px; margin-bottom: 2px; margin-right:4px; padding:4px;display:inline;width:100px" id="oairoledropdown">
+					<div class="oai-control-row" style="padding-bottom:4px">
+					<label class="oai-control">Main Message Role:
+					<select title="Main Message Role" class="form-control" style="height: 22px; font-size:10px; margin-bottom: 2px; margin-right:4px; padding:4px;display:inline;width:100px" id="oairoledropdown">
 						<option value="3" selected>AutoRole</option>
 						<option value="0">User</option>
 						<option value="1">Assistant</option>
 						<option value="2">System</option>
 					</select>
-					</div>
-					<div style="display: inline-block;">
-					<input type="checkbox" title="Add Prefix Prompt" id="jailbreakprompt" onchange="togglejailbreak()">
-					<div class="box-label" style="padding:4px" title="Add Prefix. Forcefully inserts extra text at the start of the prompt to steer the AI.">Add Prefix</div>
-					<input type="checkbox" title="Add Postfix Prompt" id="jailbreakprompt2" onchange="togglejailbreak2()">
-					<div class="box-label" style="padding:4px" title="Add Postfix. Forcefully inserts extra text to before the AI response to steer the AI.">Add Postfix</div>
+					</label>
+					<label class="oai-control" title="Add Prefix. Forcefully inserts extra text at the start of the prompt to steer the AI."><input type="checkbox" title="Add Prefix Prompt" id="jailbreakprompt" onchange="togglejailbreak()">Add Prefix</label>
+					<label class="oai-control" title="Add Postfix. Forcefully inserts extra text to before the AI response to steer the AI."><input type="checkbox" title="Add Postfix Prompt" id="jailbreakprompt2" onchange="togglejailbreak2()">Add Postfix</label>
 					<select title="Reasoning Effort" class="form-control" style="height: 22px; font-size:10px; padding:2px;display:inline;width:120px" id="oaireasoningeffort">
 						<option value="" selected>Reasoning: Default</option>
 						<option value="none">Reasoning: None</option>
