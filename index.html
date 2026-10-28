@@ -7753,12 +7753,17 @@ Current version indicated by LITEVER below.
 						last_response_streamlog += chunk;
 					}
 					let evs = [];
-					let m;
-					while ((m = /^data: ?(.*)(\r?\n){2}/m.exec(ctrl.buf)) !== null) {
-						try{evs.push({data: JSON.parse(m[1])});} catch (e) {
-							console.log("Cannot parse a chunk: " + chunk);
+					let event_end;
+					while ((event_end = /(\r?\n){2}/.exec(ctrl.buf)) !== null) {
+						let event_data = ctrl.buf.substring(0,event_end.index).split(/\r?\n/)
+							.filter(line => line.startsWith("data:"))
+							.map(line => line.substring(5).replace(/^ /,""))
+							.join("\n");
+						ctrl.buf = ctrl.buf.substring(event_end.index + event_end[0].length);
+						if(!event_data || event_data === "[DONE]") continue;
+						try{evs.push({data: JSON.parse(event_data)});} catch (e) {
+							console.log("Cannot parse a chunk: " + event_data);
 						}
-						ctrl.buf = ctrl.buf.substring(m.index + m[0].length);
 					}
 					if (evs.length) {
 						ctrl.enqueue(evs);
