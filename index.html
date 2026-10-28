@@ -7676,6 +7676,8 @@ Current version indicated by LITEVER below.
 		let pending_toolcall_last_obj = null;
 		let responses_output_items = [];
 		let responses_stream_error = "";
+		let responses_stream_active = false;
+		let responses_stream_finished = false;
 		function stash_responses_output_item(item)
 		{
 			if(!item) return;
@@ -7683,6 +7685,35 @@ Current version indicated by LITEVER below.
 			let old_index = responses_output_items.findIndex(old_item => (old_item.id || old_item.call_id) === item_key && old_item.type === item.type);
 			if(old_index>=0) responses_output_items[old_index] = item;
 			else responses_output_items.push(item);
+		}
+		function finish_responses_stream()
+		{
+			if(responses_stream_finished) return;
+			responses_stream_finished = true;
+			if(responses_stream_error)
+			{
+				console.error("Responses API error: " + responses_stream_error);
+				clear_poll_flags();
+				render_gametext();
+				msgbox("Error occurred during text generation: " + responses_stream_error);
+				on_error_feedback();
+				return;
+			}
+
+			let responses_result = normalize_oai_responses_output({output:responses_output_items});
+			if(synchro_pending_stream === "") synchro_pending_stream = responses_result.text;
+			if(responses_result.tool_calls.length>0)
+			{
+				synchro_polled_resptoolcalls = responses_result.tool_calls;
+				last_stop_reason = "tool_calls";
+			}
+			synchro_polled_response = synchro_pending_stream;
+			if(synchro_polled_response!="" && localsettings.opmode==1 && gametext_arr.length>0)
+			{
+				synchro_polled_response = cleanup_story_completion(synchro_polled_response);
+			}
+			synchro_pending_stream = "";
+			poll_pending_response();
 		}
 		let reqOpt =
 		{method: 'POST',
@@ -7744,10 +7775,13 @@ Current version indicated by LITEVER below.
 							// Responses API emits typed events instead of Chat Completions choices.
 							if(event.data && typeof event.data.type === "string" && (event.data.type === "error" || event.data.type.startsWith("response.")))
 							{
+								responses_stream_active = true;
+								if(responses_stream_finished) continue;
 								let response_event = event.data;
 								if(response_event.type === "error" || response_event.type === "response.failed")
 								{
 									responses_stream_error = format_json_error(response_event.error || response_event.response || response_event);
+									finish_responses_stream();
 								}
 								else if(response_event.type === "response.output_text.delta" || response_event.type === "response.refusal.delta")
 								{
@@ -7780,6 +7814,7 @@ Current version indicated by LITEVER below.
 									let response_result = normalize_oai_responses_output({output:responses_output_items});
 									if(synchro_pending_stream === "") synchro_pending_stream = response_result.text;
 									last_stop_reason = response_result.tool_calls.length>0 ? "tool_calls" : (response_event.type === "response.incomplete" ? "length" : "stop");
+									finish_responses_stream();
 								}
 								continue;
 							}
@@ -8003,21 +8038,10 @@ Current version indicated by LITEVER below.
 					}
 				},
 				close() { //end of stream
-					if(responses_stream_error)
+					if(responses_stream_active)
 					{
-						console.error("Responses API error: " + responses_stream_error);
-						clear_poll_flags();
-						render_gametext();
-						msgbox("Error occurred during text generation: " + responses_stream_error);
-						on_error_feedback();
+						finish_responses_stream();
 						return;
-					}
-					let responses_result = normalize_oai_responses_output({output:responses_output_items});
-					if(synchro_pending_stream === "" && responses_result.text !== "") synchro_pending_stream = responses_result.text;
-					if(responses_result.tool_calls.length>0)
-					{
-						synchro_polled_resptoolcalls = responses_result.tool_calls;
-						last_stop_reason = "tool_calls";
 					}
 					if(streaming_was_thinking && synchro_pending_stream && (last_stop_reason=="stop" || last_stop_reason=="tool_calls")) //wrap up if we stopped properly
 					{
