@@ -1908,6 +1908,36 @@ Current version indicated by LITEVER below.
 	.workerTable>tbody>tr>td{
 		padding: min(0.4vw, 5px);
 	}
+	#workercontainer .workerDetails {
+		display: none;
+	}
+	@media (max-width: 768px) {
+		#workercontainer .workerTableDiv {
+			overflow-x: auto;
+			-webkit-overflow-scrolling: touch;
+		}
+		#workercontainer .workerTable th,
+		#workercontainer .workerTable td {
+			overflow-wrap: anywhere;
+		}
+		#workercontainer .workerTable .workerJobs {
+			white-space: nowrap;
+		}
+	}
+	@media (max-width: 480px) {
+		#workercontainer .workerTable {
+			font-size: 12px;
+		}
+		#workercontainer .workerCapabilities,
+		#workercontainer .workerJobs,
+		#workercontainer .workerUptime,
+		#workercontainer .workerKudos {
+			display: none;
+		}
+		#workercontainer .workerDetails {
+			display: table-cell;
+		}
+	}
 
 	/* split: src/generation/logprobs.css */
 	/* Logprobs table */
@@ -14102,6 +14132,7 @@ Current version indicated by LITEVER below.
 					tokenspersec = 0;
 				}
 				worker_data_showonly[i].tokenspersec = parseFloat(tokenspersec);
+				worker_data_showonly[i].jobtypes = (elem.accepts_chat_jobs ? 2 : 0) + (elem.accepts_prompt_jobs ? 1 : 0);
 				if(elem.models.length>0)
 				{
 					worker_data_showonly[i].defaultmodel = elem.models[0];
@@ -14188,11 +14219,49 @@ Current version indicated by LITEVER below.
 		show_workers();
 	}
 
+	function show_worker_details(workerIndex) {
+		let elem = worker_data_showonly[workerIndex];
+		if (!elem) { return; }
+
+		let tokenspersec = elem.performance.replace(" tokens per second", "");
+		if (tokenspersec.toLowerCase()=="no requests fulfilled yet")
+		{
+			tokenspersec = 0;
+		}
+
+		let acceptedJobs = [];
+		if (elem.accepts_chat_jobs) { acceptedJobs.push("Chat"); }
+		if (elem.accepts_prompt_jobs) { acceptedJobs.push("Prompt"); }
+		if (acceptedJobs.length==0) { acceptedJobs.push("None"); }
+
+		let kudosRate = "";
+		if(first_seen_workers.hasOwnProperty(elem.id))
+		{
+			let firstseen = first_seen_workers[elem.id];
+			let kudosdiff = elem.kudos_rewards - firstseen.startkudos;
+			if(kudosdiff>0)
+			{
+				let hrspassed = ((performance.now() - firstseen.timestamp) / 1000)/3600.0;
+				kudosRate = ` (${(kudosdiff/hrspassed).toFixed(0)}/hr)`;
+			}
+		}
+
+		let details =
+			`<b>Capabilities:</b> ${escape_html(String(elem.max_length))} / ${escape_html(String(elem.max_context_length))} (${escape_html(String(tokenspersec))} T/s)<br><br>` +
+			`<b>Jobs:</b> ${escape_html(acceptedJobs.join(", "))}<br><br>` +
+			`<b>Uptime:</b> ${escape_html(String(format_uptime(elem.uptime)))} (${escape_html(String(elem.requests_fulfilled))} jobs)<br><br>` +
+			`<b>Kudos:</b> ${escape_html(elem.kudos_rewards.toFixed(0) + kudosRate)}`;
+
+		msgbox(details, `Worker Details - ${elem.name.substring(0, 40)}`, true, false, hide_msgbox);
+	}
+
 	function show_workers() {
 		document.getElementById("workercontainer").classList.remove("hidden");
 
 		let str = "";
 		let timenow = performance.now();
+		const chatJobIndicator = '<span role="img" aria-label="Accepts chat jobs" title="Accepts chat jobs">💬</span>';
+		const promptJobIndicator = '<span role="img" aria-label="Accepts prompt jobs" title="Accepts prompt jobs">📝</span>';
 		for (var i = 0; i < worker_data_showonly.length; ++i) {
 			let elem = worker_data_showonly[i];
 			let tokenspersec = elem.performance.replace(" tokens per second", "");
@@ -14212,17 +14281,21 @@ Current version indicated by LITEVER below.
 			}
 			if(elem.threads>1)
 			{
-				clickinfo += (clickinfo==""?"":"<br><br>") + "Threads: " + elem.threads;
+				clickinfo += `${clickinfo==""?"":"<br><br>"}Threads: ${elem.threads}`;
 			}
 			if(clickinfo!="")
 			{
-				workerNameHtml = "<a class=\"color_blueurl\" href=\"#\" onclick=\"msgbox(\'"+clickinfo+"\','Worker Info',false,false,hide_msgbox)\">"+workerNameHtml+"</a>";
+				workerNameHtml = `<a class="color_blueurl" href="#" onclick="msgbox('${clickinfo}','Worker Info',false,false,hide_msgbox)">${workerNameHtml}</a>`;
 			}
 			let allmdls = "";
 			for (let n = 0; n < elem.models.length; ++n) {
 				if (n > 0) { allmdls += "<br>"; }
 				allmdls += escape_html(elem.models[n].substring(0, 40));
 			}
+			let jobCapabilities = "";
+			if (elem.accepts_chat_jobs) { jobCapabilities = chatJobIndicator; }
+			if (elem.accepts_prompt_jobs) { jobCapabilities += `${jobCapabilities ? " " : ""}${promptJobIndicator}`; }
+			if (!jobCapabilities) { jobCapabilities = "&mdash;"; }
 			let kudos_per_hr = "";
 			if(first_seen_workers.hasOwnProperty(elem.id))
 			{
@@ -14231,13 +14304,13 @@ Current version indicated by LITEVER below.
 				if(kudosdiff>0)
 				{
 					var hrspassed = ((timenow - firstseen.timestamp) / 1000)/3600.0; //time passed in sec
-					kudos_per_hr = "(" + (kudosdiff/hrspassed).toFixed(0) + "/hr)";
+					kudos_per_hr = `(${(kudosdiff/hrspassed).toFixed(0)}/hr)`;
 				}
 			}
-			str += "<tr id='workertablerow_"+i+"'><td>" + workerNameHtml + "</td><td>" + allmdls + "</td><td>" + elem.max_length + " / " + elem.max_context_length + "<br>(" + tokenspersec + " T/s)</td><td "+brokenstyle+">" + format_uptime(elem.uptime) + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "<br><span style='color:gray'>"+kudos_per_hr+"</span></td></tr>";
+			str += `<tr id="workertablerow_${i}"><td>${workerNameHtml}</td><td>${allmdls}</td><td class="workerCapabilities"><a class="color_blueurl" href="#" onclick="show_worker_details(${i}); return false;">${elem.max_length} / ${elem.max_context_length}<br>(${tokenspersec} T/s)</a></td><td class="workerJobs">${jobCapabilities}</td><td class="workerUptime" ${brokenstyle}>${format_uptime(elem.uptime)}<br>(${elem.requests_fulfilled} jobs)</td><td class="workerKudos" ${style}>${elem.kudos_rewards.toFixed(0)}<br><span style="color:gray">${kudos_per_hr}</span></td><td class="workerDetails"><a class="color_blueurl" href="#" onclick="show_worker_details(${i}); return false;">${elem.max_length} / ${elem.max_context_length}<br>(${tokenspersec} T/s)</a></td></tr>`;
 		}
 		document.getElementById("workertable").innerHTML = str;
-		document.getElementById("worktitlecount").innerText = "Worker List - Total " + worker_data_showonly.length;
+		document.getElementById("worktitlecount").innerText = `Worker List - Total ${worker_data_showonly.length}`;
 	}
 
 	function show_my_own_workers()
@@ -35150,7 +35223,7 @@ Current version indicated by LITEVER below.
 			<div class="workerTableDiv">
 			<table class="table workerTable" style="text-align: center;">
 			<thead class="sticky-top bg-white">
-			<tr><th><a class="color_blueurl" href="#" onclick="sort_display_workers('name')">Name</a></th><th><a class="color_blueurl" href="#" onclick="sort_display_workers('defaultmodel')">Model</a></th><th><a class="color_blueurl" href="#" onclick="sort_display_workers('tokenspersec')">Capabilities</a></th><th><a class="color_blueurl" href="#" onclick="sort_display_workers('uptime')">Uptime</a></th><th><a class="color_blueurl" href="#" onclick="sort_display_workers('kudos_rewards')">Kudos</a></th></tr>
+			<tr><th><a class="color_blueurl" href="#" onclick="sort_display_workers('name')">Name</a></th><th><a class="color_blueurl" href="#" onclick="sort_display_workers('defaultmodel')">Model</a></th><th class="workerCapabilities"><a class="color_blueurl" href="#" onclick="sort_display_workers('tokenspersec')">Capabilities</a></th><th class="workerJobs"><a class="color_blueurl" href="#" onclick="sort_display_workers('jobtypes')">Jobs</a></th><th class="workerUptime"><a class="color_blueurl" href="#" onclick="sort_display_workers('uptime')">Uptime</a></th><th class="workerKudos"><a class="color_blueurl" href="#" onclick="sort_display_workers('kudos_rewards')">Kudos</a></th><th class="workerDetails"><a class="color_blueurl" href="#" onclick="sort_display_workers('tokenspersec')">More Info</a></th></tr>
 			</thead>
 			<tbody id="workertable">
 			</tbody>
