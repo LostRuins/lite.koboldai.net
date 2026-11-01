@@ -359,6 +359,10 @@
 				"properties": {
 					"text": {
 						"type": "string"
+					},
+					"abc": {
+						"type": "string",
+						"description": "SheetSage2 ABC notation. Present on /api/extra/music/transcribe."
 					}
 				},
 				"required": [
@@ -373,6 +377,70 @@
 					},
 					"version": {
 						"type": "string"
+					},
+					"protected": {
+						"type": "boolean"
+					},
+					"llm": {
+						"type": "boolean"
+					},
+					"txt2img": {
+						"type": "boolean"
+					},
+					"vision": {
+						"type": "boolean"
+					},
+					"audio": {
+						"type": "boolean"
+					},
+					"transcribe": {
+						"type": "boolean"
+					},
+					"multiplayer": {
+						"type": "boolean"
+					},
+					"websearch": {
+						"type": "boolean"
+					},
+					"tts": {
+						"type": "boolean"
+					},
+					"embeddings": {
+						"type": "boolean"
+					},
+					"music": {
+						"type": "boolean"
+					},
+					"musicllm": {
+						"type": "boolean"
+					},
+					"musicfamily": {
+						"type": "string",
+						"description": "Loaded music backend family, such as acestep, yue2, or none."
+					},
+					"savedata": {
+						"type": "boolean"
+					},
+					"admin": {
+						"type": "integer"
+					},
+					"router": {
+						"type": "boolean"
+					},
+					"guidance": {
+						"type": "boolean"
+					},
+					"jinja": {
+						"type": "boolean"
+					},
+					"mcp": {
+						"type": "boolean"
+					},
+					"parallelrequests": {
+						"type": "integer"
+					},
+					"defaults_modified": {
+						"type": "boolean"
 					}
 				},
 				"required": [
@@ -1869,6 +1937,7 @@
 			},
 			"OpenAISpeechRequest": {
 				"type": "object",
+				"description": "OpenAI-compatible speech input. KoboldCpp also accepts the KoboldCpp TTS fields and model-specific Audio.cpp options listed below.",
 				"properties": {
 					"model": {
 						"type": "string"
@@ -1877,7 +1946,16 @@
 						"type": "string"
 					},
 					"voice": {
-						"type": "string"
+						"type": "string",
+						"description": "Built-in or custom voice name. A WAV/MP3 filename can refer to a voice loaded with --ttsdir; OpenAI names such as alloy are also accepted."
+					},
+					"speaker_wav": {
+						"type": "string",
+						"description": "Compatibility alias for voice."
+					},
+					"speaker_json": {
+						"type": "string",
+						"description": "Custom speaker JSON for compatible TTS models."
 					},
 					"response_format": {
 						"type": "string",
@@ -1887,19 +1965,30 @@
 						],
 						"default": "wav"
 					},
+					"use_mp3": {
+						"type": "boolean",
+						"description": "KoboldCpp alias for requesting MP3 output."
+					},
 					"seed": {
-						"type": "integer"
+						"type": "integer",
+						"description": "Audio generation seed."
 					},
 					"language": {
 						"type": "string"
 					},
-					"instruction": {
-						"type": "string"
+					"instructions": {
+						"type": "string",
+						"description": "Some models use this as a voice/narration instruction."
+					},
+					"reference_text": {
+						"type": "string",
+						"description": "Transcript of the reference voice clip when required by the loaded model."
 					}
 				},
 				"required": [
 					"input"
-				]
+				],
+				"additionalProperties": true
 			},
 			"OpenAIVoiceList": {
 				"type": "object",
@@ -2145,7 +2234,8 @@
 									{
 										"type": "array",
 										"items": {
-											"$ref": "#/components/schemas/AnthropicContentBlock"
+											"type": "object",
+											"additionalProperties": true
 										}
 									}
 								]
@@ -2269,7 +2359,7 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "Accepted in the payload but not currently mapped to stopping. Use the KoboldCpp/OpenAI-compatible stop field for working stop strings."
+						"description": "Anthropic-compatible stop strings."
 					},
 					"stop": {
 						"oneOf": [
@@ -2295,7 +2385,7 @@
 						}
 					},
 					"tool_choice": {
-						"description": "Supports auto, required, none, an exact function name, or an OpenAI-style function choice object. Anthropic's native {type: tool, name: ...} object is not currently interpreted.",
+						"description": "Supports auto, any, none, an exact function name, or an OpenAI-style function choice object. Native Anthropic objects with type auto, any, none, or tool are accepted.",
 						"oneOf": [
 							{
 								"type": "string"
@@ -2513,6 +2603,9 @@
 							"id",
 							"role",
 							"model",
+							"content",
+							"stop_reason",
+							"stop_sequence",
 							"usage"
 						]
 					},
@@ -2582,7 +2675,7 @@
 	"info": {
 		"title": "KoboldCpp API",
 		"description": "For swagger.json, <a href=\"?json=1\">click here</a> or use <a href=\"https://lite.koboldai.net/koboldcpp_api.json\">online version</a>.",
-		"version": "2026.10.11"
+		"version": "2026.11.01"
 	},
 	"openapi": "3.0.3",
 	"paths": {
@@ -3140,6 +3233,21 @@
 		},
 		"/messages": {
 			"$ref": "#/paths/~1v1~1messages"
+		},
+		"/api/latest/generate": {
+			"$ref": "#/paths/~1api~1v1~1generate"
+		},
+		"/api/latest/model": {
+			"$ref": "#/paths/~1api~1v1~1model"
+		},
+		"/api/latest/config/max_length": {
+			"$ref": "#/paths/~1api~1v1~1config~1max_length"
+		},
+		"/api/latest/config/max_context_length": {
+			"$ref": "#/paths/~1api~1v1~1config~1max_context_length"
+		},
+		"/api/latest/info/version": {
+			"$ref": "#/paths/~1api~1v1~1info~1version"
 		},
 		"/api/generate": {
 			"post": {
@@ -3813,15 +3921,20 @@
 							"application/json": {
 								"example": {
 									"result": "KoboldCpp",
-									"version": "2025.06.03",
+									"version": "2026.11.01",
 									"protected": false,
+									"llm": true,
 									"txt2img": false,
 									"vision": false,
+									"audio": false,
 									"transcribe": false,
 									"multiplayer": false,
 									"websearch": false,
 									"tts": false,
-									"embeddings": false
+									"embeddings": false,
+									"music": false,
+									"musicllm": false,
+									"musicfamily": "none"
 								},
 								"schema": {
 									"$ref": "#/components/schemas/KcppVersion"
@@ -4812,7 +4925,7 @@
 						"BearerAuth": []
 					}
 				],
-				"description": "Uses Whisper to perform a Speech-To-Text transcription.",
+				"description": "Uses the loaded audio transcription model to perform Speech-To-Text transcription. This can use Whisper, or an audio-capable multimodal projector when Whisper is unavailable.",
 				"requestBody": {
 					"content": {
 						"application/json": {
@@ -4891,6 +5004,90 @@
 					}
 				},
 				"summary": "Uses Whisper to perform a Speech-To-Text transcription.",
+				"tags": [
+					"api/extra"
+				]
+			}
+		},
+		"/api/extra/music/transcribe": {
+			"post": {
+				"security": [
+					{
+						"BearerAuth": []
+					}
+				],
+				"summary": "Transcribes music or audio to text and ABC notation",
+				"description": "Uses a SheetSage2 audio transcription model to convert music into ABC notation. The response contains the transcription in both `text` and `abc`; JSON base64/data URLs and multipart file uploads are accepted.",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"example": {
+								"audio_data": "base64_audio_data",
+								"langcode": "en"
+							},
+							"schema": {
+								"type": "object",
+								"properties": {
+									"audio_data": {
+										"type": "string",
+										"description": "Base64 audio data or a data:audio URL."
+									},
+									"prompt": {
+										"type": "string",
+										"description": "Optional transcription prompt."
+									},
+									"langcode": {
+										"type": "string",
+										"description": "Language code, or auto."
+									},
+									"language": {
+										"type": "string",
+										"description": "Alias for langcode."
+									},
+									"suppress_non_speech": {
+										"type": "boolean"
+									}
+								},
+								"required": [
+									"audio_data"
+								]
+							}
+						},
+						"multipart/form-data": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"file": {
+										"type": "string",
+										"format": "binary"
+									},
+									"prompt": {
+										"type": "string"
+									},
+									"language": {
+										"type": "string"
+									}
+								},
+								"required": [
+									"file"
+								]
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Transcription and ABC notation.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TranscriptionResult"
+								}
+							}
+						}
+					}
+				},
 				"tags": [
 					"api/extra"
 				]
@@ -4997,7 +5194,7 @@
 									},
 									"voice": {
 										"type": "string",
-										"description": "The voice to use when generating the audio. You can enter anything you like, a unique speaker will be generated. If using Qwen3TTS, voice cloning is supported, load the wav samples directory with --ttsdir. There are a few preset voices you can use: kobo,cheery,sleepy,shouty,chatty"
+										"description": "Voice name. Built-in names, OpenAI names such as alloy, or a WAV/MP3 filename loaded with --ttsdir can be used. Unknown names are converted to a deterministic speaker seed when supported by the model. There are a few preset voices you can use: kobo,cheery,sleepy,shouty,chatty"
 									},
 									"speaker_wav": {
 										"type": "string",
@@ -5007,9 +5204,9 @@
 										"type": "string",
 										"description": "Custom speaker JSON. More info at https://github.com/LostRuins/koboldcpp/tree/concedo/examples/outetts"
 									},
-									"instruction": {
+									"instructions": {
 										"type": "string",
-										"description": "Qwen3TTS VoiceDesign and CustomVoice only. Provide an instruction on how the narration should sound e.g. Angry man shouting with posh british accent"
+										"description": "Some TTS models only. Provide an instruction on how the narration should sound e.g. Angry man shouting with posh british accent"
 									},
 									"language": {
 										"type": "string",
@@ -5032,12 +5229,17 @@
 										"type": "integer",
 										"default": -1,
 										"description": "Audio generation seed."
+									},
+									"reference_text": {
+										"type": "string",
+										"description": "Transcript of the reference voice clip when required by the loaded model."
 									}
 								},
 								"required": [
 									"input"
 								],
-								"type": "object"
+								"type": "object",
+								"additionalProperties": true
 							}
 						}
 					},
@@ -5196,9 +5398,167 @@
 									"caption": {
 										"type": "string",
 										"description": "A short description of the song to create"
+									},
+									"lyrics": {
+										"type": "string",
+										"description": "Lyrics to preserve or use for planning."
+									},
+									"bpm": {
+										"type": "number",
+										"description": "ACE-Step beats per minute."
+									},
+									"duration": {
+										"type": "number",
+										"description": "ACE-Step duration in seconds."
+									},
+									"keyscale": {
+										"type": "string",
+										"description": "ACE-Step musical key."
+									},
+									"timesignature": {
+										"type": "string",
+										"description": "ACE-Step time signature."
+									},
+									"vocal_language": {
+										"type": "string",
+										"description": "Language code for the lyrics."
+									},
+									"seed": {
+										"type": "integer",
+										"description": "Music generation seed."
+									},
+									"musicfamily": {
+										"type": "string",
+										"enum": [
+											"acestep",
+											"yue2"
+										],
+										"description": "Select the loaded music family."
+									},
+									"gen_codes": {
+										"type": "boolean",
+										"description": "Generate a planner/code response."
+									},
+									"rewrite_caption": {
+										"type": "boolean",
+										"default": true
+									},
+									"stereo": {
+										"type": "boolean",
+										"default": true
+									},
+									"use_mp3": {
+										"type": "boolean",
+										"description": "Request MP3 output."
+									},
+									"response_format": {
+										"type": "string",
+										"enum": [
+											"wav",
+											"mp3"
+										]
+									},
+									"audio_codes": {
+										"type": "string",
+										"description": "ACE-Step audio-code plan from a previous response."
+									},
+									"music_reference_audio_data": {
+										"type": "string",
+										"description": "Base64 audio or a data:audio URL for ACE-Step reference/cover generation. Not used by YuE2."
+									},
+									"audio_cover_strength": {
+										"type": "number",
+										"description": "ACE-Step reference audio strength, normally 0.0 to 1.0."
+									},
+									"lm_temperature": {
+										"type": "number"
+									},
+									"lm_cfg_scale": {
+										"type": "number"
+									},
+									"lm_top_p": {
+										"type": "number"
+									},
+									"lm_top_k": {
+										"type": "integer"
+									},
+									"lm_rep_pen": {
+										"type": "number"
+									},
+									"inference_steps": {
+										"type": "integer",
+										"description": "ACE-Step diffusion steps or YuE2 acoustic steps."
+									},
+									"guidance_scale": {
+										"type": "number"
+									},
+									"shift": {
+										"type": "number",
+										"description": "ACE-Step audio shift."
+									},
+									"codes_top_p": {
+										"type": "number"
+									},
+									"codes_top_k": {
+										"type": "integer"
+									},
+									"codes_temperature": {
+										"type": "number"
+									},
+									"abc": {
+										"type": "string",
+										"description": "YuE2 ABC score."
+									},
+									"cot": {
+										"type": "string",
+										"enum": [
+											"full",
+											"melody",
+											"off"
+										],
+										"description": "YuE2 score planning mode."
+									},
+									"semantic_prefix": {
+										"type": "array",
+										"items": {
+											"type": "integer"
+										},
+										"description": "YuE2 semantic token prefix from a previous plan."
+									},
+									"num_inference_steps": {
+										"type": "integer",
+										"description": "YuE2 acoustic inference steps."
+									},
+									"semantic_top_p": {
+										"type": "number"
+									},
+									"semantic_top_k": {
+										"type": "integer"
+									},
+									"semantic_temperature": {
+										"type": "number"
+									},
+									"abc_temperature": {
+										"type": "number"
+									},
+									"abc_top_p": {
+										"type": "number"
+									},
+									"abc_top_k": {
+										"type": "integer"
+									},
+									"semantic_repetition_penalty": {
+										"type": "number"
+									},
+									"semantic_min_tokens": {
+										"type": "integer"
+									},
+									"semantic_max_tokens": {
+										"type": "integer"
 									}
 								},
-								"type": "object"
+								"type": "object",
+								"additionalProperties": true
 							}
 						}
 					},
@@ -5233,8 +5593,56 @@
 									"audio_codes": ""
 								},
 								"schema": {
-									"properties": {},
-									"type": "object"
+									"type": "object",
+									"description": "A music plan. ACE-Step plans commonly include audio_codes; YuE2 plans include abc and semantic_prefix.",
+									"properties": {
+										"caption": {
+											"type": "string"
+										},
+										"lyrics": {
+											"type": "string"
+										},
+										"bpm": {
+											"type": "number"
+										},
+										"duration": {
+											"type": "number"
+										},
+										"keyscale": {
+											"type": "string"
+										},
+										"timesignature": {
+											"type": "string"
+										},
+										"vocal_language": {
+											"type": "string"
+										},
+										"task_type": {
+											"type": "string"
+										},
+										"seed": {
+											"type": "integer"
+										},
+										"audio_codes": {
+											"type": "string"
+										},
+										"abc": {
+											"type": "string"
+										},
+										"semantic_prefix": {
+											"type": "array",
+											"items": {
+												"type": "integer"
+											}
+										},
+										"musicfamily": {
+											"type": "string"
+										},
+										"rewrite_caption": {
+											"type": "boolean"
+										}
+									},
+									"additionalProperties": true
 								}
 							}
 						},
@@ -5298,9 +5706,130 @@
 									"inference_steps": {
 										"type": "number",
 										"description": "How many diffusion steps to use."
+									},
+									"musicfamily": {
+										"type": "string",
+										"enum": [
+											"acestep",
+											"yue2"
+										]
+									},
+									"seed": {
+										"type": "integer"
+									},
+									"gen_codes": {
+										"type": "boolean"
+									},
+									"rewrite_caption": {
+										"type": "boolean",
+										"default": true
+									},
+									"stereo": {
+										"type": "boolean",
+										"default": true
+									},
+									"use_mp3": {
+										"type": "boolean"
+									},
+									"response_format": {
+										"type": "string",
+										"enum": [
+											"wav",
+											"mp3"
+										]
+									},
+									"audio_codes": {
+										"type": "string",
+										"description": "ACE-Step audio-code plan."
+									},
+									"music_reference_audio_data": {
+										"type": "string",
+										"description": "Base64 audio or data:audio URL for ACE-Step reference/cover generation."
+									},
+									"audio_cover_strength": {
+										"type": "number"
+									},
+									"lm_temperature": {
+										"type": "number"
+									},
+									"lm_cfg_scale": {
+										"type": "number"
+									},
+									"lm_top_p": {
+										"type": "number"
+									},
+									"lm_top_k": {
+										"type": "integer"
+									},
+									"lm_rep_pen": {
+										"type": "number"
+									},
+									"guidance_scale": {
+										"type": "number"
+									},
+									"shift": {
+										"type": "number"
+									},
+									"codes_top_p": {
+										"type": "number"
+									},
+									"codes_top_k": {
+										"type": "integer"
+									},
+									"codes_temperature": {
+										"type": "number"
+									},
+									"abc": {
+										"type": "string",
+										"description": "YuE2 ABC score."
+									},
+									"cot": {
+										"type": "string",
+										"enum": [
+											"full",
+											"melody",
+											"off"
+										]
+									},
+									"semantic_prefix": {
+										"type": "array",
+										"items": {
+											"type": "integer"
+										}
+									},
+									"num_inference_steps": {
+										"type": "integer"
+									},
+									"semantic_top_p": {
+										"type": "number"
+									},
+									"semantic_top_k": {
+										"type": "integer"
+									},
+									"semantic_temperature": {
+										"type": "number"
+									},
+									"abc_temperature": {
+										"type": "number"
+									},
+									"abc_top_p": {
+										"type": "number"
+									},
+									"abc_top_k": {
+										"type": "integer"
+									},
+									"semantic_repetition_penalty": {
+										"type": "number"
+									},
+									"semantic_min_tokens": {
+										"type": "integer"
+									},
+									"semantic_max_tokens": {
+										"type": "integer"
 									}
 								},
-								"type": "object"
+								"type": "object",
+								"additionalProperties": true
 							}
 						}
 					},
@@ -5313,6 +5842,12 @@
 					"200": {
 						"content": {
 							"audio/wav": {
+								"schema": {
+									"type": "string",
+									"format": "binary"
+								}
+							},
+							"audio/mpeg": {
 								"schema": {
 									"type": "string",
 									"format": "binary"
