@@ -5599,15 +5599,82 @@ Current version indicated by LITEVER below.
 			};
 		}
 
+		//polyfill for object.fromEntries
+		if (!Object.fromEntries)
+		{
+			Object.fromEntries = function(iterable) {
+				if (iterable == null) throw new TypeError("Object.fromEntries requires an iterable");
+				var result = {};
+				var addEntry = function(entry) {
+					if (entry == null || (typeof entry !== "object" && typeof entry !== "function")) {
+						throw new TypeError("Iterator value " + entry + " is not an entry object");
+					}
+					Object.defineProperty(result, entry[0], {
+						value: entry[1],
+						writable: true,
+						enumerable: true,
+						configurable: true
+					});
+				};
+
+				var iteratorMethod = typeof Symbol !== "undefined" && Symbol.iterator && iterable[Symbol.iterator];
+				if (typeof iteratorMethod === "function") {
+					var iterator = iteratorMethod.call(iterable);
+					var step;
+					while (!(step = iterator.next()).done) addEntry(step.value);
+				}
+				else {
+					for (var i = 0; i < iterable.length; ++i) addEntry(iterable[i]);
+				}
+				return result;
+			};
+		}
+
+		//polyfills for array.flat and array.flatMap
+		if (!Array.prototype.flat) {
+			Array.prototype.flat = function(depth) {
+				var flattened = [];
+				var maxDepth = depth === undefined ? 1 : Number(depth);
+				if (isNaN(maxDepth) || maxDepth < 0) maxDepth = 0;
+				else maxDepth = Math.floor(maxDepth);
+				var flatten = function(array, currentDepth) {
+					for (var i = 0; i < array.length; ++i) {
+						if (!(i in array)) continue;
+						var value = array[i];
+						if (Array.isArray(value) && currentDepth > 0) flatten(value, currentDepth - 1);
+						else flattened.push(value);
+					}
+				};
+				flatten(this, maxDepth);
+				return flattened;
+			};
+		}
+
+		if (!Array.prototype.flatMap) {
+			Array.prototype.flatMap = function(callback, thisArg) {
+				if (typeof callback !== "function") throw new TypeError("flatMap callback must be a function");
+				return Array.prototype.map.call(this, callback, thisArg).flat();
+			};
+		}
+
 		//inplace polyfill for replaceall
 		if (!String.prototype.replaceAll) {
 			String.prototype.replaceAll = function(str, newStr){
 				// If a regex pattern
 				if (Object.prototype.toString.call(str).toLowerCase() === '[object regexp]') {
-					return this.replace(str, newStr);
+					if (!str.global) throw new TypeError("replaceAll requires a global RegExp");
+					return String(this).replace(str, newStr);
 				}
-				// If a string
-				return this.replace(new RegExp(str, 'g'), newStr);
+				// Escape string patterns so they retain native replaceAll's literal matching behavior.
+				var escaped = String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+				return String(this).replace(new RegExp(escaped, 'g'), newStr);
+			};
+		}
+
+		//polyfill for trimstart
+		if (!String.prototype.trimStart) {
+			String.prototype.trimStart = function() {
+				return String(this).replace(/^[\s\uFEFF\xA0]+/, "");
 			};
 		}
 
@@ -28373,7 +28440,10 @@ Current version indicated by LITEVER below.
 	{
 		let media = text.match(/(?:\s*\[<\|([hp])\|.+?\|\1\|>\])+\s*$/);
 		if(!media) return text.length;
-		let attachments = Array.from(media[0].matchAll(/\s*\[<\|([hp])\|(.+?)\|\1\|>\]/g));
+		let attachments = [];
+		let attachment_regex = /\s*\[<\|([hp])\|(.+?)\|\1\|>\]/g;
+		let attachment_match;
+		while((attachment_match = attachment_regex.exec(media[0])) !== null) attachments.push(attachment_match);
 		let shiftStart = text.length;
 		for(let j=attachments.length-1;j>=0;--j)
 		{
