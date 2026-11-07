@@ -360,6 +360,29 @@
 					"text": {
 						"type": "string"
 					},
+					"words": {
+						"type": "array",
+						"description": "Qwen3 Forced Aligner word timestamps when requested.",
+						"items": {
+							"type": "object",
+							"properties": {
+								"word": {
+									"type": "string"
+								},
+								"start": {
+									"type": "number"
+								},
+								"end": {
+									"type": "number"
+								}
+							},
+							"required": [
+								"word",
+								"start",
+								"end"
+							]
+						}
+					},
 					"abc": {
 						"type": "string",
 						"description": "SheetSage2 ABC notation. Present on /api/extra/music/transcribe."
@@ -1928,7 +1951,15 @@
 					},
 					"language": {
 						"type": "string",
-						"description": "Language code, or auto when omitted."
+						"description": "Language code, or auto when omitted. Required when transcript is supplied."
+					},
+					"transcript": {
+						"type": "string",
+						"description": "Known transcript to align directly against the audio with Qwen3 Forced Aligner, bypassing ASR."
+					},
+					"return_timestamps": {
+						"type": "boolean",
+						"description": "Adds Qwen3 Forced Aligner word timestamps. Requires --transcribealigner."
 					}
 				},
 				"required": [
@@ -2977,7 +3008,7 @@
 					}
 				],
 				"summary": "Create an OpenAI-compatible audio transcription",
-				"description": "Accepts a multipart audio file plus optional prompt and language. Uses the loaded Whisper model, or an audio-capable multimodal projector when Whisper is unavailable.",
+				"description": "Accepts a multipart audio file plus optional prompt and language. Uses the loaded Whisper or Audio.cpp ASR model, or an audio-capable multimodal projector when no transcription model is loaded. Set return_timestamps=true with Qwen3-ASR and --transcribealigner to include word timestamps.",
 				"requestBody": {
 					"required": true,
 					"content": {
@@ -2993,7 +3024,7 @@
 				],
 				"responses": {
 					"200": {
-						"description": "Transcription text.",
+						"description": "Transcription text and optional word timestamps.",
 						"content": {
 							"application/json": {
 								"schema": {
