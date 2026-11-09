@@ -29283,28 +29283,32 @@ Current version indicated by LITEVER below.
 	}
 	function populate_corpo_leftpanel()
 	{
-		let slotpromises = [];
-		for(let i=0;i<SAVE_SLOTS;++i)
-		{
-			slotpromises.push(indexeddb_load("slot_"+i+"_meta",""));
-		}
-		Promise.all(slotpromises).then(slotlabels=>
-		{
-			let panel = document.getElementById('corpoleftpanelitemsinner');
-			let panelitems = ``;
-			populate_corpo_leftpanel_topper();
-			for(let i=0;i<slotlabels.length;++i)
-			{
-				let testslot = slotlabels[i];
-				let entry = "";
-				if(testslot)
-				{
-					entry = `<div onclick="load_from_slot(`+i+`, true, false, true)" class="corpo_leftpanel_btn" type="button">`+testslot+`</div>`;
-				}
-				panelitems += entry;
-			}
-			panel.innerHTML = panelitems;
-		});
+    	let panel = document.getElementById('corpoleftpanelitemsinner');
+    	let panelitems = ``;
+    	populate_corpo_leftpanel_topper();
+    	let source = [];
+    	let isLocal = false;
+    	let isScenario = false;
+    	if (current_save_location === "2") {
+        	source = netsaveslotlabels;
+        	isLocal = false;
+        	isScenario = false;
+    	} else if (current_save_location === "3") {
+        	source = cachedsavescenariolabels;
+        	isLocal = true;
+        	isScenario = true;
+    	} else { // Location 1: Local
+        	source = cachedsaveslotlabels;
+        	isLocal = true;
+        	isScenario = false;
+    	}
+    	for (let i = 0; i < source.length; ++i) {
+        	let testslot = source[i];
+        	if (testslot) {
+            	panelitems += `<div onclick="load_from_slot(${i}, ${String(isLocal)}, ${String(isScenario)}, true)" class="corpo_leftpanel_btn" type="button">${testslot}</div>`;
+        	}
+    	}
+    	panel.innerHTML = panelitems;
 	}
 
 	function show_corpo_leftpanel(open)
