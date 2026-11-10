@@ -16927,26 +16927,36 @@ Current version indicated by LITEVER below.
 			document.getElementById("saveslotselecteddropdown").innerHTML = choices;
 		}
 	}
-	function find_unused_saveslot(onDoneCallback)
+	function find_unused_saveslot()
 	{
-		let slotpromises = [];
-		for(let i=0;i<SAVE_SLOTS;++i)
+		let targetArray;
+		let maxCount;
+		switch(current_save_location)
 		{
-			slotpromises.push(indexeddb_load("slot_"+i+"_meta",""));
+			case "1": // Local Save Slot
+				targetArray = cachedsaveslotlabels;
+				maxCount = SAVE_SLOTS;
+				break;
+			case "2": // Server Save Slot
+				targetArray = netsaveslotlabels;
+				maxCount = netsaveslotlabels.length;
+				break;
+			case "3": // Local Scenario Slot
+				targetArray = cachedsavescenariolabels;
+				maxCount = SCENARIO_SLOTS;
+				break;
+			default:
+				console.error("Unknown save location:", current_save_location);
+				return -1;
 		}
-		Promise.all(slotpromises).then(slotlabels=>
+		for(let i = 0; i < maxCount; ++i)
 		{
-			let esid = -1;
-			for(let i=0;i<slotlabels.length;++i)
+			if(targetArray[i] === "" || !targetArray[i])
 			{
-				if(slotlabels[i]=="")
-				{
-					esid = i;
-					break;
-				}
+				return i;
 			}
-			onDoneCallback(esid);
-		});
+		}
+		return -1;
 	}
 	function display_scenariolibrary()
 	{
