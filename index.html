@@ -16967,13 +16967,17 @@ Current version indicated by LITEVER below.
 	{
 		mainmenu_untab(true);
 		document.getElementById("saveloadcontainer").classList.remove("hidden");
-
+	
 		if (is_using_kcpp_with_savedatafile()) {
 			document.getElementById("kcppsaveavailable").classList.remove("hidden");
 		} else {
 			document.getElementById("kcppsaveavailable").classList.add("hidden");
 		}
-
+		fetch_labels();
+		saveloadchangeslot(true);
+	}
+	function fetch_labels()
+	{
 		let slotpromises = [];
 		let scenariopromises = [];
 		for(let i=0;i<SAVE_SLOTS;++i)
@@ -16990,27 +16994,27 @@ Current version indicated by LITEVER below.
 			{
 				cachedsaveslotlabels = slotlabels;
 				cachedsavescenariolabels = scenariolabels;
-				saveloadchangeslot(true);
-				populate_corpo_leftpanel();
+				if(is_using_kcpp_with_savedatafile())
+				{
+					//grab saves
+					fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_savedata_list_endpoint), {
+					method: 'POST', // or 'PUT'
+					headers: get_kobold_header(),
+					})
+					.then((response) => response.json())
+					.then((data) => {
+						netsaveslotlabels = data;
+						saveloadchangeslot(true);
+						populate_corpo_leftpanel();
+					})
+					.catch((error) => {
+						console.error('Error:', error);
+					});
+				} else {
+					populate_corpo_leftpanel();
+				}
 			});
 		});
-		if(is_using_kcpp_with_savedatafile())
-		{
-			//grab saves
-			fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_savedata_list_endpoint), {
-			method: 'POST', // or 'PUT'
-			headers: get_kobold_header(),
-			})
-			.then((response) => response.json())
-			.then((data) => {
-				netsaveslotlabels = data;
-				saveloadchangeslot(true);
-				populate_corpo_leftpanel();
-			})
-			.catch((error) => {
-				console.error('Error:', error);
-			});
-		}
 	}
 	function quicksave()
 	{
