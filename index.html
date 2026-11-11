@@ -13,7 +13,7 @@ Current version indicated by LITEVER below.
 <head>
 	<script id="init-config">
 	/* split: src/config/init-config.js */
-	const LITEVER = 354;
+	const LITEVER = 355;
 	const urlParams = new URLSearchParams(window.location.search);
 	var localflag = urlParams.get('local'); //this will be replaced automatically in embedded kcpp
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
@@ -4313,6 +4313,7 @@ Current version indicated by LITEVER below.
 	var default_mistralai_base = "https://api.mistral.ai/v1";
 	var default_featherless_base = "https://api.featherless.ai/v1";
 	var default_nvidianim_base = "https://integrate.api.nvidia.com/v1";
+	var default_beavernet_base = "https://net.beaverai.org/v1";
 	var default_grok_base = "https://api.x.ai/v1";
 	var default_oai_base = "https://api.openai.com/v1";
 	var default_claude_base = "https://api.anthropic.com";
@@ -4546,6 +4547,7 @@ Current version indicated by LITEVER below.
 		saved_mistralai_key: "",
 		saved_featherless_key: "",
 		saved_nvidianim_key: "",
+		saved_beavernet_key: "",
 		saved_pollinations_key: "", //this is a dummy key and isnt needed
 		saved_grok_key:"",
 		saved_claude_key: "", //do not ever share this in save files!
@@ -4773,6 +4775,7 @@ Current version indicated by LITEVER below.
 		saved_mistralai_key: true,
 		saved_featherless_key: true,
 		saved_nvidianim_key: true,
+		saved_beavernet_key: true,
 		saved_pollinations_key: true,
 		saved_grok_key: true,
 		saved_claude_key: true,
@@ -5595,6 +5598,16 @@ Current version indicated by LITEVER below.
 			Object.entries = function( obj ){
 				var ownProps = Object.keys( obj ),i = ownProps.length,resArray = new Array(i); // preallocate the Array
 				while (i--){resArray[i] = [ownProps[i], obj[ownProps[i]]];}
+				return resArray;
+			};
+		}
+
+		//polyfill for object.values (required by Firefox 50)
+		if (!Object.values)
+		{
+			Object.values = function( obj ){
+				var ownProps = Object.keys( obj ),i = ownProps.length,resArray = new Array(i); // preallocate the Array
+				while (i--){resArray[i] = obj[ownProps[i]];}
 				return resArray;
 			};
 		}
@@ -11596,6 +11609,7 @@ Current version indicated by LITEVER below.
 			new_save_storyobj.savedsettings.saved_mistralai_key = "";
 			new_save_storyobj.savedsettings.saved_featherless_key = "";
 			new_save_storyobj.savedsettings.saved_nvidianim_key = "";
+			new_save_storyobj.savedsettings.saved_beavernet_key = "";
 			new_save_storyobj.savedsettings.saved_pollinations_key = "";
 			new_save_storyobj.savedsettings.saved_grok_key = "";
 			new_save_storyobj.savedsettings.saved_claude_key = "";
@@ -15183,6 +15197,8 @@ Current version indicated by LITEVER below.
 				return document.getElementById("custom_pollinations_model");
 			case "11":
 				return document.getElementById("custom_nvidianim_model");
+			case "12":
+				return document.getElementById("custom_beavernet_model");
 			default:
 				return document.getElementById("custom_oai_model"); //just return oai
 		}
@@ -15230,7 +15246,7 @@ Current version indicated by LITEVER below.
 		}
 		dropdown.value = saved_model;
 
-		if(epchoice=="2" || epchoice=="3" || epchoice=="5" || epchoice=="7" || epchoice=="8" || epchoice=="9" || epchoice=="10" || epchoice=="11")
+		if(epchoice=="2" || epchoice=="3" || epchoice=="5" || epchoice=="7" || epchoice=="8" || epchoice=="9" || epchoice=="10" || epchoice=="11" || epchoice=="12")
 		{
 			set_oai_api_type(get_saved_oai_api_type());
 		}
@@ -15239,7 +15255,7 @@ Current version indicated by LITEVER below.
 	function ep_should_always_use_chat_completions()
 	{
 		let epchoice = document.getElementById("customapidropdown").value;
-		return (epchoice==5 || epchoice==7 || epchoice==10 || epchoice==11);
+		return (epchoice==5 || epchoice==7 || epchoice==10 || epchoice==11 || epchoice==12);
 	}
 
 	function find_oai_model()
@@ -15822,6 +15838,7 @@ Current version indicated by LITEVER below.
 		document.getElementById("custom_mistralai_model").classList.add("hidden");
 		document.getElementById("custom_featherless_model").classList.add("hidden");
 		document.getElementById("custom_nvidianim_model").classList.add("hidden");
+		document.getElementById("custom_beavernet_model").classList.add("hidden");
 		document.getElementById("custom_grok_model").classList.add("hidden");
 		document.getElementById("custom_pollinations_model").classList.add("hidden");
 		document.getElementById("hordeloadmodelcontainer").classList.add("hidden");
@@ -15841,16 +15858,18 @@ Current version indicated by LITEVER below.
 				document.getElementById("customkoboldkey").value = localsettings.saved_kai_key;
 			}
 		}
-		else if(epchoice==2 || epchoice==3 || epchoice==5 || epchoice==7 || epchoice==8 || epchoice==9 || epchoice==10 || epchoice==11)
+		else if(epchoice==2 || epchoice==3 || epchoice==5 || epchoice==7 || epchoice==8 || epchoice==9 || epchoice==10 || epchoice==11 || epchoice==12)
 		{
 			document.getElementById("oaicustom").classList.remove("hidden");
 			document.getElementById("custom_oai_endpoint").classList.add("hidden");
 			document.getElementById("custom_oai_key").classList.remove("hidden");
+			document.getElementById("custom_oai_key").placeholder = "API Key (Required)";
 			document.getElementById("openrouterdesc").classList.add("hidden");
 			document.getElementById("mistralaidesc").classList.add("hidden");
 			document.getElementById("geminidesc").classList.add("hidden");
 			document.getElementById("featherlessdesc").classList.add("hidden");
 			document.getElementById("nvidianimdesc").classList.add("hidden");
+			document.getElementById("beavernetdesc").classList.add("hidden");
 			document.getElementById("grokdesc").classList.add("hidden");
 			document.getElementById("oaidesc").classList.add("hidden");
 			document.getElementById("pollinationsdesc").classList.add("hidden");
@@ -15924,6 +15943,15 @@ Current version indicated by LITEVER below.
 				document.getElementById("nvidianimdesc").classList.remove("hidden");
 				document.getElementById("custom_oai_key").value = (localsettings.saved_nvidianim_key==dummy_api_key?"":localsettings.saved_nvidianim_key);
 				document.getElementById("custom_oai_endpoint").value = default_nvidianim_base;
+				try_fetch_oai_models_auto();
+			}
+			else if(epchoice==12)
+			{
+				document.getElementById("custom_beavernet_model").classList.remove("hidden");
+				document.getElementById("beavernetdesc").classList.remove("hidden");
+				document.getElementById("custom_oai_key").value = (localsettings.saved_beavernet_key==dummy_api_key?"":localsettings.saved_beavernet_key);
+				document.getElementById("custom_oai_key").placeholder = "API Key (Optional)";
+				document.getElementById("custom_oai_endpoint").value = default_beavernet_base;
 				try_fetch_oai_models_auto();
 			}
 			restore_prev_custom_endpoint_model_option(epchoice);
@@ -16409,7 +16437,7 @@ Current version indicated by LITEVER below.
 				});
 			}
 		}
-		else if(epchoice==2 || epchoice==3 || epchoice==5 || epchoice==7 || epchoice==8 || epchoice==9 || epchoice==10 || epchoice==11) //connect to OAI / OpenRouter / Gemini / MistralAI / Featherless / Grok Endpoint / NvidiaNim
+		else if(epchoice==2 || epchoice==3 || epchoice==5 || epchoice==7 || epchoice==8 || epchoice==9 || epchoice==10 || epchoice==11 || epchoice==12) //connect to OpenAI-compatible endpoints
 		{
 			let desired_oai_key = document.getElementById("custom_oai_key").value.trim();
 			let desired_oai_ep = document.getElementById("custom_oai_endpoint").value.trim();
@@ -16421,7 +16449,7 @@ Current version indicated by LITEVER below.
 
 			desired_oai_ep = transform_oai_ep(desired_oai_ep);
 
-			if(desired_oai_key=="" && epchoice==2 && !desired_oai_ep.includes(default_oai_base)) //allow no keys for custom oai api
+			if(desired_oai_key=="" && ((epchoice==2 && !desired_oai_ep.includes(default_oai_base)) || epchoice==12)) //allow no keys for custom OAI APIs and Beavernet
 			{
 				desired_oai_key = dummy_api_key;
 			}
@@ -16483,6 +16511,10 @@ Current version indicated by LITEVER below.
 				{
 					localsettings.saved_nvidianim_key = custom_oai_key;
 					uses_cors_proxy = true;
+				}
+				else if(epchoice==12)
+				{
+					localsettings.saved_beavernet_key = custom_oai_key;
 				}
 				else
 				{
@@ -29646,6 +29678,9 @@ Current version indicated by LITEVER below.
 			}else if(custom_oai_endpoint.toLowerCase().includes("api.nvidia.com"))
 			{
 				localsettings.prev_custom_endpoint_type = 11;
+			}else if(custom_oai_endpoint.toLowerCase().includes("net.beaverai.org"))
+			{
+				localsettings.prev_custom_endpoint_type = 12;
 			}
 		}
 		else if(custom_claude_key!="")
@@ -34924,6 +34959,7 @@ Current version indicated by LITEVER below.
 				<option value="9">Grok API</option>
 				<option value="10">PollinationsAI API</option>
 				<option value="11">Nvidia NIM API</option>
+				<option value="12">Beavernet API</option>
 			</select>
 			</div>
 
@@ -35035,6 +35071,11 @@ Current version indicated by LITEVER below.
 				Entering your <a class="color_blueurl" target="_blank" href="https://build.nvidia.com/explore/discover">Nvidia NIM API key</a> will allow you to use KoboldAI Lite with their API.<br><br>
 				You are responsibile for your own usage. <span class="color_red">Due to CORS restrictions, your connection WILL be proxied.</span><br>Only Temperature, Top-P and Repetition Penalty samplers are used.<br><br>
 				<span class="color_green" style="font-weight: bold;">Please input Nvidia NIM Key.</span><br><br>
+				</div>
+				<div id="beavernetdesc" class="hidden">
+				Entering your optional <a class="color_blueurl" target="_blank" href="https://net.beaverai.org">Beavernet API key</a> will allow you to access keyed models and higher usage limits. Anonymous access is available without a key.<br><br>
+				You are responsible for your own usage. API keys are used with Beavernet directly. Beavernet supports Chat Completions only.<br><br>
+				<span class="color_green" style="font-weight: bold;">API Key Optional.</span><br><br>
 				</div>
 
 				<div id="custom_oai_favorites_container" class="hidden">
@@ -35173,6 +35214,10 @@ Current version indicated by LITEVER below.
 					<option value="qwen/qwen3.5-397b-a17b">qwen/qwen3.5-397b-a17b</option>
 					<option value="z-ai/glm5">z-ai/glm5</option>
 					<option value="minimaxai/minimax-m2.7">minimaxai/minimax-m2.7</option>
+					<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
+				</select>
+				<select title="Beavernet AI Model Selection" style="padding:4px;display:inline;width:calc(100% - 200px)" class="form-control hidden" id="custom_beavernet_model" onchange="oai_model_change(true)">
+					<option value="">Fetching models...</option>
 					<option style="display:none;" class="custom_model_option" value="custom">[Custom]</option>
 				</select>
 				<button type="button" class="btn btn-primary" style="display:inline;width:42px;height:34px;vertical-align: top;" id="oaifindmodel" onclick="find_oai_model()">🔎</button>
