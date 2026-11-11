@@ -4322,6 +4322,15 @@ Current version indicated by LITEVER below.
 	var default_gemini_stream_suffix = ":streamGenerateContent?alt=sse&key=";
 	var default_gemini_oaicompat_base = "https://generativelanguage.googleapis.com/v1beta/openai";
 	var default_cohere_base = "https://api.cohere.ai/v1/chat";
+	var key_required_oai_bases = [
+		default_oai_base,
+		default_openrouter_base,
+		default_mistralai_base,
+		default_featherless_base,
+		default_nvidianim_base,
+		default_grok_base,
+		default_gemini_oaicompat_base
+	];
 
 	var openrouter_credits_endpoint = "/credits";
 
@@ -15661,6 +15670,42 @@ Current version indicated by LITEVER below.
 		return transform_oai_ep(first) === transform_oai_ep(second);
 	}
 
+	function oai_endpoint_requires_key(endpoint)
+	{
+		endpoint = (endpoint || "").trim();
+		if(endpoint=="")
+		{
+			return true;
+		}
+		if(!endpoint.match(/^[a-z][a-z0-9+.-]*:\/\//i))
+		{
+			endpoint = "https://" + endpoint;
+		}
+		try
+		{
+			let endpoint_host = new URL(endpoint).hostname.toLowerCase();
+			for(let base of key_required_oai_bases)
+			{
+				if(new URL(base).hostname.toLowerCase()==endpoint_host)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+		catch(error)
+		{
+			return false;
+		}
+	}
+
+	function update_oai_key_requirement()
+	{
+		let endpoint = document.getElementById("custom_oai_endpoint").value;
+		let key_input = document.getElementById("custom_oai_key");
+		key_input.placeholder = (oai_endpoint_requires_key(endpoint)?"API Key (Required)":"API Key (Optional)");
+	}
+
 	function refresh_oai_favorites(selected_index = -1)
 	{
 		let dropdown = document.getElementById("custom_oai_favorites");
@@ -15728,6 +15773,7 @@ Current version indicated by LITEVER below.
 			return;
 		}
 		let endpoint = document.getElementById("custom_oai_endpoint").value.trim();
+		update_oai_key_requirement();
 		let key = document.getElementById("custom_oai_key").value.trim();
 		let dropdown = document.getElementById("custom_oai_favorites");
 		let selected_value = dropdown.value;
@@ -15767,6 +15813,7 @@ Current version indicated by LITEVER below.
 		}
 		document.getElementById("custom_oai_endpoint").value = favorite.endpoint;
 		document.getElementById("custom_oai_key").value = favorite.key;
+		update_oai_key_requirement();
 		dropdown.dataset.currentValue = dropdown.value;
 		update_oai_favorite_btns();
 	}
@@ -15782,6 +15829,7 @@ Current version indicated by LITEVER below.
 		}
 		endpoint = transform_oai_ep(endpoint);
 		document.getElementById("custom_oai_endpoint").value = endpoint;
+		update_oai_key_requirement();
 
 		let default_name = "Endpoint " + (get_oai_favorites().filter(favorite => !favorite.is_default).length + 1);
 		try
@@ -15863,7 +15911,6 @@ Current version indicated by LITEVER below.
 			document.getElementById("oaicustom").classList.remove("hidden");
 			document.getElementById("custom_oai_endpoint").classList.add("hidden");
 			document.getElementById("custom_oai_key").classList.remove("hidden");
-			document.getElementById("custom_oai_key").placeholder = "API Key (Required)";
 			document.getElementById("openrouterdesc").classList.add("hidden");
 			document.getElementById("mistralaidesc").classList.add("hidden");
 			document.getElementById("geminidesc").classList.add("hidden");
@@ -15950,10 +15997,10 @@ Current version indicated by LITEVER below.
 				document.getElementById("custom_beavernet_model").classList.remove("hidden");
 				document.getElementById("beavernetdesc").classList.remove("hidden");
 				document.getElementById("custom_oai_key").value = (localsettings.saved_beavernet_key==dummy_api_key?"":localsettings.saved_beavernet_key);
-				document.getElementById("custom_oai_key").placeholder = "API Key (Optional)";
 				document.getElementById("custom_oai_endpoint").value = default_beavernet_base;
 				try_fetch_oai_models_auto();
 			}
+			update_oai_key_requirement();
 			restore_prev_custom_endpoint_model_option(epchoice);
 			oai_model_change(ep_should_always_use_chat_completions() || force_autotoggle_chatcompl);
 			toggleoaichatcompl();
@@ -16449,7 +16496,7 @@ Current version indicated by LITEVER below.
 
 			desired_oai_ep = transform_oai_ep(desired_oai_ep);
 
-			if(desired_oai_key=="" && ((epchoice==2 && !desired_oai_ep.includes(default_oai_base)) || epchoice==12)) //allow no keys for custom OAI APIs and Beavernet
+			if(desired_oai_key=="" && !oai_endpoint_requires_key(desired_oai_ep))
 			{
 				desired_oai_key = dummy_api_key;
 			}
