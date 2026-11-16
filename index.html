@@ -11501,23 +11501,31 @@ Current version indicated by LITEVER below.
 	function save_file_button(save_file_obj=null,nameprompt="") //if null, generate new savefile, otherwise use provided
 	{
 		warn_unsaved = false;
-		const save_file = function()
+		let defaultname = localsettings.last_known_filename;
+		if(!save_file_obj && defaultname==defaultsettings.last_known_filename) //no filename was ever chosen, so name the file after the story
+		{
+			let generatedname = generate_default_save_name();
+			if(generatedname)
+			{
+				defaultname = generatedname.filename;
+			}
+		}
+		const save_file = function(suggestname)
 		{
 			if(!save_file_obj)
 			{
 				save_file_obj = generate_savefile(localsettings.save_images, localsettings.export_settings, localsettings.export_settings);
 			}
-			let suggestname = localsettings.last_known_filename;
 			if(nameprompt!="" && !localsettings.prompt_for_savename)
 			{
-				suggestname = sanitizeAlphanumeric(sanitizeAlphanumeric(nameprompt," ").trim(),"_");
+				suggestname = sanitize_filename(nameprompt);
 			}
 			saveFileGeneric(suggestname, JSON.stringify(save_file_obj), "application/json");
 		}
 
 		if(localsettings.prompt_for_savename)
 		{
-			inputBox("Enter a Filename","Save File",localsettings.last_known_filename,"Input Filename", ()=>{
+			inputBox("Enter a Filename","Save File",defaultname,"Input Filename", ()=>{
 				let userinput = getInputBoxValue();
 				if (userinput != null && userinput.trim()!="") {
 					let tmp = userinput.trim();
@@ -11525,14 +11533,17 @@ Current version indicated by LITEVER below.
 					{
 						tmp += ".json";
 					}
-					localsettings.last_known_filename = tmp;
-					save_file();
+					if(tmp!=defaultname) //accepting the suggested name is not choosing one
+					{
+						localsettings.last_known_filename = tmp;
+					}
+					save_file(tmp);
 				}
 			},false);
 		}
 		else
 		{
-			save_file();
+			save_file(defaultname);
 		}
 	}
 
@@ -17315,6 +17326,98 @@ Current version indicated by LITEVER below.
 			msgbox("Nothing to delete - Select a save first.","No Action Taken");
 		}
 	}
+	//names a save after the story text. returns {label, filename}, or null if there is nothing to name it after
+	function generate_default_save_name()
+	{
+		const maxlabel = 50; //the slot dropdown truncates longer labels
+		const sep = " · ";
+		const clean = (str) => str.replace(/<[^>]*>/g,"").replace(/\*/g,"").replace(/\s+/g," ").trim();
+		const fit = function(str,maxlen) //cuts at a word boundary. RTL text is wrapped in bidi isolates so it cannot reorder the rest of the label
+		{
+			let isrtl = /[\u0590-\u08FF\uFB1D-\uFEFC]/.test(str);
+			maxlen -= (isrtl?2:0);
+			if(str.length>maxlen)
+			{
+				let lastspace = str.lastIndexOf(" ",maxlen-1);
+				str = str.substring(0,(lastspace>maxlen/2?lastspace:maxlen-1));
+				str = str.replace(/(?:[\uD800-\uDBFF]|[\s.,…]+)$/,"") + "…"; //no split surrogate pair or doubled ellipsis
+			}
+			return (isrtl?"\u2068"+str+"\u2069":str);
+		};
+
+		let text = gametext_arr.join("").replace(/\[<\|.+?\|>\]/g,"");
+		let thinkpat = get_thinking_regex();
+		if(thinkpat)
+		{
+			text = text.replace(new RegExp(thinkpat,"gmi"),"");
+		}
+		let lead = "";
+		let snippet = "";
+		if(localsettings.opmode==4) //first user instruction
+		{
+			let st = get_instructstartplaceholder().trim();
+			let et = get_instructendplaceholder().trim();
+			let startpos = (st?text.indexOf(st):-1);
+			if(startpos>=0)
+			{
+				startpos += st.length;
+				let endpos = (et?text.indexOf(et,startpos):-1);
+				snippet = clean(remove_all_instruct_tags(text.substring(startpos,(endpos>=0?endpos:text.length))));
+				let myname = get_my_multiplayer_chatname()+":";
+				if(snippet.startsWith(myname)) //injected chatname
+				{
+					snippet = snippet.substring(myname.length).trim();
+				}
+			}
+		}
+		else
+		{
+			text = replace_placeholders(text,false,true);
+			if(localsettings.opmode==3) //first user line that is not just a greeting, otherwise the first reply
+			{
+				let opponents = localsettings.chatopponent.split("||$||").filter(x=>x);
+				lead = opponents.slice(0,2).join(", ") + (opponents.length>2?` +${opponents.length-2}`:"");
+				const first_said = function(names,minwords)
+				{
+					for(let line of text.split("\n"))
+					{
+						let name = names.find(x=>line.startsWith(x+":"));
+						let said = (name?clean(line.substring(name.length+1)):"");
+						if(said && said.split(" ").length>=minwords)
+						{
+							return said;
+						}
+					}
+					return "";
+				};
+				snippet = first_said([localsettings.chatname,get_my_multiplayer_chatname()],3) || first_said(opponents,1);
+			}
+			else //first adventure action, otherwise the first sentence of the opening
+			{
+				let action = (localsettings.opmode==2?text.match(/(?:^|\n)> (.+)/):null);
+				snippet = clean(action?action[1]:text);
+				if(!action)
+				{
+					let sentence = snippet.match(/^.{10,}?(?:[.!?…]+(?=\s|$)|[。！？]+)/); //min length skips abbreviations like "Dr."
+					snippet = (sentence?sentence[0]:snippet);
+				}
+			}
+		}
+		if(!lead && !snippet)
+		{
+			return null;
+		}
+
+		let now = new Date();
+		let shortdate = now.toLocaleDateString(undefined,{day:'2-digit',month:'2-digit'});
+		let isodate = now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0");
+		lead = fit(lead,20);
+		snippet = fit(snippet,maxlabel-shortdate.length-sep.length-(lead?lead.length+sep.length:0));
+		return {
+			label: [lead,snippet,shortdate].filter(x=>x).join(sep),
+			filename: sanitize_filename([lead,snippet,isodate].join(" "))
+		};
+	}
 	function save_to_slot(slot,islocal,isscenario,showcontainer)
 	{
 		let session = story_session;
@@ -17326,6 +17429,12 @@ Current version indicated by LITEVER below.
 		let location = isscenario?SAVE_LOCATION_SCENARIO:(islocal?SAVE_LOCATION_LOCAL:SAVE_LOCATION_SERVER);
 		let defaultsavename = (localsettings.opmode==1?"Untitled Story":(localsettings.opmode==2?"Untitled Adventure":(localsettings.opmode==3?"Untitled Chat":"Untitled Instruct")));
 		let savename = defaultsavename + " " + new Date().toLocaleString();
+		let generatedname = (isscenario?null:generate_default_save_name());
+		if(generatedname)
+		{
+			defaultsavename = generatedname.label;
+			savename = generatedname.label;
+		}
 		let newcompressedstory = generate_compressed_story(true, true, true);
 		if(islocal || isscenario)
 		{
@@ -31512,6 +31621,18 @@ Current version indicated by LITEVER below.
 	/* split: src/utils/strings.js */
 	function sanitizeAlphanumeric(str,replacer="") {
 		return str.replace(/[^a-zA-Z0-9]/g, replacer);
+	}
+	function sanitize_filename(str,maxlen=60) //keeps only letters and digits of any language, - and _
+	{
+		let name = str.replace(/\.json$/i,"");
+		try {
+			name = name.replace(new RegExp("[^\\p{L}\\p{N}_-]+","gu"),"_");
+		} catch (e) {
+			//unicode regex is not supported in this environment
+			name = name.replace(/[^a-zA-Z0-9_-]+/g,"_");
+		}
+		name = Array.from(name.replace(/([_-])[_-]+/g,"$1")).slice(0,maxlen).join("").replace(/^[_-]+|[_-]+$/g,"");
+		return (name?name+".json":defaultsettings.last_known_filename);
 	}
 	/* split: src/utils/misc.js */
 	const stableSort = (arr, compare) => {
