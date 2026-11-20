@@ -4494,6 +4494,7 @@ Current version indicated by LITEVER below.
 	var kobold_endpoint_version = ""; //used to track problematic versions to avoid sending extra fields
 	var koboldcpp_version = ""; //detect if we are using koboldcpp
 	var koboldcpp_version_obj = {};
+	var koboldcpp_true_maxctx = 0;
 	var koboldcpp_has_vision = false;
 	var koboldcpp_has_audio = false;
 	var koboldcpp_has_multiplayer = false;
@@ -5824,6 +5825,7 @@ Current version indicated by LITEVER below.
 	});
 
 	document.getElementById("lastreq1lp").innerHTML = document.getElementById("lastreq2lp").innerHTML =	document.getElementById("lastreq3lp").innerHTML = "";
+	document.getElementById("lastreq1ctx").innerHTML = document.getElementById("lastreq2ctx").innerHTML = document.getElementById("lastreq3ctx").innerHTML = "";
 
 	let webbeta = is_using_web_lite_beta();
 	let LITEBETATAG = (webbeta?" Beta":"");
@@ -8752,6 +8754,7 @@ Current version indicated by LITEVER below.
 			document.getElementById("lastreq3").innerHTML = document.getElementById("lastreq2").innerHTML = document.getElementById("lastreq1").innerHTML =
 			`<a href="#" class="color_footer" onclick="msgbox('Source code is available at https://github.com/LostRuins/lite.koboldai.net \\nPlease report any bugs you find there.','Information')">KoboldAI Lite</a> v${LITEVER} Embedded`;
 			document.getElementById("lastreq1lp").innerHTML = document.getElementById("lastreq2lp").innerHTML =	document.getElementById("lastreq3lp").innerHTML = "";
+			document.getElementById("lastreq1ctx").innerHTML = document.getElementById("lastreq2ctx").innerHTML = document.getElementById("lastreq3ctx").innerHTML = "";
 			read_url_params_data();
 		}
 		else
@@ -16387,6 +16390,7 @@ Current version indicated by LITEVER below.
 									.then(values4 => {
 										console.log(values4);
 										let ep_maxctx = values4.value;
+										koboldcpp_true_maxctx = (ep_maxctx?ep_maxctx:0);
 										if(ep_maxctx && ep_maxctx>document.getElementById("max_context_length_slide").max)
 										{
 											document.getElementById("max_context_length_slide").max = ep_maxctx;
@@ -26067,7 +26071,9 @@ Current version indicated by LITEVER below.
 		document.getElementById("lastreq2").innerHTML = lastreq;
 		document.getElementById("lastreq3").innerHTML = lastreq;
 		document.getElementById("lastreq1lp").innerHTML = document.getElementById("lastreq2lp").innerHTML =	document.getElementById("lastreq3lp").innerHTML = "";
+		document.getElementById("lastreq1ctx").innerHTML = document.getElementById("lastreq2ctx").innerHTML = document.getElementById("lastreq3ctx").innerHTML = "";
 		update_logprobs_link();
+		update_context_usage();
 	}
 
 	/* split: src/generation/inspect.js */
@@ -26078,6 +26084,38 @@ Current version indicated by LITEVER below.
 		let oai_has_logprobs = (last_response_obj!=null && last_response_obj.choices && last_response_obj.choices.length > 0 && last_response_obj.choices[0].logprobs!=null);
 		let lastresptxt = `${(last_response_obj!=null && (kcpp_has_logprobs || oai_has_logprobs)?lastresp:"")}`;
 		document.getElementById("lastreq1lp").innerHTML = document.getElementById("lastreq2lp").innerHTML =	document.getElementById("lastreq3lp").innerHTML = lastresptxt;
+	}
+	function update_context_usage() //shows how full the context is, from the token counts koboldcpp reports for its last request
+	{
+		if(custom_kobold_endpoint=="" || !koboldcpp_version || koboldcpp_version_obj.parallelrequests>1)
+		{
+			return;
+		}
+		fetch(apply_proxy_url(custom_kobold_endpoint + koboldcpp_perf_endpoint),
+		{
+			method: 'GET',
+			headers: get_kobold_header(),
+		})
+		.then(x => x.json())
+		.then(resp => {
+			//on a busy or parallel server the last request may be someone else's, so nothing is shown
+			if(resp && typeof resp.last_input_count === 'number' && typeof resp.last_token_count === 'number' && !(resp.queue>0))
+			{
+				let used = resp.last_input_count + resp.last_token_count;
+				let maxctx = localsettings.max_context_length;
+				if(koboldcpp_true_maxctx>0 && koboldcpp_true_maxctx<maxctx) //the server never uses more than it was started with
+				{
+					maxctx = koboldcpp_true_maxctx;
+				}
+				let pct = Math.round(used*100/maxctx);
+				const shortnum = (n) => (n<1000?n:(Math.round(n/102.4)/10)+"k");
+				let tip = `Prompt ${resp.last_input_count} + generated ${resp.last_token_count} tokens (reported by the server for the last request). The oldest text is trimmed once this reaches the context size.`;
+				let ctxtxt = ` &middot; <span${(pct>=90?` class="color_red"`:``)} title="${tip}">Context: ${shortnum(used)} / ${shortnum(maxctx)} (${pct}%)</span>`;
+				document.getElementById("lastreq1ctx").innerHTML = document.getElementById("lastreq2ctx").innerHTML = document.getElementById("lastreq3ctx").innerHTML = ctxtxt;
+			}
+		}).catch((error) => {
+			console.log("Context usage error: " + error);
+		});
 	}
 
 	/* split: src/media/vision.js */
@@ -33040,7 +33078,7 @@ Current version indicated by LITEVER below.
 				</div>
 			</div>
 		</div>
-		<div class="lastreq color_muted"><span id="lastreq1"></span><span id="lastreq1lp"></span></div>
+		<div class="lastreq color_muted"><span id="lastreq1"></span><span id="lastreq1lp"></span><span id="lastreq1ctx"></span></div>
 		</div>
 		<!-- /split: src/ui/classic/classic.html -->
 
@@ -33080,7 +33118,7 @@ Current version indicated by LITEVER below.
 					</div>
 				</div>
 
-				<div class="lastreq color_footer"><span id="lastreq2"></span><span id="lastreq2lp"></span></div>
+				<div class="lastreq color_footer"><span id="lastreq2"></span><span id="lastreq2lp"></span><span id="lastreq2ctx"></span></div>
 			</div>
 		</div>
 		<!-- /split: src/ui/messenger/messenger.html -->
@@ -33132,7 +33170,7 @@ Current version indicated by LITEVER below.
 							<button title="Submit" onclick="submit_generation_button(true)" id="corpo_chat_send_btn" class="corpo_chat_send_btn mainnav" type="button"></button>
 							<button title="Abort" onclick="abort_generation()" id="corpo_chat_send_btn_abort" class="hidden corpo_chat_send_btn_abort mainnav" type="button"></button>
 						</div>
-						<div class="corpolastreq color_muted"><span id="lastreq3"></span><span id="lastreq3lp"></span></div>
+						<div class="corpolastreq color_muted"><span id="lastreq3"></span><span id="lastreq3lp"></span><span id="lastreq3ctx"></span></div>
 					</div>
 				</div>
 			</div>
