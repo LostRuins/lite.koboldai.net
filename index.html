@@ -4673,7 +4673,7 @@ Current version indicated by LITEVER below.
 		save_images: true,
 		save_remote_images: false,
 		prompt_for_savename: false,
-		last_known_filename: "saved_story.json",
+		last_known_filename: "",
 		case_sensitive_wi: false,
 		last_selected_preset: 0,
 		gui_type_story: 0, //0=standard, 1=messenger, 2=aesthetic, 3=corpo
@@ -7819,6 +7819,7 @@ Current version indicated by LITEVER below.
 		synchro_pending_stream = "";
 		streaming_was_thinking = false;
 		let logprobs_content_arr = [];
+		let stream_usage = null;
 		let pending_toolcall_objs = [];
 		let pending_toolcall_last_obj = null;
 		let responses_output_items = [];
@@ -8002,7 +8003,8 @@ Current version indicated by LITEVER below.
 								continue;
 							}
 
-							//for oai
+							//OpenAI can send usage in a final chunk with no choices.
+							if(event.data?.usage) stream_usage = event.data.usage;
 							if (event.data && event.data.choices && event.data.choices.length>0) {
 								if(event.data.choices[0].text)
 								{
@@ -8233,13 +8235,10 @@ Current version indicated by LITEVER below.
 						}
 					}
 					synchro_pending_stream = "";
-					if (logprobs_content_arr.length>0 && last_response_obj==null) {
-						//fake a last response obj
-						let fakedresponse = {
-							"artificial_response": true,
-							"results":[{"logprobs":{"content":logprobs_content_arr}}]
-						};
-						last_response_obj = fakedresponse;
+					if (last_response_obj==null && (stream_usage || logprobs_content_arr.length>0)) {
+						last_response_obj = {"artificial_response": true};
+						if(stream_usage) last_response_obj.usage = stream_usage;
+						if(logprobs_content_arr.length>0) last_response_obj.results = [{"logprobs":{"content":logprobs_content_arr}}];
 					}
 					poll_pending_response();
 					//handle gen failures
@@ -11507,13 +11506,14 @@ Current version indicated by LITEVER below.
 	function save_file_button(save_file_obj=null,nameprompt="") //if null, generate new savefile, otherwise use provided
 	{
 		warn_unsaved = false;
+		const defaultname = `saved_session_${new Date().toLocaleDateString('sv-SE')}.json`;
 		const save_file = function()
 		{
 			if(!save_file_obj)
 			{
 				save_file_obj = generate_savefile(localsettings.save_images, localsettings.export_settings, localsettings.export_settings);
 			}
-			let suggestname = localsettings.last_known_filename;
+			let suggestname = localsettings.last_known_filename || defaultname;
 			if(nameprompt!="" && !localsettings.prompt_for_savename)
 			{
 				suggestname = sanitizeAlphanumeric(sanitizeAlphanumeric(nameprompt," ").trim(),"_");
@@ -11523,7 +11523,7 @@ Current version indicated by LITEVER below.
 
 		if(localsettings.prompt_for_savename)
 		{
-			inputBox("Enter a Filename","Save File",localsettings.last_known_filename,"Input Filename", ()=>{
+			inputBox("Enter a Filename","Save File",localsettings.last_known_filename || defaultname,"Input Filename", ()=>{
 				let userinput = getInputBoxValue();
 				if (userinput != null && userinput.trim()!="") {
 					let tmp = userinput.trim();
@@ -24272,8 +24272,6 @@ Current version indicated by LITEVER below.
 					oai_payload = oai_prepare_responses_payload(oai_payload);
 				}
 
-				last_request_str = JSON.stringify(oai_payload);
-				last_request_timestamp = get_current_timestamp();
 				last_response_obj = null;
 				last_response_streamlog = "";
 				let oaiheaders = get_oai_header(custom_oai_key);
@@ -24327,6 +24325,10 @@ Current version indicated by LITEVER below.
 				if(is_browser_supports_sse() && localsettings.tokenstreammode!=0)
 				{
 					oai_payload.stream = true;
+					if(custom_oai_endpoint.toLowerCase()===default_oai_base && !is_oai_responses_selected())
+					{
+						oai_payload.stream_options = {"include_usage":true, ...oai_payload.stream_options};
+					}
 				}
 
 				//if we enable websearch and its gemini, we are FORCED to use the dedicated gemini API endpoints instead, the openai one does not support it.
@@ -24451,6 +24453,8 @@ Current version indicated by LITEVER below.
 					oaiheaders = geminiheaders;
 				}
 
+				last_request_str = JSON.stringify(oai_payload);
+				last_request_timestamp = get_current_timestamp();
 				if(is_browser_supports_sse() && localsettings.tokenstreammode!=0)
 				{
 					oai_api_stream_sse(targetep,oai_payload,oaiheaders);
@@ -26089,8 +26093,35 @@ Current version indicated by LITEVER below.
 		let lastresptxt = `${(last_response_obj!=null && (kcpp_has_logprobs || oai_has_logprobs)?lastresp:"")}`;
 		document.getElementById("lastreq1lp").innerHTML = document.getElementById("lastreq2lp").innerHTML =	document.getElementById("lastreq3lp").innerHTML = lastresptxt;
 	}
-	function update_context_usage() //shows how full the context is, from the token counts koboldcpp reports for its last request
+	function render_usage(used, tip, maxctx=null)
 	{
+		let label = `Context Tokens: ${used.toLocaleString()}`;
+		let color = "";
+		if(maxctx!==null)
+		{
+			let pct = Math.round(used*100/maxctx);
+			const shortnum = (n) => (n<1000?n:(Math.round(n/102.4)/10)+"k");
+			label = `Context: ${shortnum(used)} / ${shortnum(maxctx)} (${pct}%)`;
+			color = (pct>=90?` class="color_red"`:``);
+		}
+		let ctxtxt = ` &middot; <span${color} title="${tip}">${label}</span>`;
+		document.getElementById("lastreq1ctx").innerHTML = document.getElementById("lastreq2ctx").innerHTML = document.getElementById("lastreq3ctx").innerHTML = ctxtxt;
+	}
+	function update_context_usage()
+	{
+		if(custom_oai_key!="")
+		{
+			let usage = last_response_obj?.usage;
+			if(!usage) return;
+			let input = usage.prompt_tokens ?? usage.input_tokens;
+			let output = usage.completion_tokens ?? usage.output_tokens;
+			let total = usage.total_tokens ?? (input + output);
+			if([input, output, total].every(count => Number.isFinite(count) && count>=0))
+			{
+				render_usage(total, `Prompt ${input} + generated ${output} tokens reported for the last request.`);
+			}
+			return;
+		}
 		if(custom_kobold_endpoint=="" || !koboldcpp_version || koboldcpp_version_obj.parallelrequests>1)
 		{
 			return;
@@ -26111,11 +26142,8 @@ Current version indicated by LITEVER below.
 				{
 					maxctx = koboldcpp_true_maxctx;
 				}
-				let pct = Math.round(used*100/maxctx);
-				const shortnum = (n) => (n<1000?n:(Math.round(n/102.4)/10)+"k");
 				let tip = `Prompt ${resp.last_input_count} + generated ${resp.last_token_count} tokens (reported by the server for the last request). The oldest text is trimmed once this reaches the context size.`;
-				let ctxtxt = ` &middot; <span${(pct>=90?` class="color_red"`:``)} title="${tip}">Context: ${shortnum(used)} / ${shortnum(maxctx)} (${pct}%)</span>`;
-				document.getElementById("lastreq1ctx").innerHTML = document.getElementById("lastreq2ctx").innerHTML = document.getElementById("lastreq3ctx").innerHTML = ctxtxt;
+				render_usage(used, tip, maxctx);
 			}
 		}).catch((error) => {
 			console.log("Context usage error: " + error);
