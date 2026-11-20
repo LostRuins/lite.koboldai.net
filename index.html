@@ -8004,7 +8004,7 @@ Current version indicated by LITEVER below.
 							}
 
 							//OpenAI can send usage in a final chunk with no choices.
-							if(event.data?.usage) stream_usage = event.data.usage;
+							if(event.data && event.data.usage) stream_usage = event.data.usage;
 							if (event.data && event.data.choices && event.data.choices.length>0) {
 								if(event.data.choices[0].text)
 								{
@@ -24327,7 +24327,7 @@ Current version indicated by LITEVER below.
 					oai_payload.stream = true;
 					if(custom_oai_endpoint.toLowerCase()===default_oai_base && !is_oai_responses_selected())
 					{
-						oai_payload.stream_options = {"include_usage":true, ...oai_payload.stream_options};
+						oai_payload.stream_options = Object.assign({include_usage:true}, oai_payload.stream_options);
 					}
 				}
 
@@ -26111,11 +26111,11 @@ Current version indicated by LITEVER below.
 	{
 		if(custom_oai_key!="")
 		{
-			let usage = last_response_obj?.usage;
+			let usage = last_response_obj && last_response_obj.usage;
 			if(!usage) return;
-			let input = usage.prompt_tokens ?? usage.input_tokens;
-			let output = usage.completion_tokens ?? usage.output_tokens;
-			let total = usage.total_tokens ?? (input + output);
+			let input = usage.prompt_tokens != null ? usage.prompt_tokens : usage.input_tokens;
+			let output = usage.completion_tokens != null ? usage.completion_tokens : usage.output_tokens;
+			let total = usage.total_tokens != null ? usage.total_tokens : input + output;
 			if([input, output, total].every(count => Number.isFinite(count) && count>=0))
 			{
 				render_usage(total, `Prompt ${input} + generated ${output} tokens reported for the last request.`);
