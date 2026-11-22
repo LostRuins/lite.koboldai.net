@@ -4675,6 +4675,7 @@ Current version indicated by LITEVER below.
 		prompt_for_savename: false,
 		last_known_filename: "",
 		case_sensitive_wi: false,
+		whole_words_wi: false,
 		last_selected_preset: 0,
 		gui_type_story: 0, //0=standard, 1=messenger, 2=aesthetic, 3=corpo
 		gui_type_adventure: 0, //0=standard, 1=messenger, 2=aesthetic, 3=corpo
@@ -23133,9 +23134,9 @@ Current version indicated by LITEVER below.
 
 						if (!wi.selective || (invalidseckey && invalidantikey)) {
 							if (localsettings.case_sensitive_wi) {
-								shoulduse = wiks.some(k => wimatch_context.includes(k.trim()));
+								shoulduse = wiks.some(k => wi_key_in_context(k.trim(), wimatch_context, localsettings.whole_words_wi));
 							} else {
-								shoulduse = wiks.some(k => wimatch_context.includes(k.trim().toLowerCase()));
+								shoulduse = wiks.some(k => wi_key_in_context(k.trim().toLowerCase(), wimatch_context, localsettings.whole_words_wi));
 							}
 						}
 						else
@@ -23152,13 +23153,13 @@ Current version indicated by LITEVER below.
 							}
 							let t1=false, t2=false, t3=false;
 							if (localsettings.case_sensitive_wi) {
-								t1 = wiks.some(k => wimatch_context.includes(k.trim()));
-								t2 = wiks2.some(k => wimatch_context.includes(k.trim()));
-								t3 = wikanti.some(k => wimatch_context.includes(k.trim()));
+								t1 = wiks.some(k => wi_key_in_context(k.trim(), wimatch_context, localsettings.whole_words_wi));
+								t2 = wiks2.some(k => wi_key_in_context(k.trim(), wimatch_context, localsettings.whole_words_wi));
+								t3 = wikanti.some(k => wi_key_in_context(k.trim(), wimatch_context, localsettings.whole_words_wi));
 							} else {
-								t1 = wiks.some(k => wimatch_context.includes(k.trim().toLowerCase()));
-								t2 = wiks2.some(k => wimatch_context.includes(k.trim().toLowerCase()));
-								t3 = wikanti.some(k => wimatch_context.includes(k.trim().toLowerCase()));
+								t1 = wiks.some(k => wi_key_in_context(k.trim().toLowerCase(), wimatch_context, localsettings.whole_words_wi));
+								t2 = wiks2.some(k => wi_key_in_context(k.trim().toLowerCase(), wimatch_context, localsettings.whole_words_wi));
+								t3 = wikanti.some(k => wi_key_in_context(k.trim().toLowerCase(), wimatch_context, localsettings.whole_words_wi));
 							}
 							if(!invalidantikey && !invalidseckey) //all keys valid
 							{
@@ -30272,6 +30273,12 @@ Current version indicated by LITEVER below.
 	}
 
 	/* split: src/world-info/world-info.js */
+	function wi_key_in_context(key, context, wholewords) { //like sillytavern, multi-word keys stay substring matches. empty keys (trailing commas) keep always matching
+		if (!wholewords || key == "" || /\s/.test(key)) {
+			return context.includes(key);
+		}
+		return new RegExp("(?<![\\p{L}\\p{M}\\p{N}_])" + escapeRegExp(key) + "(?![\\p{L}\\p{M}\\p{N}_])", "u").test(context);
+	}
 	function toggle_wi_sk(idx) {
 		var ce = pending_wi_obj[idx];
 		ce.selective = !ce.selective;
@@ -30450,6 +30457,7 @@ Current version indicated by LITEVER below.
 			pending_wi_obj[i].probability = (prb?prb:100);
 		}
 		localsettings.case_sensitive_wi = (document.getElementById("case_sensitive_wi").checked?true:false);
+		localsettings.whole_words_wi = (document.getElementById("whole_words_wi").checked?true:false);
 		wi_searchdepth = document.getElementById("wi_searchdepth").value;
 		wi_insertlocation = document.getElementById("wi_insertlocation").value;
 	}
@@ -30499,6 +30507,7 @@ Current version indicated by LITEVER below.
 		});
 
 		document.getElementById("case_sensitive_wi").checked = (localsettings.case_sensitive_wi?true:false);
+		document.getElementById("whole_words_wi").checked = (localsettings.whole_words_wi?true:false);
 
 		let wigroupbtns = `<span class="justifyleft"><button type="button" style="padding:4px;margin:2px;margin-top:4px;margin-bottom:4px;" class="btn ${curr_wi_tab==""?"lightpurplebtn":"purplebtn"} widelbtn" onclick="select_wi_group('')">General</button></span>`;
 		let grpnamesdict = {};
@@ -33332,6 +33341,11 @@ Current version indicated by LITEVER below.
 				<div class="settinglabel" style="padding: 4px;">
 					<div class="justifyleft">Case Sensitive Keys <span class="helpicon">?<span class="helptext">Controls whether the world info keys are matched in a case-sensitive way.</span></span></div>
 					<input title="World Info Case Sensitive" type="checkbox" id="case_sensitive_wi" style="margin:0px 0px 0px 3px;">
+				</div>
+
+				<div class="settinglabel" style="padding: 4px;">
+					<div class="justifyleft">Match Whole Words <span class="helpicon">?<span class="helptext">If enabled, single-word keys only match whole words (e.g. 'Ward' won't match 'toward'). Multi-word keys still match anywhere. Not recommended for languages that attach prefixes to words or don't use spaces.</span></span></div>
+					<input title="World Info Match Whole Words" type="checkbox" id="whole_words_wi" style="margin:0px 0px 0px 3px;">
 				</div>
 			</div>
 			<!-- /split: src/world-info/world-info-tab.html -->
