@@ -11266,7 +11266,7 @@ Current version indicated by LITEVER below.
 			let userinput = getInputBoxValue().trim();
 			if(userinput!="")
 			{
-				import_compressed_story(userinput, false);
+				confirm_load_unsaved(() => import_compressed_story(userinput, false));
 			}
 		},false,true);
 	}
@@ -11702,8 +11702,12 @@ Current version indicated by LITEVER below.
 	};
 
 	//attempt to load a file from disk. could be any format, even images
-	function load_selected_file(selectedFile, to_groupchat=false)
+	function load_selected_file(selectedFile, to_groupchat=false, load_confirmed=false)
 	{
+		if (!to_groupchat && !load_confirmed) {
+			confirm_load_unsaved(() => load_selected_file(selectedFile, to_groupchat, true));
+			return;
+		}
 		var selectedFilename = "";
 		if(selectedFile)
 		{
@@ -11852,6 +11856,16 @@ Current version indicated by LITEVER below.
 
 		};
 		reader.readAsText(selectedFile);
+	}
+
+	function confirm_load_unsaved(onProceed)
+	{
+		let input = document.getElementById("input_text");
+		if (!localsettings.no_warn_unsaved && (warn_unsaved || (input && input.value !== ""))) {
+			msgboxYesNo("Unsaved changes will be lost, proceed?", "Confirm Load", onProceed, null);
+		} else {
+			onProceed();
+		}
 	}
 
 	function safe_to_overwrite()
@@ -13265,8 +13279,12 @@ Current version indicated by LITEVER below.
 			confirm_scenario();
 		}
 	}
-	function confirm_scenario()
+	function confirm_scenario(load_confirmed=false)
 	{
+		if (temp_scenario!=null && !load_confirmed) {
+			confirm_load_unsaved(() => confirm_scenario(true));
+			return;
+		}
 		mainmenu_untab(false);
 		if(temp_scenario!=null)
 		{
@@ -17507,14 +17525,7 @@ Current version indicated by LITEVER below.
 				});
 			}
 		}
-		if (!safe_to_overwrite() && warn_unsaved) {
-			msgboxYesNo("Unsaved changes will be lost, proceed?", "Confirm Load", () => {
-				proceed_load_from_slot();
-			}, null);
-		}
-		else {
-			proceed_load_from_slot();
-		}
+		confirm_load_unsaved(proceed_load_from_slot);
 	}
 	function download_from_slot(slot,islocal,isscenario)
 	{
@@ -20896,7 +20907,6 @@ Current version indicated by LITEVER below.
 	{
 		if(warn_unsaved && !localsettings.no_warn_unsaved)
 		{
-			warn_unsaved = false;
 			return "Unsaved changes will be lost!"; //the actual message will not be shown in new browsers
 		}
 		return undefined;
