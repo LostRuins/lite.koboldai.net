@@ -18624,13 +18624,10 @@ Current version indicated by LITEVER below.
 		update_preset_btns();
 		edit_instruct_tag_format();
 
-		let wbvoices = "";
+		let voices = [];
 		if ('speechSynthesis' in window) {
-			let voices = window.speechSynthesis.getVoices();
+			voices = window.speechSynthesis.getVoices();
 			console.log("speech synth available: " + voices.length);
-			for (var i = 0; i < voices.length; ++i) {
-				wbvoices += `<option value="${i}">${voices[i].name}</option>`;
-			}
 		} else {
 			console.log("No speech synth available");
 		}
@@ -18638,10 +18635,23 @@ Current version indicated by LITEVER below.
 		document.getElementById("kcpp_tts_voice").value = localsettings.kcpp_tts_voice;
 		document.getElementById("oai_tts_model").value = localsettings.oai_tts_model;
 		document.getElementById("oai_tts_voice").value = localsettings.oai_tts_voice;
-		if(wbvoices)
+		if(voices.length)
 		{
-			document.getElementById("wb_tts_choice").innerHTML = wbvoices;
-			document.getElementById("wb_tts_choice").value = localsettings.wb_tts_choice;
+			const voiceSelect = document.getElementById("wb_tts_choice");
+			const options = voiceSelect.options;
+			if (options.length === voices.length && voices.every((voice, i) => voice.name === options[i].textContent)) {
+				voiceSelect.value = localsettings.wb_tts_choice;
+			} else {
+				// Swap the select to avoid Firefox reprocessing the remaining options on each removal.
+				const newSelect = voiceSelect.cloneNode(false);
+				const newOptions = document.createDocumentFragment();
+				voices.forEach((voice, i) => newOptions.append(new Option(voice.name, i)));
+				newSelect.append(newOptions);
+				newSelect.value = localsettings.wb_tts_choice;
+				const wasFocused = document.activeElement === voiceSelect;
+				voiceSelect.replaceWith(newSelect);
+				if (wasFocused) newSelect.focus({ preventScroll: true });
+			}
 		}
 		kcpp_tts_json = localsettings.kcpp_tts_json;
 		toggle_tts_mode();
